@@ -1,0 +1,9 @@
+[submodule "emulators/videopac"]
+	path = emulators/videopac
+	url = https://github.com/retro-ai/videopac-emulator.git
+	branch = stable
+
+[submodule "emulators/mo5"]
+	path = emulators/mo5
+	url = https://github.com/retro-ai/mo5-emulator.git
+	branch = stable
