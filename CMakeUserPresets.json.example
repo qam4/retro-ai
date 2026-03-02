@@ -2,135 +2,53 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "my-dev",
-      "displayName": "My Development Build",
-      "description": "Personal development configuration",
-      "inherits": "dev",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "my-release",
-      "displayName": "My Release Build",
-      "description": "Personal release configuration",
-      "inherits": "release",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++"
-      }
-    },
-    {
-      "name": "clang-dev",
-      "displayName": "Clang Development Build",
-      "description": "Development build with Clang",
-      "inherits": "dev",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++"
-      }
-    },
-    {
-      "name": "msvc-dev",
-      "displayName": "MSVC Development Build",
-      "description": "Development build with MSVC (Windows)",
-      "generator": "Visual Studio 17 2022",
-      "architecture": "x64",
-      "binaryDir": "${sourceDir}/build/${presetName}",
+      "name": "dev-mingw",
+      "inherits": "ci-mingw",
+      "binaryDir": "${sourceDir}/build/dev-mingw",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "BUILD_PYTHON_BINDINGS": "ON",
-        "BUILD_TESTS": "ON",
-        "BUILD_EXAMPLES": "ON",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_TOOLCHAIN_FILE": "C:/src/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
+        "VCPKG_HOST_TRIPLET": "x64-mingw-dynamic"
       }
     },
     {
-      "name": "mingw-dev",
-      "displayName": "MinGW Development Build",
-      "description": "Development build with MinGW (Windows)",
-      "generator": "MinGW Makefiles",
-      "binaryDir": "${sourceDir}/build/${presetName}",
+      "name": "dev-win64",
+      "inherits": "ci-windows",
+      "binaryDir": "${sourceDir}/build/dev-win64",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "BUILD_PYTHON_BINDINGS": "ON",
-        "BUILD_TESTS": "ON",
-        "BUILD_EXAMPLES": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++"
-      }
-    },
-    {
-      "name": "mingw-release",
-      "displayName": "MinGW Release Build",
-      "description": "Release build with MinGW (Windows)",
-      "generator": "MinGW Makefiles",
-      "binaryDir": "${sourceDir}/build/${presetName}",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "BUILD_PYTHON_BINDINGS": "ON",
-        "BUILD_TESTS": "OFF",
-        "BUILD_EXAMPLES": "ON",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++"
-      }
-    },
-    {
-      "name": "fast-build",
-      "displayName": "Fast Build (No Tests)",
-      "description": "Quick build without tests for rapid iteration",
-      "inherits": "dev",
-      "cacheVariables": {
-        "BUILD_TESTS": "OFF",
-        "BUILD_EXAMPLES": "OFF"
+        "CMAKE_TOOLCHAIN_FILE": "C:/src/vcpkg/scripts/buildsystems/vcpkg.cmake"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "my-dev",
-      "configurePreset": "my-dev",
+      "name": "dev-mingw",
+      "configurePreset": "dev-mingw",
       "jobs": 8
     },
     {
-      "name": "my-release",
-      "configurePreset": "my-release",
-      "jobs": 8
-    },
-    {
-      "name": "clang-dev",
-      "configurePreset": "clang-dev",
-      "jobs": 8
-    },
-    {
-      "name": "msvc-dev",
-      "configurePreset": "msvc-dev",
-      "jobs": 8
-    },
-    {
-      "name": "mingw-dev",
-      "configurePreset": "mingw-dev",
-      "jobs": 8
-    },
-    {
-      "name": "mingw-release",
-      "configurePreset": "mingw-release",
-      "jobs": 8
-    },
-    {
-      "name": "fast-build",
-      "configurePreset": "fast-build",
+      "name": "dev-win64",
+      "configurePreset": "dev-win64",
+      "configuration": "Debug",
       "jobs": 8
     }
   ],
   "testPresets": [
     {
-      "name": "my-dev",
-      "configurePreset": "my-dev",
+      "name": "dev-mingw",
+      "configurePreset": "dev-mingw",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "dev-win64",
+      "configurePreset": "dev-win64",
+      "configuration": "Debug",
       "output": {
         "outputOnFailure": true
       }

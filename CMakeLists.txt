@@ -20,9 +20,6 @@ endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Build emulator cores as libraries
-# Note: These assume the emulators expose their core as a library
-# You may need to adjust based on your emulator's CMakeLists.txt
-
 # Videopac emulator
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/emulators/videopac/CMakeLists.txt)
     add_subdirectory(emulators/videopac)
@@ -41,83 +38,93 @@ else()
     set(HAVE_MO5 OFF)
 endif()
 
-# Retro-AI core library
+# Retro-AI core library (header-only)
 add_library(retro_ai_core INTERFACE)
 target_include_directories(retro_ai_core INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
+# Reward systems library (defined before adapters that depend on it)
+add_library(reward_systems
+    src/reward_systems.cpp
+    src/reward_systems/survival.cpp
+    src/reward_systems/memory.cpp
+    src/reward_systems/vision.cpp
+    src/reward_systems/intrinsic.cpp
+    src/reward_systems/custom.cpp
+)
+target_link_libraries(reward_systems PUBLIC retro_ai_core)
+
 # RL adapters for each emulator
 if(HAVE_VIDEOPAC)
     add_library(videopac_rl src/videopac_rl.cpp)
-    target_link_libraries(videopac_rl 
+    target_link_libraries(videopac_rl
         PUBLIC retro_ai_core
-        PRIVATE videopac_core  # Adjust based on your emulator's library name
+        PRIVATE videopac_core reward_systems
     )
+    # Use generator expressions to avoid source-dir-prefixed paths in exports
     target_include_directories(videopac_rl PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/emulators/videopac/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/emulators/videopac/include>
+        $<INSTALL_INTERFACE:include>
     )
 endif()
 
 if(HAVE_MO5)
     add_library(mo5_rl src/mo5_rl.cpp)
-    target_link_libraries(mo5_rl 
+    target_link_libraries(mo5_rl
         PUBLIC retro_ai_core
-        PRIVATE mo5_core  # Adjust based on your emulator's library name
+        PRIVATE mo5_core reward_systems
     )
     target_include_directories(mo5_rl PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/emulators/mo5/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/emulators/mo5/include>
+        $<INSTALL_INTERFACE:include>
     )
 endif()
-
-# Reward systems library
-add_library(reward_systems src/reward_systems.cpp)
-target_link_libraries(reward_systems PUBLIC retro_ai_core)
 
 # Python bindings
 if(BUILD_PYTHON_BINDINGS)
     pybind11_add_module(retro_ai_native python/bindings.cpp)
     target_link_libraries(retro_ai_native PRIVATE retro_ai_core reward_systems)
-    
+
     if(HAVE_VIDEOPAC)
         target_link_libraries(retro_ai_native PRIVATE videopac_rl)
         target_compile_definitions(retro_ai_native PRIVATE HAVE_VIDEOPAC)
     endif()
-    
+
     if(HAVE_MO5)
         target_link_libraries(retro_ai_native PRIVATE mo5_rl)
         target_compile_definitions(retro_ai_native PRIVATE HAVE_MO5)
     endif()
-    
-    # Install Python module
+
     install(TARGETS retro_ai_native LIBRARY DESTINATION .)
 endif()
 
 # Tests
-if(BUILD_TESTS)
+if(BUILD_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
     enable_testing()
     add_subdirectory(tests)
 endif()
 
 # Examples
-if(BUILD_EXAMPLES)
+if(BUILD_EXAMPLES AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt)
     add_subdirectory(examples)
 endif()
 
 # Install headers
 install(DIRECTORY include/retro_ai DESTINATION include)
 
-# Install libraries
-if(HAVE_VIDEOPAC)
-    install(TARGETS videopac_rl EXPORT retro_ai_targets)
-endif()
-if(HAVE_MO5)
-    install(TARGETS mo5_rl EXPORT retro_ai_targets)
-endif()
+# Install libraries — include all dependent targets in the export set
+install(TARGETS retro_ai_core EXPORT retro_ai_targets)
 install(TARGETS reward_systems EXPORT retro_ai_targets)
 
-# Export targets
+if(HAVE_VIDEOPAC)
+    install(TARGETS videopac_rl videopac_core EXPORT retro_ai_targets)
+endif()
+if(HAVE_MO5)
+    install(TARGETS mo5_rl mo5_core EXPORT retro_ai_targets)
+endif()
+
 install(EXPORT retro_ai_targets
     FILE retro_ai_targets.cmake
     NAMESPACE retro_ai::

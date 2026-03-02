@@ -53,6 +53,7 @@ out/
 *.so
 *.dylib
 *.dll
+*.pyd
 *.exe
 
 # Testing
