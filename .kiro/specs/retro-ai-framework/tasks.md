@@ -222,7 +222,7 @@ This implementation plan follows the 6-phase roadmap defined in the design docum
     - Call reward system's compute_reward() in step() method
     - _Requirements: 3.3, 6.1, 7.1, 8.1, 9.1_
 
-- [-] 5. Phase 4: Python Layer (Weeks 7-8)
+- [x] 5. Phase 4: Python Layer (Weeks 7-8)
   - [x] 5.1 Implement BaseEnv framework-agnostic environment
     - Create `python/retro_ai/envs/base_env.py` with BaseEnv class
     - Implement __init__() to create RLInterface via factory method
@@ -287,7 +287,7 @@ This implementation plan follows the 6-phase roadmap defined in the design docum
     - **Validates: Requirements 18.4**
     - Test that frame skip K executes action K times and returns sum of rewards
   
-  - [ ] 5.7 Implement optional Gymnasium wrapper
+  - [x] 5.7 Implement optional Gymnasium wrapper
     - Create `python/retro_ai/wrappers/gymnasium_wrapper.py` with GymnasiumWrapper class
     - Convert BaseEnv to Gymnasium-compatible environment
     - Convert observation_space to gymnasium.spaces.Box
@@ -306,12 +306,12 @@ This implementation plan follows the 6-phase roadmap defined in the design docum
     - **Validates: Requirements 15.3**
     - Test that C++ exceptions are caught and converted to Python exceptions
   
-  - [ ] 5.10 Implement Python exception classes
+  - [x] 5.10 Implement Python exception classes
     - Create `python/retro_ai/__init__.py` with RetroAIError, InitializationError, InvalidActionError, StateError, ConfigurationError
     - Map C++ exceptions to Python exceptions in bindings
     - _Requirements: 15.3_
   
-  - [ ] 5.11 Implement logging and debugging utilities
+  - [x] 5.11 Implement logging and debugging utilities
     - Create structured logging with StructuredLogger class
     - Log environment creation, reset, termination events at INFO level
     - Log reward computation details at DEBUG level
