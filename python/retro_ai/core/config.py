@@ -139,8 +139,7 @@ class ConfigParser:
             return yaml  # type: ignore[return-value]
         except ImportError:
             raise ImportError(
-                "PyYAML is required for YAML support. "
-                "Install it with:  pip install pyyaml"
+                "PyYAML is required for YAML support. " "Install it with:  pip install pyyaml"
             )
 
     @staticmethod
@@ -149,25 +148,18 @@ class ConfigParser:
     ) -> Dict[str, Any]:
         """Read JSON from file or parse a string."""
         if os.path.isfile(path_or_str):
-            with open(
-                path_or_str, "r", encoding="utf-8"
-            ) as fh:
+            with open(path_or_str, "r", encoding="utf-8") as fh:
                 try:
                     data: Dict[str, Any] = json.load(fh)
                     return data
                 except json.JSONDecodeError as exc:
-                    raise ValueError(
-                        "Invalid JSON in file "
-                        f"'{path_or_str}': {exc}"
-                    ) from exc
+                    raise ValueError("Invalid JSON in file " f"'{path_or_str}': {exc}") from exc
 
         try:
             result: Dict[str, Any] = json.loads(path_or_str)
             return result
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Invalid JSON string: {exc}"
-            ) from exc
+            raise ValueError(f"Invalid JSON string: {exc}") from exc
 
     @staticmethod
     def _load_yaml(
@@ -176,29 +168,20 @@ class ConfigParser:
     ) -> Dict[str, Any]:
         """Read YAML from file or parse a string."""
         if os.path.isfile(path_or_str):
-            with open(
-                path_or_str, "r", encoding="utf-8"
-            ) as fh:
+            with open(path_or_str, "r", encoding="utf-8") as fh:
                 try:
                     data = yaml.safe_load(fh)
                 except Exception as exc:
-                    raise ValueError(
-                        "Invalid YAML in file "
-                        f"'{path_or_str}': {exc}"
-                    ) from exc
+                    raise ValueError("Invalid YAML in file " f"'{path_or_str}': {exc}") from exc
         else:
             try:
                 data = yaml.safe_load(path_or_str)
             except Exception as exc:
-                raise ValueError(
-                    f"Invalid YAML string: {exc}"
-                ) from exc
+                raise ValueError(f"Invalid YAML string: {exc}") from exc
 
         if not isinstance(data, dict):
             raise ValueError(
-                "YAML config must be a mapping at "
-                "the top level, got "
-                f"{type(data).__name__}"
+                "YAML config must be a mapping at " "the top level, got " f"{type(data).__name__}"
             )
         return data
 
@@ -208,10 +191,7 @@ class ConfigParser:
     ) -> EmulatorConfig:
         """Convert dict to EmulatorConfig with validation."""
         if not isinstance(data, dict):
-            raise ValueError(
-                "Config must be a mapping, got "
-                f"{type(data).__name__}"
-            )
+            raise ValueError("Config must be a mapping, got " f"{type(data).__name__}")
 
         # --- required fields ---
         if "emulator_type" not in data:
@@ -222,68 +202,40 @@ class ConfigParser:
             )
         if "rom_path" not in data:
             raise ValueError(
-                "Missing required field 'rom_path'."
-                " Provide the path to the ROM file."
+                "Missing required field 'rom_path'." " Provide the path to the ROM file."
             )
 
         emulator_type = data["emulator_type"]
         rom_path = data["rom_path"]
 
-        if (
-            not isinstance(emulator_type, str)
-            or not emulator_type.strip()
-        ):
+        if not isinstance(emulator_type, str) or not emulator_type.strip():
             raise ValueError(
-                "'emulator_type' must be a non-empty"
-                f" string, got {emulator_type!r}."
+                "'emulator_type' must be a non-empty" f" string, got {emulator_type!r}."
             )
-        if (
-            not isinstance(rom_path, str)
-            or not rom_path.strip()
-        ):
-            raise ValueError(
-                "'rom_path' must be a non-empty"
-                f" string, got {rom_path!r}."
-            )
+        if not isinstance(rom_path, str) or not rom_path.strip():
+            raise ValueError("'rom_path' must be a non-empty" f" string, got {rom_path!r}.")
 
         # --- optional fields ---
         bios_path = data.get("bios_path")
         if bios_path is not None:
             if not isinstance(bios_path, str):
                 tp = type(bios_path).__name__
-                raise ValueError(
-                    "'bios_path' must be a string"
-                    f" or null, got {tp}."
-                )
+                raise ValueError("'bios_path' must be a string" f" or null, got {tp}.")
 
         # --- reward sub-config ---
         reward_data = data.get("reward")
         if reward_data is not None:
             if not isinstance(reward_data, dict):
                 tp = type(reward_data).__name__
-                raise ValueError(
-                    "'reward' must be a mapping,"
-                    f" got {tp}."
-                )
+                raise ValueError("'reward' must be a mapping," f" got {tp}.")
             mode = reward_data.get("mode", "survival")
-            if (
-                not isinstance(mode, str)
-                or not mode.strip()
-            ):
-                raise ValueError(
-                    "'reward.mode' must be a non-empty"
-                    f" string, got {mode!r}."
-                )
+            if not isinstance(mode, str) or not mode.strip():
+                raise ValueError("'reward.mode' must be a non-empty" f" string, got {mode!r}.")
             params = reward_data.get("parameters", {})
             if not isinstance(params, dict):
                 tp = type(params).__name__
-                raise ValueError(
-                    "'reward.parameters' must be a"
-                    f" mapping, got {tp}."
-                )
-            reward = RewardConfig(
-                mode=mode, parameters=params
-            )
+                raise ValueError("'reward.parameters' must be a" f" mapping, got {tp}.")
+            reward = RewardConfig(mode=mode, parameters=params)
         else:
             reward = RewardConfig()
 

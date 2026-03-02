@@ -8,15 +8,19 @@ description: Pre-commit checklist, CI portability review, and post-push verifica
 Before every `git commit`, you MUST follow this exact workflow:
 
 1. Build: `cmake --build --preset dev-mingw`
-2. Test: `ctest --preset dev-mingw` — all tests must pass
-3. CI portability review (see section below)
-4. Update any relevant documents: spec tasks.md checkboxes, design docs, etc.
-5. Stage only the relevant files with `git add` — do not blindly `git add -A`
-6. Draft the commit message in `COMMIT_MSG.txt`
-7. Wait for user approval — NEVER commit or push without explicit user consent
-8. Commit with `git commit -F COMMIT_MSG.txt` only after user says go
-9. NEVER run `git push` without explicit user consent
-10. Delete `COMMIT_MSG.txt` after a successful commit
+2. Lint Python: `python -m black --check python/` and `python -m ruff check python/`
+   - If black reports failures, run `python -m black python/` to fix, then re-check
+   - If ruff reports failures, fix them manually
+3. Test C++: `ctest --preset dev-mingw` — all tests must pass
+4. Test Python: `python -m pytest tests/python/ -v --tb=short` (with PYTHONPATH set)
+5. CI portability review (see section below)
+6. Update any relevant documents: spec tasks.md checkboxes, design docs, etc.
+7. Stage only the relevant files with `git add` — do not blindly `git add -A`
+8. Draft the commit message in `COMMIT_MSG.txt`
+9. Wait for user approval — NEVER commit or push without explicit user consent
+10. Commit with `git commit -F COMMIT_MSG.txt` only after user says go
+11. NEVER run `git push` without explicit user consent
+12. Delete `COMMIT_MSG.txt` after a successful commit
 
 # CI Portability Review
 
@@ -54,6 +58,9 @@ After pushing (when the user approves a push):
 # General Rules
 
 - Build preset is `dev-mingw` (not `dev`)
+- Python is MinGW Python (`C:\msys64\mingw64\bin\python.exe`), NOT pyenv
+  - Install packages via `pacman -S mingw-w64-x86_64-python-<name>`
+  - Set `PYTHONPATH=C:\src\retro-ai\python;C:\src\retro-ai\build\dev-mingw` for imports
 - Commit between phases for clean rollback points
 - Delete files that are no longer compiled — don't leave dead code on disk
 - Tag releases at milestones when GitHub builds pass

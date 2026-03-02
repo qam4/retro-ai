@@ -90,11 +90,7 @@ class PreprocessingPipeline:
         """Apply grayscale and resize to one frame."""
         # Grayscale conversion  (Req 18.1)
         if self.grayscale and frame.ndim == 3 and frame.shape[-1] == 3:
-            gray = (
-                0.299 * frame[..., 0]
-                + 0.587 * frame[..., 1]
-                + 0.114 * frame[..., 2]
-            )
+            gray = 0.299 * frame[..., 0] + 0.587 * frame[..., 1] + 0.114 * frame[..., 2]
             frame = np.expand_dims(gray.astype(np.uint8), axis=-1)
 
         # Nearest-neighbour resize using pure NumPy  (Req 18.2)
@@ -135,9 +131,7 @@ class PreprocessedEnv:
     # Core RL API
     # ------------------------------------------------------------------
 
-    def reset(
-        self, seed: Optional[int] = None
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(self, seed: Optional[int] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Reset the wrapped environment and preprocess the observation.
 
         Returns
@@ -150,9 +144,7 @@ class PreprocessedEnv:
         obs, info = self.env.reset(seed=seed)
         return self.preprocessing.reset(obs), info
 
-    def step(
-        self, action: int
-    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute *action* with frame skipping and preprocessing.
 
         The action is repeated ``frame_skip`` times (or until the episode

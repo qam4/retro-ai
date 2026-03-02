@@ -41,9 +41,7 @@ class BaseEnv:
         reward_mode: str = "survival",
         config: Optional[Dict[str, Any]] = None,
     ) -> None:
-        self._interface = self._create_interface(
-            emulator_type, rom_path, bios_path, reward_mode
-        )
+        self._interface = self._create_interface(emulator_type, rom_path, bios_path, reward_mode)
         self._obs_space = self._interface.observation_space()
         self._action_space = self._interface.action_space()
 
@@ -51,9 +49,7 @@ class BaseEnv:
     # Core RL API
     # ------------------------------------------------------------------
 
-    def reset(
-        self, seed: Optional[int] = None
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(self, seed: Optional[int] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Reset the environment and return the initial observation.
 
         Parameters
@@ -71,16 +67,12 @@ class BaseEnv:
             Metadata dictionary parsed from the native JSON info string.
         """
         native_seed = seed if seed is not None else -1
-        result = self._interface.reset_numpy(
-            native_seed
-        )
+        result = self._interface.reset_numpy(native_seed)
         observation = result["observation"]
         info = self._parse_info(result["info"])
         return observation, info
 
-    def step(
-        self, action: int
-    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute one environment step.
 
         Parameters
@@ -207,13 +199,10 @@ class BaseEnv:
         if emu == "videopac":
             if bios_path is None:
                 raise ValueError("Videopac emulator requires a bios_path")
-            return retro_ai_native.VideopacRLInterface(
-                bios_path, rom_path, reward_mode
-            )
+            return retro_ai_native.VideopacRLInterface(bios_path, rom_path, reward_mode)
         if emu == "mo5":
             return retro_ai_native.MO5RLInterface(rom_path, reward_mode)
 
         raise ValueError(
-            f"Unknown emulator type: {emulator_type!r}. "
-            f"Supported types: 'videopac', 'mo5'"
+            f"Unknown emulator type: {emulator_type!r}. " f"Supported types: 'videopac', 'mo5'"
         )
