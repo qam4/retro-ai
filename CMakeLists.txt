@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Static libs linked into the Python .so need -fPIC on Linux
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Options
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 option(BUILD_TESTS "Build tests" ON)
