@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=65", "wheel", "pybind11>=2.10", "cmake>=3.20"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retro-ai"
+version = "0.1.0"
+description = "Reinforcement learning framework for retro game emulators"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["reinforcement-learning", "emulator", "retro-games", "ai", "machine-learning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Games/Entertainment",
+]
+
+dependencies = [
+    "numpy>=1.20",
+]
+
+[project.optional-dependencies]
+gymnasium = [
+    "gymnasium>=0.29.0",
+]
+training = [
+    "stable-baselines3>=2.0.0",
+    "torch>=2.0.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "black",
+    "mypy",
+    "ruff",
+]
+all = [
+    "retro-ai[gymnasium,training,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/qam4/retro-ai"
+Documentation = "https://github.com/qam4/retro-ai/blob/main/docs"
+Repository = "https://github.com/qam4/retro-ai"
+Issues = "https://github.com/qam4/retro-ai/issues"
+
+[tool.setuptools]
+packages = ["retro_ai", "retro_ai.core", "retro_ai.envs", "retro_ai.wrappers"]
+package-dir = {"" = "python"}
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"

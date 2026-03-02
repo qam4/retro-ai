@@ -1,0 +1,181 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "Development Build",
+      "description": "Debug build with all features enabled",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_TESTS": "ON",
+        "BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release Build",
+      "description": "Optimized release build",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_TESTS": "OFF",
+        "BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "ci-linux",
+      "displayName": "CI Linux Build",
+      "description": "Build configuration for Linux CI",
+      "inherits": "default",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_TESTS": "ON",
+        "BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "ci-macos",
+      "displayName": "CI macOS Build",
+      "description": "Build configuration for macOS CI",
+      "inherits": "default",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_TESTS": "ON",
+        "BUILD_EXAMPLES": "ON"
+      }
+    },
+    {
+      "name": "ci-windows",
+      "displayName": "CI Windows Build",
+      "description": "Build configuration for Windows CI",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_TESTS": "ON",
+        "BUILD_EXAMPLES": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "ci-mingw",
+      "displayName": "CI MinGW Build",
+      "description": "Build configuration for MinGW (Windows)",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_TESTS": "ON",
+        "BUILD_EXAMPLES": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "python-only",
+      "displayName": "Python Bindings Only",
+      "description": "Build only Python bindings (for pip install)",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_TESTS": "OFF",
+        "BUILD_EXAMPLES": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "jobs": 8
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "jobs": 8
+    },
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux",
+      "jobs": 4
+    },
+    {
+      "name": "ci-macos",
+      "configurePreset": "ci-macos",
+      "jobs": 4
+    },
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows",
+      "jobs": 4
+    },
+    {
+      "name": "ci-mingw",
+      "configurePreset": "ci-mingw",
+      "jobs": 4
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-macos",
+      "configurePreset": "ci-macos",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-mingw",
+      "configurePreset": "ci-mingw",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
