@@ -146,3 +146,23 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/retro_ai_config_version.cmake"
     DESTINATION lib/cmake/retro_ai
 )
+
+# ---------------------------------------------------------------------------
+# Python lint / format targets
+# ---------------------------------------------------------------------------
+if(Python3_FOUND)
+    set(_PY_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/python")
+
+    add_custom_target(format-python
+        COMMAND ${Python3_EXECUTABLE} -m black "${_PY_SRC_DIR}"
+        COMMENT "Formatting Python code with black"
+        VERBATIM
+    )
+
+    add_custom_target(lint-python
+        COMMAND ${Python3_EXECUTABLE} -m black --check "${_PY_SRC_DIR}"
+        COMMAND ${Python3_EXECUTABLE} -m ruff check "${_PY_SRC_DIR}"
+        COMMENT "Linting Python code (black --check + ruff)"
+        VERBATIM
+    )
+endif()

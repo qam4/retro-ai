@@ -8,8 +8,8 @@ description: Pre-commit checklist, CI portability review, and post-push verifica
 Before every `git commit`, you MUST follow this exact workflow:
 
 1. Build: `cmake --build --preset dev-mingw`
-2. Lint Python: `python -m black --check python/` and `python -m ruff check python/`
-   - If black reports failures, run `python -m black python/` to fix, then re-check
+2. Lint Python: `cmake --build --preset dev-mingw --target lint-python`
+   - If black reports failures, run `cmake --build --preset dev-mingw --target format-python`, then re-lint
    - If ruff reports failures, fix them manually
 3. Test C++: `ctest --preset dev-mingw` — all tests must pass
 4. Test Python: `python -m pytest tests/python/ -v --tb=short` (with PYTHONPATH set)
