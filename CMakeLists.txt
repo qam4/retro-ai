@@ -25,7 +25,28 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 # Build emulator cores as libraries
 # Videopac emulator
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/emulators/videopac/CMakeLists.txt)
+    # Build only the core library — disable standalone, libretro, tests, SDL
+    set(BUILD_STANDALONE OFF CACHE BOOL "" FORCE)
+    set(BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
+    set(ENABLE_SDL OFF CACHE BOOL "" FORCE)
+    set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    # Disable the emulator's own test suite (we have our own)
+    set(VIDEOPAC_SAVED_BUILD_TESTS ${BUILD_TESTS})
+    set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
     add_subdirectory(emulators/videopac)
+    # Restore our BUILD_TESTS setting
+    set(BUILD_TESTS ${VIDEOPAC_SAVED_BUILD_TESTS} CACHE BOOL "" FORCE)
+
+    # The submodule's CMakeLists.txt uses CMAKE_SOURCE_DIR (which resolves to
+    # our top-level dir) instead of CMAKE_CURRENT_SOURCE_DIR.  Fix the include
+    # directories so videopac_core points at its own headers, not ours.
+    # Use generator expressions to satisfy CMake's install export validation.
+    set_target_properties(videopac_core PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
+    target_include_directories(videopac_core PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/emulators/videopac/include>
+        $<INSTALL_INTERFACE:include>
+    )
+
     set(HAVE_VIDEOPAC ON)
 else()
     message(WARNING "Videopac emulator not found. Run: git submodule update --init")

@@ -12,6 +12,9 @@ namespace retro_ai {
 ///
 /// Uses the PIMPL pattern to hide emulator-specific details from consumers.
 /// The emulator runs in headless mode (no SDL, no graphics output).
+///
+/// Framebuffer: 160×240 palette-indexed pixels are converted to RGB888.
+/// Actions: 18 discrete actions (joystick directions + fire + keyboard keys).
 class VideopacRLInterface : public RLInterface {
 public:
     /// Construct a Videopac environment.
@@ -50,6 +53,12 @@ public:
     // Metadata
     std::string emulator_name() const override;
     std::string game_name() const override;
+
+    // Screen dimensions (from the real VDC)
+    static constexpr int kScreenWidth = 160;
+    static constexpr int kScreenHeight = 240;
+    static constexpr int kScreenChannels = 3;
+    static constexpr int kNumActions = 18;
 
 private:
     class Impl;
