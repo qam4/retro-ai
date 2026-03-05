@@ -132,11 +132,17 @@ class TrainingPipeline:
 
     def _build_env(self):
         """BaseEnv -> PreprocessedEnv -> GymnasiumWrapper [-> SSW]."""
+        config_dict = {}
+        gp = self._game_profile
+        if gp and hasattr(gp, "joystick_index"):
+            config_dict["joystick_index"] = gp.joystick_index
+
         base = BaseEnv(
             emulator_type=self.config.emulator_type,
             rom_path=self.config.rom_path,
             bios_path=self.config.bios_path,
             reward_mode=self.config.reward_mode,
+            config=config_dict or None,
         )
         pipeline = PreprocessingPipeline(
             grayscale=self.config.grayscale,

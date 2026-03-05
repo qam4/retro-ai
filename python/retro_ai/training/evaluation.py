@@ -86,11 +86,16 @@ class EvaluationModule:
     def _build_env(self):
         """Build the evaluation environment chain."""
         gp = self.game_profile
+        config_dict = {}
+        if hasattr(gp, "joystick_index"):
+            config_dict["joystick_index"] = gp.joystick_index
+
         base = BaseEnv(
             emulator_type=gp.emulator_type,
             rom_path=gp.rom_path,
             bios_path=gp.bios_path,
             reward_mode=gp.reward_mode,
+            config=config_dict or None,
         )
         pipeline = PreprocessingPipeline(
             grayscale=gp.grayscale,

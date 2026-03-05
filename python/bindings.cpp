@@ -276,10 +276,11 @@ PYBIND11_MODULE(retro_ai_native, m) {
 #ifdef HAVE_VIDEOPAC
     py::class_<VideopacRLInterface, RLInterface, std::shared_ptr<VideopacRLInterface>>(
             m, "VideopacRLInterface")
-        .def(py::init<const std::string&, const std::string&, const std::string&>(),
+        .def(py::init<const std::string&, const std::string&, const std::string&, int>(),
              py::arg("bios_path"),
              py::arg("rom_path"),
              py::arg("reward_mode") = "survival",
+             py::arg("joystick_index") = 0,
              "Create a Videopac (Odyssey 2) environment.");
 #endif
 

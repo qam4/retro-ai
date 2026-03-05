@@ -29,9 +29,9 @@ static const std::unordered_map<std::string, Creator>& registry() {
         {"survival", []() { return std::make_unique<SurvivalRewardSystem>(); }},
         {"memory",   []() { return std::make_unique<MemoryRewardSystem>(); }},
         {"vision",   []() {
-            // Default: full-screen region, 160×200 observation (common retro size).
-            ScreenRegion region{0, 0, 160, 10};
-            ObservationSpace obs{160, 200, 3, 8};
+            // Score region for Videopac: counter at x=112, y=80, 4 chars wide
+            ScreenRegion region{112, 80, 40, 14};
+            ObservationSpace obs{160, 240, 3, 8};
             return std::make_unique<VisionRewardSystem>(region, obs);
         }},
         {"intrinsic", []() { return std::make_unique<IntrinsicRewardSystem>(); }},

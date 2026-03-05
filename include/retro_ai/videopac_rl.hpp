@@ -21,10 +21,12 @@ public:
     /// @param bios_path  Path to the Videopac BIOS file.
     /// @param rom_path   Path to the ROM file to load.
     /// @param reward_mode Initial reward computation mode (default: "survival").
+    /// @param joystick_index Which joystick to use for actions (0 or 1).
     /// @throws InitializationError if the emulator fails to initialize.
     explicit VideopacRLInterface(const std::string& bios_path,
                                   const std::string& rom_path,
-                                  const std::string& reward_mode = "survival");
+                                  const std::string& reward_mode = "survival",
+                                  int joystick_index = 0);
 
     ~VideopacRLInterface() override;
 

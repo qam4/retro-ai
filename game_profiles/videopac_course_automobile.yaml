@@ -1,0 +1,20 @@
+# Course de Voitures (Course Automobile) - Game 1, Level 1
+# The C++ reset already presses Key1 once (game select).
+# This startup sequence presses Key1 a second time (level select).
+name: course_automobile
+display_name: "Course Automobile - Game 1 Level 1 (Videopac)"
+emulator_type: videopac
+rom_path: "C:/src/videopac/roms/Course de Voitures + Autodrome + Cryptogramme (1980)(Philips)(FR).bin"
+bios_path: "C:/src/videopac/roms/Philips C52 BIOS (19xx)(Philips)(FR).bin"
+reward_mode: survival
+action_count: 4
+joystick_index: 1
+startup_sequence:
+  actions:
+    - action: 11   # Key 1 - select level 1
+      frames: 10
+  post_delay_frames: 120
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4

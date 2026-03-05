@@ -42,7 +42,7 @@ class BaseEnv:
         config: Optional[Dict[str, Any]] = None,
     ) -> None:
         self._interface = self._create_interface(
-            emulator_type, rom_path, bios_path, reward_mode
+            emulator_type, rom_path, bios_path, reward_mode, config
         )
         self._obs_space = self._interface.observation_space()
         self._action_space = self._interface.action_space()
@@ -193,6 +193,7 @@ class BaseEnv:
         rom_path: str,
         bios_path: Optional[str],
         reward_mode: str,
+        config: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """Factory: instantiate the correct native RLInterface."""
         import retro_ai_native  # local import to keep module-level clean
@@ -201,7 +202,12 @@ class BaseEnv:
         if emu == "videopac":
             if bios_path is None:
                 raise ValueError("Videopac emulator requires a bios_path")
-            return retro_ai_native.VideopacRLInterface(bios_path, rom_path, reward_mode)
+            joystick_index = 0
+            if config and "joystick_index" in config:
+                joystick_index = int(config["joystick_index"])
+            return retro_ai_native.VideopacRLInterface(
+                bios_path, rom_path, reward_mode, joystick_index
+            )
         if emu == "mo5":
             return retro_ai_native.MO5RLInterface(rom_path, reward_mode)
 

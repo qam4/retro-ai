@@ -76,10 +76,12 @@ class VideopacRLInterface::Impl {
 public:
     Impl(const std::string& bios_path,
          const std::string& rom_path,
-         const std::string& reward_mode)
+         const std::string& reward_mode,
+         int joystick_index = 0)
         : bios_path_(bios_path)
         , rom_path_(rom_path)
         , reward_mode_(reward_mode)
+        , joystick_index_(joystick_index)
         , frame_number_(0)
         , reward_system_(RewardSystemFactory::create(reward_mode))
     {
@@ -295,40 +297,41 @@ private:
     /// Map a discrete action to emulator input.
     void apply_action(int action) {
         InputHandler& input = emulator_->get_input_handler();
+        const int joy = joystick_index_;
 
         switch (action) {
         case 0:  // NOOP
             break;
         case 1:  // Up
-            input.set_joystick_state(0, Direction::Up, true);
+            input.set_joystick_state(joy, Direction::Up, true);
             break;
         case 2:  // Down
-            input.set_joystick_state(0, Direction::Down, true);
+            input.set_joystick_state(joy, Direction::Down, true);
             break;
         case 3:  // Left
-            input.set_joystick_state(0, Direction::Left, true);
+            input.set_joystick_state(joy, Direction::Left, true);
             break;
         case 4:  // Right
-            input.set_joystick_state(0, Direction::Right, true);
+            input.set_joystick_state(joy, Direction::Right, true);
             break;
         case 5:  // Fire
-            input.set_joystick_button(0, true);
+            input.set_joystick_button(joy, true);
             break;
         case 6:  // Up + Fire
-            input.set_joystick_state(0, Direction::Up, true);
-            input.set_joystick_button(0, true);
+            input.set_joystick_state(joy, Direction::Up, true);
+            input.set_joystick_button(joy, true);
             break;
         case 7:  // Down + Fire
-            input.set_joystick_state(0, Direction::Down, true);
-            input.set_joystick_button(0, true);
+            input.set_joystick_state(joy, Direction::Down, true);
+            input.set_joystick_button(joy, true);
             break;
         case 8:  // Left + Fire
-            input.set_joystick_state(0, Direction::Left, true);
-            input.set_joystick_button(0, true);
+            input.set_joystick_state(joy, Direction::Left, true);
+            input.set_joystick_button(joy, true);
             break;
         case 9:  // Right + Fire
-            input.set_joystick_state(0, Direction::Right, true);
-            input.set_joystick_button(0, true);
+            input.set_joystick_state(joy, Direction::Right, true);
+            input.set_joystick_button(joy, true);
             break;
         case 10: // Key 0
             input.set_key_state(VidKey::Key0, true);
@@ -365,6 +368,7 @@ private:
     std::string bios_path_;
     std::string rom_path_;
     std::string reward_mode_;
+    int joystick_index_;
     int frame_number_;
     std::unique_ptr<RewardSystem> reward_system_;
     StepResult previous_result_;
@@ -377,8 +381,9 @@ private:
 
 VideopacRLInterface::VideopacRLInterface(const std::string& bios_path,
                                           const std::string& rom_path,
-                                          const std::string& reward_mode)
-    : impl_(std::make_unique<Impl>(bios_path, rom_path, reward_mode))
+                                          const std::string& reward_mode,
+                                          int joystick_index)
+    : impl_(std::make_unique<Impl>(bios_path, rom_path, reward_mode, joystick_index))
 {
 }
 

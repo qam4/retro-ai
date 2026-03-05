@@ -49,6 +49,8 @@ class GameProfile:
     resize: Optional[Tuple[int, int]] = (84, 84)
     frame_stack: int = 4
     frame_skip: int = 4
+    # Controller config
+    joystick_index: int = 0
 
     # -- Serialization helpers ------------------------------------------------
 
