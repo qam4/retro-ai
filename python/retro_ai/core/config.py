@@ -5,11 +5,11 @@ and YAML formats. YAML requires the PyYAML package
 (optional dependency).
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, Optional
 import json
 import os
 import types
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -139,7 +139,8 @@ class ConfigParser:
             return yaml  # type: ignore[return-value]
         except ImportError:
             raise ImportError(
-                "PyYAML is required for YAML support. " "Install it with:  pip install pyyaml"
+                "PyYAML is required for YAML support. "
+                "Install it with:  pip install pyyaml"
             )
 
     @staticmethod
@@ -153,7 +154,9 @@ class ConfigParser:
                     data: Dict[str, Any] = json.load(fh)
                     return data
                 except json.JSONDecodeError as exc:
-                    raise ValueError("Invalid JSON in file " f"'{path_or_str}': {exc}") from exc
+                    raise ValueError(
+                        "Invalid JSON in file " f"'{path_or_str}': {exc}"
+                    ) from exc
 
         try:
             result: Dict[str, Any] = json.loads(path_or_str)
@@ -172,7 +175,9 @@ class ConfigParser:
                 try:
                     data = yaml.safe_load(fh)
                 except Exception as exc:
-                    raise ValueError("Invalid YAML in file " f"'{path_or_str}': {exc}") from exc
+                    raise ValueError(
+                        "Invalid YAML in file " f"'{path_or_str}': {exc}"
+                    ) from exc
         else:
             try:
                 data = yaml.safe_load(path_or_str)
@@ -181,7 +186,9 @@ class ConfigParser:
 
         if not isinstance(data, dict):
             raise ValueError(
-                "YAML config must be a mapping at " "the top level, got " f"{type(data).__name__}"
+                "YAML config must be a mapping at "
+                "the top level, got "
+                f"{type(data).__name__}"
             )
         return data
 
@@ -202,7 +209,8 @@ class ConfigParser:
             )
         if "rom_path" not in data:
             raise ValueError(
-                "Missing required field 'rom_path'." " Provide the path to the ROM file."
+                "Missing required field 'rom_path'."
+                " Provide the path to the ROM file."
             )
 
         emulator_type = data["emulator_type"]
@@ -213,7 +221,9 @@ class ConfigParser:
                 "'emulator_type' must be a non-empty" f" string, got {emulator_type!r}."
             )
         if not isinstance(rom_path, str) or not rom_path.strip():
-            raise ValueError("'rom_path' must be a non-empty" f" string, got {rom_path!r}.")
+            raise ValueError(
+                "'rom_path' must be a non-empty" f" string, got {rom_path!r}."
+            )
 
         # --- optional fields ---
         bios_path = data.get("bios_path")
@@ -230,7 +240,9 @@ class ConfigParser:
                 raise ValueError("'reward' must be a mapping," f" got {tp}.")
             mode = reward_data.get("mode", "survival")
             if not isinstance(mode, str) or not mode.strip():
-                raise ValueError("'reward.mode' must be a non-empty" f" string, got {mode!r}.")
+                raise ValueError(
+                    "'reward.mode' must be a non-empty" f" string, got {mode!r}."
+                )
             params = reward_data.get("parameters", {})
             if not isinstance(params, dict):
                 tp = type(params).__name__

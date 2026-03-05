@@ -7,11 +7,11 @@ description: Pre-commit checklist, CI portability review, and post-push verifica
 
 Before every `git commit`, you MUST follow this exact workflow:
 
-1. Build: `cmake --build --preset dev-mingw`
-2. Lint Python: `cmake --build --preset dev-mingw --target lint-python`
-   - If black reports failures, run `cmake --build --preset dev-mingw --target format-python`, then re-lint
+1. Build: `cmake --build --preset dev-win64`
+2. Lint Python: `cmake --build --preset dev-win64 --target lint-python`
+   - If black reports failures, run `cmake --build --preset dev-win64 --target format-python`, then re-lint
    - If ruff reports failures, fix them manually
-3. Test C++: `ctest --preset dev-mingw` — all tests must pass
+3. Test C++: `ctest --preset dev-win64` — all tests must pass
 4. Test Python: `python -m pytest tests/python/ -v --tb=short` (with PYTHONPATH set)
 5. CI portability review (see section below)
 6. Update any relevant documents: spec tasks.md checkboxes, design docs, etc.
@@ -57,10 +57,12 @@ After pushing (when the user approves a push):
 
 # General Rules
 
-- Build preset is `dev-mingw` (not `dev`)
-- Python is MinGW Python (`C:\msys64\mingw64\bin\python.exe`), NOT pyenv
-  - Install packages via `pacman -S mingw-w64-x86_64-python-<name>`
-  - Set `PYTHONPATH=C:\src\retro-ai\python;C:\src\retro-ai\build\dev-mingw` for imports
+- Build preset is `dev-win64` (MSVC, Visual Studio 18 2026)
+  - MinGW preset `dev-mingw` still works but is not the primary build
+- Python is pyenv Python 3.13.5 (`C:\Users\fredmarc\.pyenv\pyenv-win\versions\3.13.5\python.exe`)
+  - Install packages via `pip install <name>` (standard MSVC Python, PyTorch wheels work)
+  - Set `PYTHONPATH=C:\src\retro-ai\python;C:\src\retro-ai\build\dev-win64\Debug` for imports
+  - Native module: `retro_ai_native.cp313-win_amd64.pyd` in `build/dev-win64/Debug/`
 - Commit between phases for clean rollback points
 - Delete files that are no longer compiled — don't leave dead code on disk
 - Tag releases at milestones when GitHub builds pass

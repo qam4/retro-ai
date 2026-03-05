@@ -41,7 +41,9 @@ class BaseEnv:
         reward_mode: str = "survival",
         config: Optional[Dict[str, Any]] = None,
     ) -> None:
-        self._interface = self._create_interface(emulator_type, rom_path, bios_path, reward_mode)
+        self._interface = self._create_interface(
+            emulator_type, rom_path, bios_path, reward_mode
+        )
         self._obs_space = self._interface.observation_space()
         self._action_space = self._interface.action_space()
 
@@ -204,5 +206,6 @@ class BaseEnv:
             return retro_ai_native.MO5RLInterface(rom_path, reward_mode)
 
         raise ValueError(
-            f"Unknown emulator type: {emulator_type!r}. " f"Supported types: 'videopac', 'mo5'"
+            f"Unknown emulator type: {emulator_type!r}. "
+            f"Supported types: 'videopac', 'mo5'"
         )

@@ -59,7 +59,9 @@ class StructuredLogger:
                 handler.setFormatter(StructuredFormatter())
             else:
                 handler.setFormatter(
-                    logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+                    logging.Formatter(
+                        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+                    )
                 )
             self._logger.addHandler(handler)
 

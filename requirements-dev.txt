@@ -1,0 +1,9 @@
+# Development and testing dependencies
+-r requirements.txt
+pytest>=7.0
+black>=24.0
+ruff>=0.4.0
+pybind11>=3.0
+# Optional
+# opencv-python>=4.0  # for video recording
+# tensorboard>=2.0    # for training visualization

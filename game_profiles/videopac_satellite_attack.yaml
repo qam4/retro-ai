@@ -1,0 +1,15 @@
+name: satellite_attack
+display_name: "Satellite Attack (Videopac)"
+emulator_type: videopac
+rom_path: "C:/src/videopac/roms/Satellite Attack (1981)(Philips)(EU).bin"
+bios_path: "C:/src/videopac/roms/Philips C52 BIOS (19xx)(Philips)(FR).bin"
+reward_mode: survival
+startup_sequence:
+  actions:
+    - action: 1
+      frames: 10
+  post_delay_frames: 120
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4

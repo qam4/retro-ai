@@ -15,7 +15,8 @@ try:
     from gymnasium import spaces
 except ImportError:
     raise ImportError(
-        "gymnasium is required for GymnasiumWrapper. " "Install it with:  pip install gymnasium"
+        "gymnasium is required for GymnasiumWrapper. "
+        "Install it with:  pip install gymnasium"
     )
 
 from retro_ai.envs.base_env import BaseEnv
