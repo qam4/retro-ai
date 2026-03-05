@@ -1,0 +1,29 @@
+# Sample training config for Satellite Attack (Videopac)
+# Usage: retro-ai train game_profiles/satellite_attack_training.yaml
+
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+
+total_timesteps: 100000
+game_profile: satellite_attack
+reward_mode: survival
+policy: CnnPolicy
+
+# Preprocessing
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+
+# Output
+output_dir: output/satellite_attack
+checkpoint_interval: 25000
+max_checkpoints: 3
+log_interval: 1000
+
+# Metrics
+rolling_window: 50
+stagnation_threshold: 50000
+tensorboard: false

@@ -94,21 +94,21 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 5. Implement SB3 callbacks
-  - [ ] 5.1 Implement `MetricsCallback` in `training/callbacks.py`
+  - [x] 5.1 Implement `MetricsCallback` in `training/callbacks.py`
     - Subclass `stable_baselines3.common.callbacks.BaseCallback`
     - On each step, check for completed episodes in `self.locals` and record to MetricsTracker
     - Flush metrics at configured `log_interval`
     - Log episode reward, length, and FPS at log interval via StructuredLogger
     - _Requirements: 5.1, 8.2_
 
-  - [ ] 5.2 Implement `CheckpointCallback` in `training/callbacks.py`
+  - [x] 5.2 Implement `CheckpointCallback` in `training/callbacks.py`
     - Save model at configured `checkpoint_interval` steps
     - Name files `model_step_{step_number}.zip`
     - Implement rolling deletion: keep only `max_checkpoints` most recent, delete older ones
     - Handle save errors gracefully (log and continue)
     - _Requirements: 4.1, 4.2, 4.4_
 
-  - [ ] 5.3 Implement `StagnationCallback` in `training/callbacks.py`
+  - [x] 5.3 Implement `StagnationCallback` in `training/callbacks.py`
     - Track best rolling average reward from MetricsTracker
     - When rolling average does not improve for `stagnation_threshold` steps, log a warning
     - _Requirements: 5.5_
@@ -120,7 +120,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Validates: Requirements 4.4**
 
 - [ ] 6. Implement training pipeline orchestrator
-  - [ ] 6.1 Implement `TrainingPipeline` in `training/pipeline.py`
+  - [x] 6.1 Implement `TrainingPipeline` in `training/pipeline.py`
     - Constructor takes `TrainingConfig` and optional `StructuredLogger`
     - Implement `_validate_config()` using `TrainingConfigParser.validate()`
     - Implement `_build_env()`: BaseEnv → PreprocessedEnv → GymnasiumWrapper → StartupSequenceWrapper (if startup_sequence defined)
@@ -132,14 +132,14 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - Save copy of TrainingConfig as `config.yaml` in output dir for reproducibility
     - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 5.2, 9.1, 9.2, 9.5, 10.3, 10.4_
 
-  - [ ] 6.2 Implement `resume()` in `TrainingPipeline`
+  - [x] 6.2 Implement `resume()` in `TrainingPipeline`
     - Load model from checkpoint path, restore optimizer state
     - Load existing metrics CSV via `MetricsTracker.load_existing()`
     - Continue training from saved step count
     - On corrupted checkpoint, iterate backwards through checkpoint files to find valid one; raise `StateError` if none valid
     - _Requirements: 4.3, 4.5, 8.4_
 
-  - [ ] 6.3 Implement weighted reward combination in pipeline
+  - [x] 6.3 Implement weighted reward combination in pipeline
     - When `reward_weights` is set in TrainingConfig, combine multiple reward signals using configured weights
     - Log active reward mode and parameters at training start
     - _Requirements: 10.3, 10.4_
@@ -152,7 +152,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Implement evaluation module
-  - [ ] 8.1 Implement `EvaluationModule` in `training/evaluation.py`
+  - [x] 8.1 Implement `EvaluationModule` in `training/evaluation.py`
     - Constructor takes model_path, game_profile, num_episodes, base_seed, output_dir, optional video_path
     - Build env same way as pipeline (BaseEnv → PreprocessedEnv → GymnasiumWrapper → StartupSequenceWrapper)
     - Run agent for `num_episodes` episodes with deterministic seeds `[base_seed, base_seed+1, ..., base_seed+N-1]`
@@ -171,7 +171,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Validates: Requirements 7.4**
 
 - [ ] 9. Implement inference runner
-  - [ ] 9.1 Implement `InferenceRunner` in `training/inference.py`
+  - [x] 9.1 Implement `InferenceRunner` in `training/inference.py`
     - Constructor takes model_path, game_profile, target_fps (default 60.0), optional video_path
     - Build env same way as pipeline with StartupSequenceWrapper
     - Load trained model, run inference loop with frame pacing via `time.perf_counter()` / `time.sleep()`
@@ -182,7 +182,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
 - [ ] 10. Implement video recorder
-  - [ ] 10.1 Implement `VideoRecorder` in `training/video.py`
+  - [x] 10.1 Implement `VideoRecorder` in `training/video.py`
     - `available()` static method checks for cv2 import
     - Constructor takes path, fps, overlay flag; logs warning and becomes no-op if cv2 unavailable
     - `add_frame(frame, reward, step)` writes frame to MP4; when overlay enabled, render reward/step with `cv2.putText`
@@ -195,7 +195,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Validates: Requirements 11.3**
 
 - [ ] 11. Implement CLI entry points
-  - [ ] 11.1 Implement CLI in `training/cli.py`
+  - [x] 11.1 Implement CLI in `training/cli.py`
     - `train` command: accepts config file path, optional `--resume` checkpoint path; loads config, creates TrainingPipeline, calls run() or resume()
     - `evaluate` command: accepts model path, `--profile`, `--episodes`, `--seed`, `--output`; creates EvaluationModule, calls run()
     - `play` command: accepts model path, `--profile`, `--fps`, `--record`; creates InferenceRunner, calls run()
@@ -211,11 +211,11 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - _Requirements: 12.5_
 
 - [ ] 12. Wire everything together and integration test
-  - [ ] 12.1 Update `python/retro_ai/training/__init__.py` with all public exports
+  - [x] 12.1 Update `python/retro_ai/training/__init__.py` with all public exports
     - Export TrainingConfig, AlgorithmConfig, TrainingConfigParser, GameProfile, StartupSequence, GameProfileRegistry, TrainingPipeline, EvaluationModule, InferenceRunner, MetricsTracker, VideoRecorder
     - _Requirements: 9.1, 9.2_
 
-  - [ ] 12.2 Create a sample training config YAML for Satellite Attack
+  - [x] 12.2 Create a sample training config YAML for Satellite Attack
     - Create `game_profiles/satellite_attack_training.yaml` with PPO, 100k timesteps, survival reward, referencing the game profile
     - Verify config loads and validates correctly
     - _Requirements: 1.1, 1.4, 2.1_
