@@ -68,7 +68,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install numpy pytest pytest-cov
+        pip install numpy pytest pytest-cov gymnasium pyyaml
 
     - name: Run Python tests
       env:
