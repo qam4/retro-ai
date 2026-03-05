@@ -183,6 +183,7 @@ class TrainingPipeline:
             MetricsCallback(
                 metrics=self._metrics,
                 log_interval=self.config.log_interval,
+                total_timesteps=self.config.total_timesteps,
                 logger_inst=self._logger,
             )
         )
@@ -219,12 +220,13 @@ class TrainingPipeline:
         """Log training run parameters."""
         self._logger.info(
             "training_start",
-            algorithm=self.config.algorithm.name,
-            total_timesteps=self.config.total_timesteps,
-            emulator=self.config.emulator_type,
-            reward_mode=self.config.reward_mode,
-            reward_params=self.config.reward_params,
-            policy=self.config.policy,
+            {
+                "algorithm": self.config.algorithm.name,
+                "total_timesteps": self.config.total_timesteps,
+                "emulator": self.config.emulator_type,
+                "reward_mode": self.config.reward_mode,
+                "policy": self.config.policy,
+            },
         )
 
     def _load_checkpoint(self, checkpoint_path, env):

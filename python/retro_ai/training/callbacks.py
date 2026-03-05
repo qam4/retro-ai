@@ -18,12 +18,14 @@ class MetricsCallback(BaseCallback):
         self,
         metrics: MetricsTracker,
         log_interval: int,
+        total_timesteps: int = 0,
         logger_inst: Optional[StructuredLogger] = None,
         verbose: int = 0,
     ):
         super().__init__(verbose)
         self._metrics = metrics
         self._log_interval = log_interval
+        self._total_timesteps = total_timesteps
         self._logger = logger_inst
         self._last_log_step = 0
         self._step_start = time.monotonic()
@@ -51,11 +53,12 @@ class MetricsCallback(BaseCallback):
                 elapsed = time.monotonic() - self._step_start
                 fps = self._log_interval / elapsed if elapsed > 0 else 0
                 rolling = self._metrics.rolling_reward()
+                total = self._total_timesteps
+                pct = f" ({100 * self.num_timesteps / total:.0f}%)" if total > 0 else ""
                 self._logger.info(
-                    "training_progress",
-                    step=self.num_timesteps,
-                    rolling_reward=rolling,
-                    fps=round(fps, 1),
+                    f"step {self.num_timesteps}/{total}{pct}"
+                    f" | rolling_reward={rolling}"
+                    f" | fps={fps:.0f}",
                 )
             self._last_log_step = self.num_timesteps
             self._step_start = time.monotonic()
@@ -95,8 +98,7 @@ class CheckpointCallback(BaseCallback):
             if self._logger:
                 self._logger.info(
                     "checkpoint_saved",
-                    step=self.num_timesteps,
-                    path=path,
+                    {"step": self.num_timesteps, "path": path},
                 )
         except Exception as e:
             if self._logger:
@@ -148,8 +150,12 @@ class StagnationCallback(BaseCallback):
             if logger_inst := getattr(self, "_logger", None):
                 logger_inst.warning(
                     "stagnation_detected",
-                    steps_since_improvement=(self.num_timesteps - self._best_step),
-                    best_rolling=self._best_rolling,
+                    {
+                        "steps_since_improvement": (
+                            self.num_timesteps - self._best_step
+                        ),
+                        "best_rolling": self._best_rolling,
+                    },
                 )
             self._warned = True
         return True
