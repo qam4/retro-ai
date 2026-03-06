@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "retro_ai/rl_interface.hpp"
+#include "retro_ai/reward_system.hpp"
 
 namespace retro_ai {
 
@@ -19,7 +20,8 @@ public:
     /// @param reward_mode Initial reward computation mode (default: "survival").
     /// @throws InitializationError if the emulator fails to initialize.
     explicit MO5RLInterface(const std::string& rom_path,
-                            const std::string& reward_mode = "survival");
+                            const std::string& reward_mode = "survival",
+                            const RewardParams& reward_params = {});
 
     ~MO5RLInterface() override;
 

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "retro_ai/rl_interface.hpp"
+#include "retro_ai/reward_system.hpp"
 
 namespace retro_ai {
 
@@ -26,7 +27,8 @@ public:
     explicit VideopacRLInterface(const std::string& bios_path,
                                   const std::string& rom_path,
                                   const std::string& reward_mode = "survival",
-                                  int joystick_index = 0);
+                                  int joystick_index = 0,
+                                  const RewardParams& reward_params = {});
 
     ~VideopacRLInterface() override;
 

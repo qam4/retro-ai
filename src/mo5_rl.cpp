@@ -32,10 +32,12 @@ static constexpr int kNumActions     = mo5::NUM_ACTIONS;     // 60
 class MO5RLInterface::Impl {
 public:
     Impl(const std::string& rom_path,
-         const std::string& reward_mode)
+         const std::string& reward_mode,
+         const RewardParams& reward_params = {})
         : reward_mode_(reward_mode)
         , frame_number_(0)
-        , reward_system_(RewardSystemFactory::create(reward_mode))
+        , reward_params_(reward_params)
+        , reward_system_(RewardSystemFactory::create(reward_mode, reward_params))
     {
         if (!mo5::emulator_init(rom_path)) {
             throw InitializationError(
@@ -128,7 +130,7 @@ public:
 
     void set_reward_mode(const std::string& mode) {
         reward_mode_ = mode;
-        reward_system_ = RewardSystemFactory::create(mode);
+        reward_system_ = RewardSystemFactory::create(mode, reward_params_);
         if (reward_system_) {
             reward_system_->reset();
         }
@@ -151,6 +153,7 @@ private:
 
     std::string reward_mode_;
     int frame_number_;
+    RewardParams reward_params_;
     std::unique_ptr<RewardSystem> reward_system_;
     StepResult previous_result_;
 };
@@ -160,8 +163,9 @@ private:
 // ---------------------------------------------------------------------------
 
 MO5RLInterface::MO5RLInterface(const std::string& rom_path,
-                                const std::string& reward_mode)
-    : impl_(std::make_unique<Impl>(rom_path, reward_mode))
+                                const std::string& reward_mode,
+                                const RewardParams& reward_params)
+    : impl_(std::make_unique<Impl>(rom_path, reward_mode, reward_params))
 {
 }
 

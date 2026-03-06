@@ -136,6 +136,8 @@ class TrainingPipeline:
         gp = self._game_profile
         if gp and hasattr(gp, "joystick_index"):
             config_dict["joystick_index"] = gp.joystick_index
+        if gp and gp.reward_params:
+            config_dict["reward_params"] = gp.reward_params
 
         base = BaseEnv(
             emulator_type=self.config.emulator_type,

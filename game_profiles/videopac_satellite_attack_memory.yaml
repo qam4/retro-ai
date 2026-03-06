@@ -1,0 +1,28 @@
+# Satellite Attack (Videopac) — Memory-based reward
+# Uses RAM addresses to read the score directly from emulator memory.
+# Addresses discovered via scripts/ram_watcher.py.
+#
+# ROM paths use $RETRO_AI_ROM_DIR — set it or source setup_env.sh
+name: satellite_attack_memory
+display_name: "Satellite Attack - Memory Reward (Videopac)"
+emulator_type: videopac
+rom_path: "$RETRO_AI_ROM_DIR/videopac/Satellite Attack (1981)(Philips)(EU).bin"
+bios_path: "$RETRO_AI_ROM_DIR/videopac/Philips C52 BIOS (19xx)(Philips)(FR).bin"
+reward_mode: memory
+reward_params:
+  score_addresses:
+    - address: 0x003A
+      num_bytes: 1
+      is_bcd: true
+    - address: 0x003B
+      num_bytes: 1
+      is_bcd: true
+startup_sequence:
+  actions:
+    - action: 1
+      frames: 10
+  post_delay_frames: 120
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4

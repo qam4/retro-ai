@@ -76,7 +76,44 @@ class GameProfile:
         if isinstance(resize, list):
             data["resize"] = tuple(resize)
 
+        # Resolve $RETRO_AI_ROM_DIR in rom_path / bios_path
+        rom_dir = os.environ.get("RETRO_AI_ROM_DIR", "")
+        for key in ("rom_path", "bios_path"):
+            val = data.get(key)
+            if isinstance(val, str) and val.startswith("$RETRO_AI_ROM_DIR"):
+                data[key] = val.replace("$RETRO_AI_ROM_DIR", rom_dir, 1)
+
+        # Validate reward_params before constructing the profile
+        reward_params = data.get("reward_params", {})
+        if reward_params:
+            GameProfile._validate_reward_params(reward_params)
+
         return GameProfile(**data)
+
+    @staticmethod
+    def _validate_reward_params(reward_params: Dict[str, Any]) -> None:
+        """Validate reward_params values. Raises ConfigurationError on invalid input."""
+        if "screen_region" in reward_params:
+            region = reward_params["screen_region"]
+            for key in ("x", "y", "width", "height"):
+                val = region.get(key)
+                if val is not None and (not isinstance(val, int) or val < 0):
+                    raise ConfigurationError(
+                        f"screen_region.{key} must be a non-negative integer, got {val!r}"
+                    )
+        if "score_addresses" in reward_params:
+            for i, entry in enumerate(reward_params["score_addresses"]):
+                addr = entry.get("address", 0)
+                if not isinstance(addr, int) or addr < 0 or addr > 65535:
+                    raise ConfigurationError(
+                        f"score_addresses[{i}].address must be in [0, 65535], got {addr!r}"
+                    )
+                nb = entry.get("num_bytes", 1)
+                if nb not in (1, 2, 4):
+                    raise ConfigurationError(
+                        f"score_addresses[{i}].num_bytes must be 1, 2, or 4, got {nb!r}"
+                    )
+
 
     @staticmethod
     def from_yaml(path: str) -> "GameProfile":

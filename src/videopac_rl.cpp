@@ -77,13 +77,15 @@ public:
     Impl(const std::string& bios_path,
          const std::string& rom_path,
          const std::string& reward_mode,
-         int joystick_index = 0)
+         int joystick_index = 0,
+         const RewardParams& reward_params = {})
         : bios_path_(bios_path)
         , rom_path_(rom_path)
         , reward_mode_(reward_mode)
         , joystick_index_(joystick_index)
         , frame_number_(0)
-        , reward_system_(RewardSystemFactory::create(reward_mode))
+        , reward_params_(reward_params)
+        , reward_system_(RewardSystemFactory::create(reward_mode, reward_params))
     {
         // Configure headless emulator (NTSC = 60 Hz)
         Configuration config;
@@ -259,7 +261,7 @@ public:
 
     void set_reward_mode(const std::string& mode) {
         reward_mode_ = mode;
-        reward_system_ = RewardSystemFactory::create(mode);
+        reward_system_ = RewardSystemFactory::create(mode, reward_params_);
         if (reward_system_) {
             reward_system_->reset();
         }
@@ -370,6 +372,7 @@ private:
     std::string reward_mode_;
     int joystick_index_;
     int frame_number_;
+    RewardParams reward_params_;
     std::unique_ptr<RewardSystem> reward_system_;
     StepResult previous_result_;
     std::unique_ptr<EmulatorCore> emulator_;
@@ -382,8 +385,9 @@ private:
 VideopacRLInterface::VideopacRLInterface(const std::string& bios_path,
                                           const std::string& rom_path,
                                           const std::string& reward_mode,
-                                          int joystick_index)
-    : impl_(std::make_unique<Impl>(bios_path, rom_path, reward_mode, joystick_index))
+                                          int joystick_index,
+                                          const RewardParams& reward_params)
+    : impl_(std::make_unique<Impl>(bios_path, rom_path, reward_mode, joystick_index, reward_params))
 {
 }
 

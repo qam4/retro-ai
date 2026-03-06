@@ -17,6 +17,7 @@
 
 #include "retro_ai/rl_interface.hpp"
 #include "retro_ai/exceptions.hpp"
+#include "retro_ai/reward_system.hpp"
 
 #ifdef HAVE_VIDEOPAC
 #include "retro_ai/videopac_rl.hpp"
@@ -276,20 +277,23 @@ PYBIND11_MODULE(retro_ai_native, m) {
 #ifdef HAVE_VIDEOPAC
     py::class_<VideopacRLInterface, RLInterface, std::shared_ptr<VideopacRLInterface>>(
             m, "VideopacRLInterface")
-        .def(py::init<const std::string&, const std::string&, const std::string&, int>(),
+        .def(py::init<const std::string&, const std::string&, const std::string&, int,
+                       const RewardParams&>(),
              py::arg("bios_path"),
              py::arg("rom_path"),
              py::arg("reward_mode") = "survival",
              py::arg("joystick_index") = 0,
+             py::arg("reward_params") = RewardParams{},
              "Create a Videopac (Odyssey 2) environment.");
 #endif
 
 #ifdef HAVE_MO5
     py::class_<MO5RLInterface, RLInterface, std::shared_ptr<MO5RLInterface>>(
             m, "MO5RLInterface")
-        .def(py::init<const std::string&, const std::string&>(),
+        .def(py::init<const std::string&, const std::string&, const RewardParams&>(),
              py::arg("rom_path"),
              py::arg("reward_mode") = "survival",
+             py::arg("reward_params") = RewardParams{},
              "Create a Thomson MO5 environment.");
 #endif
 }

@@ -1,0 +1,28 @@
+algorithm:
+  batch_size: 64
+  extra: {}
+  learning_rate: 0.0003
+  name: PPO
+bios_path: /home/fredmarc/src/retro-ai/roms/videopac/Philips C52 BIOS (19xx)(Philips)(FR).bin
+checkpoint_interval: 25000
+emulator_type: videopac
+frame_skip: 4
+frame_stack: 4
+game_profile: course_automobile
+grayscale: true
+log_interval: 1000
+max_checkpoints: 3
+output_dir: output/course_automobile
+policy: CnnPolicy
+resize:
+- 84
+- 84
+reward_mode: survival
+reward_params: {}
+reward_weights: null
+rolling_window: 50
+rom_path: /home/fredmarc/src/retro-ai/roms/videopac/Course de Voitures + Autodrome
+  + Cryptogramme (1980)(Philips)(FR).bin
+stagnation_threshold: 50000
+tensorboard: false
+total_timesteps: 100000

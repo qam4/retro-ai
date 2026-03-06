@@ -198,6 +198,11 @@ class BaseEnv:
         """Factory: instantiate the correct native RLInterface."""
         import retro_ai_native  # local import to keep module-level clean
 
+        # Flatten reward_params for the native constructor
+        reward_params_flat: Dict[str, str] = {}
+        if config and "reward_params" in config:
+            reward_params_flat = BaseEnv._flatten_reward_params(config["reward_params"])
+
         emu = emulator_type.lower()
         if emu == "videopac":
             if bios_path is None:
@@ -206,12 +211,35 @@ class BaseEnv:
             if config and "joystick_index" in config:
                 joystick_index = int(config["joystick_index"])
             return retro_ai_native.VideopacRLInterface(
-                bios_path, rom_path, reward_mode, joystick_index
+                bios_path, rom_path, reward_mode, joystick_index,
+                reward_params=reward_params_flat,
             )
         if emu == "mo5":
-            return retro_ai_native.MO5RLInterface(rom_path, reward_mode)
+            return retro_ai_native.MO5RLInterface(
+                rom_path, reward_mode,
+                reward_params=reward_params_flat,
+            )
 
         raise ValueError(
             f"Unknown emulator type: {emulator_type!r}. "
             f"Supported types: 'videopac', 'mo5'"
         )
+
+    @staticmethod
+    def _flatten_reward_params(reward_params: Dict[str, Any]) -> Dict[str, str]:
+        """Flatten nested reward_params into a string key-value map for C++."""
+        flat: Dict[str, str] = {}
+        if "screen_region" in reward_params:
+            sr = reward_params["screen_region"]
+            key_map = {"x": "x", "y": "y", "width": "w", "height": "h"}
+            for src_key, dst_suffix in key_map.items():
+                if src_key in sr:
+                    flat[f"screen_region_{dst_suffix}"] = str(sr[src_key])
+        if "score_addresses" in reward_params:
+            for i, entry in enumerate(reward_params["score_addresses"]):
+                flat[f"score_address_{i}_addr"] = str(entry["address"])
+                flat[f"score_address_{i}_bytes"] = str(entry.get("num_bytes", 1))
+                flat[f"score_address_{i}_bcd"] = str(int(entry.get("is_bcd", False)))
+            flat["score_address_count"] = str(len(reward_params["score_addresses"]))
+        return flat
+

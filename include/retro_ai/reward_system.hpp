@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace retro_ai {
@@ -32,6 +33,9 @@ public:
     virtual std::string name() const = 0;
 };
 
+/// String-based parameter map for per-game reward configuration.
+using RewardParams = std::unordered_map<std::string, std::string>;
+
 /// Factory for creating RewardSystem instances by mode name.
 ///
 /// New reward systems are registered at compile time. The factory owns the
@@ -42,6 +46,13 @@ public:
     /// @param mode  One of the strings returned by available_modes().
     /// @return A new RewardSystem instance, or nullptr if mode is unknown.
     static std::unique_ptr<RewardSystem> create(const std::string& mode);
+
+    /// Create a RewardSystem for the given mode name with per-game parameters.
+    /// @param mode   One of the strings returned by available_modes().
+    /// @param params Key-value parameter map (e.g. screen_region_x, score_address_0_addr).
+    /// @return A new RewardSystem instance, or nullptr if mode is unknown.
+    static std::unique_ptr<RewardSystem> create(const std::string& mode,
+                                                 const RewardParams& params);
 
     /// List all registered reward mode names.
     static std::vector<std::string> available_modes();
