@@ -1,9 +1,17 @@
+# Satellite Attack (Videopac)
+# ROM paths use $RETRO_AI_ROM_DIR — set it or source setup_env.sh
 name: satellite_attack
 display_name: "Satellite Attack (Videopac)"
 emulator_type: videopac
-rom_path: "C:/src/videopac/roms/Satellite Attack (1981)(Philips)(EU).bin"
-bios_path: "C:/src/videopac/roms/Philips C52 BIOS (19xx)(Philips)(FR).bin"
-reward_mode: survival
+rom_path: "$RETRO_AI_ROM_DIR/videopac/Satellite Attack (1981)(Philips)(EU).bin"
+bios_path: "$RETRO_AI_ROM_DIR/videopac/Philips C52 BIOS (19xx)(Philips)(FR).bin"
+reward_mode: vision
+reward_params:
+  screen_region:
+    x: 112
+    y: 80
+    width: 40
+    height: 14
 startup_sequence:
   actions:
     - action: 1

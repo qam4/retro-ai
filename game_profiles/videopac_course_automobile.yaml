@@ -1,11 +1,13 @@
 # Course de Voitures (Course Automobile) - Game 1, Level 1
 # The C++ reset already presses Key1 once (game select).
 # This startup sequence presses Key1 a second time (level select).
+#
+# ROM paths use $RETRO_AI_ROM_DIR — set it or source setup_env.sh
 name: course_automobile
 display_name: "Course Automobile - Game 1 Level 1 (Videopac)"
 emulator_type: videopac
-rom_path: "C:/src/videopac/roms/Course de Voitures + Autodrome + Cryptogramme (1980)(Philips)(FR).bin"
-bios_path: "C:/src/videopac/roms/Philips C52 BIOS (19xx)(Philips)(FR).bin"
+rom_path: "$RETRO_AI_ROM_DIR/videopac/Course de Voitures + Autodrome + Cryptogramme (1980)(Philips)(FR).bin"
+bios_path: "$RETRO_AI_ROM_DIR/videopac/Philips C52 BIOS (19xx)(Philips)(FR).bin"
 reward_mode: survival
 action_count: 4
 joystick_index: 1

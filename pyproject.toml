@@ -25,6 +25,9 @@ video = [
 [project.scripts]
 retro-ai = "retro_ai.training.cli:main"
 
+[tool.setuptools.packages.find]
+where = ["python"]
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]
