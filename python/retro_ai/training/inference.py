@@ -26,11 +26,13 @@ class InferenceRunner:
         game_profile: GameProfile,
         target_fps: float = 60.0,
         video_path: Optional[str] = None,
+        overlay: bool = True,
     ):
         self.model_path = model_path
         self.game_profile = game_profile
         self._target_fps = target_fps
         self.video_path = video_path
+        self._overlay = overlay
         self._logger = StructuredLogger("inference")
 
     def run(self, max_episodes: Optional[int] = None) -> None:
@@ -45,6 +47,7 @@ class InferenceRunner:
             done = False
             skipped_frames = 0
             step = 0
+            episode_reward = 0.0
 
             while not done:
                 frame_start = time.perf_counter()
@@ -52,9 +55,10 @@ class InferenceRunner:
                 obs, reward, done, truncated, info = env.step(action)
                 done = done or truncated
                 step += 1
+                episode_reward += reward
 
                 if recorder:
-                    recorder.add_frame(obs, reward=reward, step=step)
+                    recorder.add_frame(obs, reward=episode_reward, step=step)
 
                 # Frame pacing
                 elapsed = time.perf_counter() - frame_start
@@ -64,12 +68,15 @@ class InferenceRunner:
                 else:
                     skipped_frames += 1
 
-            if skipped_frames > 0:
-                self._logger.info(
-                    "frames_skipped",
-                    count=skipped_frames,
-                    episode=episodes_run,
-                )
+            self._logger.info(
+                "episode_complete",
+                {
+                    "episode": episodes_run + 1,
+                    "reward": episode_reward,
+                    "length": step,
+                    "skipped_frames": skipped_frames,
+                },
+            )
 
             episodes_run += 1
             if max_episodes is not None and episodes_run >= max_episodes:
@@ -83,6 +90,8 @@ class InferenceRunner:
         config_dict = {}
         if hasattr(gp, "joystick_index"):
             config_dict["joystick_index"] = gp.joystick_index
+        if gp.reward_params:
+            config_dict["reward_params"] = gp.reward_params
 
         base = BaseEnv(
             emulator_type=gp.emulator_type,
@@ -115,5 +124,14 @@ class InferenceRunner:
 
     def _maybe_init_recorder(self) -> Optional[VideoRecorder]:
         if self.video_path and VideoRecorder.available():
-            return VideoRecorder(path=self.video_path)
+            return VideoRecorder(
+                path=self.video_path,
+                fps=self._target_fps,
+                overlay=self._overlay,
+            )
+        if self.video_path and not VideoRecorder.available():
+            self._logger.warning(
+                "video_unavailable",
+                {"message": "opencv-python not installed, video recording disabled"},
+            )
         return None

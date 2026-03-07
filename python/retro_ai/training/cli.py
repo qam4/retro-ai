@@ -28,6 +28,7 @@ def main() -> None:
     eval_p.add_argument("--episodes", type=int, default=10)
     eval_p.add_argument("--seed", type=int, default=42)
     eval_p.add_argument("--output", default="output")
+    eval_p.add_argument("--video", help="Path to save MP4 video of evaluation")
 
     # play
     play_p = sub.add_parser("play", help="Watch agent play in real-time")
@@ -39,6 +40,14 @@ def main() -> None:
     )
     play_p.add_argument("--fps", type=float, default=60.0)
     play_p.add_argument("--record", help="Path to save MP4 video")
+    play_p.add_argument(
+        "--episodes", type=int, default=None,
+        help="Max episodes to run (default: infinite)",
+    )
+    play_p.add_argument(
+        "--no-overlay", action="store_true",
+        help="Disable reward/step overlay on recorded video",
+    )
 
     # list-games
     sub.add_parser("list-games", help="List available game profiles")
@@ -85,6 +94,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> None:
         num_episodes=args.episodes,
         base_seed=args.seed,
         output_dir=args.output,
+        video_path=getattr(args, "video", None),
     )
     summary = evaluator.run()
     print(f"Evaluation complete: {summary}")
@@ -101,8 +111,9 @@ def _cmd_play(args: argparse.Namespace) -> None:
         game_profile=profile,
         target_fps=args.fps,
         video_path=args.record,
+        overlay=not args.no_overlay,
     )
-    runner.run()
+    runner.run(max_episodes=args.episodes)
 
 
 def _cmd_list_games() -> None:

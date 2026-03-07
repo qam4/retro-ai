@@ -89,6 +89,8 @@ class EvaluationModule:
         config_dict = {}
         if hasattr(gp, "joystick_index"):
             config_dict["joystick_index"] = gp.joystick_index
+        if gp.reward_params:
+            config_dict["reward_params"] = gp.reward_params
 
         base = BaseEnv(
             emulator_type=gp.emulator_type,
