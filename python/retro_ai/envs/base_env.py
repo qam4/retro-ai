@@ -227,19 +227,32 @@ class BaseEnv:
 
     @staticmethod
     def _flatten_reward_params(reward_params: Dict[str, Any]) -> Dict[str, str]:
-        """Flatten nested reward_params into a string key-value map for C++."""
+        """Flatten nested reward_params into a string key-value map for C++.
+
+        Handles two formats:
+        1. Already-flat string maps (e.g. from YAML game profiles) — passed
+           through as-is.
+        2. Nested dicts (``screen_region``, ``score_addresses``) — expanded
+           into the flat key convention expected by the C++ side.
+        """
         flat: Dict[str, str] = {}
-        if "screen_region" in reward_params:
-            sr = reward_params["screen_region"]
-            key_map = {"x": "x", "y": "y", "width": "w", "height": "h"}
-            for src_key, dst_suffix in key_map.items():
-                if src_key in sr:
-                    flat[f"screen_region_{dst_suffix}"] = str(sr[src_key])
-        if "score_addresses" in reward_params:
-            for i, entry in enumerate(reward_params["score_addresses"]):
-                flat[f"score_address_{i}_addr"] = str(entry["address"])
-                flat[f"score_address_{i}_bytes"] = str(entry.get("num_bytes", 1))
-                flat[f"score_address_{i}_bcd"] = str(int(entry.get("is_bcd", False)))
-            flat["score_address_count"] = str(len(reward_params["score_addresses"]))
+
+        for key, value in reward_params.items():
+            # Nested structures get special handling
+            if key == "screen_region" and isinstance(value, dict):
+                key_map = {"x": "x", "y": "y", "width": "w", "height": "h"}
+                for src_key, dst_suffix in key_map.items():
+                    if src_key in value:
+                        flat[f"screen_region_{dst_suffix}"] = str(value[src_key])
+            elif key == "score_addresses" and isinstance(value, list):
+                for i, entry in enumerate(value):
+                    flat[f"score_address_{i}_addr"] = str(entry["address"])
+                    flat[f"score_address_{i}_bytes"] = str(entry.get("num_bytes", 1))
+                    flat[f"score_address_{i}_bcd"] = str(int(entry.get("is_bcd", False)))
+                flat["score_address_count"] = str(len(value))
+            else:
+                # Scalar / already-flat key — pass through as string
+                flat[key] = str(value)
+
         return flat
 
