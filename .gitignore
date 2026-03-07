@@ -68,9 +68,8 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Trained models (optional - comment out if you want to commit them)
-*.zip
-*.pkl
+# Training output (models, metrics, eval results, logs)
+output/
 trained_models/
 
 # ROMs (never commit these)
