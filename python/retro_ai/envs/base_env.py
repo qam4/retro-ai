@@ -31,7 +31,13 @@ class BaseEnv:
         Initial reward computation mode (e.g. ``"survival"``).
     config : dict or None
         Reserved for future per-emulator configuration options.
+    observation_mode : str
+        Observation source.  ``"framebuffer"`` (default) returns the RGB
+        pixel buffer; ``"ram"`` returns raw emulator RAM bytes, skipping
+        framebuffer extraction entirely.
     """
+
+    _VALID_OBSERVATION_MODES = {"framebuffer", "ram"}
 
     def __init__(
         self,
@@ -40,7 +46,14 @@ class BaseEnv:
         bios_path: Optional[str] = None,
         reward_mode: str = "survival",
         config: Optional[Dict[str, Any]] = None,
+        observation_mode: str = "framebuffer",
     ) -> None:
+        if observation_mode not in self._VALID_OBSERVATION_MODES:
+            raise ValueError(
+                f"Invalid observation_mode: {observation_mode!r}. "
+                f"Must be one of {sorted(self._VALID_OBSERVATION_MODES)}"
+            )
+        self._observation_mode = observation_mode
         self._interface = self._create_interface(
             emulator_type, rom_path, bios_path, reward_mode, config
         )
@@ -70,7 +83,11 @@ class BaseEnv:
         """
         native_seed = seed if seed is not None else -1
         result = self._interface.reset_numpy(native_seed)
-        observation = result["observation"]
+        if self._observation_mode == "ram":
+            ram_bytes = self._interface.read_ram()
+            observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
+        else:
+            observation = result["observation"]
         info = self._parse_info(result["info"])
         return observation, info
 
@@ -96,12 +113,55 @@ class BaseEnv:
             Additional metadata dictionary.
         """
         result = self._interface.step_numpy([action])
-        observation = result["observation"]
+        if self._observation_mode == "ram":
+            ram_bytes = self._interface.read_ram()
+            observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
+        else:
+            observation = result["observation"]
         reward = float(result["reward"])
         done = bool(result["done"])
         truncated = bool(result["truncated"])
         info = self._parse_info(result["info"])
         return observation, reward, done, truncated, info
+
+    def step_n(self, action: int, n: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """Execute *n* environment steps with the same action via C++ batching.
+
+        Delegates to the native ``step_n_numpy`` method which runs all *n*
+        frames in a single Python→C++ round-trip, avoiding per-frame overhead.
+
+        Parameters
+        ----------
+        action : int
+            The discrete action to repeat for *n* frames.
+        n : int
+            Number of frames to step.
+
+        Returns
+        -------
+        observation : numpy.ndarray
+            Final observation after *n* steps (``uint8``, shape ``(H, W, C)``).
+        reward : float
+            Accumulated reward across all *n* steps.
+        done : bool
+            ``True`` when the episode ended during the sequence.
+        truncated : bool
+            ``True`` when the episode was truncated.
+        info : dict
+            Metadata from the final step.
+        """
+        result = self._interface.step_n_numpy([action], n)
+        if self._observation_mode == "ram":
+            ram_bytes = self._interface.read_ram()
+            observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
+        else:
+            observation = result["observation"]
+        reward = float(result["reward"])
+        done = bool(result["done"])
+        truncated = bool(result["truncated"])
+        info = self._parse_info(result["info"])
+        return observation, reward, done, truncated, info
+
 
     # ------------------------------------------------------------------
     # Space queries
@@ -111,7 +171,18 @@ class BaseEnv:
         """Return the observation-space specification as a plain dict.
 
         Keys: ``width``, ``height``, ``channels``, ``bits_per_channel``.
+
+        When ``observation_mode`` is ``"ram"``, the space is 1-D:
+        ``(ram_size, 1, 1)`` with 8 bits per channel.
         """
+        if self._observation_mode == "ram":
+            ram_size = self._interface.ram_size()
+            return {
+                "width": ram_size,
+                "height": 1,
+                "channels": 1,
+                "bits_per_channel": 8,
+            }
         return {
             "width": self._obs_space.width,
             "height": self._obs_space.height,

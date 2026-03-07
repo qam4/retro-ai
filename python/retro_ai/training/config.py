@@ -58,6 +58,11 @@ class TrainingConfig:
     # Policy network
     policy: str = "CnnPolicy"
 
+    # Performance (training-performance spec)
+    num_envs: int = 1  # Requirement 2: parallel environments
+    observation_mode: str = "framebuffer"  # Requirement 6: "framebuffer" | "ram"
+    mixed_precision: bool = False  # Requirement 8: FP16 training
+
 
 class TrainingConfigParser:
     """Serialize, deserialize, and validate TrainingConfig objects."""
@@ -145,6 +150,12 @@ class TrainingConfigParser:
             if config.resize[0] <= 0 or config.resize[1] <= 0:
                 raise ConfigurationError("resize")
 
+        if config.num_envs < 1:
+            raise ConfigurationError("num_envs")
+
+        if config.observation_mode not in {"framebuffer", "ram"}:
+            raise ConfigurationError("observation_mode")
+
 
 # ---------------------------------------------------------------------------
 # Config merge with GameProfile (Task 2.3)
@@ -161,6 +172,7 @@ _TC_DEFAULTS: Dict[str, Any] = {
     "resize": (84, 84),
     "frame_stack": 4,
     "frame_skip": 4,
+    "observation_mode": "framebuffer",
 }
 
 

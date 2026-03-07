@@ -5,7 +5,21 @@
 #include <string>
 #include <vector>
 
+#ifdef RETRO_AI_PROFILING
+#include <chrono>
+#endif
+
 namespace retro_ai {
+
+/// Per-component timing breakdown for a single frame (microseconds).
+/// Only populated when built with RETRO_AI_PROFILING; all zeros otherwise.
+struct FrameTimings {
+    double cpu_us = 0.0;           // CPU emulation (run_frame)
+    double vdc_us = 0.0;           // VDC rendering (included in run_frame for now)
+    double framebuffer_us = 0.0;   // Framebuffer extraction / RGB conversion
+    double reward_us = 0.0;        // Reward computation
+    double total_us = 0.0;         // Total step time
+};
 
 /// Describes the dimensions and format of observations returned by the environment.
 struct ObservationSpace {
@@ -63,6 +77,43 @@ public:
     // Videopac: 64 bytes internal (8048) + 128 bytes external = 192 bytes.
     // Default returns empty (emulator doesn't support RAM inspection).
     virtual std::vector<uint8_t> read_ram() const { return {}; }
+
+    // Single-byte RAM read without allocation (hot-path friendly).
+    // Returns 0 for out-of-range addresses. Default returns 0.
+    virtual uint8_t read_ram_byte(uint16_t address) const { return 0; }
+
+    // Return total RAM size in bytes (for RAM-based observation space).
+    // Default returns 0 (emulator doesn't support RAM inspection).
+    virtual int ram_size() const { return 0; }
+
+    // Return RAM contents as observation (flat byte vector).
+    // Default calls read_ram(). Emulator-specific implementations can optimize.
+    virtual std::vector<uint8_t> read_ram_observation() const { return read_ram(); }
+
+    // Step N frames with the same action, return final observation + accumulated reward.
+    // Default implementation calls step() N times.
+    // Returns 0 reward for n < 1 (no steps taken).
+    virtual StepResult step_n(const std::vector<int>& action, int n) {
+        StepResult result;
+        if (n < 1) {
+            result.reward = 0.0f;
+            result.done = false;
+            result.truncated = false;
+            return result;
+        }
+        float total_reward = 0.0f;
+        for (int i = 0; i < n; ++i) {
+            result = step(action);
+            total_reward += result.reward;
+            if (result.done || result.truncated) break;
+        }
+        result.reward = total_reward;
+        return result;
+    }
+
+    // Profiling: return per-component timings from the last step() call.
+    // Only meaningful when built with RETRO_AI_PROFILING; returns zeros otherwise.
+    virtual FrameTimings get_last_frame_timings() const { return {}; }
 
     // Metadata
     virtual std::string emulator_name() const = 0;

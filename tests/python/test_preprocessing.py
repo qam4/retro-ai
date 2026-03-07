@@ -200,6 +200,26 @@ class TestFrameSkip:
         pipe = PreprocessingPipeline(frame_skip=4)
         assert pipe.frame_skip == 4
 
+    def test_frame_skip_valid_range_boundaries(self):
+        """Requirement 3.1 — frame_skip in [1, 16] accepted."""
+        assert PreprocessingPipeline(frame_skip=1).frame_skip == 1
+        assert PreprocessingPipeline(frame_skip=16).frame_skip == 16
+
+    def test_frame_skip_zero_rejected(self):
+        """Requirement 3.1 — frame_skip=0 raises ValueError."""
+        with pytest.raises(ValueError, match="frame_skip must be between 1 and 16"):
+            PreprocessingPipeline(frame_skip=0)
+
+    def test_frame_skip_negative_rejected(self):
+        """Requirement 3.1 — negative frame_skip raises ValueError."""
+        with pytest.raises(ValueError, match="frame_skip must be between 1 and 16"):
+            PreprocessingPipeline(frame_skip=-1)
+
+    def test_frame_skip_above_16_rejected(self):
+        """Requirement 3.1 — frame_skip=17 raises ValueError."""
+        with pytest.raises(ValueError, match="frame_skip must be between 1 and 16"):
+            PreprocessingPipeline(frame_skip=17)
+
 
 # ==================================================================
 # PreprocessedEnv tests
@@ -326,3 +346,125 @@ class TestPreprocessedEnvDelegation:
         wrapped = PreprocessedEnv(env, PreprocessingPipeline())
         assert wrapped.available_reward_modes() == ["survival"]
         wrapped.set_reward_mode("survival")  # should not raise
+
+
+# ------------------------------------------------------------------
+# step_n integration tests (Task 8.2)
+# ------------------------------------------------------------------
+
+
+class FakeEnvWithStepN(FakeEnv):
+    """FakeEnv that also exposes a ``step_n`` method, simulating BaseEnv
+    with C++ step_n support."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.step_n_called = False
+        self.step_n_action = None
+        self.step_n_count = None
+
+    def step_n(self, action, n):
+        """Batch-step: repeat action n times, accumulate reward, stop on done."""
+        self.step_n_called = True
+        self.step_n_action = action
+        self.step_n_count = n
+
+        total_reward = 0.0
+        done = False
+        truncated = False
+        info = {}
+        obs = None
+        for _ in range(n):
+            obs, reward, done, truncated, info = self.step(action)
+            total_reward += reward
+            if done or truncated:
+                break
+        return obs, total_reward, done, truncated, info
+
+
+class TestStepNIntegration:
+    """Task 8.2 — PreprocessedEnv delegates to step_n when available."""
+
+    def test_uses_step_n_when_available_and_frame_skip_gt_1(self):
+        """When env has step_n and frame_skip > 1, the fast path is used."""
+        env = FakeEnvWithStepN()
+        pipe = PreprocessingPipeline(frame_skip=4)
+        wrapped = PreprocessedEnv(env, pipe)
+        wrapped.reset()
+        obs, reward, done, truncated, info = wrapped.step(0)
+
+        assert env.step_n_called is True
+        assert env.step_n_action == 0
+        assert env.step_n_count == 4
+        assert reward == pytest.approx(4.0)
+        assert isinstance(obs, np.ndarray)
+
+    def test_fallback_when_no_step_n(self):
+        """When env lacks step_n, the Python-side loop is used."""
+        env = FakeEnv()  # no step_n method
+        pipe = PreprocessingPipeline(frame_skip=4)
+        wrapped = PreprocessedEnv(env, pipe)
+        wrapped.reset()
+        _, reward, _, _, _ = wrapped.step(0)
+
+        assert not hasattr(env, 'step_n_called')
+        assert reward == pytest.approx(4.0)
+
+    def test_no_step_n_when_frame_skip_is_1(self):
+        """When frame_skip == 1, step_n is NOT called even if available."""
+        env = FakeEnvWithStepN()
+        pipe = PreprocessingPipeline(frame_skip=1)
+        wrapped = PreprocessedEnv(env, pipe)
+        wrapped.reset()
+        wrapped.step(0)
+
+        assert env.step_n_called is False
+
+    def test_step_n_early_termination(self):
+        """step_n stops early when the episode ends mid-skip."""
+
+        class QuickDoneEnvWithStepN(FakeEnvWithStepN):
+            def step(self, action):
+                self._step_count += 1
+                obs = np.zeros((self._h, self._w, self._c), dtype=np.uint8)
+                done = self._step_count >= 2
+                return obs, 1.0, done, False, {}
+
+        env = QuickDoneEnvWithStepN()
+        pipe = PreprocessingPipeline(frame_skip=10)
+        wrapped = PreprocessedEnv(env, pipe)
+        wrapped.reset()
+        _, reward, done, _, _ = wrapped.step(0)
+
+        assert env.step_n_called is True
+        assert done is True
+        assert reward == pytest.approx(2.0)
+
+    def test_step_n_with_preprocessing(self):
+        """step_n result is still preprocessed (grayscale + resize)."""
+        env = FakeEnvWithStepN(60, 80)
+        pipe = PreprocessingPipeline(grayscale=True, resize=(42, 42), frame_skip=4)
+        wrapped = PreprocessedEnv(env, pipe)
+        wrapped.reset()
+        obs, _, _, _, _ = wrapped.step(0)
+
+        assert obs.shape == (42, 42, 1)
+        assert env.step_n_called is True
+
+    def test_step_n_reward_matches_fallback(self):
+        """step_n path produces the same reward as the fallback loop."""
+        # With step_n
+        env_fast = FakeEnvWithStepN()
+        pipe_fast = PreprocessingPipeline(frame_skip=4)
+        wrapped_fast = PreprocessedEnv(env_fast, pipe_fast)
+        wrapped_fast.reset(seed=42)
+        _, reward_fast, _, _, _ = wrapped_fast.step(0)
+
+        # Without step_n (fallback)
+        env_slow = FakeEnv()
+        pipe_slow = PreprocessingPipeline(frame_skip=4)
+        wrapped_slow = PreprocessedEnv(env_slow, pipe_slow)
+        wrapped_slow.reset(seed=42)
+        _, reward_slow, _, _, _ = wrapped_slow.step(0)
+
+        assert reward_fast == pytest.approx(reward_slow)

@@ -41,6 +41,11 @@ class PreprocessingPipeline:
         frame_stack: int = 1,
         frame_skip: int = 1,
     ) -> None:
+        if not (1 <= frame_skip <= 16):
+            raise ValueError(
+                f"frame_skip must be between 1 and 16 inclusive, got {frame_skip}"
+            )
+
         self.grayscale = grayscale
         self.resize = resize  # (target_height, target_width)
         self.frame_stack = frame_stack
@@ -147,9 +152,20 @@ class PreprocessedEnv:
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute *action* with frame skipping and preprocessing.
 
-        The action is repeated ``frame_skip`` times (or until the episode
-        ends).  Rewards are accumulated across skipped frames.
+        When ``frame_skip > 1`` and the underlying environment exposes a
+        C++ ``step_n`` method (via ``BaseEnv._interface``), the entire
+        skip sequence is executed in a single Python→C++ call.  Otherwise
+        the existing Python-side loop is used as a fallback.
         """
+        if self.preprocessing.frame_skip > 1 and hasattr(self.env, 'step_n'):
+            # Fast path: single C++ round-trip for all skipped frames
+            obs, reward, done, truncated, info = self.env.step_n(
+                action, self.preprocessing.frame_skip
+            )
+            processed_obs = self.preprocessing.process(obs)
+            return processed_obs, reward, done, truncated, info
+
+        # Fallback: Python-side frame skip loop
         total_reward = 0.0
         done = False
         truncated = False

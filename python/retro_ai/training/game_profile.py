@@ -49,6 +49,10 @@ class GameProfile:
     resize: Optional[Tuple[int, int]] = (84, 84)
     frame_stack: int = 4
     frame_skip: int = 4
+    frame_skip_rationale: Optional[str] = None
+    resize_rationale: Optional[str] = None
+    # Observation mode
+    observation_mode: Optional[str] = None  # "framebuffer" (default) or "ram"
     # Controller config
     joystick_index: int = 0
 

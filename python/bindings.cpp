@@ -133,6 +133,22 @@ PYBIND11_MODULE(retro_ai_native, m) {
                    " shape=" + shape_str + ">";
         });
 
+    // -- FrameTimings -------------------------------------------------------
+    py::class_<FrameTimings>(m, "FrameTimings")
+        .def(py::init<>())
+        .def_readwrite("cpu_us",         &FrameTimings::cpu_us)
+        .def_readwrite("vdc_us",         &FrameTimings::vdc_us)
+        .def_readwrite("framebuffer_us", &FrameTimings::framebuffer_us)
+        .def_readwrite("reward_us",      &FrameTimings::reward_us)
+        .def_readwrite("total_us",       &FrameTimings::total_us)
+        .def("__repr__", [](const FrameTimings& t) {
+            return "<FrameTimings cpu=" + std::to_string(t.cpu_us) +
+                   "us vdc=" + std::to_string(t.vdc_us) +
+                   "us fb=" + std::to_string(t.framebuffer_us) +
+                   "us reward=" + std::to_string(t.reward_us) +
+                   "us total=" + std::to_string(t.total_us) + "us>";
+        });
+
     // -- StepResult ---------------------------------------------------------
     py::class_<StepResult>(m, "StepResult")
         .def(py::init<>())
@@ -233,6 +249,28 @@ PYBIND11_MODULE(retro_ai_native, m) {
         }, py::arg("action"),
            "Step and return a dict with observation as NumPy array.")
 
+        // step_n() – step N frames with GIL release
+        .def("step_n", [](RLInterface& self, const std::vector<int>& action, int n) {
+            StepResult result;
+            {
+                py::gil_scoped_release release;
+                result = self.step_n(action, n);
+            }
+            return result;
+        }, py::arg("action"), py::arg("n"),
+           "Execute N steps with the same action and return a StepResult with accumulated reward.")
+
+        // step_n_numpy() – step N frames, return dict with NumPy observation
+        .def("step_n_numpy", [](RLInterface& self, const std::vector<int>& action, int n) {
+            StepResult result;
+            {
+                py::gil_scoped_release release;
+                result = self.step_n(action, n);
+            }
+            return step_result_to_dict(result, self.observation_space());
+        }, py::arg("action"), py::arg("n"),
+           "Step N frames and return a dict with observation as NumPy array.")
+
         // Query methods (no GIL release needed – fast, read-only)
         .def("observation_space", &RLInterface::observation_space)
         .def("action_space",      &RLInterface::action_space)
@@ -278,7 +316,27 @@ PYBIND11_MODULE(retro_ai_native, m) {
             }
             return py::bytes(reinterpret_cast<const char*>(ram.data()),
                              ram.size());
-        }, "Return game-relevant RAM as bytes (empty if unsupported).");
+        }, "Return game-relevant RAM as bytes (empty if unsupported).")
+
+        // Profiling: per-component frame timings
+        .def("get_last_frame_timings", &RLInterface::get_last_frame_timings,
+             "Return per-component timings from the last step() call.")
+
+        // Single-byte RAM read (zero-allocation) and RAM size
+        .def("read_ram_byte", &RLInterface::read_ram_byte, py::arg("address"),
+             "Read a single byte from emulator RAM without allocation. Returns 0 for out-of-range.")
+        .def("ram_size", &RLInterface::ram_size,
+             "Return the total RAM size in bytes (0 if unsupported).")
+        .def("read_ram_observation", [](const RLInterface& self) {
+            std::vector<uint8_t> ram;
+            {
+                py::gil_scoped_release release;
+                ram = self.read_ram_observation();
+            }
+            py::array_t<uint8_t> arr(static_cast<py::ssize_t>(ram.size()));
+            std::memcpy(arr.mutable_data(), ram.data(), ram.size());
+            return arr;
+        }, "Return RAM contents as a NumPy uint8 array for RAM-based observations.");
 
     // -- Helper: observation_to_numpy standalone function --------------------
     m.def("observation_to_numpy",

@@ -6,6 +6,7 @@ from typing import Optional
 
 from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.callbacks import CallbackList
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from retro_ai import StateError
 from retro_ai.core.logging import StructuredLogger
@@ -58,6 +59,7 @@ class TrainingPipeline:
         """Execute a full training run. Returns path to saved model."""
         self._resolve_profile()
         TrainingConfigParser.validate(self.config)
+        self._check_low_resolution()
         self._log_run_start()
 
         os.makedirs(self.config.output_dir, exist_ok=True)
@@ -90,6 +92,7 @@ class TrainingPipeline:
         """Resume training from a checkpoint."""
         self._resolve_profile()
         TrainingConfigParser.validate(self.config)
+        self._check_low_resolution()
 
         os.makedirs(self.config.output_dir, exist_ok=True)
         csv_path = os.path.join(self.config.output_dir, "metrics.csv")
@@ -130,49 +133,132 @@ class TrainingPipeline:
             self._game_profile = registry.load(self.config.game_profile)
             self.config = merge_config_with_profile(self.config, self._game_profile)
 
+    def _check_low_resolution(self) -> None:
+        """Warn if the configured resize resolution is very low."""
+        resize = self.config.resize
+        if resize is not None:
+            h, w = resize
+            if h < 42 or w < 42:
+                self._logger.warning(
+                    "Low observation resolution %s may degrade agent "
+                    "performance. Consider using at least 42×42.",
+                    resize,
+                )
+
     def _build_env(self):
-        """BaseEnv -> PreprocessedEnv -> GymnasiumWrapper [-> SSW]."""
-        config_dict = {}
-        gp = self._game_profile
-        if gp and hasattr(gp, "joystick_index"):
-            config_dict["joystick_index"] = gp.joystick_index
-        if gp and gp.reward_params:
-            config_dict["reward_params"] = gp.reward_params
+        """Build environment(s): single or vectorized via SubprocVecEnv.
 
-        base = BaseEnv(
-            emulator_type=self.config.emulator_type,
-            rom_path=self.config.rom_path,
-            bios_path=self.config.bios_path,
-            reward_mode=self.config.reward_mode,
-            config=config_dict or None,
-        )
-        pipeline = PreprocessingPipeline(
-            grayscale=self.config.grayscale,
-            resize=self.config.resize,
-            frame_stack=self.config.frame_stack,
-            frame_skip=self.config.frame_skip,
-        )
-        preprocessed = PreprocessedEnv(base, pipeline)
-        env = GymnasiumWrapper(preprocessed)
+        When ``num_envs == 1`` a single unwrapped environment is returned
+        (no subprocess overhead).  When ``num_envs > 1`` a
+        :class:`SubprocVecEnv` with *N* independent env instances is
+        returned, each running its own
+        ``BaseEnv → PreprocessedEnv → GymnasiumWrapper`` stack.
+        """
+        num_envs = self.config.num_envs
 
-        # Wrap with startup sequence if profile defines one
-        gp = self._game_profile
-        if gp and gp.startup_sequence:
-            env = StartupSequenceWrapper(env, gp.startup_sequence)
+        def make_env(rank: int):
+            """Return a zero-argument callable that builds one env."""
+            def _init():
+                config_dict = {}
+                gp = self._game_profile
+                if gp and hasattr(gp, "joystick_index"):
+                    config_dict["joystick_index"] = gp.joystick_index
+                if gp and gp.reward_params:
+                    config_dict["reward_params"] = gp.reward_params
 
-        return env
+                base = BaseEnv(
+                    emulator_type=self.config.emulator_type,
+                    rom_path=self.config.rom_path,
+                    bios_path=self.config.bios_path,
+                    reward_mode=self.config.reward_mode,
+                    config=config_dict or None,
+                )
+                pipeline = PreprocessingPipeline(
+                    grayscale=self.config.grayscale,
+                    resize=self.config.resize,
+                    frame_stack=self.config.frame_stack,
+                    frame_skip=self.config.frame_skip,
+                )
+                preprocessed = PreprocessedEnv(base, pipeline)
+                env = GymnasiumWrapper(preprocessed)
+
+                # Wrap with startup sequence if profile defines one
+                if self._game_profile and self._game_profile.startup_sequence:
+                    env = StartupSequenceWrapper(
+                        env, self._game_profile.startup_sequence
+                    )
+                return env
+            return _init
+
+        if num_envs == 1:
+            return make_env(0)()  # no subprocess overhead
+        else:
+            return SubprocVecEnv([make_env(i) for i in range(num_envs)])
 
     def _build_model(self, env):
         """Instantiate the SB3 algorithm from config."""
         algo_cls = ALGORITHM_MAP[self.config.algorithm.name]
+
+        policy = self.config.policy
+        # Auto-select MlpPolicy for RAM observations (Requirement 6.4)
+        if self.config.observation_mode == "ram" and policy != "MlpPolicy":
+            self._logger.info(
+                "policy_override",
+                {
+                    "reason": "observation_mode is 'ram'; CNN not applicable",
+                    "original_policy": policy,
+                    "selected_policy": "MlpPolicy",
+                },
+            )
+            policy = "MlpPolicy"
+
         kwargs = {
-            "policy": self.config.policy,
+            "policy": policy,
             "env": env,
             "learning_rate": self.config.algorithm.learning_rate,
             "batch_size": self.config.algorithm.batch_size,
             "verbose": 0,
             **self.config.algorithm.extra,
         }
+
+        # Mixed precision support (Requirement 8)
+        if self.config.mixed_precision:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.set_float32_matmul_precision("medium")
+                kwargs["policy_kwargs"] = kwargs.get("policy_kwargs", {})
+                kwargs["policy_kwargs"]["optimizer_kwargs"] = {"fused": True}
+                self._logger.info(
+                    "mixed_precision_enabled",
+                    {"device": "cuda"},
+                )
+            else:
+                self._logger.warning(
+                    "mixed_precision_no_cuda",
+                    {
+                        "message": "mixed_precision enabled but no CUDA GPU "
+                        "available, using FP32"
+                    },
+                )
+
+        # Scale n_steps for vectorized environments so the effective
+        # batch size (num_envs × n_steps) stays consistent.
+        num_envs = self.config.num_envs
+        if num_envs > 1 and self.config.algorithm.name == "PPO":
+            base_n_steps = kwargs.get("n_steps", 2048)
+            adjusted_n_steps = max(1, base_n_steps // num_envs)
+            kwargs["n_steps"] = adjusted_n_steps
+            self._logger.info(
+                "n_steps_scaled",
+                {
+                    "num_envs": num_envs,
+                    "base_n_steps": base_n_steps,
+                    "adjusted_n_steps": adjusted_n_steps,
+                    "effective_batch": num_envs * adjusted_n_steps,
+                },
+            )
+
         if self.config.tensorboard:
             tb_dir = os.path.join(self.config.output_dir, "tb")
             kwargs["tensorboard_log"] = tb_dir

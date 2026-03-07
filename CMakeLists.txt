@@ -12,6 +12,28 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 option(BUILD_TESTS "Build tests" ON)
 option(BUILD_EXAMPLES "Build examples" ON)
+option(RETRO_AI_PROFILING "Enable per-component timing instrumentation in step()" OFF)
+option(PGO_GENERATE "Build with PGO instrumentation" OFF)
+option(PGO_USE "Build using PGO profile data" OFF)
+
+# Profile-Guided Optimization flags
+if(PGO_GENERATE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        add_compile_options(-fprofile-generate=${CMAKE_BINARY_DIR}/pgo-data)
+        add_link_options(-fprofile-generate=${CMAKE_BINARY_DIR}/pgo-data)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-fprofile-instr-generate=${CMAKE_BINARY_DIR}/pgo-data/default.profraw)
+        add_link_options(-fprofile-instr-generate=${CMAKE_BINARY_DIR}/pgo-data/default.profraw)
+    endif()
+elseif(PGO_USE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        add_compile_options(-fprofile-use=${CMAKE_BINARY_DIR}/pgo-data -fprofile-correction)
+        add_link_options(-fprofile-use=${CMAKE_BINARY_DIR}/pgo-data)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-fprofile-instr-use=${CMAKE_BINARY_DIR}/pgo-data/default.profdata)
+        add_link_options(-fprofile-instr-use=${CMAKE_BINARY_DIR}/pgo-data/default.profdata)
+    endif()
+endif()
 
 # Find Python and pybind11 for bindings
 if(BUILD_PYTHON_BINDINGS)
@@ -68,6 +90,9 @@ target_include_directories(retro_ai_core INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+if(RETRO_AI_PROFILING)
+    target_compile_definitions(retro_ai_core INTERFACE RETRO_AI_PROFILING)
+endif()
 
 # Reward systems library (defined before adapters that depend on it)
 add_library(reward_systems

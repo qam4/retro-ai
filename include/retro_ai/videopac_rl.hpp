@@ -41,6 +41,7 @@ public:
     // Core RL methods
     StepResult reset(int seed = -1) override;
     StepResult step(const std::vector<int>& action) override;
+    StepResult step_n(const std::vector<int>& action, int n) override;
 
     // Space queries
     ObservationSpace observation_space() const override;
@@ -60,6 +61,11 @@ public:
 
     // RAM inspection
     std::vector<uint8_t> read_ram() const override;
+    uint8_t read_ram_byte(uint16_t address) const override;
+    int ram_size() const override;
+
+    // Profiling
+    FrameTimings get_last_frame_timings() const override;
 
     // Screen dimensions (from the real VDC)
     static constexpr int kScreenWidth = 160;

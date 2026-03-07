@@ -43,6 +43,10 @@
 #include <cstring>
 #include <fstream>
 
+#ifdef RETRO_AI_PROFILING
+#include <chrono>
+#endif
+
 // For wiring up memory-based rewards
 #include "retro_ai/reward_systems/memory.hpp"
 
@@ -89,6 +93,7 @@ public:
         , frame_number_(0)
         , reward_params_(reward_params)
         , reward_system_(RewardSystemFactory::create(reward_mode, reward_params))
+        , rgb_buffer_(kFramebufferSize)
     {
         // Configure headless emulator (NTSC = 60 Hz)
         Configuration config;
@@ -133,9 +138,7 @@ public:
         // Provide a reader lambda that reads from our flat 192-byte RAM layout
         // (64 internal + 128 external, same as read_ram()).
         mem_reward->set_memory_reader([this](uint16_t addr) -> uint8_t {
-            auto ram = read_ram();
-            if (addr < ram.size()) return ram[addr];
-            return 0;
+            return read_ram_byte(addr);
         });
 
         // If no score addresses were configured via the factory params,
@@ -182,12 +185,11 @@ public:
     /// Check if the game timer has reached zero.
     bool is_timer_expired() const {
         if (!done_when_timer_zero_) return false;
-        auto ram = read_ram();
-        if (timer_minutes_addr_ >= static_cast<int>(ram.size()) ||
-            timer_seconds_addr_ >= static_cast<int>(ram.size())) {
+        if (timer_minutes_addr_ >= 192 || timer_seconds_addr_ >= 192) {
             return false;
         }
-        return ram[timer_minutes_addr_] == 0 && ram[timer_seconds_addr_] == 0;
+        return read_ram_byte(static_cast<uint16_t>(timer_minutes_addr_)) == 0 &&
+               read_ram_byte(static_cast<uint16_t>(timer_seconds_addr_)) == 0;
     }
 
     StepResult reset(int /*seed*/) {
@@ -217,7 +219,8 @@ public:
         }
 
         StepResult result;
-        result.observation = extract_framebuffer();
+        const auto& fb = extract_framebuffer();
+        result.observation.assign(fb.begin(), fb.end());
         result.reward = 0.0f;
         result.done = false;
         result.truncated = false;
@@ -233,7 +236,99 @@ public:
         // Validate action
         if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
             int bad_action = action.empty() ? -1 : action[0];
-            result.observation = extract_framebuffer();
+            const auto& fb = extract_framebuffer();
+            result.observation.assign(fb.begin(), fb.end());
+            result.reward = 0.0f;
+            result.done = false;
+            result.truncated = true;
+            result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                          ", \"error\": \"Invalid action " +
+                          std::to_string(bad_action) +
+                          ", must be in range [0, " +
+                          std::to_string(kNumActions) + ")\"}";
+            return result;
+        }
+
+#ifdef RETRO_AI_PROFILING
+        using Clock = std::chrono::high_resolution_clock;
+        auto step_start = Clock::now();
+#endif
+
+        int act = action[0];
+        apply_action(act);
+
+#ifdef RETRO_AI_PROFILING
+        auto cpu_start = Clock::now();
+#endif
+        emulator_->run_frame();
+#ifdef RETRO_AI_PROFILING
+        auto cpu_end = Clock::now();
+#endif
+
+        clear_input();
+        ++frame_number_;
+
+#ifdef RETRO_AI_PROFILING
+        auto fb_start = Clock::now();
+#endif
+        const auto& fb = extract_framebuffer();
+        result.observation.assign(fb.begin(), fb.end());
+#ifdef RETRO_AI_PROFILING
+        auto fb_end = Clock::now();
+#endif
+
+#ifdef RETRO_AI_PROFILING
+        auto reward_start = Clock::now();
+#endif
+        if (reward_system_) {
+            result.reward =
+                reward_system_->compute_reward(result, previous_result_);
+        } else {
+            result.reward = 0.0f;
+        }
+#ifdef RETRO_AI_PROFILING
+        auto reward_end = Clock::now();
+#endif
+
+        result.done = is_timer_expired();
+        result.truncated = false;
+        result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+
+#ifdef RETRO_AI_PROFILING
+        auto step_end = Clock::now();
+        auto to_us = [](auto dur) {
+            return std::chrono::duration<double, std::micro>(dur).count();
+        };
+        last_timings_.cpu_us = to_us(cpu_end - cpu_start);
+        last_timings_.framebuffer_us = to_us(fb_end - fb_start);
+        last_timings_.reward_us = to_us(reward_end - reward_start);
+        last_timings_.vdc_us = 0.0;  // VDC is part of run_frame; separate instrumentation requires emulator changes
+        last_timings_.total_us = to_us(step_end - step_start);
+#endif
+
+        previous_result_ = result;
+        return result;
+    }
+
+    StepResult step_n(const std::vector<int>& action, int n) {
+        StepResult result;
+
+        // Handle n < 1: return current state with 0 reward
+        if (n < 1) {
+            const auto& fb = extract_framebuffer();
+            result.observation.assign(fb.begin(), fb.end());
+            result.reward = 0.0f;
+            result.done = false;
+            result.truncated = false;
+            result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+            return result;
+        }
+
+        // Validate action
+        if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
+            int bad_action = action.empty() ? -1 : action[0];
+            const auto& fb = extract_framebuffer();
+            result.observation.assign(fb.begin(), fb.end());
             result.reward = 0.0f;
             result.done = false;
             result.truncated = true;
@@ -246,19 +341,38 @@ public:
         }
 
         int act = action[0];
-        apply_action(act);
-        emulator_->run_frame();
-        clear_input();
-        ++frame_number_;
+        float total_reward = 0.0f;
+        bool done = false;
 
-        result.observation = extract_framebuffer();
-        if (reward_system_) {
-            result.reward =
-                reward_system_->compute_reward(result, previous_result_);
-        } else {
-            result.reward = 0.0f;
+        for (int i = 0; i < n; ++i) {
+            apply_action(act);
+            emulator_->run_frame();
+            clear_input();
+            ++frame_number_;
+
+            // Compute reward without framebuffer extraction.
+            // MemoryRewardSystem uses read_ram_byte() via its reader callback,
+            // so it doesn't need the observation. Create a minimal StepResult
+            // with just frame info for the reward computation.
+            if (reward_system_) {
+                StepResult intermediate;
+                intermediate.reward = 0.0f;
+                intermediate.done = false;
+                intermediate.truncated = false;
+                intermediate.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+                total_reward += reward_system_->compute_reward(intermediate, previous_result_);
+                previous_result_ = intermediate;
+            }
+
+            done = is_timer_expired();
+            if (done) break;
         }
-        result.done = is_timer_expired();
+
+        // Extract framebuffer only for the final frame
+        const auto& fb = extract_framebuffer();
+        result.observation.assign(fb.begin(), fb.end());
+        result.reward = total_reward;
+        result.done = done;
         result.truncated = false;
         result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
 
@@ -368,20 +482,33 @@ public:
         return ram;
     }
 
+    uint8_t read_ram_byte(uint16_t address) const {
+        if (address < 64) {
+            return emulator_->get_cpu_state().ram[address];
+        }
+        if (address < 192) {
+            return emulator_->get_memory_state().external_ram[address - 64];
+        }
+        return 0;
+    }
+
+    int ram_size() const {
+        return 192;
+    }
+
 private:
-    /// Convert palette-indexed framebuffer to RGB888.
-    std::vector<uint8_t> extract_framebuffer() const {
+    /// Convert palette-indexed framebuffer to RGB888 into pre-allocated buffer.
+    const std::vector<uint8_t>& extract_framebuffer() {
         const uint8_t* indexed_fb = emulator_->get_framebuffer();
-        std::vector<uint8_t> rgb(kFramebufferSize);
 
         for (int i = 0; i < kScreenWidth * kScreenHeight; ++i) {
             uint8_t idx = indexed_fb[i] & 0x0F;  // clamp to 0-15
             const auto& c = PALETTE_STANDARD[idx];
-            rgb[i * 3 + 0] = c.r;
-            rgb[i * 3 + 1] = c.g;
-            rgb[i * 3 + 2] = c.b;
+            rgb_buffer_[i * 3 + 0] = c.r;
+            rgb_buffer_[i * 3 + 1] = c.g;
+            rgb_buffer_[i * 3 + 2] = c.b;
         }
-        return rgb;
+        return rgb_buffer_;
     }
 
     /// Map a discrete action to emulator input.
@@ -464,11 +591,25 @@ private:
     std::unique_ptr<RewardSystem> reward_system_;
     StepResult previous_result_;
     std::unique_ptr<EmulatorCore> emulator_;
+    std::vector<uint8_t> rgb_buffer_;  // pre-allocated framebuffer (Requirement 4)
 
     // Timer-based episode termination
     int timer_minutes_addr_ = -1;
     int timer_seconds_addr_ = -1;
     bool done_when_timer_zero_ = false;
+
+#ifdef RETRO_AI_PROFILING
+    FrameTimings last_timings_{};
+#endif
+
+public:
+    FrameTimings get_last_frame_timings() const {
+#ifdef RETRO_AI_PROFILING
+        return last_timings_;
+#else
+        return {};
+#endif
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -495,6 +636,10 @@ StepResult VideopacRLInterface::reset(int seed) {
 
 StepResult VideopacRLInterface::step(const std::vector<int>& action) {
     return impl_->step(action);
+}
+
+StepResult VideopacRLInterface::step_n(const std::vector<int>& action, int n) {
+    return impl_->step_n(action, n);
 }
 
 ObservationSpace VideopacRLInterface::observation_space() const {
@@ -531,6 +676,18 @@ std::string VideopacRLInterface::game_name() const {
 
 std::vector<uint8_t> VideopacRLInterface::read_ram() const {
     return impl_->read_ram();
+}
+
+uint8_t VideopacRLInterface::read_ram_byte(uint16_t address) const {
+    return impl_->read_ram_byte(address);
+}
+
+int VideopacRLInterface::ram_size() const {
+    return impl_->ram_size();
+}
+
+FrameTimings VideopacRLInterface::get_last_frame_timings() const {
+    return impl_->get_last_frame_timings();
 }
 
 }  // namespace retro_ai
