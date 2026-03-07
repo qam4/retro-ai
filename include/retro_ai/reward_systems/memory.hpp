@@ -14,6 +14,9 @@ struct MemoryAddress {
     uint16_t address;   ///< Start address in emulator RAM.
     int num_bytes;      ///< Number of consecutive bytes (1, 2, or 4).
     bool is_bcd;        ///< True if the value is stored as binary-coded decimal.
+    bool little_endian; ///< True if least-significant byte is at the start address.
+                        ///< For BCD: low-order digits first. For binary: standard LE.
+                        ///< Default false (big-endian / most-significant byte first).
 };
 
 /// Callback type for reading a single byte from emulator RAM.

@@ -1,5 +1,9 @@
-# Training config for Course Automobile - Game 1 Level 1
+# Training config for Course Automobile — Game 1 Level 1
 # Usage: retro-ai train game_profiles/course_automobile_training.yaml
+#
+# This game has a 2-minute timer. At 60fps with frame_skip=4, one episode
+# is ~1800 effective steps. With 100k timesteps we get ~55 full episodes,
+# enough for PPO to start learning basic lane avoidance.
 
 algorithm:
   name: PPO
@@ -8,10 +12,10 @@ algorithm:
 
 total_timesteps: 100000
 game_profile: course_automobile
-reward_mode: survival
+reward_mode: memory
 policy: CnnPolicy
 
-# Preprocessing
+# Preprocessing (must match game profile)
 grayscale: true
 resize: [84, 84]
 frame_stack: 4

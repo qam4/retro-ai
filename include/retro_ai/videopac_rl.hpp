@@ -58,6 +58,9 @@ public:
     std::string emulator_name() const override;
     std::string game_name() const override;
 
+    // RAM inspection
+    std::vector<uint8_t> read_ram() const override;
+
     // Screen dimensions (from the real VDC)
     static constexpr int kScreenWidth = 160;
     static constexpr int kScreenHeight = 240;

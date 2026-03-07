@@ -1,22 +1,99 @@
-# Course de Voitures (Course Automobile) - Game 1, Level 1
-# The C++ reset already presses Key1 once (game select).
-# This startup sequence presses Key1 a second time (level select).
+# =============================================================================
+# Course de Voitures (Course Automobile) — Videopac / Odyssey²
+# =============================================================================
 #
-# ROM paths use $RETRO_AI_ROM_DIR — set it or source setup_env.sh
+# Game:     Course de Voitures + Autodrome + Cryptogramme (1980, Philips, FR)
+# Platform: Videopac C52 (Philips, PAL/NTSC)
+# BIOS:     Philips C52 BIOS (French)
+#
+# Description:
+#   Top-down racing game. The player controls a red car on a two-lane road
+#   (two vertical lines). White opponent cars scroll downward; the player
+#   must dodge them while driving forward. Moving forward increases the
+#   score; collisions freeze the score. A 2-minute countdown timer starts
+#   when the player first pushes Up. Game ends when the timer reaches 00:00.
+#
+# ROM contents (multi-game cartridge):
+#   Game 1 — Course de Voitures (the racing game, selected here)
+#   Game 2 — Autodrome
+#   Game 3 — Cryptogramme
+#
+# Startup sequence:
+#   1. BIOS splash screen (auto-skipped by warmup frames)
+#   2. "Select Game" screen → press Key1 to pick Game 1
+#      (handled by C++ reset(), which presses Key1 once)
+#   3. "Select Level" screen → press Key1 again for Level 1
+#      (handled by startup_sequence below)
+#   4. On track, timer starts on first Up input
+#
+# Controls:
+#   Joystick 1 (index 1, right-side port on Videopac):
+#     Up    — accelerate forward (starts timer + score)
+#     Down  — brake / reverse
+#     Left  — steer left
+#     Right — steer right
+#   No fire button used in this game.
+#
+# =============================================================================
+# RAM Map (discovered via scripts/scan_ram.py + scripts/scan_score_detail.py)
+# =============================================================================
+#
+# The Videopac uses an Intel 8048 CPU with:
+#   - 64 bytes internal RAM (addresses 0–63 in our flat layout)
+#   - 128 bytes external RAM (addresses 64–191, i.e. ExtRAM[0x00]–ExtRAM[0x7F])
+#
+# Score (2-byte BCD, little-endian):
+#   IntRAM[54] (0x36) — low byte  (BCD: tens + units of score)
+#   IntRAM[55] (0x37) — high byte (BCD: thousands + hundreds)
+#   Example: score 0175 → IntRAM[54]=0x75, IntRAM[55]=0x01
+#   Wraps: low byte goes 0x00→0x99 then resets to 0x00, high byte increments.
+#   Score only increases while the car is moving forward (Up held).
+#   Collision with opponent car freezes the score until the player clears.
+#
+# Timer (2-byte BCD, big-endian — minutes:seconds):
+#   ExtRAM[0x01] (addr 65) — minutes digit (starts at 0x01 for "1" minute)
+#   ExtRAM[0x02] (addr 66) — seconds (BCD, starts at 0x59 for 59 seconds)
+#   Full timer: 01:59 → counts down to 00:00.
+#   Decreases by 1 BCD unit per real second (~60 frames).
+#   Game over when both bytes reach 0x00.
+#
+# =============================================================================
+
 name: course_automobile
-display_name: "Course Automobile - Game 1 Level 1 (Videopac)"
+display_name: "Course de Voitures — Game 1 Level 1 (Videopac)"
 emulator_type: videopac
+
 rom_path: "$RETRO_AI_ROM_DIR/videopac/Course de Voitures + Autodrome + Cryptogramme (1980)(Philips)(FR).bin"
 bios_path: "$RETRO_AI_ROM_DIR/videopac/Philips C52 BIOS (19xx)(Philips)(FR).bin"
-reward_mode: survival
-action_count: 4
-joystick_index: 1
+
+joystick_index: 1          # Player 2 port (right side on Videopac hardware)
+action_count: 4            # Up, Down, Left, Right (no fire needed)
+reward_mode: memory        # RAM-based score delta reward
+
 startup_sequence:
   actions:
-    - action: 11   # Key 1 - select level 1
+    - action: 11           # Key1 — select Level 1
       frames: 10
-  post_delay_frames: 120
+  post_delay_frames: 120   # Let the game settle before agent takes over
+
+# Preprocessing for CNN policy
 grayscale: true
 resize: [84, 84]
 frame_stack: 4
 frame_skip: 4
+
+# RAM-based reward and episode termination
+reward_params:
+  # Score: 2-byte BCD little-endian at IntRAM[54..55]
+  # Low byte (units+tens) at addr 54, high byte (hundreds+thousands) at addr 55.
+  # On-screen score of 1007 → ram[54]=0x07, ram[55]=0x10 → decoded 1007.
+  score_address_count: "1"
+  score_address_0_addr: "54"
+  score_address_0_bytes: "2"
+  score_address_0_bcd: "1"
+  score_address_0_le: "1"
+
+  # Timer: ExtRAM[0x01] (minutes) + ExtRAM[0x02] (seconds), both BCD
+  timer_minutes_addr: "65"
+  timer_seconds_addr: "66"
+  done_when_timer_zero: "true"

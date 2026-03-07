@@ -43,6 +43,9 @@
 #include <cstring>
 #include <fstream>
 
+// For wiring up memory-based rewards
+#include "retro_ai/reward_systems/memory.hpp"
+
 namespace retro_ai {
 
 using videopac::EmulatorCore;
@@ -108,6 +111,12 @@ public:
                 "Failed to load Videopac ROM '" + rom_path +
                 "': " + rom_result.error);
         }
+
+        // Wire up memory reader for RAM-based reward systems
+        wire_memory_reward_system();
+
+        // Parse timer addresses from reward_params for episode termination
+        parse_timer_params();
     }
 
     ~Impl() = default;
@@ -115,6 +124,71 @@ public:
     // Non-copyable
     Impl(const Impl&) = delete;
     Impl& operator=(const Impl&) = delete;
+
+    /// Wire up the MemoryRewardSystem with a reader that accesses our emulator RAM.
+    void wire_memory_reward_system() {
+        auto* mem_reward = dynamic_cast<MemoryRewardSystem*>(reward_system_.get());
+        if (!mem_reward) return;
+
+        // Provide a reader lambda that reads from our flat 192-byte RAM layout
+        // (64 internal + 128 external, same as read_ram()).
+        mem_reward->set_memory_reader([this](uint16_t addr) -> uint8_t {
+            auto ram = read_ram();
+            if (addr < ram.size()) return ram[addr];
+            return 0;
+        });
+
+        // If no score addresses were configured via the factory params,
+        // set up the Course Automobile defaults:
+        // Score = 2-byte BCD at IntRAM[54] (little-endian: low byte first)
+        int count = 0;
+        auto it = reward_params_.find("score_address_count");
+        if (it != reward_params_.end()) {
+            try { count = std::stoi(it->second); } catch (...) {}
+        }
+        if (count == 0) {
+            // Use the discovered addresses: IntRAM[54] (addr 54), 2 bytes BCD LE
+            std::vector<MemoryAddress> addrs;
+            addrs.push_back({54, 2, true, true});  // 2-byte BCD LE score at IntRAM[54..55]
+            mem_reward->set_score_addresses(std::move(addrs));
+        }
+    }
+
+    /// Parse timer-related params for episode termination.
+    void parse_timer_params() {
+        // Default timer addresses for Course Automobile:
+        // ExtRAM[0x01] (addr 65) = minutes, ExtRAM[0x02] (addr 66) = seconds
+        // Both BCD. Game over when both are 0.
+        timer_minutes_addr_ = 65;
+        timer_seconds_addr_ = 66;
+        done_when_timer_zero_ = false;
+
+        auto it = reward_params_.find("done_when_timer_zero");
+        if (it != reward_params_.end() && it->second == "true") {
+            done_when_timer_zero_ = true;
+        }
+
+        // Allow overriding timer addresses from params
+        it = reward_params_.find("timer_minutes_addr");
+        if (it != reward_params_.end()) {
+            try { timer_minutes_addr_ = std::stoi(it->second); } catch (...) {}
+        }
+        it = reward_params_.find("timer_seconds_addr");
+        if (it != reward_params_.end()) {
+            try { timer_seconds_addr_ = std::stoi(it->second); } catch (...) {}
+        }
+    }
+
+    /// Check if the game timer has reached zero.
+    bool is_timer_expired() const {
+        if (!done_when_timer_zero_) return false;
+        auto ram = read_ram();
+        if (timer_minutes_addr_ >= static_cast<int>(ram.size()) ||
+            timer_seconds_addr_ >= static_cast<int>(ram.size())) {
+            return false;
+        }
+        return ram[timer_minutes_addr_] == 0 && ram[timer_seconds_addr_] == 0;
+    }
 
     StepResult reset(int /*seed*/) {
         emulator_->reset();
@@ -184,7 +258,7 @@ public:
         } else {
             result.reward = 0.0f;
         }
-        result.done = false;
+        result.done = is_timer_expired();
         result.truncated = false;
         result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
 
@@ -262,6 +336,7 @@ public:
     void set_reward_mode(const std::string& mode) {
         reward_mode_ = mode;
         reward_system_ = RewardSystemFactory::create(mode, reward_params_);
+        wire_memory_reward_system();
         if (reward_system_) {
             reward_system_->reset();
         }
@@ -278,6 +353,19 @@ public:
             return rom_path_.substr(pos + 1);
         }
         return rom_path_;
+    }
+
+    std::vector<uint8_t> read_ram() const {
+        // Return 64 bytes internal RAM (8048 CPU) + 128 bytes external RAM = 192 bytes
+        // This is the game-relevant state for score/timer discovery.
+        auto cpu_state = emulator_->get_cpu_state();
+        auto mem_state = emulator_->get_memory_state();
+
+        std::vector<uint8_t> ram;
+        ram.reserve(64 + 128);
+        ram.insert(ram.end(), cpu_state.ram, cpu_state.ram + 64);
+        ram.insert(ram.end(), mem_state.external_ram, mem_state.external_ram + 128);
+        return ram;
     }
 
 private:
@@ -376,6 +464,11 @@ private:
     std::unique_ptr<RewardSystem> reward_system_;
     StepResult previous_result_;
     std::unique_ptr<EmulatorCore> emulator_;
+
+    // Timer-based episode termination
+    int timer_minutes_addr_ = -1;
+    int timer_seconds_addr_ = -1;
+    bool done_when_timer_zero_ = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -434,6 +527,10 @@ std::string VideopacRLInterface::emulator_name() const {
 
 std::string VideopacRLInterface::game_name() const {
     return impl_->game_name();
+}
+
+std::vector<uint8_t> VideopacRLInterface::read_ram() const {
+    return impl_->read_ram();
 }
 
 }  // namespace retro_ai

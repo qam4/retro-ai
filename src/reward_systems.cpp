@@ -103,6 +103,7 @@ std::unique_ptr<RewardSystem> RewardSystemFactory::create(
                 param_ulong(params, prefix + "_addr", 0));
             addr.num_bytes = param_int(params, prefix + "_bytes", 1);
             addr.is_bcd = param_int(params, prefix + "_bcd", 0) != 0;
+            addr.little_endian = param_int(params, prefix + "_le", 0) != 0;
             addresses.push_back(addr);
         }
         return std::make_unique<MemoryRewardSystem>(std::move(addresses));

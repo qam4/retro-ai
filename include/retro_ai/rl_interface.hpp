@@ -58,6 +58,12 @@ public:
     virtual void set_reward_mode(const std::string& mode) = 0;
     virtual std::vector<std::string> available_reward_modes() const = 0;
 
+    // RAM inspection (for reward discovery tools)
+    // Returns the game-relevant RAM as a flat byte vector.
+    // Videopac: 64 bytes internal (8048) + 128 bytes external = 192 bytes.
+    // Default returns empty (emulator doesn't support RAM inspection).
+    virtual std::vector<uint8_t> read_ram() const { return {}; }
+
     // Metadata
     virtual std::string emulator_name() const = 0;
     virtual std::string game_name() const = 0;

@@ -184,6 +184,9 @@ PYBIND11_MODULE(retro_ai_native, m) {
         std::string game_name() const override {
             PYBIND11_OVERRIDE_PURE(std::string, RLInterface, game_name);
         }
+        std::vector<uint8_t> read_ram() const override {
+            PYBIND11_OVERRIDE(std::vector<uint8_t>, RLInterface, read_ram);
+        }
     };
 
     py::class_<RLInterface, PyRLInterface, std::shared_ptr<RLInterface>>(m, "RLInterface")
@@ -264,7 +267,18 @@ PYBIND11_MODULE(retro_ai_native, m) {
 
         // Metadata
         .def("emulator_name", &RLInterface::emulator_name)
-        .def("game_name",     &RLInterface::game_name);
+        .def("game_name",     &RLInterface::game_name)
+
+        // RAM inspection (for reward discovery tools)
+        .def("read_ram", [](const RLInterface& self) {
+            std::vector<uint8_t> ram;
+            {
+                py::gil_scoped_release release;
+                ram = self.read_ram();
+            }
+            return py::bytes(reinterpret_cast<const char*>(ram.data()),
+                             ram.size());
+        }, "Return game-relevant RAM as bytes (empty if unsupported).");
 
     // -- Helper: observation_to_numpy standalone function --------------------
     m.def("observation_to_numpy",
