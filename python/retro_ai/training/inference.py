@@ -39,6 +39,7 @@ class InferenceRunner:
         """Run inference loop at target FPS."""
         env = self._build_env()
         model = self._load_model(env)
+        raw_env = self._find_base_env(env)
         recorder = self._maybe_init_recorder()
         episodes_run = 0
 
@@ -57,8 +58,18 @@ class InferenceRunner:
                 step += 1
                 episode_reward += reward
 
-                if recorder:
+                if recorder and raw_env is not None:
+                    # Record raw emulator frame (full resolution RGB)
+                    recorder.add_frame(raw_env._last_raw_obs, reward=episode_reward, step=step)
+                elif recorder:
                     recorder.add_frame(obs, reward=episode_reward, step=step)
+
+                # Progress logging every 200 steps
+                if step % 200 == 0:
+                    self._logger.info(
+                        "play_progress",
+                        {"episode": episodes_run + 1, "step": step, "reward": episode_reward},
+                    )
 
                 # Frame pacing
                 elapsed = time.perf_counter() - frame_start
@@ -124,14 +135,36 @@ class InferenceRunner:
 
     def _maybe_init_recorder(self) -> Optional[VideoRecorder]:
         if self.video_path and VideoRecorder.available():
+            # Video FPS = real-time playback rate, independent of emulator speed.
+            # The emulator runs at 60 Hz; with frame_skip=N the agent sees
+            # 60/N unique frames per real-time second.
+            frame_skip = self.game_profile.frame_skip or 1
+            video_fps = 60.0 / frame_skip
             return VideoRecorder(
                 path=self.video_path,
-                fps=self._target_fps,
+                fps=video_fps,
                 overlay=self._overlay,
+                scale=3,
             )
         if self.video_path and not VideoRecorder.available():
             self._logger.warning(
                 "video_unavailable",
                 {"message": "opencv-python not installed, video recording disabled"},
             )
+        return None
+
+    @staticmethod
+    def _find_base_env(env):
+        """Walk the wrapper chain to find the underlying BaseEnv."""
+        current = env
+        for _ in range(20):  # safety limit
+            if hasattr(current, "_last_raw_obs"):
+                return current
+            # Wrappers use .env or ._env for the inner environment
+            if hasattr(current, "env"):
+                current = current.env
+            elif hasattr(current, "_env"):
+                current = current._env
+            else:
+                break
         return None

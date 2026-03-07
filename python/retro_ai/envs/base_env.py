@@ -59,6 +59,7 @@ class BaseEnv:
         )
         self._obs_space = self._interface.observation_space()
         self._action_space = self._interface.action_space()
+        self._last_raw_obs: Optional[np.ndarray] = None
 
     # ------------------------------------------------------------------
     # Core RL API
@@ -88,6 +89,7 @@ class BaseEnv:
             observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
         else:
             observation = result["observation"]
+        self._last_raw_obs = result["observation"]  # cache for video recording
         info = self._parse_info(result["info"])
         return observation, info
 
@@ -118,6 +120,7 @@ class BaseEnv:
             observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
         else:
             observation = result["observation"]
+        self._last_raw_obs = result["observation"]  # cache for video recording
         reward = float(result["reward"])
         done = bool(result["done"])
         truncated = bool(result["truncated"])
@@ -156,6 +159,7 @@ class BaseEnv:
             observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
         else:
             observation = result["observation"]
+        self._last_raw_obs = result["observation"]  # cache for video recording
         reward = float(result["reward"])
         done = bool(result["done"])
         truncated = bool(result["truncated"])

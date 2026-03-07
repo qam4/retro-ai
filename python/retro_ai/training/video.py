@@ -16,10 +16,12 @@ class VideoRecorder:
         path: str,
         fps: float = 60.0,
         overlay: bool = False,
+        scale: int = 3,
     ):
         self._path = path
         self._fps = fps
         self._overlay = overlay
+        self._scale = max(1, scale)
         self._writer: Optional[object] = None
         self._cv2 = None
 
@@ -52,20 +54,33 @@ class VideoRecorder:
 
         if self._writer is None:
             h, w = frame.shape[:2]
+            out_h, out_w = h * self._scale, w * self._scale
             fourcc = self._cv2.VideoWriter_fourcc(*"mp4v")
-            self._writer = self._cv2.VideoWriter(self._path, fourcc, self._fps, (w, h))
+            self._writer = self._cv2.VideoWriter(
+                self._path, fourcc, self._fps, (out_w, out_h)
+            )
+
+        # Upscale with nearest-neighbour to keep pixel-art crisp
+        if self._scale > 1:
+            frame = self._cv2.resize(
+                frame, None,
+                fx=self._scale, fy=self._scale,
+                interpolation=self._cv2.INTER_NEAREST,
+            )
 
         out = frame.copy()
         if self._overlay and (reward != 0.0 or step != 0):
-            text = f"R:{reward:.1f} S:{step}"
+            text = f"R:{reward:.0f}  Step:{step}"
+            font_scale = 0.5 * (self._scale / 2)
+            thickness = max(1, self._scale // 2)
             self._cv2.putText(
                 out,
                 text,
-                (5, 15),
+                (8, 20 * max(1, self._scale // 2)),
                 self._cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
+                font_scale,
                 (255, 255, 255),
-                1,
+                thickness,
             )
 
         # OpenCV expects BGR
