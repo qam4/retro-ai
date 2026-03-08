@@ -157,7 +157,7 @@ class PreprocessedEnv:
         skip sequence is executed in a single Python→C++ call.  Otherwise
         the existing Python-side loop is used as a fallback.
         """
-        if self.preprocessing.frame_skip > 1 and hasattr(self.env, 'step_n'):
+        if self.preprocessing.frame_skip > 1 and hasattr(self.env, "step_n"):
             # Fast path: single C++ round-trip for all skipped frames
             obs, reward, done, truncated, info = self.env.step_n(
                 action, self.preprocessing.frame_skip

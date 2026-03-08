@@ -41,11 +41,14 @@ def main() -> None:
     play_p.add_argument("--fps", type=float, default=60.0)
     play_p.add_argument("--record", help="Path to save MP4 video")
     play_p.add_argument(
-        "--episodes", type=int, default=None,
+        "--episodes",
+        type=int,
+        default=None,
         help="Max episodes to run (default: infinite)",
     )
     play_p.add_argument(
-        "--no-overlay", action="store_true",
+        "--no-overlay",
+        action="store_true",
         help="Disable reward/step overlay on recorded video",
     )
 

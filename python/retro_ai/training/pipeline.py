@@ -159,6 +159,7 @@ class TrainingPipeline:
 
         def make_env(rank: int):
             """Return a zero-argument callable that builds one env."""
+
             def _init():
                 config_dict = {}
                 gp = self._game_profile
@@ -191,6 +192,7 @@ class TrainingPipeline:
                 # Monitor wrapper records episode rewards/lengths for metrics
                 env = Monitor(env)
                 return env
+
             return _init
 
         if num_envs == 1:

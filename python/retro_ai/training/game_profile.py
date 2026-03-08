@@ -118,7 +118,6 @@ class GameProfile:
                         f"score_addresses[{i}].num_bytes must be 1, 2, or 4, got {nb!r}"
                     )
 
-
     @staticmethod
     def from_yaml(path: str) -> "GameProfile":
         """Load a GameProfile from a YAML file."""

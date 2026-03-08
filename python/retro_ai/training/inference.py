@@ -60,7 +60,9 @@ class InferenceRunner:
 
                 if recorder and raw_env is not None:
                     # Record raw emulator frame (full resolution RGB)
-                    recorder.add_frame(raw_env._last_raw_obs, reward=episode_reward, step=step)
+                    recorder.add_frame(
+                        raw_env._last_raw_obs, reward=episode_reward, step=step
+                    )
                 elif recorder:
                     recorder.add_frame(obs, reward=episode_reward, step=step)
 
@@ -68,7 +70,11 @@ class InferenceRunner:
                 if step % 200 == 0:
                     self._logger.info(
                         "play_progress",
-                        {"episode": episodes_run + 1, "step": step, "reward": episode_reward},
+                        {
+                            "episode": episodes_run + 1,
+                            "step": step,
+                            "reward": episode_reward,
+                        },
                     )
 
                 # Frame pacing

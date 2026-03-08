@@ -63,8 +63,10 @@ class VideoRecorder:
         # Upscale with nearest-neighbour to keep pixel-art crisp
         if self._scale > 1:
             frame = self._cv2.resize(
-                frame, None,
-                fx=self._scale, fy=self._scale,
+                frame,
+                None,
+                fx=self._scale,
+                fy=self._scale,
                 interpolation=self._cv2.INTER_NEAREST,
             )
 
