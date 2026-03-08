@@ -103,14 +103,16 @@ class GameProfile:
                 val = region.get(key)
                 if val is not None and (not isinstance(val, int) or val < 0):
                     raise ConfigurationError(
-                        f"screen_region.{key} must be a non-negative integer, got {val!r}"
+                        f"screen_region.{key} must be a "
+                        f"non-negative integer, got {val!r}"
                     )
         if "score_addresses" in reward_params:
             for i, entry in enumerate(reward_params["score_addresses"]):
                 addr = entry.get("address", 0)
                 if not isinstance(addr, int) or addr < 0 or addr > 65535:
                     raise ConfigurationError(
-                        f"score_addresses[{i}].address must be in [0, 65535], got {addr!r}"
+                        f"score_addresses[{i}].address must be "
+                        f"in [0, 65535], got {addr!r}"
                     )
                 nb = entry.get("num_bytes", 1)
                 if nb not in (1, 2, 4):

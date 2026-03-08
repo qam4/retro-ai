@@ -7,8 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from retro_ai.training.config import TrainingConfig
-from retro_ai.training.pipeline import TrainingPipeline
+try:
+    from retro_ai.training.config import TrainingConfig
+    from retro_ai.training.pipeline import TrainingPipeline
+except ImportError:
+    pytest.skip("stable_baselines3 not available", allow_module_level=True)
 
 
 class TestMixedPrecisionNoCuda:
@@ -85,8 +88,10 @@ class TestMixedPrecisionWithCuda:
             mock_algo_cls = MagicMock()
             algo_map.__getitem__ = MagicMock(return_value=mock_algo_cls)
 
-            with patch("torch.cuda.is_available", return_value=True) as _, \
-                 patch("torch.set_float32_matmul_precision") as mock_precision:
+            with (
+                patch("torch.cuda.is_available", return_value=True) as _,
+                patch("torch.set_float32_matmul_precision") as mock_precision,
+            ):
                 pipeline._build_model(mock_env)
 
                 mock_precision.assert_called_once_with("medium")
