@@ -333,7 +333,7 @@ Optimize end-to-end training throughput from ~35 fps to significantly higher, ta
     - **Property 18: Regression suite exit code reflects pass/fail**
     - **Validates: Requirements 16.3, 16.5**
 
-- [-] 24. Final checkpoint — Verify profiling and benchmarking infrastructure
+- [x] 24. Final checkpoint — Verify profiling and benchmarking infrastructure
   - Rebuild C++ with `cmake --build build/ci-linux --target retro_ai_native -j4` and run full test suite with `PYTHONPATH=build/ci-linux:python pytest`. Ensure all new scripts are importable and CLI `--help` works.
 
 ## Notes

@@ -15,6 +15,10 @@ game_profile: course_automobile
 reward_mode: memory
 policy: CnnPolicy
 
+# Performance tuning
+num_envs: 4                # Parallel environments (1 = single process)
+observation_mode: framebuffer  # "framebuffer" (CnnPolicy) or "ram" (MlpPolicy)
+
 # Preprocessing (must match game profile)
 grayscale: true
 resize: [84, 84]

@@ -1,0 +1,28 @@
+{
+  "optimization_name": "vecenv-4",
+  "baseline_fps": 6.2,
+  "optimized_fps": 70.6,
+  "absolute_delta": 64.4,
+  "percentage_improvement": 1038.7,
+  "timestamp": "2026-03-08T17:23:19Z",
+  "benchmark_details": {
+    "timestamp": "2026-03-08T17:23:19.159242+00:00",
+    "game_profile": "course_automobile",
+    "num_envs": 4,
+    "frame_skip": 4,
+    "observation_mode": "framebuffer",
+    "resize": [
+      84,
+      84
+    ],
+    "total_timesteps": 10000,
+    "wall_clock_seconds": 141.621,
+    "fps": 70.6,
+    "component_timings": {
+      "emulator_step_ms": 0.0,
+      "reward_ms": 0.0,
+      "preprocessing_ms": 0.0,
+      "model_inference_ms": 0.0
+    }
+  }
+}
