@@ -24,11 +24,13 @@ struct ScreenRegion {
 class VisionRewardSystem : public RewardSystem {
 public:
     /// Width of each digit template in pixels.
-    static constexpr int kDigitWidth = 7;
+    static constexpr int kDigitWidth = 8;
     /// Height of each digit template in pixels.
-    static constexpr int kDigitHeight = 10;
+    static constexpr int kDigitHeight = 14;
     /// Number of digit templates (0-9).
     static constexpr int kNumDigits = 10;
+    /// Horizontal spacing between character origins in VDC quad mode (8px char + 8px gap).
+    static constexpr int kQuadCharSpacing = 16;
 
     /// Construct with a score region and the observation space dimensions.
     /// @param score_region  Screen area where the score is rendered.
@@ -69,9 +71,6 @@ private:
     int64_t previous_score_;
     bool has_previous_;
 
-    /// Hardcoded 7×10 binary digit templates (1 = foreground, 0 = background).
-    static const std::array<std::array<uint8_t, kDigitWidth * kDigitHeight>,
-                            kNumDigits> digit_templates_;
 };
 
 }  // namespace retro_ai

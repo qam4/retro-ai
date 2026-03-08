@@ -56,7 +56,7 @@ static const std::unordered_map<std::string, Creator>& registry() {
         {"memory",   []() { return std::make_unique<MemoryRewardSystem>(); }},
         {"vision",   []() {
             // Score region for Videopac: counter at x=112, y=80, 4 chars wide
-            ScreenRegion region{112, 80, 40, 14};
+            ScreenRegion region{112, 80, 48, 14};
             ObservationSpace obs{160, 240, 3, 8};
             return std::make_unique<VisionRewardSystem>(region, obs);
         }},
@@ -85,7 +85,7 @@ std::unique_ptr<RewardSystem> RewardSystemFactory::create(
         ScreenRegion region{
             param_int(params, "screen_region_x", 112),
             param_int(params, "screen_region_y", 80),
-            param_int(params, "screen_region_w", 40),
+            param_int(params, "screen_region_w", 48),
             param_int(params, "screen_region_h", 14)
         };
         ObservationSpace obs{160, 240, 3, 8};
