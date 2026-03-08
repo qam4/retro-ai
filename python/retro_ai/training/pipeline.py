@@ -6,6 +6,7 @@ from typing import Optional
 
 from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.callbacks import CallbackList
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from retro_ai import StateError
@@ -187,6 +188,8 @@ class TrainingPipeline:
                     env = StartupSequenceWrapper(
                         env, self._game_profile.startup_sequence
                     )
+                # Monitor wrapper records episode rewards/lengths for metrics
+                env = Monitor(env)
                 return env
             return _init
 
