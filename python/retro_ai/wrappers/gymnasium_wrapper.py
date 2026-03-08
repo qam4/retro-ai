@@ -6,7 +6,7 @@ need Gymnasium integration — the rest of retro-ai works without it.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -86,13 +86,15 @@ class GymnasiumWrapper(gym.Env):
         self._last_obs = obs
         return obs, info
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: Union[int, np.ndarray]) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute one step.
 
         Returns
         -------
         observation, reward, terminated, truncated, info
         """
+        if isinstance(action, np.ndarray):
+            action = action.tolist()
         obs, reward, done, truncated, info = self._env.step(action)
         self._last_obs = obs
         return obs, reward, done, truncated, info

@@ -85,7 +85,8 @@ public:
          const std::string& rom_path,
          const std::string& reward_mode,
          int joystick_index = 0,
-         const RewardParams& reward_params = {})
+         const RewardParams& reward_params = {},
+         const std::string& action_mode = "multi_discrete")
         : bios_path_(bios_path)
         , rom_path_(rom_path)
         , reward_mode_(reward_mode)
@@ -94,7 +95,15 @@ public:
         , reward_params_(reward_params)
         , reward_system_(RewardSystemFactory::create(reward_mode, reward_params))
         , rgb_buffer_(kFramebufferSize)
+        , action_mode_(action_mode)
     {
+        // Validate action_mode
+        if (action_mode_ != "discrete" && action_mode_ != "multi_discrete") {
+            throw InitializationError(
+                "Invalid action_mode '" + action_mode_ +
+                "': must be \"discrete\" or \"multi_discrete\"");
+        }
+
         // Configure headless emulator (NTSC = 60 Hz)
         Configuration config;
         config.video_standard = VideoStandard::NTSC;
@@ -233,20 +242,51 @@ public:
     StepResult step(const std::vector<int>& action) {
         StepResult result;
 
-        // Validate action
-        if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
-            int bad_action = action.empty() ? -1 : action[0];
-            const auto& fb = extract_framebuffer();
-            result.observation.assign(fb.begin(), fb.end());
-            result.reward = 0.0f;
-            result.done = false;
-            result.truncated = true;
-            result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                          ", \"error\": \"Invalid action " +
-                          std::to_string(bad_action) +
-                          ", must be in range [0, " +
-                          std::to_string(kNumActions) + ")\"}";
-            return result;
+        // --- Validation ---
+        if (action_mode_ == "multi_discrete") {
+            // Validate multi-discrete: exactly 5 elements, each 0 or 1
+            if (action.size() != static_cast<size_t>(VideopacRLInterface::kMultiDiscreteSize)) {
+                const auto& fb = extract_framebuffer();
+                result.observation.assign(fb.begin(), fb.end());
+                result.reward = 0.0f;
+                result.done = false;
+                result.truncated = true;
+                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                              ", \"error\": \"Multi-discrete action must have exactly " +
+                              std::to_string(VideopacRLInterface::kMultiDiscreteSize) +
+                              " elements, got " + std::to_string(action.size()) + "\"}";
+                return result;
+            }
+            for (size_t i = 0; i < action.size(); ++i) {
+                if (action[i] != 0 && action[i] != 1) {
+                    const auto& fb = extract_framebuffer();
+                    result.observation.assign(fb.begin(), fb.end());
+                    result.reward = 0.0f;
+                    result.done = false;
+                    result.truncated = true;
+                    result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                                  ", \"error\": \"Multi-discrete action element " +
+                                  std::to_string(i) + " must be 0 or 1, got " +
+                                  std::to_string(action[i]) + "\"}";
+                    return result;
+                }
+            }
+        } else {
+            // Existing discrete validation (unchanged)
+            if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
+                int bad_action = action.empty() ? -1 : action[0];
+                const auto& fb = extract_framebuffer();
+                result.observation.assign(fb.begin(), fb.end());
+                result.reward = 0.0f;
+                result.done = false;
+                result.truncated = true;
+                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                              ", \"error\": \"Invalid action " +
+                              std::to_string(bad_action) +
+                              ", must be in range [0, " +
+                              std::to_string(kNumActions) + ")\"}";
+                return result;
+            }
         }
 
 #ifdef RETRO_AI_PROFILING
@@ -254,8 +294,13 @@ public:
         auto step_start = Clock::now();
 #endif
 
-        int act = action[0];
-        apply_action(act);
+        // --- Apply action ---
+        if (action_mode_ == "multi_discrete") {
+            apply_multi_discrete_action(action);
+        } else {
+            int act = action[0];
+            apply_action(act);
+        }
 
 #ifdef RETRO_AI_PROFILING
         auto cpu_start = Clock::now();
@@ -324,28 +369,64 @@ public:
             return result;
         }
 
-        // Validate action
-        if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
-            int bad_action = action.empty() ? -1 : action[0];
-            const auto& fb = extract_framebuffer();
-            result.observation.assign(fb.begin(), fb.end());
-            result.reward = 0.0f;
-            result.done = false;
-            result.truncated = true;
-            result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                          ", \"error\": \"Invalid action " +
-                          std::to_string(bad_action) +
-                          ", must be in range [0, " +
-                          std::to_string(kNumActions) + ")\"}";
-            return result;
+        // --- Validation ---
+        if (action_mode_ == "multi_discrete") {
+            // Validate multi-discrete: exactly 5 elements, each 0 or 1
+            if (action.size() != static_cast<size_t>(VideopacRLInterface::kMultiDiscreteSize)) {
+                const auto& fb = extract_framebuffer();
+                result.observation.assign(fb.begin(), fb.end());
+                result.reward = 0.0f;
+                result.done = false;
+                result.truncated = true;
+                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                              ", \"error\": \"Multi-discrete action must have exactly " +
+                              std::to_string(VideopacRLInterface::kMultiDiscreteSize) +
+                              " elements, got " + std::to_string(action.size()) + "\"}";
+                return result;
+            }
+            for (size_t i = 0; i < action.size(); ++i) {
+                if (action[i] != 0 && action[i] != 1) {
+                    const auto& fb = extract_framebuffer();
+                    result.observation.assign(fb.begin(), fb.end());
+                    result.reward = 0.0f;
+                    result.done = false;
+                    result.truncated = true;
+                    result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                                  ", \"error\": \"Multi-discrete action element " +
+                                  std::to_string(i) + " must be 0 or 1, got " +
+                                  std::to_string(action[i]) + "\"}";
+                    return result;
+                }
+            }
+        } else {
+            // Existing discrete validation (unchanged)
+            if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
+                int bad_action = action.empty() ? -1 : action[0];
+                const auto& fb = extract_framebuffer();
+                result.observation.assign(fb.begin(), fb.end());
+                result.reward = 0.0f;
+                result.done = false;
+                result.truncated = true;
+                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                              ", \"error\": \"Invalid action " +
+                              std::to_string(bad_action) +
+                              ", must be in range [0, " +
+                              std::to_string(kNumActions) + ")\"}";
+                return result;
+            }
         }
 
-        int act = action[0];
         float total_reward = 0.0f;
         bool done = false;
 
         for (int i = 0; i < n; ++i) {
-            apply_action(act);
+            // --- Apply action ---
+            if (action_mode_ == "multi_discrete") {
+                apply_multi_discrete_action(action);
+            } else {
+                apply_action(action[0]);
+            }
+
             emulator_->run_frame();
             clear_input();
             ++frame_number_;
@@ -385,6 +466,10 @@ public:
     }
 
     ActionSpace action_space() const {
+        if (action_mode_ == "multi_discrete") {
+            return {ActionType::MULTI_DISCRETE,
+                    std::vector<int>(VideopacRLInterface::kMultiDiscreteSize, 2)};
+        }
         return {ActionType::DISCRETE, {kNumActions}};
     }
 
@@ -511,6 +596,18 @@ private:
         return rgb_buffer_;
     }
 
+    /// Map a 5-element binary vector to independent joystick inputs.
+    /// Order: [up, down, left, right, fire]
+    void apply_multi_discrete_action(const std::vector<int>& action) {
+        InputHandler& input = emulator_->get_input_handler();
+        const int joy = joystick_index_;
+        if (action[0]) input.set_joystick_state(joy, Direction::Up, true);
+        if (action[1]) input.set_joystick_state(joy, Direction::Down, true);
+        if (action[2]) input.set_joystick_state(joy, Direction::Left, true);
+        if (action[3]) input.set_joystick_state(joy, Direction::Right, true);
+        if (action[4]) input.set_joystick_button(joy, true);
+    }
+
     /// Map a discrete action to emulator input.
     void apply_action(int action) {
         InputHandler& input = emulator_->get_input_handler();
@@ -592,6 +689,7 @@ private:
     StepResult previous_result_;
     std::unique_ptr<EmulatorCore> emulator_;
     std::vector<uint8_t> rgb_buffer_;  // pre-allocated framebuffer (Requirement 4)
+    std::string action_mode_;
 
     // Timer-based episode termination
     int timer_minutes_addr_ = -1;
@@ -620,8 +718,9 @@ VideopacRLInterface::VideopacRLInterface(const std::string& bios_path,
                                           const std::string& rom_path,
                                           const std::string& reward_mode,
                                           int joystick_index,
-                                          const RewardParams& reward_params)
-    : impl_(std::make_unique<Impl>(bios_path, rom_path, reward_mode, joystick_index, reward_params))
+                                          const RewardParams& reward_params,
+                                          const std::string& action_mode)
+    : impl_(std::make_unique<Impl>(bios_path, rom_path, reward_mode, joystick_index, reward_params, action_mode))
 {
 }
 

@@ -15,7 +15,10 @@ namespace retro_ai {
 /// The emulator runs in headless mode (no SDL, no graphics output).
 ///
 /// Framebuffer: 160×240 palette-indexed pixels are converted to RGB888.
-/// Actions: 18 discrete actions (joystick directions + fire + keyboard keys).
+/// Action modes:
+///   - "discrete": 18 flat discrete actions (joystick directions + fire + keyboard keys).
+///   - "multi_discrete" (default): 5 independent binary dimensions [up, down, left, right, fire],
+///     enabling diagonal movement and simultaneous inputs.
 class VideopacRLInterface : public RLInterface {
 public:
     /// Construct a Videopac environment.
@@ -23,12 +26,17 @@ public:
     /// @param rom_path   Path to the ROM file to load.
     /// @param reward_mode Initial reward computation mode (default: "survival").
     /// @param joystick_index Which joystick to use for actions (0 or 1).
-    /// @throws InitializationError if the emulator fails to initialize.
+    /// @param reward_params Additional reward system parameters.
+    /// @param action_mode Action space mode: "discrete" (18 flat actions) or
+    ///        "multi_discrete" (5 binary dims: up/down/left/right/fire).
+    /// @throws InitializationError if the emulator fails to initialize or
+    ///         action_mode is invalid.
     explicit VideopacRLInterface(const std::string& bios_path,
                                   const std::string& rom_path,
                                   const std::string& reward_mode = "survival",
                                   int joystick_index = 0,
-                                  const RewardParams& reward_params = {});
+                                  const RewardParams& reward_params = {},
+                                  const std::string& action_mode = "multi_discrete");
 
     ~VideopacRLInterface() override;
 
@@ -72,6 +80,7 @@ public:
     static constexpr int kScreenHeight = 240;
     static constexpr int kScreenChannels = 3;
     static constexpr int kNumActions = 18;
+    static constexpr int kMultiDiscreteSize = 5;
 
 private:
     class Impl;

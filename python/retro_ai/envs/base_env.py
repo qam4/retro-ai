@@ -7,7 +7,7 @@ write custom training loops.
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -47,6 +47,7 @@ class BaseEnv:
         reward_mode: str = "survival",
         config: Optional[Dict[str, Any]] = None,
         observation_mode: str = "framebuffer",
+        action_mode: str = "multi_discrete",
     ) -> None:
         if observation_mode not in self._VALID_OBSERVATION_MODES:
             raise ValueError(
@@ -54,8 +55,10 @@ class BaseEnv:
                 f"Must be one of {sorted(self._VALID_OBSERVATION_MODES)}"
             )
         self._observation_mode = observation_mode
+        self._action_mode = action_mode
         self._interface = self._create_interface(
-            emulator_type, rom_path, bios_path, reward_mode, config
+            emulator_type, rom_path, bios_path, reward_mode, config,
+            action_mode=action_mode,
         )
         self._obs_space = self._interface.observation_space()
         self._action_space = self._interface.action_space()
@@ -93,13 +96,15 @@ class BaseEnv:
         info = self._parse_info(result["info"])
         return observation, info
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: Union[int, List[int]]) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute one environment step.
 
         Parameters
         ----------
-        action : int
-            The discrete action to execute.
+        action : int or list[int]
+            The action to execute.  For discrete mode, a single ``int``.
+            For multi-discrete mode, a list of 5 binary values
+            ``[up, down, left, right, fire]``.
 
         Returns
         -------
@@ -114,7 +119,10 @@ class BaseEnv:
         info : dict
             Additional metadata dictionary.
         """
-        result = self._interface.step_numpy([action])
+        if self._action_mode == "multi_discrete":
+            result = self._interface.step_numpy(action if isinstance(action, list) else list(action))
+        else:
+            result = self._interface.step_numpy([action])
         if self._observation_mode == "ram":
             ram_bytes = self._interface.read_ram()
             observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
@@ -127,7 +135,7 @@ class BaseEnv:
         info = self._parse_info(result["info"])
         return observation, reward, done, truncated, info
 
-    def step_n(self, action: int, n: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step_n(self, action: Union[int, List[int]], n: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute *n* environment steps with the same action via C++ batching.
 
         Delegates to the native ``step_n_numpy`` method which runs all *n*
@@ -135,8 +143,9 @@ class BaseEnv:
 
         Parameters
         ----------
-        action : int
-            The discrete action to repeat for *n* frames.
+        action : int or list[int]
+            The action to repeat for *n* frames.  For discrete mode, a single
+            ``int``.  For multi-discrete mode, a list of 5 binary values.
         n : int
             Number of frames to step.
 
@@ -153,7 +162,10 @@ class BaseEnv:
         info : dict
             Metadata from the final step.
         """
-        result = self._interface.step_n_numpy([action], n)
+        if self._action_mode == "multi_discrete":
+            result = self._interface.step_n_numpy(action if isinstance(action, list) else list(action), n)
+        else:
+            result = self._interface.step_n_numpy([action], n)
         if self._observation_mode == "ram":
             ram_bytes = self._interface.read_ram()
             observation = np.frombuffer(bytes(ram_bytes), dtype=np.uint8).copy()
@@ -269,6 +281,7 @@ class BaseEnv:
         bios_path: Optional[str],
         reward_mode: str,
         config: Optional[Dict[str, Any]] = None,
+        action_mode: str = "multi_discrete",
     ) -> Any:
         """Factory: instantiate the correct native RLInterface."""
         import retro_ai_native  # local import to keep module-level clean
@@ -288,6 +301,7 @@ class BaseEnv:
             return retro_ai_native.VideopacRLInterface(
                 bios_path, rom_path, reward_mode, joystick_index,
                 reward_params=reward_params_flat,
+                action_mode=action_mode,
             )
         if emu == "mo5":
             return retro_ai_native.MO5RLInterface(
