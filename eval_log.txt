@@ -1,0 +1,21 @@
+Profile loaded: course_automobile
+reward_params: {'score_address_count': '1', 'score_address_0_addr': '54', 'score_address_0_bytes': '2', 'score_address_0_bcd': '1', 'score_address_0_le': '1', 'timer_minutes_addr': '65', 'timer_seconds_addr': '66', 'done_when_timer_zero': 'true'}
+Running evaluation...
+Traceback (most recent call last):
+  File "<string>", line 20, in <module>
+  File "/local/home/fredmarc/src/retro-ai/python/retro_ai/training/evaluation.py", line 60, in run
+    obs, reward, done, truncated, info = env.step(action)
+                                         ^^^^^^^^^^^^^^^^
+  File "/home/fredmarc/.pyenv/versions/3.12.11/lib/python3.12/site-packages/gymnasium/core.py", line 327, in step
+    return self.env.step(action)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/local/home/fredmarc/src/retro-ai/python/retro_ai/wrappers/gymnasium_wrapper.py", line 96, in step
+    obs, reward, done, truncated, info = self._env.step(action)
+                                         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/local/home/fredmarc/src/retro-ai/python/retro_ai/core/preprocessing.py", line 162, in step
+    obs, reward, done, truncated, info = self.env.step_n(
+                                         ^^^^^^^^^^^^^^^^
+  File "/local/home/fredmarc/src/retro-ai/python/retro_ai/envs/base_env.py", line 153, in step_n
+    result = self._interface.step_n_numpy([action], n)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

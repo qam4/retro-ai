@@ -400,6 +400,283 @@ ObservationSpace observation_space() const {
 }
 ```
 
+### Baseline and Comparison Output Schemas
+
+These additional data models support the profiling and benchmarking infrastructure (Requirements 14-16).
+
+**Baseline JSON** (`benchmarks/baseline.json`): Extends the Benchmark Output Schema with an `environment` sub-object containing hardware/software metadata (see Section 13 below).
+
+**Comparison Output JSON**: Each comparison result contains `optimization_name`, `baseline_fps`, `optimized_fps`, `absolute_delta`, `percentage_improvement`, and an optional `warning` field for regressions (see Section 14 below).
+
+**References JSON** (`benchmarks/references.json`): Maps configuration names to `{fps, timestamp}` objects used by the regression detection script (see Section 15 below).
+
+## Components and Interfaces (continued)
+
+The following sections extend the component design to cover profiling tooling (Requirements 12-13) and benchmarking infrastructure (Requirements 14-16).
+
+### 11. Python-Side Profiling with py-spy (Requirement 12)
+
+A helper script `scripts/profile_pyspy.py` wraps py-spy invocation around a training session. It:
+
+1. Accepts `--mode record|top`, `--output-dir`, `--game-profile`, `--timesteps`, and `--rate` (sampling Hz)
+2. Constructs the appropriate py-spy command:
+   - `record` mode: `py-spy record -o <output_dir>/flamegraph.svg --rate <rate> -- python -m retro_ai.training.cli train <profile>`
+   - `top` mode: `py-spy top --rate <rate> -- python -m retro_ai.training.cli train <profile>`
+3. Uses the sidecar monitor pattern (`scripts/monitor.py`) for the `record` mode to handle long-running sessions
+4. Defaults: `--rate 100`, `--timesteps 5000`, `--output-dir output/profiling`
+
+```python
+# scripts/profile_pyspy.py — core command construction
+
+def build_pyspy_command(
+    mode: str,
+    output_dir: str,
+    game_profile: str,
+    timesteps: int,
+    rate: int,
+) -> list[str]:
+    """Build the py-spy command line for the given mode.
+
+    Returns the command as a list of strings suitable for subprocess.
+    """
+    train_cmd = [
+        sys.executable, "-m", "retro_ai.training.cli", "train",
+        game_profile, "--total-timesteps", str(timesteps),
+    ]
+
+    if mode == "record":
+        svg_path = os.path.join(output_dir, "flamegraph.svg")
+        return ["py-spy", "record", "-o", svg_path, "--rate", str(rate), "--"] + train_cmd
+    elif mode == "top":
+        return ["py-spy", "top", "--rate", str(rate), "--"] + train_cmd
+    else:
+        raise ValueError(f"Unknown mode: {mode!r}. Use 'record' or 'top'.")
+```
+
+The script does not modify the training code — py-spy attaches externally as a sampling profiler. The `record` mode produces a flame graph SVG; the `top` mode provides a live interactive view.
+
+### 12. C++ Profiling with gprof or perf (Requirement 13)
+
+Two new CMake build options are added alongside the existing `PGO_GENERATE`/`PGO_USE`:
+
+```cmake
+option(PROFILING_GPROF "Build with gprof instrumentation (-pg)" OFF)
+option(PROFILING_PERF "Build with perf-compatible symbols (-g -fno-omit-frame-pointer)" OFF)
+
+# Mutual exclusivity check
+set(_PROF_COUNT 0)
+foreach(_opt PGO_GENERATE PGO_USE PROFILING_GPROF PROFILING_PERF)
+    if(${_opt})
+        math(EXPR _PROF_COUNT "${_PROF_COUNT} + 1")
+    endif()
+endforeach()
+if(_PROF_COUNT GREATER 1)
+    message(FATAL_ERROR
+        "Only one of PGO_GENERATE, PGO_USE, PROFILING_GPROF, PROFILING_PERF "
+        "may be enabled at a time.")
+endif()
+
+# gprof instrumentation
+if(PROFILING_GPROF)
+    add_compile_options(-pg)
+    add_link_options(-pg)
+endif()
+
+# perf-compatible symbols
+if(PROFILING_PERF)
+    add_compile_options(-g -fno-omit-frame-pointer)
+    add_link_options(-g)
+endif()
+```
+
+A helper script `scripts/profile_cpp.py` automates the profiling workflow:
+
+```python
+# scripts/profile_cpp.py — orchestrates C++ profiling
+
+def run_gprof_workflow(build_dir: str, game_profile: str, timesteps: int, output_dir: str):
+    """Run gprof profiling: execute workload, then gprof analysis."""
+    # 1. Run the PGO training workload (reuses existing script)
+    workload_cmd = [sys.executable, "scripts/pgo_training_workload.py",
+                    "--game-profile", game_profile, "--timesteps", str(timesteps)]
+    subprocess.run(workload_cmd, check=True)
+    # 2. Run gprof on the generated gmon.out
+    gprof_cmd = ["gprof", os.path.join(build_dir, "retro_ai_native*.so"), "gmon.out"]
+    # ... write flat profile + call graph to output_dir
+
+def run_perf_workflow(game_profile: str, timesteps: int, output_dir: str):
+    """Run perf profiling: perf record, then perf script → flame graph."""
+    workload_cmd = [sys.executable, "scripts/pgo_training_workload.py",
+                    "--game-profile", game_profile, "--timesteps", str(timesteps)]
+    perf_cmd = ["perf", "record", "-g", "--"] + workload_cmd
+    # ... then perf script | stackcollapse-perf.pl | flamegraph.pl
+```
+
+### 13. Baseline Performance Documentation (Requirement 14)
+
+The baseline is captured by running `scripts/bench_training.py` with default parameters and storing the result at `benchmarks/baseline.json`. A helper script `scripts/capture_baseline.py` automates this:
+
+```python
+# scripts/capture_baseline.py
+
+def capture_baseline(output_path: str = "benchmarks/baseline.json"):
+    """Run bench_training.py with defaults and save baseline + environment info."""
+    # Run benchmark
+    result = run_bench_training(
+        game_profile="course_automobile",
+        num_envs=1, frame_skip=4,
+        observation_mode="framebuffer",
+        resize=(84, 84), timesteps=10000,
+    )
+    # Add environment metadata
+    result["environment"] = collect_environment_info()
+    # Write to file
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(result, f, indent=2)
+
+def collect_environment_info() -> dict:
+    """Collect hardware/software environment for reproducibility."""
+    import platform, torch
+    return {
+        "cpu_model": platform.processor() or platform.machine(),
+        "ram_gb": round(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024**3), 1),
+        "os": f"{platform.system()} {platform.release()}",
+        "python_version": platform.python_version(),
+        "pytorch_version": torch.__version__,
+        "compiler": get_compiler_version(),
+        "build_flags": "Release (no PGO, no profiling)",
+    }
+```
+
+Baseline JSON schema:
+
+```json
+{
+    "timestamp": "2025-01-15T10:30:00Z",
+    "game_profile": "course_automobile",
+    "num_envs": 1,
+    "frame_skip": 4,
+    "observation_mode": "framebuffer",
+    "resize": [84, 84],
+    "total_timesteps": 10000,
+    "wall_clock_seconds": 285.7,
+    "fps": 35.0,
+    "component_timings": { ... },
+    "environment": {
+        "cpu_model": "Intel i7-12700K",
+        "ram_gb": 32.0,
+        "os": "Linux 6.1.0",
+        "python_version": "3.11.5",
+        "pytorch_version": "2.1.0",
+        "compiler": "GCC 12.3.0",
+        "build_flags": "Release (no PGO, no profiling)"
+    }
+}
+```
+
+### 14. Per-Optimization Impact Measurement (Requirement 15)
+
+A comparison script `scripts/bench_compare.py` runs a benchmark with a specific optimization and compares against the stored baseline:
+
+```python
+# scripts/bench_compare.py
+
+def compute_comparison(baseline_fps: float, optimized_fps: float, optimization_name: str) -> dict:
+    """Compute the comparison metrics between baseline and optimized fps.
+
+    Returns a dict with all required fields for the comparison output.
+    """
+    absolute_delta = optimized_fps - baseline_fps
+    percentage_improvement = (absolute_delta / baseline_fps * 100.0) if baseline_fps > 0 else 0.0
+    result = {
+        "optimization_name": optimization_name,
+        "baseline_fps": round(baseline_fps, 1),
+        "optimized_fps": round(optimized_fps, 1),
+        "absolute_delta": round(absolute_delta, 1),
+        "percentage_improvement": round(percentage_improvement, 1),
+    }
+    if optimized_fps < baseline_fps:
+        result["warning"] = "REGRESSION: optimized fps is lower than baseline"
+    return result
+```
+
+Supported optimization levers (each run independently against baseline):
+
+| Lever | bench_training.py args |
+|---|---|
+| `vecenv-2` | `--num-envs 2` |
+| `vecenv-4` | `--num-envs 4` |
+| `vecenv-8` | `--num-envs 8` |
+| `frameskip-1` | `--frame-skip 1` |
+| `frameskip-2` | `--frame-skip 2` |
+| `frameskip-8` | `--frame-skip 8` |
+| `ram-obs` | `--observation-mode ram` |
+| `lowres-42` | `--resize 42 42` |
+| `highres-160` | `--resize 160 240` |
+
+### 15. Performance Regression Detection (Requirement 16)
+
+A regression benchmark script `scripts/bench_regression.py` runs a fixed set of configurations and compares against stored reference values in `benchmarks/references.json`:
+
+```python
+# scripts/bench_regression.py
+
+REGRESSION_CONFIGS = [
+    {"name": "default", "args": {}},
+    {"name": "vectorized-4", "args": {"num_envs": 4}},
+    {"name": "ram-observation", "args": {"observation_mode": "ram"}},
+]
+
+def check_regression(measured_fps: float, reference_fps: float, tolerance: float = 0.10) -> bool:
+    """Return True if measured_fps is within tolerance of reference_fps.
+
+    A regression is detected when measured_fps < reference_fps * (1 - tolerance).
+    """
+    return measured_fps >= reference_fps * (1.0 - tolerance)
+
+def run_regression_suite(
+    references: dict,
+    tolerance: float = 0.10,
+    configs: list[dict] | None = None,
+) -> tuple[list[dict], bool]:
+    """Run all regression configs and return (results, all_passed).
+
+    Each result dict contains: name, reference_fps, measured_fps, passed, delta_pct.
+    all_passed is True only if every config passed.
+    """
+    if configs is None:
+        configs = REGRESSION_CONFIGS
+    results = []
+    all_passed = True
+    for config in configs:
+        name = config["name"]
+        ref_fps = references.get(name, {}).get("fps", 0.0)
+        measured_fps = run_benchmark(config["args"])
+        passed = check_regression(measured_fps, ref_fps, tolerance)
+        if not passed:
+            all_passed = False
+        results.append({
+            "name": name,
+            "reference_fps": ref_fps,
+            "measured_fps": round(measured_fps, 1),
+            "passed": passed,
+            "delta_pct": round((measured_fps - ref_fps) / ref_fps * 100, 1) if ref_fps > 0 else 0.0,
+        })
+    return results, all_passed
+```
+
+References JSON schema (`benchmarks/references.json`):
+
+```json
+{
+    "default": {"fps": 35.0, "timestamp": "2025-01-15T10:30:00Z"},
+    "vectorized-4": {"fps": 120.0, "timestamp": "2025-01-15T10:35:00Z"},
+    "ram-observation": {"fps": 180.0, "timestamp": "2025-01-15T10:40:00Z"}
+}
+```
+
+The script supports `--update-references` to overwrite references with current measurements, `--tolerance` to configure the regression threshold (default 10%), and exits with code 0 on all-pass, non-zero on any failure.
 
 ## Correctness Properties
 
@@ -483,6 +760,36 @@ ObservationSpace observation_space() const {
 
 **Validates: Requirements 10.4**
 
+### Property 14: py-spy helper constructs correct command for mode
+
+*For any* valid mode (`"record"` or `"top"`), game profile string, positive timestep count, and positive sampling rate, `build_pyspy_command()` shall return a command list where: (a) the first element is `"py-spy"`, (b) the second element equals the mode, (c) `"record"` mode includes `"-o"` followed by a path ending in `.svg`, and (d) the command ends with the training CLI invocation including the game profile and timestep count. For any invalid mode, the function shall raise `ValueError`.
+
+**Validates: Requirements 12.5, 12.6**
+
+### Property 15: Baseline JSON contains all required fields
+
+*For any* valid baseline JSON object produced by `capture_baseline()`, it shall contain at minimum the keys: `fps`, `wall_clock_seconds`, `total_timesteps`, `game_profile`, `component_timings`, and `environment`. The `environment` sub-object shall contain at minimum: `cpu_model`, `ram_gb`, `os`, `python_version`, `pytorch_version`, `compiler`, `build_flags`.
+
+**Validates: Requirements 14.2, 14.4**
+
+### Property 16: Comparison delta computation correctness
+
+*For any* positive `baseline_fps` and non-negative `optimized_fps`, `compute_comparison()` shall return a dict where `absolute_delta` equals `optimized_fps - baseline_fps` (within floating-point tolerance), `percentage_improvement` equals `absolute_delta / baseline_fps * 100`, and a `"warning"` key is present if and only if `optimized_fps < baseline_fps`.
+
+**Validates: Requirements 15.2, 15.4, 15.5**
+
+### Property 17: Regression detection threshold
+
+*For any* positive `reference_fps`, non-negative `measured_fps`, and tolerance in (0, 1), `check_regression()` shall return `True` if and only if `measured_fps >= reference_fps * (1 - tolerance)`.
+
+**Validates: Requirements 16.3**
+
+### Property 18: Regression suite exit code reflects pass/fail
+
+*For any* list of regression results, the `all_passed` flag returned by `run_regression_suite()` shall be `True` if and only if every individual result has `passed == True`. When `all_passed` is `False`, the script shall exit with a non-zero code; when `True`, exit code shall be 0.
+
+**Validates: Requirements 16.3, 16.5**
+
 ## Error Handling
 
 | Scenario | Component | Behavior |
@@ -497,6 +804,14 @@ ObservationSpace observation_space() const {
 | `mixed_precision=true` without CUDA | TrainingPipeline | Log warning, fall back to FP32 |
 | PGO profile data missing when `PGO_USE=ON` | CMake | Compiler warning/error at build time |
 | Benchmark script given invalid game profile | bench_training.py | Exit with error message |
+| `build_pyspy_command()` with invalid mode | profile_pyspy.py | Raise `ValueError` |
+| py-spy not installed or not in PATH | profile_pyspy.py | Exit with error message explaining how to install py-spy |
+| `profile_cpp.py` run without matching build flags | profile_cpp.py | Exit with error message (e.g., "rebuild with -DPROFILING_GPROF=ON") |
+| Multiple profiling/PGO CMake options enabled | CMakeLists.txt | `FATAL_ERROR` at configure time |
+| `benchmarks/baseline.json` missing when comparison requested | bench_compare.py | Exit with error message ("run capture_baseline.py first") |
+| `benchmarks/references.json` missing when regression check requested | bench_regression.py | Exit with error message ("run with --update-references first") |
+| `compute_comparison()` with `baseline_fps <= 0` | bench_compare.py | Return `percentage_improvement: 0.0` (avoid division by zero) |
+| `check_regression()` with `reference_fps <= 0` | bench_regression.py | Return `True` (no regression detectable without a valid reference) |
 
 ## Testing Strategy
 
@@ -519,6 +834,11 @@ Properties to implement as PBT:
 | P11: step_n equivalence | `step_n()` vs sequential `step()` | Random actions, random n ∈ [1, 16] |
 | P12: step vs step_n(1) | `step()` vs `step_n(action, 1)` | Random actions |
 | P13: Benchmark JSON | `format_benchmark_output()` | Random timing data |
+| P14: py-spy command construction | `build_pyspy_command()` | Random mode ∈ {"record", "top", invalid}, random profile strings, random timesteps ∈ [1, 100000], random rate ∈ [1, 1000] |
+| P15: Baseline JSON fields | `capture_baseline()` output | Random benchmark outputs with environment metadata |
+| P16: Comparison delta | `compute_comparison()` | Random positive baseline_fps ∈ (0.1, 10000), random optimized_fps ∈ [0, 10000], random optimization names |
+| P17: Regression threshold | `check_regression()` | Random reference_fps ∈ (0.1, 10000), random measured_fps ∈ [0, 10000], random tolerance ∈ (0.01, 0.5) |
+| P18: Regression suite pass/fail | `run_regression_suite()` | Random sets of (measured_fps, reference_fps) pairs with varying tolerance |
 
 Each test is tagged: `# Feature: training-performance, Property {N}: {title}`
 
@@ -535,6 +855,19 @@ Unit tests cover specific examples, edge cases, and integration points:
 - PGO CMake options produce correct compiler flags for GCC and Clang (examples from Req 9.1, 9.2)
 - Benchmark script accepts all parameter combinations (example from Req 10.3)
 - `resize=(30, 30)` triggers low-resolution warning (edge case from P10)
+- `build_pyspy_command("record", ...)` produces command starting with `py-spy record -o ...` (example from Req 12.5)
+- `build_pyspy_command("top", ...)` produces command starting with `py-spy top ...` (example from Req 12.6)
+- `build_pyspy_command("invalid", ...)` raises `ValueError` (edge case from P14)
+- CMake `PROFILING_GPROF=ON` adds `-pg` to compile flags (example from Req 13.1)
+- CMake `PROFILING_PERF=ON` adds `-g -fno-omit-frame-pointer` (example from Req 13.2)
+- CMake with both `PROFILING_GPROF=ON` and `PGO_GENERATE=ON` produces `FATAL_ERROR` (example from Req 13.3)
+- `capture_baseline()` output contains `environment.cpu_model` and `environment.python_version` (example from Req 14.4)
+- `compute_comparison(35.0, 70.0, "vecenv-2")` returns `absolute_delta=35.0, percentage_improvement=100.0` (example from Req 15.2)
+- `compute_comparison(35.0, 30.0, "bad-opt")` returns dict with `"warning"` key (example from Req 15.5)
+- `check_regression(31.5, 35.0, 0.10)` returns `True` (31.5 >= 35.0 * 0.9) (example from Req 16.3)
+- `check_regression(31.0, 35.0, 0.10)` returns `False` (31.0 < 31.5) (example from Req 16.3)
+- Regression script with `--update-references` writes to `benchmarks/references.json` (example from Req 16.4)
+- Regression script exits 0 when all configs pass, non-zero when any fail (example from Req 16.5)
 
 ### Testing Libraries
 

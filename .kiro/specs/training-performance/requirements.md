@@ -10,6 +10,8 @@ Retro-AI currently trains RL agents at approximately 35 fps end-to-end (training
 
 The emulator is running in Release mode (`-O2`/`-O3`), so the 206 fps ceiling for an 8048 @ 5.91 MHz suggests the VDC simulation is the primary bottleneck on the C++ side. This specification covers all optimization avenues to improve training throughput: profiling to identify hotspots, emulator core optimization, parallelized data collection via vectorized environments, reduced emulator work per episode via frame skip and step batching, elimination of per-frame heap allocations, alternative observation spaces, neural network efficiency improvements, and build-level optimizations. All changes must be designed for generalization across emulators and games, not just the current Videopac/Course Automobile setup.
 
+**Profiling-first principle**: Before applying any optimization, the project must establish a profiling baseline using real profiling tools (py-spy for Python, gprof/perf for C++) and measure the impact of each optimization independently. The existing custom `std::chrono` instrumentation (Requirement 1) provides C++ component-level breakdowns, but real profilers are needed to identify hotspots in the Python/SB3 layer and to validate C++ hotspots with call-graph-level detail. Similar gprof-based profiling is already being done in the videopac emulator subproject.
+
 ## Glossary
 
 - **Training_Pipeline**: The Python orchestrator (`pipeline.py`) that builds environments, configures the SB3 model, and runs `model.learn()`.
@@ -24,6 +26,12 @@ The emulator is running in Release mode (`-O2`/`-O3`), so the 206 fps ceiling fo
 - **RAM_Observation**: An alternative observation space that uses raw emulator RAM bytes instead of the framebuffer image.
 - **PGO**: Profile-Guided Optimization — a compiler technique that uses runtime profiling data to optimize hot code paths.
 - **VDC**: Video Display Controller — the 8245 chip that renders sprites, characters, and the grid in the Videopac. Its per-frame simulation is the dominant cost in headless mode.
+- **py-spy**: A sampling profiler for Python programs that attaches externally to a running process without requiring code modification, producing flame graphs and top-like views.
+- **gprof**: The GNU profiler — a C/C++ profiling tool that uses compile-time instrumentation (`-pg`) to produce flat profiles and call graphs showing function-level time distribution.
+- **perf**: The Linux performance analysis tool — a kernel-level profiler that uses hardware performance counters and software events to produce call-graph-level hotspot data without compile-time instrumentation (requires `-g -fno-omit-frame-pointer`).
+- **Flame_Graph**: A visualization of profiled stack traces where the x-axis represents the proportion of time spent in each function and the y-axis represents call stack depth, enabling rapid identification of hotspots.
+- **Baseline_Benchmark**: A recorded performance measurement taken before any optimization is applied, serving as the reference point for measuring improvement.
+- **Regression_Benchmark**: A repeatable benchmark suite that compares current performance against stored reference values to detect unintended performance degradation.
 
 ## Requirements
 
@@ -152,3 +160,67 @@ The emulator is running in Release mode (`-O2`/`-O3`), so the 206 fps ceiling fo
 2. WHEN the episode terminates before `n` frames are completed, THE `step_n()` method SHALL return immediately with the terminal observation, accumulated reward, and `done=true`.
 3. THE `step_n()` method SHALL avoid extracting intermediate framebuffers for skipped frames, only extracting the final frame's observation.
 4. THE existing `step()` method SHALL remain available and behave identically to `step_n(actions, 1)`.
+
+### Requirement 12: Python-Side Profiling with py-spy
+
+**User Story:** As a developer, I want to profile the Python training loop with py-spy to produce flame graphs, so that I can identify which Python/SB3 functions consume the most wall-clock time and target the actual Python-side bottlenecks.
+
+#### Acceptance Criteria
+
+1. THE project SHALL provide a documented procedure for running py-spy against a training session to produce a flame graph SVG file.
+2. THE profiling procedure SHALL capture a representative training workload of at least 5000 timesteps to ensure statistical significance.
+3. THE profiling procedure SHALL produce output that identifies the top hotspots in the Python call stack, including SB3 internals, environment wrapper overhead, and Python↔C++ boundary crossings.
+4. THE profiling procedure SHALL work without modifying the training code (py-spy attaches externally to the running process).
+5. THE project SHALL include a helper script that launches training under py-spy with recommended sampling parameters and saves the flame graph to a specified output directory.
+6. THE helper script SHALL support both `record` mode (flame graph SVG) and `top` mode (live top-like view) via a command-line flag.
+
+### Requirement 13: C++ Profiling with gprof or perf
+
+**User Story:** As a developer, I want to profile the C++ emulator core with gprof or perf to get call-graph-level hotspot data, so that I can identify which C++ functions (VDC simulation, CPU emulation, memory access) are the true bottlenecks beyond what custom instrumentation reveals.
+
+#### Acceptance Criteria
+
+1. THE CMake build system SHALL provide a `PROFILING_GPROF` build option that compiles the C++ code with `-pg` for gprof instrumentation.
+2. THE CMake build system SHALL provide a `PROFILING_PERF` build option that compiles the C++ code with `-g -fno-omit-frame-pointer` for perf compatibility.
+3. THE `PROFILING_GPROF` and `PROFILING_PERF` options SHALL be mutually exclusive with each other and with the existing `PGO_GENERATE`/`PGO_USE` options.
+4. THE project SHALL include a documented procedure for running a profiling workload, collecting gprof or perf data, and generating a human-readable report.
+5. WHEN `PROFILING_GPROF` is enabled, THE project SHALL provide a script that runs a representative workload and produces a `gprof` flat profile and call graph.
+6. WHEN `PROFILING_PERF` is enabled, THE project SHALL provide a script that runs a representative workload and produces a `perf report` or flame graph via `perf script | stackcollapse-perf.pl | flamegraph.pl`.
+7. THE profiling build options SHALL be compatible with both GCC and Clang compilers.
+
+### Requirement 14: Baseline Performance Documentation
+
+**User Story:** As a developer, I want a documented baseline of current training performance before any optimization is applied, so that I have a reference point to measure improvement against.
+
+#### Acceptance Criteria
+
+1. THE project SHALL record a baseline benchmark result using `scripts/bench_training.py` with the default Course Automobile game profile and default parameters (num_envs=1, frame_skip=4, observation_mode=framebuffer, resize=84x84).
+2. THE baseline result SHALL include: end-to-end fps, wall-clock time for 10000 timesteps, and per-component timing breakdown (emulator step, reward, preprocessing, model inference).
+3. THE baseline result SHALL be stored in a machine-readable JSON file at `benchmarks/baseline.json` so that future runs can be compared programmatically.
+4. THE project SHALL record the hardware and software environment used for the baseline (CPU model, RAM, OS, Python version, PyTorch version, compiler version, build flags).
+5. THE baseline SHALL be captured on a clean build without any profiling instrumentation or PGO enabled, using the standard Release build configuration.
+
+### Requirement 15: Per-Optimization Impact Measurement
+
+**User Story:** As a developer, I want to measure the fps impact of each optimization lever independently, so that I can quantify which changes provide the most benefit and avoid shipping optimizations that have negligible or negative impact.
+
+#### Acceptance Criteria
+
+1. THE project SHALL provide a benchmark comparison script that runs `scripts/bench_training.py` with a specified optimization enabled and compares the result against the stored baseline.
+2. THE comparison script SHALL compute and report the absolute fps difference and percentage improvement over baseline for each optimization.
+3. THE comparison script SHALL support measuring the following optimization levers independently: vectorized environments (num_envs=2,4,8), frame skip values (1,2,4,8), RAM observation mode, resolution changes (42x42, 84x84, 160x240), step_n batching, and PGO builds.
+4. THE comparison script SHALL output results in a machine-readable format (JSON) with fields: `optimization_name`, `baseline_fps`, `optimized_fps`, `absolute_delta`, `percentage_improvement`.
+5. WHEN an optimization produces a regression (fps lower than baseline), THE comparison script SHALL flag the result with a warning.
+
+### Requirement 16: Performance Regression Detection
+
+**User Story:** As a developer, I want a benchmark suite that can be re-run after code changes to detect performance regressions, so that future development does not accidentally degrade training throughput.
+
+#### Acceptance Criteria
+
+1. THE project SHALL provide a regression benchmark script that runs a fixed set of benchmark configurations and compares results against stored reference values.
+2. THE regression benchmark script SHALL run at minimum three configurations: default (baseline), vectorized (num_envs=4), and RAM observation mode.
+3. WHEN any benchmark result falls below the stored reference value by more than a configurable tolerance (default: 10%), THE regression script SHALL report a failure with the specific configuration and measured vs expected fps.
+4. THE regression script SHALL store its reference values in `benchmarks/references.json` and support updating them via a `--update-references` flag.
+5. THE regression script SHALL output a pass/fail summary suitable for CI integration, with exit code 0 for all-pass and non-zero for any failure.
+6. THE regression script SHALL complete within 5 minutes for the default set of configurations to remain practical for regular use.

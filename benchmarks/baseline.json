@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-08T16:15:34Z",
+  "game_profile": "course_automobile",
+  "num_envs": 1,
+  "frame_skip": 4,
+  "observation_mode": "framebuffer",
+  "resize": [84, 84],
+  "total_timesteps": 10000,
+  "wall_clock_seconds": 1613.825,
+  "fps": 6.2,
+  "raw_emulator_fps": 197,
+  "notes": "PPO CnnPolicy, batch_size=64, n_steps=10000. FPS drops from ~32 at start to ~4 during gradient updates, stabilizes at ~6. Built with RETRO_AI_PROFILING=ON (slight overhead).",
+  "cpp_profile": {
+    "cpu_emulation_pct": 99.09,
+    "framebuffer_extraction_pct": 0.89,
+    "reward_computation_pct": 0.0,
+    "raw_fps": 197
+  },
+  "environment": {
+    "cpu_model": "x86_64",
+    "os": "Linux",
+    "python_version": "3.12",
+    "build_flags": "Release + RETRO_AI_PROFILING=ON"
+  }
+}

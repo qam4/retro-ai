@@ -1,0 +1,46 @@
+RETURNCODE: 0
+STDOUT:
+=== Training Benchmark Results ===
+
+  Game profile:      course_automobile
+  Num envs:          1
+  Frame skip:        4
+  Observation mode:  framebuffer
+  Resize:            [84, 84]
+  Total timesteps:   100
+
+  Wall-clock time:   797.513 s
+  Throughput:        0.1 fps
+
+  Component timings (avg per step):
+    Emulator step:        0.000 ms
+    Reward:              0.0000 ms
+    Preprocessing:        0.000 ms
+    Model inference:      0.000 ms
+
+--- JSON ---
+{
+  "timestamp": "2026-03-08T00:31:00.246369+00:00",
+  "game_profile": "course_automobile",
+  "num_envs": 1,
+  "frame_skip": 4,
+  "observation_mode": "framebuffer",
+  "resize": [
+    84,
+    84
+  ],
+  "total_timesteps": 100,
+  "wall_clock_seconds": 797.513,
+  "fps": 0.1,
+  "component_timings": {
+    "emulator_step_ms": 0.0,
+    "reward_ms": 0.0,
+    "preprocessing_ms": 0.0,
+    "model_inference_ms": 0.0
+  }
+}
+
+STDERR:
+Benchmarking 100 timesteps (num_envs=1, frame_skip=4, obs=framebuffer, resize=[84, 84])...
+
+

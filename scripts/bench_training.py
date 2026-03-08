@@ -257,9 +257,17 @@ def _run_benchmark(config, profile):
         "verbose": 0,
         "device": device,
     }
+    # Set n_steps so PPO doesn't try to collect more steps than we're benchmarking.
+    # PPO needs n_steps * num_envs steps per rollout before an update.
     if num_envs > 1:
         base_n_steps = 2048
         kwargs["n_steps"] = max(1, base_n_steps // num_envs)
+    else:
+        # For benchmarks, cap n_steps to total_timesteps so small runs don't hang
+        kwargs["n_steps"] = min(2048, config.total_timesteps)
+    # batch_size can't exceed n_steps * num_envs
+    effective_buffer = kwargs["n_steps"] * num_envs
+    kwargs["batch_size"] = min(config.algorithm.batch_size, effective_buffer)
 
     model = PPO(**kwargs)
 
@@ -282,7 +290,7 @@ def _run_benchmark(config, profile):
     # Before and after learn(), we can't easily intercept each step.
     # Instead, we measure total wall-clock and estimate component
     # breakdown from the C++ per-frame timings sampled before the run.
-    sample_count = min(200, config.total_timesteps)
+    sample_count = min(100, config.total_timesteps // 2)
     if interface is not None:
         t0 = time.perf_counter()
         for _ in range(sample_count):
@@ -295,10 +303,29 @@ def _run_benchmark(config, profile):
         # Reset after sampling
         interface.reset_numpy(-1)
 
-    # Run training
+    # Run training — use a simple callback to print progress so the monitor
+    # doesn't think we've hung.
+    from stable_baselines3.common.callbacks import BaseCallback
+
+    class _ProgressCallback(BaseCallback):
+        def __init__(self, total, interval=1000):
+            super().__init__()
+            self._total = total
+            self._interval = interval
+        def _on_step(self) -> bool:
+            if self.num_timesteps % self._interval == 0 or self.num_timesteps >= self._total:
+                elapsed = time.perf_counter() - wall_start
+                fps_so_far = self.num_timesteps / elapsed if elapsed > 0 else 0
+                print(f"  [{self.num_timesteps}/{self._total}] {fps_so_far:.1f} fps", flush=True)
+            return True
+
+    progress_interval = max(500, config.total_timesteps // 20)
     wall_start = time.perf_counter()
     try:
-        model.learn(total_timesteps=config.total_timesteps)
+        model.learn(
+            total_timesteps=config.total_timesteps,
+            callback=_ProgressCallback(config.total_timesteps, progress_interval),
+        )
     except KeyboardInterrupt:
         print("\nBenchmark interrupted.", file=sys.stderr)
     wall_elapsed = time.perf_counter() - wall_start

@@ -15,6 +15,21 @@ option(BUILD_EXAMPLES "Build examples" ON)
 option(RETRO_AI_PROFILING "Enable per-component timing instrumentation in step()" OFF)
 option(PGO_GENERATE "Build with PGO instrumentation" OFF)
 option(PGO_USE "Build using PGO profile data" OFF)
+option(PROFILING_GPROF "Build with gprof instrumentation (-pg)" OFF)
+option(PROFILING_PERF "Build with perf-compatible symbols (-g -fno-omit-frame-pointer)" OFF)
+
+# Mutual exclusivity: only one profiling/PGO mode at a time
+set(_PROF_COUNT 0)
+foreach(_opt PGO_GENERATE PGO_USE PROFILING_GPROF PROFILING_PERF)
+    if(${_opt})
+        math(EXPR _PROF_COUNT "${_PROF_COUNT} + 1")
+    endif()
+endforeach()
+if(_PROF_COUNT GREATER 1)
+    message(FATAL_ERROR
+        "Only one of PGO_GENERATE, PGO_USE, PROFILING_GPROF, PROFILING_PERF "
+        "may be enabled at a time.")
+endif()
 
 # Profile-Guided Optimization flags
 if(PGO_GENERATE)
@@ -33,6 +48,19 @@ elseif(PGO_USE)
         add_compile_options(-fprofile-instr-use=${CMAKE_BINARY_DIR}/pgo-data/default.profdata)
         add_link_options(-fprofile-instr-use=${CMAKE_BINARY_DIR}/pgo-data/default.profdata)
     endif()
+endif()
+
+# gprof instrumentation
+if(PROFILING_GPROF)
+    add_compile_options(-pg)
+    add_link_options(-pg)
+endif()
+
+# perf-compatible symbols (works without recompilation for basic perf, but
+# -fno-omit-frame-pointer gives accurate call graphs)
+if(PROFILING_PERF)
+    add_compile_options(-g -fno-omit-frame-pointer)
+    add_link_options(-g)
 endif()
 
 # Find Python and pybind11 for bindings

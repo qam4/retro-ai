@@ -2,7 +2,7 @@
 
 ## Overview
 
-Optimize end-to-end training throughput from ~35 fps to significantly higher, targeting the 70% Python/SB3 overhead and C++ hot-path allocations. Tasks are ordered by impact and dependency: profiling first, then C++ hot-path fixes, batching, vectorization, and remaining optimizations. Each task builds incrementally on previous work.
+Optimize end-to-end training throughput from ~35 fps to significantly higher, targeting the 70% Python/SB3 overhead and C++ hot-path allocations. Tasks follow a **profile-first** approach: build profiling tools, capture a baseline, then apply optimizations and measure their impact. Tasks 1-16 (optimization infrastructure) are already complete; tasks 17-23 add proper profiling and measurement.
 
 ## Tasks
 
@@ -227,8 +227,114 @@ Optimize end-to-end training throughput from ~35 fps to significantly higher, ta
     - When `mixed_precision=true` and no CUDA: log warning, proceed with FP32
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
-- [x] 16. Final checkpoint
+- [x] 16. Optimization infrastructure checkpoint
   - Rebuild C++ with `cmake --build build/ci-linux --target retro_ai_native -j4` and run full test suite with `PYTHONPATH=build/ci-linux:python pytest`. Ensure all tests pass, ask the user if questions arise.
+
+## Phase 2: Profiling and Measurement (profile first, optimize second)
+
+- [x] 17. Python-side profiling with py-spy
+  - [x] 17.1 Create `scripts/profile_pyspy.py` helper script
+    - Implement `build_pyspy_command(mode, output_dir, game_profile, timesteps, rate)` that constructs the py-spy command list per Design Section 11
+    - Support `--mode record|top`, `--output-dir`, `--game-profile`, `--timesteps`, `--rate` CLI arguments
+    - `record` mode: build command `py-spy record -o <output_dir>/flamegraph.svg --rate <rate> -- python -m retro_ai.training.cli train <profile> --total-timesteps <N>`
+    - `top` mode: build command `py-spy top --rate <rate> -- python -m retro_ai.training.cli train <profile> --total-timesteps <N>`
+    - Raise `ValueError` for invalid mode
+    - Defaults: `--rate 100`, `--timesteps 5000`, `--output-dir output/profiling`
+    - Use `scripts/monitor.py` sidecar pattern for `record` mode to handle long-running sessions
+    - Validate py-spy is installed/in PATH, exit with helpful error if not
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
+
+  - [ ]* 17.2 Write property test for `build_pyspy_command()` (Property 14)
+    - **Property 14: py-spy helper constructs correct command for mode**
+    - **Validates: Requirements 12.5, 12.6**
+
+- [x] 18. C++ profiling CMake options and helper script
+  - [x] 18.1 Add `PROFILING_GPROF` and `PROFILING_PERF` CMake options
+    - Add `option(PROFILING_GPROF "Build with gprof instrumentation (-pg)" OFF)` to `CMakeLists.txt`
+    - Add `option(PROFILING_PERF "Build with perf-compatible symbols (-g -fno-omit-frame-pointer)" OFF)` to `CMakeLists.txt`
+    - Add mutual exclusivity check: only one of `PGO_GENERATE`, `PGO_USE`, `PROFILING_GPROF`, `PROFILING_PERF` may be enabled at a time; emit `FATAL_ERROR` if multiple are set
+    - When `PROFILING_GPROF` is ON: add `-pg` to compile and link options
+    - When `PROFILING_PERF` is ON: add `-g -fno-omit-frame-pointer` to compile options, `-g` to link options
+    - Must work with both GCC and Clang
+    - _Requirements: 13.1, 13.2, 13.3, 13.7_
+
+  - [x] 18.2 Create `scripts/profile_cpp.py` helper script
+    - Implement `run_gprof_workflow(build_dir, game_profile, timesteps, output_dir)`: runs training workload then `gprof` analysis, writes flat profile and call graph to output_dir
+    - Implement `run_perf_workflow(game_profile, timesteps, output_dir)`: runs `perf record -g` around training workload, then `perf script | stackcollapse-perf.pl | flamegraph.pl` to produce flame graph
+    - Accept `--mode gprof|perf`, `--build-dir`, `--game-profile`, `--timesteps`, `--output-dir` CLI arguments
+    - Validate that the build was compiled with the matching profiling flag; exit with error if not
+    - _Requirements: 13.4, 13.5, 13.6_
+
+- [x] 19. Checkpoint — Verify profiling tools
+  - Ensure `scripts/profile_pyspy.py` and `scripts/profile_cpp.py` are syntactically correct and CLI `--help` works. Run `PYTHONPATH=build/ci-linux:python pytest` to verify no regressions.
+
+- [x] 20. Baseline performance capture
+  - [x] 20.1 Create `scripts/capture_baseline.py`
+    - Implement `capture_baseline(output_path="benchmarks/baseline.json")` per Design Section 13
+    - Run `scripts/bench_training.py` with default Course Automobile profile: `num_envs=1`, `frame_skip=4`, `observation_mode=framebuffer`, `resize=(84,84)`, `timesteps=10000`
+    - Implement `collect_environment_info()` returning dict with: `cpu_model`, `ram_gb`, `os`, `python_version`, `pytorch_version`, `compiler`, `build_flags`
+    - Merge benchmark result with `environment` metadata and write to `benchmarks/baseline.json`
+    - Use `scripts/monitor.py` sidecar pattern since the benchmark may take several minutes
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5_
+
+  - [x] 20.2 Run py-spy profiling and capture flame graph
+    - Run `scripts/profile_pyspy.py --mode record` against a 5000-step training session
+    - Analyze the flame graph to identify top Python-side hotspots
+    - Document findings in the output directory
+    - _Requirements: 12.1, 12.2, 12.3_
+
+  - [x] 20.3 Run C++ profiling (gprof or perf)
+    - Rebuild with `PROFILING_GPROF=ON` or `PROFILING_PERF=ON`
+    - Run `scripts/profile_cpp.py` against a representative workload
+    - Analyze the flat profile / flame graph to identify C++ hotspots
+    - Document findings in the output directory
+    - Rebuild with standard Release flags after profiling
+    - _Requirements: 13.4, 13.5, 13.6_
+
+  - [ ]* 20.4 Write property test for baseline JSON fields (Property 15)
+    - **Property 15: Baseline JSON contains all required fields**
+    - **Validates: Requirements 14.2, 14.4**
+
+- [x] 21. Checkpoint — Review profiling results
+  - Review py-spy flame graph and C++ profile with the user. Identify the top bottlenecks and decide which optimization levers to pull. This is the decision point before applying optimizations.
+
+## Phase 3: Optimization measurement and regression detection
+
+- [x] 22. Per-optimization comparison script
+  - [x] 22.1 Create `scripts/bench_compare.py`
+    - Implement `compute_comparison(baseline_fps, optimized_fps, optimization_name)` per Design Section 14
+    - Accept `--optimization` CLI argument (vecenv-2, vecenv-4, vecenv-8, frameskip-1, frameskip-2, frameskip-8, ram-obs, lowres-42, highres-160)
+    - Load baseline from `benchmarks/baseline.json`; exit with error if missing
+    - Run `bench_training.py` with optimization-specific args, compute comparison, output JSON
+    - Flag regressions with a warning
+    - Use `scripts/monitor.py` sidecar pattern for the benchmark run
+    - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
+
+  - [ ]* 22.2 Write property test for `compute_comparison()` (Property 16)
+    - **Property 16: Comparison delta computation correctness**
+    - **Validates: Requirements 15.2, 15.4, 15.5**
+
+- [x] 23. Regression detection script
+  - [x] 23.1 Create `scripts/bench_regression.py`
+    - Implement `check_regression(measured_fps, reference_fps, tolerance=0.10)` per Design Section 15
+    - Implement `run_regression_suite(references, tolerance, configs)` returning `(results, all_passed)`
+    - Default configs: `default`, `vectorized-4`, `ram-observation`
+    - Load references from `benchmarks/references.json`; exit with error if missing (unless `--update-references`)
+    - Support `--update-references` and `--tolerance` flags
+    - Exit code 0 for all-pass, non-zero for any failure
+    - Use `scripts/monitor.py` sidecar pattern for each benchmark run
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+
+  - [ ]* 23.2 Write property test for `check_regression()` (Property 17)
+    - **Property 17: Regression detection threshold**
+    - **Validates: Requirements 16.3**
+
+  - [ ]* 23.3 Write property test for `run_regression_suite()` pass/fail (Property 18)
+    - **Property 18: Regression suite exit code reflects pass/fail**
+    - **Validates: Requirements 16.3, 16.5**
+
+- [-] 24. Final checkpoint — Verify profiling and benchmarking infrastructure
+  - Rebuild C++ with `cmake --build build/ci-linux --target retro_ai_native -j4` and run full test suite with `PYTHONPATH=build/ci-linux:python pytest`. Ensure all new scripts are importable and CLI `--help` works.
 
 ## Notes
 
@@ -239,3 +345,4 @@ Optimize end-to-end training throughput from ~35 fps to significantly higher, ta
 - C++ tests use Catch2, Python tests use pytest + hypothesis
 - Build: `cmake --build build/ci-linux --target retro_ai_native -j4`
 - Test: `PYTHONPATH=build/ci-linux:python pytest`
+- Long-running benchmarks (capture_baseline, bench_compare, bench_regression) should use the `scripts/monitor.py` sidecar pattern per the steering guide at `.kiro/steering/long-running-tasks.md`
