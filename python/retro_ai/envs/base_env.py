@@ -57,7 +57,11 @@ class BaseEnv:
         self._observation_mode = observation_mode
         self._action_mode = action_mode
         self._interface = self._create_interface(
-            emulator_type, rom_path, bios_path, reward_mode, config,
+            emulator_type,
+            rom_path,
+            bios_path,
+            reward_mode,
+            config,
             action_mode=action_mode,
         )
         self._obs_space = self._interface.observation_space()
@@ -96,7 +100,9 @@ class BaseEnv:
         info = self._parse_info(result["info"])
         return observation, info
 
-    def step(self, action: Union[int, List[int]]) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(
+        self, action: Union[int, List[int]]
+    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute one environment step.
 
         Parameters
@@ -120,7 +126,9 @@ class BaseEnv:
             Additional metadata dictionary.
         """
         if self._action_mode == "multi_discrete":
-            result = self._interface.step_numpy(action if isinstance(action, list) else list(action))
+            result = self._interface.step_numpy(
+                action if isinstance(action, list) else list(action)
+            )
         else:
             result = self._interface.step_numpy([action])
         if self._observation_mode == "ram":
@@ -135,7 +143,9 @@ class BaseEnv:
         info = self._parse_info(result["info"])
         return observation, reward, done, truncated, info
 
-    def step_n(self, action: Union[int, List[int]], n: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step_n(
+        self, action: Union[int, List[int]], n: int
+    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute *n* environment steps with the same action via C++ batching.
 
         Delegates to the native ``step_n_numpy`` method which runs all *n*
@@ -163,7 +173,9 @@ class BaseEnv:
             Metadata from the final step.
         """
         if self._action_mode == "multi_discrete":
-            result = self._interface.step_n_numpy(action if isinstance(action, list) else list(action), n)
+            result = self._interface.step_n_numpy(
+                action if isinstance(action, list) else list(action), n
+            )
         else:
             result = self._interface.step_n_numpy([action], n)
         if self._observation_mode == "ram":
@@ -177,7 +189,6 @@ class BaseEnv:
         truncated = bool(result["truncated"])
         info = self._parse_info(result["info"])
         return observation, reward, done, truncated, info
-
 
     # ------------------------------------------------------------------
     # Space queries
@@ -299,13 +310,17 @@ class BaseEnv:
             if config and "joystick_index" in config:
                 joystick_index = int(config["joystick_index"])
             return retro_ai_native.VideopacRLInterface(
-                bios_path, rom_path, reward_mode, joystick_index,
+                bios_path,
+                rom_path,
+                reward_mode,
+                joystick_index,
                 reward_params=reward_params_flat,
                 action_mode=action_mode,
             )
         if emu == "mo5":
             return retro_ai_native.MO5RLInterface(
-                rom_path, reward_mode,
+                rom_path,
+                reward_mode,
                 reward_params=reward_params_flat,
             )
 
@@ -337,11 +352,12 @@ class BaseEnv:
                 for i, entry in enumerate(value):
                     flat[f"score_address_{i}_addr"] = str(entry["address"])
                     flat[f"score_address_{i}_bytes"] = str(entry.get("num_bytes", 1))
-                    flat[f"score_address_{i}_bcd"] = str(int(entry.get("is_bcd", False)))
+                    flat[f"score_address_{i}_bcd"] = str(
+                        int(entry.get("is_bcd", False))
+                    )
                 flat["score_address_count"] = str(len(value))
             else:
                 # Scalar / already-flat key — pass through as string
                 flat[key] = str(value)
 
         return flat
-

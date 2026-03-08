@@ -86,7 +86,9 @@ class GymnasiumWrapper(gym.Env):
         self._last_obs = obs
         return obs, info
 
-    def step(self, action: Union[int, np.ndarray]) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(
+        self, action: Union[int, np.ndarray]
+    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute one step.
 
         Returns
