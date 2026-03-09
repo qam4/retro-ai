@@ -164,42 +164,49 @@ static std::pair<int, float> match_videopac_digit(
 
     // Binarize patch with Otsu
     uint8_t threshold = otsu_threshold(patch);
-    std::vector<uint8_t> binary(patch.size());
+    std::vector<uint8_t> binary_normal(patch.size());
+    std::vector<uint8_t> binary_invert(patch.size());
     for (size_t i = 0; i < patch.size(); ++i) {
-        binary[i] = (patch[i] > threshold) ? 1 : 0;
+        binary_normal[i] = (patch[i] > threshold) ? 1 : 0;
+        binary_invert[i] = (patch[i] > threshold) ? 0 : 1;
     }
 
+    // Try both polarities: digits may be brighter or darker than background.
+    // Videopac renders colored digits on colored backgrounds (e.g. blue on
+    // magenta), so the digit can be darker than the background in grayscale.
     int best_digit = -1;
     float best_score = 0.0f;
     constexpr float kAcceptThreshold = 0.70f;
 
-    for (int d = 0; d < 10; ++d) {
-        int matches = 0;
-        int total = patch_w * patch_h;
+    for (const auto& binary : {binary_normal, binary_invert}) {
+        for (int d = 0; d < 10; ++d) {
+            int matches = 0;
+            int total = patch_w * patch_h;
 
-        for (int py = 0; py < patch_h; ++py) {
-            // Map patch row to ROM row (0-6, skip row 7 which is blank).
-            // Videopac doubles each row, so 14 scanlines map to 7 ROM rows.
-            int rom_row = (py * 7) / patch_h;
-            if (rom_row > 6) rom_row = 6;
-            uint8_t pattern = videopac_digit_rom[d][rom_row];
+            for (int py = 0; py < patch_h; ++py) {
+                // Map patch row to ROM row (0-6, skip row 7 which is blank).
+                // Videopac doubles each row, so 14 scanlines map to 7 ROM rows.
+                int rom_row = (py * 7) / patch_h;
+                if (rom_row > 6) rom_row = 6;
+                uint8_t pattern = videopac_digit_rom[d][rom_row];
 
-            for (int px = 0; px < patch_w; ++px) {
-                // Map patch column to ROM column (0-7, MSB-first)
-                int rom_col = (px * 8) / patch_w;
-                if (rom_col > 7) rom_col = 7;
-                uint8_t rom_pixel = (pattern & (0x80 >> rom_col)) ? 1 : 0;
+                for (int px = 0; px < patch_w; ++px) {
+                    // Map patch column to ROM column (0-7, MSB-first)
+                    int rom_col = (px * 8) / patch_w;
+                    if (rom_col > 7) rom_col = 7;
+                    uint8_t rom_pixel = (pattern & (0x80 >> rom_col)) ? 1 : 0;
 
-                if (binary[py * patch_w + px] == rom_pixel) {
-                    ++matches;
+                    if (binary[py * patch_w + px] == rom_pixel) {
+                        ++matches;
+                    }
                 }
             }
-        }
 
-        float score = static_cast<float>(matches) / static_cast<float>(total);
-        if (score > best_score) {
-            best_score = score;
-            best_digit = d;
+            float score = static_cast<float>(matches) / static_cast<float>(total);
+            if (score > best_score) {
+                best_score = score;
+                best_digit = d;
+            }
         }
     }
 
@@ -227,10 +234,10 @@ int VisionRewardSystem::extract_score(
     std::vector<uint8_t> gray = crop_to_grayscale(observation);
 
     // Slide a window across the cropped region.
-    // Videopac characters are 8px wide on screen; in quad mode they are
-    // spaced 16px apart.  We try the configured kDigitWidth first
-    // (non-overlapping), which works when the score region is tightly cropped.
-    int step = kQuadCharSpacing;
+    // Use kDigitWidth (8px) as the step — this works for both single
+    // characters (8px spacing) and quad characters (16px spacing, where
+    // the 8px gap between characters won't match any digit template).
+    int step = kDigitWidth;
     int max_digits = score_region_.width / step;
     int score = 0;
     bool found_any = false;

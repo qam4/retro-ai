@@ -319,3 +319,155 @@ TEST(VisionOCRBugMultiDigit, TwoDigitScore00) {
         << ". Score '00' was not detected — the 7×10 patch is too small "
         << "to match the 8×14 VDC digit '0'.";
 }
+
+// ---------------------------------------------------------------------------
+// Helper: render a VDC digit with custom foreground/background colors.
+// Same as render_vdc_digit but with configurable RGB colors.
+// ---------------------------------------------------------------------------
+static void render_vdc_digit_colored(std::vector<uint8_t>& framebuffer,
+                                     int digit, int x, int y,
+                                     uint8_t fg_r, uint8_t fg_g, uint8_t fg_b,
+                                     uint8_t bg_r, uint8_t bg_g, uint8_t bg_b) {
+    const int stride = kObsWidth * kObsChannels;
+
+    for (int rom_row = 0; rom_row < 8; ++rom_row) {
+        uint8_t pattern = videopac_digit_rom[digit][rom_row];
+        for (int sub = 0; sub < 2; ++sub) {
+            int scanline = y + rom_row * 2 + sub;
+            if (scanline < 0 || scanline >= kObsHeight) continue;
+            for (int col = 0; col < 8; ++col) {
+                int px = x + col;
+                if (px < 0 || px >= kObsWidth) continue;
+                bool fg = (pattern & (0x80 >> col)) != 0;
+                size_t idx = static_cast<size_t>(scanline) * stride +
+                             static_cast<size_t>(px) * kObsChannels;
+                framebuffer[idx + 0] = fg ? fg_r : bg_r;
+                framebuffer[idx + 1] = fg ? fg_g : bg_g;
+                framebuffer[idx + 2] = fg ? fg_b : bg_b;
+            }
+        }
+    }
+}
+
+// Helper: fill entire framebuffer with a solid color.
+static void fill_framebuffer(std::vector<uint8_t>& fb,
+                             uint8_t r, uint8_t g, uint8_t b) {
+    for (size_t i = 0; i < fb.size(); i += 3) {
+        fb[i] = r; fb[i+1] = g; fb[i+2] = b;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test: Colored digit detection — blue digits on magenta background
+//
+// Course Automobile renders blue (73,73,255) digits on magenta (255,73,255).
+// In grayscale: blue=94, magenta=148. Digits are DARKER than background.
+// The dual-polarity binarization must detect these correctly.
+// ---------------------------------------------------------------------------
+class VisionOCRColoredTest : public ::testing::TestWithParam<int> {};
+
+TEST_P(VisionOCRColoredTest, BlueOnMagentaDigitDetection) {
+    int digit = GetParam();
+
+    auto vision = make_vision_system(0, 0, 48, kVDCCharHeight);
+    auto fb = make_blank_framebuffer();
+
+    // Fill background with magenta (255, 73, 255)
+    fill_framebuffer(fb, 255, 73, 255);
+
+    // Render digit in blue (73, 73, 255) on magenta background
+    render_vdc_digit_colored(fb, digit, 0, 0,
+                             73, 73, 255,     // foreground: blue
+                             255, 73, 255);   // background: magenta
+
+    vision.reset();
+
+    StepResult step1;
+    step1.observation = fb;
+    step1.reward = 0.0f;
+    step1.done = false;
+    step1.truncated = false;
+
+    StepResult dummy;
+    dummy.observation = {};
+
+    // First call: detect digit, store as previous, return 0.0
+    float r1 = vision.compute_reward(step1, dummy);
+    EXPECT_FLOAT_EQ(r1, 0.0f);
+
+    // Second call with different digit to verify detection via delta
+    int other_digit = (digit + 5) % 10;
+    auto fb2 = make_blank_framebuffer();
+    fill_framebuffer(fb2, 255, 73, 255);
+    render_vdc_digit_colored(fb2, other_digit, 0, 0,
+                             73, 73, 255, 255, 73, 255);
+
+    StepResult step2;
+    step2.observation = fb2;
+    step2.reward = 0.0f;
+    step2.done = false;
+    step2.truncated = false;
+
+    float r2 = vision.compute_reward(step2, dummy);
+    float expected_delta = static_cast<float>(other_digit - digit);
+    EXPECT_FLOAT_EQ(r2, expected_delta)
+        << "Blue-on-magenta digit " << digit << " → " << other_digit
+        << ": expected delta " << expected_delta << " but got " << r2
+        << ". Dual-polarity binarization should handle dark-on-bright digits.";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllColoredDigits,
+    VisionOCRColoredTest,
+    ::testing::Range(0, 10),
+    [](const ::testing::TestParamInfo<int>& info) {
+        return "Digit" + std::to_string(info.param);
+    });
+
+// ---------------------------------------------------------------------------
+// Test: Multi-digit colored score at 8px single-character spacing
+//
+// Render "42" at 8px spacing (single chars, not quad) with blue on magenta.
+// This matches how Course Automobile actually renders its score.
+// ---------------------------------------------------------------------------
+TEST(VisionOCRColoredMultiDigit, BlueOnMagenta42At8pxSpacing) {
+    auto vision = make_vision_system(0, 0, 48, kVDCCharHeight);
+    auto fb = make_blank_framebuffer();
+    fill_framebuffer(fb, 255, 73, 255);
+
+    // Render "42" at 8px spacing (single character width, no gap)
+    render_vdc_digit_colored(fb, 4, 0, 0, 73, 73, 255, 255, 73, 255);
+    render_vdc_digit_colored(fb, 2, 8, 0, 73, 73, 255, 255, 73, 255);
+
+    vision.reset();
+
+    StepResult step1;
+    step1.observation = fb;
+    step1.reward = 0.0f;
+    step1.done = false;
+    step1.truncated = false;
+
+    StepResult dummy;
+    dummy.observation = {};
+
+    float r1 = vision.compute_reward(step1, dummy);
+    EXPECT_FLOAT_EQ(r1, 0.0f);
+
+    // Render "99" to get delta = 99 - 42 = 57
+    auto fb2 = make_blank_framebuffer();
+    fill_framebuffer(fb2, 255, 73, 255);
+    render_vdc_digit_colored(fb2, 9, 0, 0, 73, 73, 255, 255, 73, 255);
+    render_vdc_digit_colored(fb2, 9, 8, 0, 73, 73, 255, 255, 73, 255);
+
+    StepResult step2;
+    step2.observation = fb2;
+    step2.reward = 0.0f;
+    step2.done = false;
+    step2.truncated = false;
+
+    float r2 = vision.compute_reward(step2, dummy);
+    EXPECT_FLOAT_EQ(r2, 57.0f)
+        << "Expected 99-42=57 but got " << r2
+        << ". Blue-on-magenta multi-digit at 8px spacing failed.";
+}
+
