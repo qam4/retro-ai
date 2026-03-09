@@ -224,3 +224,15 @@ If someone sets `reward_mode: vision` on an MO5 game, it silently uses Videopac 
 - Or make `VisionRewardSystem` configurable with a "digit matcher" strategy that varies per platform
 - The existing `load_digit_templates()` hook was designed for this but is currently a no-op
 - MO5 would need its own character ROM patterns, screen dimensions, and character spacing
+
+## Follow-Up: StartupSequenceWrapper Action Mode Incompatibility
+
+**Discovered during OCR end-to-end testing. Blocks real-emulator validation of vision reward mode.**
+
+The `StartupSequenceWrapper` sends discrete action indices (e.g. `11` for Key1) via `env.step(action)`. But when the emulator is in `multi_discrete` action mode (where actions are binary vectors like `[up, down, left, right, fire]`), the scalar `11` is meaningless — it doesn't map to any keyboard key.
+
+This means the startup sequence (which presses Key1 for level select in Course Automobile) silently does nothing, leaving the game stuck on the level select screen. The timer never starts, the score never changes, and vision OCR has nothing to detect.
+
+The memory-mode training works because `num_envs=4` uses `SubprocVecEnv` which may handle the startup differently, or the PPO random exploration eventually hits the right action combination.
+
+**Fix needed:** `StartupSequenceWrapper` must translate discrete action indices to the appropriate format for the current action mode. For multi_discrete, action `11` (Key1) needs to be converted to the correct binary vector that activates the Key1 input.
