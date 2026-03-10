@@ -1,0 +1,39 @@
+# Extended training config for Course Automobile — multi-discrete actions
+# With multi-discrete, the agent can hold Up + steer simultaneously,
+# which is required for max score (score only increases while moving up).
+#
+# Fresh training with 500k timesteps (~275 episodes).
+
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+
+total_timesteps: 500000
+game_profile: course_automobile
+reward_mode: memory
+policy: CnnPolicy
+
+# Action space — multi-discrete allows simultaneous up + steer
+action_mode: multi_discrete
+
+# Performance tuning
+num_envs: 4
+observation_mode: framebuffer
+
+# Preprocessing (must match game profile)
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+
+# Output
+output_dir: output/course_automobile_md
+checkpoint_interval: 50000
+max_checkpoints: 5
+log_interval: 2000
+
+# Metrics
+rolling_window: 50
+stagnation_threshold: 200000
+tensorboard: false

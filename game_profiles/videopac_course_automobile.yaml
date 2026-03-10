@@ -71,9 +71,7 @@ action_count: 4            # Up, Down, Left, Right (no fire needed)
 reward_mode: memory        # RAM-based score delta reward
 
 startup_sequence:
-  actions:
-    - action: 11           # Key1 — select Level 1
-      frames: 10
+  actions: []              # Game + level selection now handled by C++ reset()
   post_delay_frames: 120   # Let the game settle before agent takes over
 
 # Observation mode — this game uses framebuffer (image) observations

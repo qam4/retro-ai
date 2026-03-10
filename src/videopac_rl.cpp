@@ -72,7 +72,9 @@ static constexpr int kNumActions     = VideopacRLInterface::kNumActions;
 static constexpr int kWarmupFramesBeforeKey1 = 30;
 // Number of frames to hold Key1 pressed
 static constexpr int kKey1HoldFrames = 10;
-// Number of frames to run after Key1 to let the game start
+// Number of frames between first and second Key1 press (for multi-game carts)
+static constexpr int kGapBetweenKey1Presses = 30;
+// Number of frames to run after final Key1 to let the game start
 static constexpr int kWarmupFramesAfterKey1 = 60;
 
 // ---------------------------------------------------------------------------
@@ -218,7 +220,21 @@ public:
         }
         input.set_key_state(VidKey::Key1, false);
 
-        // Let the game initialize after key press
+        // Gap before second Key1 press (for multi-game cartridges
+        // that need a second press to select level)
+        for (int i = 0; i < kGapBetweenKey1Presses; ++i) {
+            emulator_->run_frame();
+        }
+
+        // Second Key1 press — selects level 1 on multi-game carts,
+        // harmlessly ignored by single-game carts
+        input.set_key_state(VidKey::Key1, true);
+        for (int i = 0; i < kKey1HoldFrames; ++i) {
+            emulator_->run_frame();
+        }
+        input.set_key_state(VidKey::Key1, false);
+
+        // Let the game initialize after key presses
         for (int i = 0; i < kWarmupFramesAfterKey1; ++i) {
             emulator_->run_frame();
         }

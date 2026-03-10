@@ -462,7 +462,8 @@ env = VideopacEnv(
 
 ## Future Enhancements
 
-- Multi-agent support (competitive/cooperative)
+- **Multi-agent self-play** — Extend `RLInterface` with a `MultiAgentRLInterface` that accepts actions for both joystick ports simultaneously. Primary use case: Videopac football (2-player competitive) with self-play training. Would require dual joystick input in `step()`, per-player reward signals (e.g. goals scored with opposite signs), and a self-play training loop that samples opponents from a pool of past checkpoints (à la OpenAI Five). Integration with PettingZoo (multi-agent Gymnasium) and Tianshou for the self-play loop.
+- **Transfer learning / model reuse** — Support loading a pretrained model's feature extractor into a new agent (different reward mode, action space, or even different game on the same emulator). Also support knowledge distillation where a trained "teacher" agent guides a "student" agent with a different architecture or action space.
 - Distributed training support
 - Pre-trained model zoo
 - Web-based visualization

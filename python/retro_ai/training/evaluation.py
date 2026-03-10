@@ -44,6 +44,7 @@ class EvaluationModule:
         """Run evaluation and return summary stats."""
         env = self._build_env()
         model = self._load_model(env)
+        raw_env = self._find_base_env(env)
         recorder = self._maybe_init_recorder()
         results: List[Dict[str, Any]] = []
 
@@ -63,8 +64,12 @@ class EvaluationModule:
                 episode_length += 1
                 step += 1
 
-                if recorder:
-                    recorder.add_frame(obs, reward=reward, step=step)
+                if recorder and raw_env is not None:
+                    recorder.add_frame(
+                        raw_env._last_raw_obs, reward=episode_reward, step=step
+                    )
+                elif recorder:
+                    recorder.add_frame(obs, reward=episode_reward, step=step)
 
             results.append(
                 {
@@ -124,7 +129,29 @@ class EvaluationModule:
 
     def _maybe_init_recorder(self) -> Optional[VideoRecorder]:
         if self.video_path and VideoRecorder.available():
-            return VideoRecorder(path=self.video_path)
+            frame_skip = self.game_profile.frame_skip or 1
+            video_fps = 60.0 / frame_skip
+            return VideoRecorder(
+                path=self.video_path,
+                fps=video_fps,
+                overlay=True,
+                scale=3,
+            )
+        return None
+
+    @staticmethod
+    def _find_base_env(env):
+        """Walk the wrapper chain to find the underlying BaseEnv."""
+        current = env
+        for _ in range(20):
+            if hasattr(current, "_last_raw_obs"):
+                return current
+            if hasattr(current, "env"):
+                current = current.env
+            elif hasattr(current, "_env"):
+                current = current._env
+            else:
+                break
         return None
 
     @staticmethod

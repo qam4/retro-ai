@@ -77,7 +77,7 @@ class TrainingPipeline:
 
         try:
             model.learn(
-                total_timesteps=self.config.total_timesteps,
+                total_timesteps=self._aligned_timesteps(model),
                 callback=callbacks,
             )
         except KeyboardInterrupt:
@@ -110,7 +110,7 @@ class TrainingPipeline:
 
         try:
             model.learn(
-                total_timesteps=self.config.total_timesteps,
+                total_timesteps=self._aligned_timesteps(model),
                 callback=callbacks,
                 reset_num_timesteps=False,
             )
@@ -174,6 +174,8 @@ class TrainingPipeline:
                     bios_path=self.config.bios_path,
                     reward_mode=self.config.reward_mode,
                     config=config_dict or None,
+                    observation_mode=self.config.observation_mode,
+                    action_mode=self.config.action_mode,
                 )
                 pipeline = PreprocessingPipeline(
                     grayscale=self.config.grayscale,
@@ -297,6 +299,36 @@ class TrainingPipeline:
             )
         )
         return CallbackList(cbs)
+
+    def _aligned_timesteps(self, model) -> int:
+        """Round total_timesteps up to the nearest rollout boundary.
+
+        PPO always completes a full rollout buffer before stopping, so
+        the progress bar overshoots if total_timesteps isn't a multiple
+        of (n_steps * num_envs).  Rounding up avoids confusing displays
+        like 'step 2000/500 (400%)'.
+        """
+        requested = self.config.total_timesteps
+        n_steps = getattr(model, "n_steps", None)
+        n_envs = getattr(model, "n_envs", 1)
+        if n_steps is None:
+            return requested
+        rollout_size = n_steps * n_envs
+        if rollout_size <= 0:
+            return requested
+        remainder = requested % rollout_size
+        if remainder == 0:
+            return requested
+        aligned = requested + (rollout_size - remainder)
+        self._logger.info(
+            "timesteps_aligned",
+            {
+                "requested": requested,
+                "aligned": aligned,
+                "rollout_size": rollout_size,
+            },
+        )
+        return aligned
 
     def _save_model(self, model) -> Path:
         """Save the final model."""

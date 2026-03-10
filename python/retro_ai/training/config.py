@@ -61,6 +61,7 @@ class TrainingConfig:
     # Performance (training-performance spec)
     num_envs: int = 1  # Requirement 2: parallel environments
     observation_mode: str = "framebuffer"  # Requirement 6: "framebuffer" | "ram"
+    action_mode: str = "discrete"  # "discrete" | "multi_discrete"
     mixed_precision: bool = False  # Requirement 8: FP16 training
 
 
@@ -155,6 +156,9 @@ class TrainingConfigParser:
 
         if config.observation_mode not in {"framebuffer", "ram"}:
             raise ConfigurationError("observation_mode")
+
+        if config.action_mode not in {"discrete", "multi_discrete"}:
+            raise ConfigurationError("action_mode")
 
 
 # ---------------------------------------------------------------------------

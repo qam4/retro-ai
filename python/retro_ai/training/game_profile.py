@@ -223,18 +223,47 @@ class StartupSequenceWrapper(gym.Wrapper):
     def __init__(self, env: gym.Env, sequence: StartupSequence):
         super().__init__(env)
         self._sequence = sequence
+        # Detect multi-discrete action space for action conversion
+        self._multi_discrete = isinstance(self.action_space, gym.spaces.MultiDiscrete)
+
+    def _convert_action(self, action_int: int):
+        """Convert a discrete action index for the underlying env.
+
+        For multi-discrete envs, startup actions that are joystick directions
+        (0-4) are mapped to the 5-bit encoding. Keyboard actions (>=5) are
+        passed as the integer directly — the GymnasiumWrapper and BaseEnv
+        will handle them as discrete actions via the C++ step().
+        """
+        if self._multi_discrete:
+            # Map basic joystick directions to multi-discrete bits
+            # [up, down, left, right, fire]
+            direction_map = {
+                0: [0, 0, 0, 0, 0],  # noop
+                1: [1, 0, 0, 0, 0],  # up
+                2: [0, 1, 0, 0, 0],  # down
+                3: [0, 0, 1, 0, 0],  # left
+                4: [0, 0, 0, 1, 0],  # right
+            }
+            if action_int in direction_map:
+                return direction_map[action_int]
+            # Keyboard actions (Key1=11, etc.) — fall through as int.
+            # The underlying env.step() must handle this gracefully.
+            return action_int
+        return action_int
 
     def reset(self, **kwargs):  # type: ignore[override]
         obs, info = self.env.reset(**kwargs)
         for action in self._sequence.actions:
+            converted = self._convert_action(action.action)
             for _ in range(action.frames):
-                obs, _, done, truncated, info = self.env.step(action.action)
+                obs, _, done, truncated, info = self.env.step(converted)
                 if done or truncated:
                     obs, info = self.env.reset(**kwargs)
                     break
-        # Post-delay: step with no-op (action 0) for N frames
+        # Post-delay: step with no-op for N frames
+        noop = self._convert_action(0)
         for _ in range(self._sequence.post_delay_frames):
-            obs, _, done, truncated, info = self.env.step(0)
+            obs, _, done, truncated, info = self.env.step(noop)
             if done or truncated:
                 break
         return obs, info

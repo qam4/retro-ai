@@ -71,6 +71,39 @@ log.log_step(reward=1.0, done=False)
 log.log_episode_end()
 ```
 
+### Policy Architectures
+
+The training pipeline uses Stable-Baselines3 policy networks. The `policy`
+field in training configs selects the architecture:
+
+**CnnPolicy (NatureCNN)** — for framebuffer observations (84×84 images):
+
+```
+Input: (84, 84, C) where C = channels × frame_stack
+  → Conv2d(C, 32, kernel=8, stride=4) + ReLU
+  → Conv2d(32, 64, kernel=4, stride=2) + ReLU
+  → Conv2d(64, 64, kernel=3, stride=1) + ReLU
+  → Flatten → Linear(3136, 512) + ReLU
+  → Policy head (action logits) + Value head (scalar)
+```
+
+This is the architecture from Mnih et al. 2015 ("Human-level control through
+deep reinforcement learning", Nature). Total ~1.7M parameters for a
+Discrete(18) action space, slightly more for MultiDiscrete([2,2,2,2,2])
+since it has 5 independent output heads.
+
+**MlpPolicy** — for RAM observations (flat byte vectors):
+
+```
+Input: (ram_size,) uint8 vector
+  → Linear(ram_size, 64) + Tanh
+  → Linear(64, 64) + Tanh
+  → Policy head (action logits) + Value head (scalar)
+```
+
+Much smaller (~8K parameters) and faster to train, but requires meaningful
+RAM addresses to be identified for the game.
+
 ### Exceptions
 
 All inherit from `retro_ai.RetroAIError`:
