@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-03-10T14:49:58.876035+00:00",
+  "games": {
+    "course_automobile": [
+      {
+        "id": "course-automobile-md-v1",
+        "display_name": "Course Automobile \u2014 Multi-Discrete v1",
+        "reward_mean": 2191.0,
+        "reward_max": 2191.0,
+        "best_training_reward": 2367.0,
+        "action_mode": "multi_discrete",
+        "algorithm": "PPO",
+        "total_timesteps": 500000,
+        "release_tag": ""
+      },
+      {
+        "id": "course-automobile-discrete-v1",
+        "display_name": "Course Automobile \u2014 Discrete v1",
+        "reward_mean": 1344.0,
+        "reward_max": 1344.0,
+        "best_training_reward": 1398.0,
+        "action_mode": "discrete",
+        "algorithm": "PPO",
+        "total_timesteps": 100000,
+        "release_tag": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "id": "course-automobile-md-v1",
+  "game": "course_automobile",
+  "display_name": "Course Automobile \u2014 Multi-Discrete v1",
+  "description": "PPO with multi-discrete actions (5 binary), 500k steps, 4 envs",
+  "created_at": "2026-03-09T22:00:00Z",
+  "training": {
+    "algorithm": "PPO",
+    "total_timesteps": 500000,
+    "action_mode": "multi_discrete",
+    "reward_mode": "memory",
+    "policy": "CnnPolicy",
+    "policy_architecture": "NatureCNN: Conv(32x8x8s4)+Conv(64x4x4s2)+Conv(64x3x3s1)+FC(512)",
+    "num_envs": 4,
+    "learning_rate": 0.0003,
+    "frame_skip": 4,
+    "wall_clock_seconds": 5305.1
+  },
+  "eval": {
+    "reward_mean": 2191.0,
+    "reward_std": 0.0,
+    "reward_min": 2191.0,
+    "reward_max": 2191.0,
+    "num_episodes": 5,
+    "best_training_reward": 2367.0
+  },
+  "release": {
+    "tag": "",
+    "url": "",
+    "assets": []
+  }
+}

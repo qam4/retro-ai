@@ -55,6 +55,23 @@ def main() -> None:
     # list-games
     sub.add_parser("list-games", help="List available game profiles")
 
+    # publish
+    pub_p = sub.add_parser("publish", help="Publish a trained agent to GitHub Releases")
+    pub_p.add_argument("model", help="Path to trained model (.zip)")
+    pub_p.add_argument("--eval", required=True, help="Path to eval_results.json")
+    pub_p.add_argument("--config", required=True, help="Path to training config.yaml")
+    pub_p.add_argument("--profile", required=True, help="Game profile name")
+    pub_p.add_argument("--video", help="Path to replay video (.mp4)")
+    pub_p.add_argument("--description", default="", help="Agent description")
+
+    # download
+    dl_p = sub.add_parser("download", help="Download agent artifacts from GitHub")
+    dl_p.add_argument("agent_id", help="Agent ID (e.g. course-automobile-md-v1)")
+    dl_p.add_argument("--output", default=".", help="Output directory")
+
+    # leaderboard
+    sub.add_parser("leaderboard", help="Regenerate the agent leaderboard")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -69,6 +86,12 @@ def main() -> None:
         _cmd_play(args)
     elif args.command == "list-games":
         _cmd_list_games()
+    elif args.command == "publish":
+        _cmd_publish(args)
+    elif args.command == "download":
+        _cmd_download(args)
+    elif args.command == "leaderboard":
+        _cmd_leaderboard()
 
 
 def _cmd_train(args: argparse.Namespace) -> None:
@@ -134,3 +157,35 @@ def _cmd_list_games() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def _cmd_publish(args: argparse.Namespace) -> None:
+    from retro_ai.training.registry import AgentPublisher, AgentRegistry
+
+    registry = AgentRegistry()
+    publisher = AgentPublisher(registry)
+    publisher.publish(
+        model_path=args.model,
+        eval_path=args.eval,
+        config_path=args.config,
+        game_profile=args.profile,
+        video_path=getattr(args, "video", None),
+        description=args.description,
+    )
+
+
+def _cmd_download(args: argparse.Namespace) -> None:
+    from retro_ai.training.registry import AgentDownloader, AgentRegistry
+
+    registry = AgentRegistry()
+    downloader = AgentDownloader(registry)
+    downloader.download(args.agent_id, args.output)
+
+
+def _cmd_leaderboard() -> None:
+    from retro_ai.training.registry import AgentRegistry
+
+    registry = AgentRegistry()
+    registry.generate_leaderboard()
+    registry.generate_readme()
+    print("Leaderboard regenerated in agents/")
