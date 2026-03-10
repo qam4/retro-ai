@@ -17,10 +17,9 @@ reward_params:
     - address: 0x003B
       num_bytes: 1
       is_bcd: true
+  done_when_score_drops: "true"
 startup_sequence:
-  actions:
-    - action: 1
-      frames: 10
+  actions: []              # Game start handled by C++ reset() (Key1 x2)
   post_delay_frames: 120
 grayscale: true
 resize: [84, 84]

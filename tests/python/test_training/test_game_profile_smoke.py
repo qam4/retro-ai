@@ -72,9 +72,7 @@ class TestGameProfile:
         assert profile.name == "satellite_attack"
         assert profile.emulator_type == "videopac"
         assert profile.startup_sequence is not None
-        assert len(profile.startup_sequence.actions) == 1
-        assert profile.startup_sequence.actions[0].action == 1
-        assert profile.startup_sequence.actions[0].frames == 10
+        assert len(profile.startup_sequence.actions) == 0
         assert profile.startup_sequence.post_delay_frames == 120
         assert profile.resize == (84, 84)
 

@@ -176,10 +176,16 @@ public:
         timer_minutes_addr_ = 65;
         timer_seconds_addr_ = 66;
         done_when_timer_zero_ = false;
+        done_when_score_drops_ = false;
 
         auto it = reward_params_.find("done_when_timer_zero");
         if (it != reward_params_.end() && it->second == "true") {
             done_when_timer_zero_ = true;
+        }
+
+        it = reward_params_.find("done_when_score_drops");
+        if (it != reward_params_.end() && it->second == "true") {
+            done_when_score_drops_ = true;
         }
 
         // Allow overriding timer addresses from params
@@ -201,6 +207,20 @@ public:
         }
         return read_ram_byte(static_cast<uint16_t>(timer_minutes_addr_)) == 0 &&
                read_ram_byte(static_cast<uint16_t>(timer_seconds_addr_)) == 0;
+    }
+
+    /// Check if the episode should end (any termination condition).
+    bool is_episode_done() {
+        if (is_timer_expired()) return true;
+        if (done_when_score_drops_ && reward_system_) {
+            // Check if the memory reward returned a negative delta,
+            // which means the score dropped (player died, score reset).
+            // We use the last computed reward from step().
+            if (last_reward_ < 0.0f && frame_number_ > 10) {
+                return true;
+            }
+        }
+        return false;
     }
 
     StepResult reset(int /*seed*/) {
@@ -242,6 +262,7 @@ public:
         if (reward_system_) {
             reward_system_->reset();
         }
+        last_reward_ = 0.0f;
 
         StepResult result;
         const auto& fb = extract_framebuffer();
@@ -351,9 +372,12 @@ public:
         auto reward_end = Clock::now();
 #endif
 
-        result.done = is_timer_expired();
+        result.done = false;  // set after is_episode_done() check below
         result.truncated = false;
         result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+
+        last_reward_ = result.reward;
+        result.done = is_episode_done();
 
 #ifdef RETRO_AI_PROFILING
         auto step_end = Clock::now();
@@ -457,11 +481,13 @@ public:
                 intermediate.done = false;
                 intermediate.truncated = false;
                 intermediate.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
-                total_reward += reward_system_->compute_reward(intermediate, previous_result_);
+                float r = reward_system_->compute_reward(intermediate, previous_result_);
+                total_reward += r;
+                last_reward_ = r;
                 previous_result_ = intermediate;
             }
 
-            done = is_timer_expired();
+            done = is_episode_done();
             if (done) break;
         }
 
@@ -711,6 +737,8 @@ private:
     int timer_minutes_addr_ = -1;
     int timer_seconds_addr_ = -1;
     bool done_when_timer_zero_ = false;
+    bool done_when_score_drops_ = false;
+    float last_reward_ = 0.0f;
 
 #ifdef RETRO_AI_PROFILING
     FrameTimings last_timings_{};

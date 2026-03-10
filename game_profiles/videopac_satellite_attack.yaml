@@ -13,9 +13,7 @@ reward_params:
     width: 40
     height: 14
 startup_sequence:
-  actions:
-    - action: 1
-      frames: 10
+  actions: []              # Game start handled by C++ reset() (Key1 x2)
   post_delay_frames: 120
 grayscale: true
 resize: [84, 84]

@@ -1,0 +1,39 @@
+# Training config for Satellite Attack — multi-discrete, memory reward
+# Usage: RETRO_AI_ROM_DIR=roms retro-ai train game_profiles/satellite_attack_md_training.yaml
+#
+# Satellite Attack is a space shooter. The agent controls a ship that moves
+# left/right and fires upward at descending satellites. Score increases by
+# 10 per hit. Episode ends when the score drops (player dies, score resets).
+# Multi-discrete allows simultaneous movement + firing.
+
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+
+total_timesteps: 500000
+game_profile: satellite_attack_memory
+reward_mode: memory
+policy: CnnPolicy
+action_mode: multi_discrete
+
+# Performance tuning
+num_envs: 4
+observation_mode: framebuffer
+
+# Preprocessing
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+
+# Output
+output_dir: output/satellite_attack_md
+checkpoint_interval: 50000
+max_checkpoints: 5
+log_interval: 2000
+
+# Metrics
+rolling_window: 50
+stagnation_threshold: 200000
+tensorboard: false
