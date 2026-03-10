@@ -150,7 +150,8 @@ class InferenceRunner:
                 path=self.video_path,
                 fps=video_fps,
                 overlay=self._overlay,
-                scale=3,
+                scale=1,
+                aspect_ratio="4:3",
             )
         if self.video_path and not VideoRecorder.available():
             self._logger.warning(

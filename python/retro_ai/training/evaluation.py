@@ -135,7 +135,8 @@ class EvaluationModule:
                 path=self.video_path,
                 fps=video_fps,
                 overlay=True,
-                scale=3,
+                scale=1,
+                aspect_ratio="4:3",
             )
         return None
 
