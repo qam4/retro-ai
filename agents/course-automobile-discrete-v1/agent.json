@@ -25,8 +25,8 @@
     "best_training_reward": 1398.0
   },
   "release": {
-    "tag": "",
-    "url": "",
-    "assets": []
+    "tag": "agent-course-automobile-discrete-v1",
+    "url": "https://github.com/qam4/retro-ai/releases/tag/agent-course-automobile-discrete-v1",
+    "assets": ["model.zip", "config.yaml", "eval_results.json", "replay.mp4"]
   }
 }

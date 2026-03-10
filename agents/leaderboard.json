@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-10T14:49:58.876035+00:00",
+  "generated_at": "2026-03-10T15:48:54.958962+00:00",
   "games": {
     "course_automobile": [
       {
@@ -11,7 +11,7 @@
         "action_mode": "multi_discrete",
         "algorithm": "PPO",
         "total_timesteps": 500000,
-        "release_tag": ""
+        "release_tag": "agent-course-automobile-md-v1"
       },
       {
         "id": "course-automobile-discrete-v1",
@@ -22,7 +22,7 @@
         "action_mode": "discrete",
         "algorithm": "PPO",
         "total_timesteps": 100000,
-        "release_tag": ""
+        "release_tag": "agent-course-automobile-discrete-v1"
       }
     ]
   }
