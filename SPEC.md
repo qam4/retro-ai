@@ -464,6 +464,11 @@ env = VideopacEnv(
 
 - **Multi-agent self-play** — Extend `RLInterface` with a `MultiAgentRLInterface` that accepts actions for both joystick ports simultaneously. Primary use case: Videopac football (2-player competitive) with self-play training. Would require dual joystick input in `step()`, per-player reward signals (e.g. goals scored with opposite signs), and a self-play training loop that samples opponents from a pool of past checkpoints (à la OpenAI Five). Integration with PettingZoo (multi-agent Gymnasium) and Tianshou for the self-play loop.
 - **Transfer learning / model reuse** — Support loading a pretrained model's feature extractor into a new agent (different reward mode, action space, or even different game on the same emulator). Also support knowledge distillation where a trained "teacher" agent guides a "student" agent with a different architecture or action space.
+- **Automated score discovery** — Run the emulator with noop/random actions, let the game play naturally (enemies hit shields, timers tick, etc.), snapshot RAM every frame, and correlate RAM changes with on-screen score changes detected via the vision reward system's OCR. This would eliminate the need for ROM disassembly or hardware knowledge to find score addresses for new games.
+- **Sticky actions** — With configurable probability (e.g. 25%), repeat the previous action instead of executing the new one. Adds stochasticity to prevent frame-perfect memorized sequences. Standard in ALE v5.
+- **Reward clipping** — Clip per-step rewards to [-1, +1] for comparable reward scales across games. Useful for multi-game training or curriculum learning.
+- **Frame max-pooling** — Take pixel-wise max of 2 consecutive frames before preprocessing. Prevents the agent from "missing" flickering sprites (common on Videopac where hardware limits sprites per scanline).
+- **Fire-on-reset** — Detect games that require pressing fire to start after losing a life, and automatically inject the fire action on episode reset.
 - Distributed training support
 - Pre-trained model zoo
 - Web-based visualization

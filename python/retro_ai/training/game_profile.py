@@ -29,6 +29,7 @@ class StartupSequence:
 
     actions: List[StartupAction] = field(default_factory=list)
     post_delay_frames: int = 60  # wait after sequence completes
+    random_noop_max: int = 0  # max random noop frames after startup (0 = disabled)
 
 
 @dataclass
@@ -223,20 +224,30 @@ class StartupSequenceWrapper(gym.Wrapper):
     def __init__(self, env: gym.Env, sequence: StartupSequence):
         super().__init__(env)
         self._sequence = sequence
-        # Detect multi-discrete action space for action conversion
-        self._multi_discrete = isinstance(self.action_space, gym.spaces.MultiDiscrete)
+        # Detect action space type for action conversion
+        self._is_multi_discrete = isinstance(
+            self.action_space, gym.spaces.MultiDiscrete
+        )
+        # Distinguish 5-dim [up,down,left,right,fire] from 3-dim [vert,horiz,fire]
+        self._is_joystick = self._is_multi_discrete and len(self.action_space.nvec) == 3
 
     def _convert_action(self, action_int: int):
         """Convert a discrete action index for the underlying env.
 
-        For multi-discrete envs, startup actions that are joystick directions
-        (0-4) are mapped to the 5-bit encoding. Keyboard actions (>=5) are
-        passed as the integer directly — the GymnasiumWrapper and BaseEnv
-        will handle them as discrete actions via the C++ step().
+        Handles discrete, multi-discrete [5], and joystick [3,3,2] modes.
         """
-        if self._multi_discrete:
-            # Map basic joystick directions to multi-discrete bits
-            # [up, down, left, right, fire]
+        if self._is_joystick:
+            # [vertical(3), horizontal(3), fire(2)]
+            # 0=neutral, 1=up/right, 2=down/left
+            direction_map = {
+                0: [0, 0, 0],  # noop
+                1: [1, 0, 0],  # up
+                2: [2, 0, 0],  # down
+                3: [0, 2, 0],  # left
+                4: [0, 1, 0],  # right
+            }
+            return direction_map.get(action_int, [0, 0, 0])
+        if self._is_multi_discrete:
             direction_map = {
                 0: [0, 0, 0, 0, 0],  # noop
                 1: [1, 0, 0, 0, 0],  # up
@@ -246,8 +257,6 @@ class StartupSequenceWrapper(gym.Wrapper):
             }
             if action_int in direction_map:
                 return direction_map[action_int]
-            # Keyboard actions (Key1=11, etc.) — fall through as int.
-            # The underlying env.step() must handle this gracefully.
             return action_int
         return action_int
 
@@ -266,4 +275,13 @@ class StartupSequenceWrapper(gym.Wrapper):
             obs, _, done, truncated, info = self.env.step(noop)
             if done or truncated:
                 break
+        # Random noop frames to break determinism (standard Atari trick)
+        if self._sequence.random_noop_max > 0:
+            import random
+
+            n = random.randint(0, self._sequence.random_noop_max)
+            for _ in range(n):
+                obs, _, done, truncated, info = self.env.step(noop)
+                if done or truncated:
+                    break
         return obs, info

@@ -9,18 +9,35 @@ emulator_type: videopac
 rom_path: "$RETRO_AI_ROM_DIR/videopac/Satellite Attack (1981)(Philips)(EU).bin"
 bios_path: "$RETRO_AI_ROM_DIR/videopac/Philips C52 BIOS (19xx)(Philips)(FR).bin"
 reward_mode: memory
+joystick_index: 1          # Player 2 port (right side on Videopac hardware)
 reward_params:
-  score_addresses:
-    - address: 0x003A
-      num_bytes: 1
-      is_bcd: true
-    - address: 0x003B
-      num_bytes: 1
-      is_bcd: true
+  # Score: 4 individual digit bytes in ExtRAM (VDC character codes 0-9)
+  # Discovered from satellite-attack-disassembly.txt:
+  #   ExtRAM[0x10] = thousands, ExtRAM[0x11] = hundreds,
+  #   ExtRAM[0x12] = tens, ExtRAM[0x13] = units
+  # Flat addresses: 64 + offset (64+0x10=80, etc.)
+  score_address_count: "4"
+  score_address_0_addr: "80"
+  score_address_0_bytes: "1"
+  score_address_0_bcd: "0"
+  score_address_0_multiplier: "1000"
+  score_address_1_addr: "81"
+  score_address_1_bytes: "1"
+  score_address_1_bcd: "0"
+  score_address_1_multiplier: "100"
+  score_address_2_addr: "82"
+  score_address_2_bytes: "1"
+  score_address_2_bcd: "0"
+  score_address_2_multiplier: "10"
+  score_address_3_addr: "83"
+  score_address_3_bytes: "1"
+  score_address_3_bcd: "0"
+  score_address_3_multiplier: "1"
   done_when_score_drops: "true"
 startup_sequence:
   actions: []              # Game start handled by C++ reset() (Key1 x2)
   post_delay_frames: 120
+  random_noop_max: 30      # Random 0-30 noop frames to break determinism
 grayscale: true
 resize: [84, 84]
 frame_stack: 4

@@ -100,10 +100,11 @@ public:
         , action_mode_(action_mode)
     {
         // Validate action_mode
-        if (action_mode_ != "discrete" && action_mode_ != "multi_discrete") {
+        if (action_mode_ != "discrete" && action_mode_ != "multi_discrete"
+            && action_mode_ != "joystick") {
             throw InitializationError(
                 "Invalid action_mode '" + action_mode_ +
-                "': must be \"discrete\" or \"multi_discrete\"");
+                "': must be \"discrete\", \"multi_discrete\", or \"joystick\"");
         }
 
         // Configure headless emulator (NTSC = 60 Hz)
@@ -163,7 +164,7 @@ public:
         if (count == 0) {
             // Use the discovered addresses: IntRAM[54] (addr 54), 2 bytes BCD LE
             std::vector<MemoryAddress> addrs;
-            addrs.push_back({54, 2, true, true});  // 2-byte BCD LE score at IntRAM[54..55]
+            addrs.push_back({54, 2, true, true, 1});  // 2-byte BCD LE score at IntRAM[54..55]
             mem_reward->set_score_addresses(std::move(addrs));
         }
     }
@@ -209,16 +210,43 @@ public:
                read_ram_byte(static_cast<uint16_t>(timer_seconds_addr_)) == 0;
     }
 
+    /// Read the current score from the configured score addresses.
+    int64_t read_current_score() const {
+        int count = 0;
+        auto it = reward_params_.find("score_address_count");
+        if (it != reward_params_.end()) {
+            try { count = std::stoi(it->second); } catch (...) {}
+        }
+        if (count == 0) return -1;  // no score addresses configured
+
+        int64_t total = 0;
+        for (int i = 0; i < count; ++i) {
+            std::string prefix = "score_address_" + std::to_string(i);
+            uint16_t addr = 0;
+            int64_t multiplier = 1;
+            auto a = reward_params_.find(prefix + "_addr");
+            if (a != reward_params_.end()) {
+                try { addr = static_cast<uint16_t>(std::stoul(a->second)); } catch (...) {}
+            }
+            auto m = reward_params_.find(prefix + "_multiplier");
+            if (m != reward_params_.end()) {
+                try { multiplier = std::stoll(m->second); } catch (...) {}
+            }
+            total += static_cast<int64_t>(read_ram_byte(addr)) * multiplier;
+        }
+        return total;
+    }
+
     /// Check if the episode should end (any termination condition).
     bool is_episode_done() {
         if (is_timer_expired()) return true;
-        if (done_when_score_drops_ && reward_system_) {
-            // Check if the memory reward returned a negative delta,
-            // which means the score dropped (player died, score reset).
-            // We use the last computed reward from step().
-            if (last_reward_ < 0.0f && frame_number_ > 10) {
+        if (done_when_score_drops_ && frame_number_ > 10) {
+            // Read score directly from RAM — works regardless of reward mode.
+            int64_t current_score = read_current_score();
+            if (current_score >= 0 && current_score < previous_score_for_done_) {
                 return true;
             }
+            previous_score_for_done_ = current_score;
         }
         return false;
     }
@@ -263,6 +291,7 @@ public:
             reward_system_->reset();
         }
         last_reward_ = 0.0f;
+        previous_score_for_done_ = 0;
 
         StepResult result;
         const auto& fb = extract_framebuffer();
@@ -281,48 +310,25 @@ public:
 
         // --- Validation ---
         if (action_mode_ == "multi_discrete") {
-            // Validate multi-discrete: exactly 5 elements, each 0 or 1
             if (action.size() != static_cast<size_t>(VideopacRLInterface::kMultiDiscreteSize)) {
-                const auto& fb = extract_framebuffer();
-                result.observation.assign(fb.begin(), fb.end());
-                result.reward = 0.0f;
-                result.done = false;
-                result.truncated = true;
-                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                              ", \"error\": \"Multi-discrete action must have exactly " +
-                              std::to_string(VideopacRLInterface::kMultiDiscreteSize) +
-                              " elements, got " + std::to_string(action.size()) + "\"}";
-                return result;
+                return make_truncated("Multi-discrete action must have exactly 5 elements, got " + std::to_string(action.size()));
             }
             for (size_t i = 0; i < action.size(); ++i) {
                 if (action[i] != 0 && action[i] != 1) {
-                    const auto& fb = extract_framebuffer();
-                    result.observation.assign(fb.begin(), fb.end());
-                    result.reward = 0.0f;
-                    result.done = false;
-                    result.truncated = true;
-                    result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                                  ", \"error\": \"Multi-discrete action element " +
-                                  std::to_string(i) + " must be 0 or 1, got " +
-                                  std::to_string(action[i]) + "\"}";
-                    return result;
+                    return make_truncated("Multi-discrete element " + std::to_string(i) + " must be 0 or 1, got " + std::to_string(action[i]));
                 }
             }
+        } else if (action_mode_ == "joystick") {
+            if (action.size() != static_cast<size_t>(VideopacRLInterface::kJoystickAxes)) {
+                return make_truncated("Joystick action must have exactly 3 elements [vert,horiz,fire], got " + std::to_string(action.size()));
+            }
+            if (action[0] < 0 || action[0] > 2 || action[1] < 0 || action[1] > 2 || action[2] < 0 || action[2] > 1) {
+                return make_truncated("Joystick action out of range: vert must be 0-2, horiz 0-2, fire 0-1");
+            }
         } else {
-            // Existing discrete validation (unchanged)
             if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
                 int bad_action = action.empty() ? -1 : action[0];
-                const auto& fb = extract_framebuffer();
-                result.observation.assign(fb.begin(), fb.end());
-                result.reward = 0.0f;
-                result.done = false;
-                result.truncated = true;
-                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                              ", \"error\": \"Invalid action " +
-                              std::to_string(bad_action) +
-                              ", must be in range [0, " +
-                              std::to_string(kNumActions) + ")\"}";
-                return result;
+                return make_truncated("Invalid action " + std::to_string(bad_action) + ", must be in range [0, " + std::to_string(kNumActions) + ")");
             }
         }
 
@@ -334,6 +340,8 @@ public:
         // --- Apply action ---
         if (action_mode_ == "multi_discrete") {
             apply_multi_discrete_action(action);
+        } else if (action_mode_ == "joystick") {
+            apply_joystick_action(action);
         } else {
             int act = action[0];
             apply_action(act);
@@ -379,6 +387,13 @@ public:
         last_reward_ = result.reward;
         result.done = is_episode_done();
 
+        // When done_when_score_drops triggers, the negative delta from the
+        // score reset is not a meaningful penalty — death is signaled by the
+        // episode ending, not by negative reward. Zero out the death frame.
+        if (result.done && done_when_score_drops_ && result.reward < 0.0f) {
+            result.reward = 0.0f;
+        }
+
 #ifdef RETRO_AI_PROFILING
         auto step_end = Clock::now();
         auto to_us = [](auto dur) {
@@ -411,48 +426,25 @@ public:
 
         // --- Validation ---
         if (action_mode_ == "multi_discrete") {
-            // Validate multi-discrete: exactly 5 elements, each 0 or 1
             if (action.size() != static_cast<size_t>(VideopacRLInterface::kMultiDiscreteSize)) {
-                const auto& fb = extract_framebuffer();
-                result.observation.assign(fb.begin(), fb.end());
-                result.reward = 0.0f;
-                result.done = false;
-                result.truncated = true;
-                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                              ", \"error\": \"Multi-discrete action must have exactly " +
-                              std::to_string(VideopacRLInterface::kMultiDiscreteSize) +
-                              " elements, got " + std::to_string(action.size()) + "\"}";
-                return result;
+                return make_truncated("Multi-discrete action must have exactly 5 elements, got " + std::to_string(action.size()));
             }
             for (size_t i = 0; i < action.size(); ++i) {
                 if (action[i] != 0 && action[i] != 1) {
-                    const auto& fb = extract_framebuffer();
-                    result.observation.assign(fb.begin(), fb.end());
-                    result.reward = 0.0f;
-                    result.done = false;
-                    result.truncated = true;
-                    result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                                  ", \"error\": \"Multi-discrete action element " +
-                                  std::to_string(i) + " must be 0 or 1, got " +
-                                  std::to_string(action[i]) + "\"}";
-                    return result;
+                    return make_truncated("Multi-discrete element " + std::to_string(i) + " must be 0 or 1, got " + std::to_string(action[i]));
                 }
             }
+        } else if (action_mode_ == "joystick") {
+            if (action.size() != static_cast<size_t>(VideopacRLInterface::kJoystickAxes)) {
+                return make_truncated("Joystick action must have exactly 3 elements, got " + std::to_string(action.size()));
+            }
+            if (action[0] < 0 || action[0] > 2 || action[1] < 0 || action[1] > 2 || action[2] < 0 || action[2] > 1) {
+                return make_truncated("Joystick action out of range");
+            }
         } else {
-            // Existing discrete validation (unchanged)
             if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
                 int bad_action = action.empty() ? -1 : action[0];
-                const auto& fb = extract_framebuffer();
-                result.observation.assign(fb.begin(), fb.end());
-                result.reward = 0.0f;
-                result.done = false;
-                result.truncated = true;
-                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                              ", \"error\": \"Invalid action " +
-                              std::to_string(bad_action) +
-                              ", must be in range [0, " +
-                              std::to_string(kNumActions) + ")\"}";
-                return result;
+                return make_truncated("Invalid action " + std::to_string(bad_action) + ", must be in range [0, " + std::to_string(kNumActions) + ")");
             }
         }
 
@@ -463,6 +455,8 @@ public:
             // --- Apply action ---
             if (action_mode_ == "multi_discrete") {
                 apply_multi_discrete_action(action);
+            } else if (action_mode_ == "joystick") {
+                apply_joystick_action(action);
             } else {
                 apply_action(action[0]);
             }
@@ -482,9 +476,15 @@ public:
                 intermediate.truncated = false;
                 intermediate.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
                 float r = reward_system_->compute_reward(intermediate, previous_result_);
-                total_reward += r;
                 last_reward_ = r;
                 previous_result_ = intermediate;
+
+                // Don't include the death frame's negative delta
+                if (done_when_score_drops_ && r < 0.0f) {
+                    done = is_episode_done();
+                    if (done) break;  // skip adding negative r to total
+                }
+                total_reward += r;
             }
 
             done = is_episode_done();
@@ -511,6 +511,12 @@ public:
         if (action_mode_ == "multi_discrete") {
             return {ActionType::MULTI_DISCRETE,
                     std::vector<int>(VideopacRLInterface::kMultiDiscreteSize, 2)};
+        }
+        if (action_mode_ == "joystick") {
+            // [vertical(3), horizontal(3), fire(2)]
+            // vertical: 0=neutral, 1=up, 2=down
+            // horizontal: 0=neutral, 1=right, 2=left
+            return {ActionType::MULTI_DISCRETE, {3, 3, 2}};
         }
         return {ActionType::DISCRETE, {kNumActions}};
     }
@@ -650,6 +656,21 @@ private:
         if (action[4]) input.set_joystick_button(joy, true);
     }
 
+    /// Map a 3-element axis vector to joystick inputs.
+    /// [vertical, horizontal, fire]
+    /// vertical: 0=neutral, 1=up, 2=down
+    /// horizontal: 0=neutral, 1=right, 2=left
+    /// fire: 0=off, 1=on
+    void apply_joystick_action(const std::vector<int>& action) {
+        InputHandler& input = emulator_->get_input_handler();
+        const int joy = joystick_index_;
+        if (action[0] == 1) input.set_joystick_state(joy, Direction::Up, true);
+        if (action[0] == 2) input.set_joystick_state(joy, Direction::Down, true);
+        if (action[1] == 1) input.set_joystick_state(joy, Direction::Right, true);
+        if (action[1] == 2) input.set_joystick_state(joy, Direction::Left, true);
+        if (action[2] == 1) input.set_joystick_button(joy, true);
+    }
+
     /// Map a discrete action to emulator input.
     void apply_action(int action) {
         InputHandler& input = emulator_->get_input_handler();
@@ -721,6 +742,19 @@ private:
         emulator_->get_input_handler().reset();
     }
 
+    /// Build a truncated StepResult with an error message.
+    StepResult make_truncated(const std::string& error) {
+        StepResult result;
+        const auto& fb = extract_framebuffer();
+        result.observation.assign(fb.begin(), fb.end());
+        result.reward = 0.0f;
+        result.done = false;
+        result.truncated = true;
+        result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                      ", \"error\": \"" + error + "\"}";
+        return result;
+    }
+
     std::string bios_path_;
     std::string rom_path_;
     std::string reward_mode_;
@@ -739,6 +773,7 @@ private:
     bool done_when_timer_zero_ = false;
     bool done_when_score_drops_ = false;
     float last_reward_ = 0.0f;
+    int64_t previous_score_for_done_ = 0;
 
 #ifdef RETRO_AI_PROFILING
     FrameTimings last_timings_{};

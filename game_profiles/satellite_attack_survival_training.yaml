@@ -1,0 +1,30 @@
+# Satellite Attack — survival reward, joystick mode, 100k steps
+# Dense reward signal: +1 per frame alive, episode ends on score drop (death).
+
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+
+total_timesteps: 100000
+game_profile: satellite_attack_memory
+reward_mode: survival
+policy: CnnPolicy
+action_mode: joystick
+
+num_envs: 4
+observation_mode: framebuffer
+
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+
+output_dir: output/satellite_attack_surv
+checkpoint_interval: 25000
+max_checkpoints: 3
+log_interval: 1000
+
+rolling_window: 50
+stagnation_threshold: 50000
+tensorboard: false

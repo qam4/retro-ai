@@ -29,6 +29,16 @@ def main() -> None:
     eval_p.add_argument("--seed", type=int, default=42)
     eval_p.add_argument("--output", default="output")
     eval_p.add_argument("--video", help="Path to save MP4 video of evaluation")
+    eval_p.add_argument(
+        "--action-mode",
+        default=None,
+        help="Action mode override (discrete, multi_discrete, joystick)",
+    )
+    eval_p.add_argument(
+        "--reward-mode",
+        default=None,
+        help="Reward mode override (survival, memory, vision)",
+    )
 
     # play
     play_p = sub.add_parser("play", help="Watch agent play in real-time")
@@ -121,6 +131,8 @@ def _cmd_evaluate(args: argparse.Namespace) -> None:
         base_seed=args.seed,
         output_dir=args.output,
         video_path=getattr(args, "video", None),
+        action_mode=getattr(args, "action_mode", None),
+        reward_mode=getattr(args, "reward_mode", None),
     )
     summary = evaluator.run()
     print(f"Evaluation complete: {summary}")

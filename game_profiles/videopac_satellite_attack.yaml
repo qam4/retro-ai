@@ -6,6 +6,7 @@ emulator_type: videopac
 rom_path: "$RETRO_AI_ROM_DIR/videopac/Satellite Attack (1981)(Philips)(EU).bin"
 bios_path: "$RETRO_AI_ROM_DIR/videopac/Philips C52 BIOS (19xx)(Philips)(FR).bin"
 reward_mode: vision
+joystick_index: 1          # Player 2 port (right side on Videopac hardware)
 reward_params:
   screen_region:
     x: 112
@@ -15,6 +16,7 @@ reward_params:
 startup_sequence:
   actions: []              # Game start handled by C++ reset() (Key1 x2)
   post_delay_frames: 120
+  random_noop_max: 30
 grayscale: true
 resize: [84, 84]
 frame_stack: 4

@@ -31,6 +31,8 @@ class EvaluationModule:
         base_seed: int = 42,
         output_dir: str = "output",
         video_path: Optional[str] = None,
+        action_mode: Optional[str] = None,
+        reward_mode: Optional[str] = None,
     ):
         self.model_path = model_path
         self.game_profile = game_profile
@@ -38,6 +40,8 @@ class EvaluationModule:
         self.base_seed = base_seed
         self.output_dir = output_dir
         self.video_path = video_path
+        self._action_mode = action_mode
+        self._reward_mode = reward_mode
         self._logger = StructuredLogger("evaluation")
 
     def run(self) -> Dict[str, Any]:
@@ -66,10 +70,15 @@ class EvaluationModule:
 
                 if recorder and raw_env is not None:
                     recorder.add_frame(
-                        raw_env._last_raw_obs, reward=episode_reward, step=step
+                        raw_env._last_raw_obs,
+                        reward=episode_reward,
+                        step=step,
+                        action=action,
                     )
                 elif recorder:
-                    recorder.add_frame(obs, reward=episode_reward, step=step)
+                    recorder.add_frame(
+                        obs, reward=episode_reward, step=step, action=action
+                    )
 
             results.append(
                 {
@@ -97,12 +106,16 @@ class EvaluationModule:
         if gp.reward_params:
             config_dict["reward_params"] = gp.reward_params
 
+        reward_mode = self._reward_mode or gp.reward_mode
+        action_mode = self._action_mode or "multi_discrete"
+
         base = BaseEnv(
             emulator_type=gp.emulator_type,
             rom_path=gp.rom_path,
             bios_path=gp.bios_path,
-            reward_mode=gp.reward_mode,
+            reward_mode=reward_mode,
             config=config_dict or None,
+            action_mode=action_mode,
         )
         pipeline = PreprocessingPipeline(
             grayscale=gp.grayscale,

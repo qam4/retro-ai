@@ -17,8 +17,11 @@ namespace retro_ai {
 /// Framebuffer: 160×240 palette-indexed pixels are converted to RGB888.
 /// Action modes:
 ///   - "discrete": 18 flat discrete actions (joystick directions + fire + keyboard keys).
-///   - "multi_discrete" (default): 5 independent binary dimensions [up, down, left, right, fire],
+///   - "multi_discrete": 5 independent binary dimensions [up, down, left, right, fire],
 ///     enabling diagonal movement and simultaneous inputs.
+///   - "joystick": 3 axes [vertical(3), horizontal(3), fire(2)] = MultiDiscrete([3,3,2]).
+///     Physically correct joystick model: 0=neutral, 1=up/right, 2=down/left.
+///     18 valid combinations, no impossible states like up+down.
 class VideopacRLInterface : public RLInterface {
 public:
     /// Construct a Videopac environment.
@@ -81,6 +84,7 @@ public:
     static constexpr int kScreenChannels = 3;
     static constexpr int kNumActions = 18;
     static constexpr int kMultiDiscreteSize = 5;
+    static constexpr int kJoystickAxes = 3;  // [vertical, horizontal, fire]
 
 private:
     class Impl;

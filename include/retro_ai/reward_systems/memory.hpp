@@ -17,6 +17,10 @@ struct MemoryAddress {
     bool little_endian; ///< True if least-significant byte is at the start address.
                         ///< For BCD: low-order digits first. For binary: standard LE.
                         ///< Default false (big-endian / most-significant byte first).
+    int64_t multiplier; ///< Positional weight applied after decoding (default 1).
+                        ///< Useful for digit-array scores where each byte holds a
+                        ///< single digit: {addr=80, multiplier=1000}, {addr=81,
+                        ///< multiplier=100}, etc.
 };
 
 /// Callback type for reading a single byte from emulator RAM.

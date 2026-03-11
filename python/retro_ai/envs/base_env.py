@@ -125,7 +125,7 @@ class BaseEnv:
         info : dict
             Additional metadata dictionary.
         """
-        if self._action_mode == "multi_discrete":
+        if self._action_mode in ("multi_discrete", "joystick"):
             result = self._interface.step_numpy(
                 action if isinstance(action, list) else list(action)
             )
@@ -172,7 +172,7 @@ class BaseEnv:
         info : dict
             Metadata from the final step.
         """
-        if self._action_mode == "multi_discrete":
+        if self._action_mode in ("multi_discrete", "joystick"):
             result = self._interface.step_n_numpy(
                 action if isinstance(action, list) else list(action), n
             )

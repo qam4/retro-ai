@@ -75,6 +75,8 @@ class TrainingConfigParser:
         Handles nested AlgorithmConfig and list-to-tuple conversion.
         """
         data = dict(data)  # shallow copy
+        # Track which keys were explicitly provided in the input
+        explicit_keys = set(data.keys())
         # Convert nested algorithm dict to AlgorithmConfig
         algo = data.get("algorithm")
         if isinstance(algo, dict):
@@ -83,7 +85,9 @@ class TrainingConfigParser:
         resize = data.get("resize")
         if isinstance(resize, list):
             data["resize"] = tuple(resize)
-        return TrainingConfig(**data)
+        config = TrainingConfig(**data)
+        config._explicit_keys = explicit_keys  # type: ignore[attr-defined]
+        return config
 
     @staticmethod
     def from_yaml(path: str) -> TrainingConfig:
@@ -157,7 +161,7 @@ class TrainingConfigParser:
         if config.observation_mode not in {"framebuffer", "ram"}:
             raise ConfigurationError("observation_mode")
 
-        if config.action_mode not in {"discrete", "multi_discrete"}:
+        if config.action_mode not in {"discrete", "multi_discrete", "joystick"}:
             raise ConfigurationError("action_mode")
 
 
@@ -187,17 +191,24 @@ def merge_config_with_profile(
     """Merge a TrainingConfig with a GameProfile.
 
     Precedence: explicit TrainingConfig values > GameProfile values > defaults.
-    A field is "explicitly set" if it differs from the dataclass default or is
-    not None for Optional fields.
+    A field is "explicitly set" if it was present in the parsed YAML/JSON
+    (tracked via ``_explicit_keys``), OR if it differs from the dataclass default.
 
     Returns a *new* TrainingConfig with merged values.
     """
     from dataclasses import replace
 
+    explicit = getattr(config, "_explicit_keys", set())
+
     merged = {}
     for field_name, default_val in _TC_DEFAULTS.items():
         tc_val = getattr(config, field_name)
         gp_val = getattr(profile, field_name, None)
+
+        # If the field was explicitly written in the training config, keep it
+        if field_name in explicit:
+            merged[field_name] = tc_val
+            continue
 
         # For Optional fields (default is None): explicitly set means not None
         if default_val is None:
@@ -205,13 +216,10 @@ def merge_config_with_profile(
                 merged[field_name] = tc_val
             elif gp_val is not None:
                 merged[field_name] = gp_val
-            # else: stays None (default)
         else:
-            # For fields with non-None defaults: explicitly set means != default
             if tc_val != default_val:
                 merged[field_name] = tc_val
             elif gp_val is not None and gp_val != default_val:
                 merged[field_name] = gp_val
-            # else: keep TrainingConfig value (the default)
 
     return replace(config, **merged)
