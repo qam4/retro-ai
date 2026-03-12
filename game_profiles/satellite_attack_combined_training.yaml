@@ -1,0 +1,32 @@
+# Satellite Attack — memory reward + survival bonus, joystick mode
+# Combined reward: score delta from RAM (sparse, for learning to shoot)
+# plus +1 per frame alive (dense, for learning to survive).
+
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+
+total_timesteps: 100000
+game_profile: satellite_attack_memory
+reward_mode: memory
+survival_bonus: 1.0
+policy: CnnPolicy
+action_mode: joystick
+
+num_envs: 4
+observation_mode: framebuffer
+
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+
+output_dir: output/satellite_attack_combined
+checkpoint_interval: 25000
+max_checkpoints: 3
+log_interval: 1000
+
+rolling_window: 50
+stagnation_threshold: 50000
+tensorboard: false

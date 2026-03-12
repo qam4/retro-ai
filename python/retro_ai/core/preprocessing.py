@@ -40,6 +40,7 @@ class PreprocessingPipeline:
         resize: Optional[Tuple[int, int]] = None,
         frame_stack: int = 1,
         frame_skip: int = 1,
+        crop: Optional[Tuple[int, int, int, int]] = None,
     ) -> None:
         if not (1 <= frame_skip <= 16):
             raise ValueError(
@@ -50,6 +51,7 @@ class PreprocessingPipeline:
         self.resize = resize  # (target_height, target_width)
         self.frame_stack = frame_stack
         self.frame_skip = frame_skip
+        self.crop = crop  # (y, x, height, width) — applied before grayscale/resize
 
         if frame_stack > 1:
             self.frame_buffer: Optional[deque] = deque(maxlen=frame_stack)
@@ -92,7 +94,12 @@ class PreprocessingPipeline:
     # ------------------------------------------------------------------
 
     def _process_single_frame(self, frame: np.ndarray) -> np.ndarray:
-        """Apply grayscale and resize to one frame."""
+        """Apply crop, grayscale, and resize to one frame."""
+        # Crop to region of interest (applied first)
+        if self.crop is not None:
+            y, x, h, w = self.crop
+            frame = frame[y : y + h, x : x + w]
+
         # Grayscale conversion  (Req 18.1)
         if self.grayscale and frame.ndim == 3 and frame.shape[-1] == 3:
             gray = 0.299 * frame[..., 0] + 0.587 * frame[..., 1] + 0.114 * frame[..., 2]

@@ -40,6 +40,7 @@ class TrainingConfig:
     resize: Optional[Tuple[int, int]] = (84, 84)  # (H, W)
     frame_stack: int = 4
     frame_skip: int = 4
+    crop: Optional[Tuple[int, int, int, int]] = None  # (y, x, h, w) crop before resize
 
     # Game profile
     game_profile: Optional[str] = None  # profile name or path
@@ -63,6 +64,7 @@ class TrainingConfig:
     observation_mode: str = "framebuffer"  # Requirement 6: "framebuffer" | "ram"
     action_mode: str = "discrete"  # "discrete" | "multi_discrete"
     mixed_precision: bool = False  # Requirement 8: FP16 training
+    survival_bonus: float = 0.0  # per-step survival bonus added to reward
 
 
 class TrainingConfigParser:
@@ -85,6 +87,9 @@ class TrainingConfigParser:
         resize = data.get("resize")
         if isinstance(resize, list):
             data["resize"] = tuple(resize)
+        crop = data.get("crop")
+        if isinstance(crop, list):
+            data["crop"] = tuple(crop)
         config = TrainingConfig(**data)
         config._explicit_keys = explicit_keys  # type: ignore[attr-defined]
         return config
@@ -180,6 +185,7 @@ _TC_DEFAULTS: Dict[str, Any] = {
     "resize": (84, 84),
     "frame_stack": 4,
     "frame_skip": 4,
+    "crop": None,
     "observation_mode": "framebuffer",
 }
 

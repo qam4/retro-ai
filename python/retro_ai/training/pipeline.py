@@ -182,6 +182,7 @@ class TrainingPipeline:
                     resize=self.config.resize,
                     frame_stack=self.config.frame_stack,
                     frame_skip=self.config.frame_skip,
+                    crop=self.config.crop,
                 )
                 preprocessed = PreprocessedEnv(base, pipeline)
                 env = GymnasiumWrapper(preprocessed)
@@ -191,6 +192,13 @@ class TrainingPipeline:
                     env = StartupSequenceWrapper(
                         env, self._game_profile.startup_sequence
                     )
+                # Add survival bonus if configured
+                if self.config.survival_bonus > 0:
+                    from retro_ai.wrappers.survival_bonus import (
+                        SurvivalBonusWrapper,
+                    )
+
+                    env = SurvivalBonusWrapper(env, self.config.survival_bonus)
                 # Monitor wrapper records episode rewards/lengths for metrics
                 env = Monitor(env)
                 return env

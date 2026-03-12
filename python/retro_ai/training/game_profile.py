@@ -52,6 +52,7 @@ class GameProfile:
     frame_skip: int = 4
     frame_skip_rationale: Optional[str] = None
     resize_rationale: Optional[str] = None
+    crop: Optional[Tuple[int, int, int, int]] = None  # (y, x, h, w)
     # Observation mode
     observation_mode: Optional[str] = None  # "framebuffer" (default) or "ram"
     # Controller config
@@ -80,6 +81,9 @@ class GameProfile:
         resize = data.get("resize")
         if isinstance(resize, list):
             data["resize"] = tuple(resize)
+        crop = data.get("crop")
+        if isinstance(crop, list):
+            data["crop"] = tuple(crop)
 
         # Resolve $RETRO_AI_ROM_DIR in rom_path / bios_path
         rom_dir = os.environ.get("RETRO_AI_ROM_DIR", "")
