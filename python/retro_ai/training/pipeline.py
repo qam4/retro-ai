@@ -199,6 +199,20 @@ class TrainingPipeline:
                     )
 
                     env = SurvivalBonusWrapper(env, self.config.survival_bonus)
+                # Add sticky actions if configured
+                if self.config.sticky_actions > 0:
+                    from retro_ai.wrappers.sticky_actions import (
+                        StickyActionsWrapper,
+                    )
+
+                    env = StickyActionsWrapper(env, self.config.sticky_actions)
+                # Add reward clipping if configured
+                if self.config.reward_clip > 0:
+                    from retro_ai.wrappers.reward_clip import (
+                        RewardClipWrapper,
+                    )
+
+                    env = RewardClipWrapper(env, self.config.reward_clip)
                 # Monitor wrapper records episode rewards/lengths for metrics
                 env = Monitor(env)
                 return env

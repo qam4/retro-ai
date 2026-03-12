@@ -65,6 +65,12 @@ class TrainingConfig:
     action_mode: str = "discrete"  # "discrete" | "multi_discrete"
     mixed_precision: bool = False  # Requirement 8: FP16 training
     survival_bonus: float = 0.0  # per-step survival bonus added to reward
+    sticky_actions: float = (
+        0.0  # probability of repeating previous action (0 = disabled, 0.25 = standard)
+    )
+    reward_clip: float = (
+        0.0  # clip rewards to [-val, +val] (0 = disabled, 1.0 = standard)
+    )
 
 
 class TrainingConfigParser:
