@@ -241,6 +241,14 @@ class TrainingPipeline:
 
         if num_envs == 1:
             return make_env(0)()  # no subprocess overhead
+        elif self.config.vec_env_type == "threaded":
+            from retro_ai.wrappers.threaded_vec_env import ThreadedVecEnv
+
+            self._logger.info(
+                "vec_env_type",
+                {"type": "threaded", "num_envs": num_envs},
+            )
+            return ThreadedVecEnv([make_env(i) for i in range(num_envs)])
         else:
             return SubprocVecEnv([make_env(i) for i in range(num_envs)])
 

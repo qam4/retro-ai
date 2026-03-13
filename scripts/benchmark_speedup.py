@@ -76,6 +76,7 @@ def run_benchmark(args):
         num_envs=args.num_envs,
         device=args.device,
         mixed_precision=args.mixed_precision,
+        vec_env_type=args.vec_env_type,
         sticky_actions=args.sticky_actions,
         reward_clip=args.reward_clip,
         output_dir=f"output/bench_{args.name}",
@@ -86,7 +87,7 @@ def run_benchmark(args):
 
     print(f"=== Benchmark: {args.name} ===")
     print(f"  device={args.device}, num_envs={args.num_envs}, "
-          f"mixed_precision={args.mixed_precision}")
+          f"mixed_precision={args.mixed_precision}, vec_env={args.vec_env_type}")
     print(f"  timesteps={args.timesteps}, algorithm={args.algorithm}")
     print()
 
@@ -109,6 +110,7 @@ def run_benchmark(args):
             "device": args.device,
             "num_envs": args.num_envs,
             "mixed_precision": args.mixed_precision,
+            "vec_env_type": args.vec_env_type,
             "sticky_actions": args.sticky_actions,
             "reward_clip": args.reward_clip,
         },
@@ -142,6 +144,7 @@ def main():
     parser.add_argument("--sticky-actions", type=float, default=0.0)
     parser.add_argument("--reward-clip", type=float, default=0.0)
     parser.add_argument("--timesteps", type=int, default=10000)
+    parser.add_argument("--vec-env-type", default="subproc", choices=["subproc", "threaded"])
     parser.add_argument("--algorithm", default="PPO", choices=["PPO", "DQN", "SBX_PPO", "SBX_DQN"])
     args = parser.parse_args()
     run_benchmark(args)

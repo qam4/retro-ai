@@ -41,14 +41,12 @@ Findings:
 
 | Configuration              | FPS   | Speedup | Wall clock |
 |----------------------------|-------|---------|------------|
-| SB3 PPO, GPU, 1 env       | 39.2  | 1.0x*   | 255s       |
-| SBX PPO, GPU, 1 env       | 38.2  | 0.97x*  | 262s       |
+| SB3 PPO, GPU, 1 env       | 39.2  | 1.15x   | 255s       |
+| SBX PPO, GPU, 1 env       | 38.2  | 1.12x   | 262s       |
 | SB3 PPO, GPU+FP16, 4 envs | 117.9 | 3.46x   | 85s        |
 | SBX PPO, GPU, 4 envs      | 103.9 | 3.05x   | 96s        |
 | SB3 PPO, GPU+FP16, 8 envs | 160.0 | 4.69x   | 63s        |
 | SBX PPO, GPU, 8 envs      | 137.6 | 4.04x   | 73s        |
-
-*Speedup relative to CPU baseline (34.1 FPS).
 
 Findings:
 - SBX (JAX) does NOT provide a speedup over SB3 (PyTorch) for our
@@ -56,42 +54,65 @@ Findings:
 - The "10-50x" speedup reported for SBX is for pure-RL benchmarks
   where the environment is trivially fast (e.g. Brax physics). In our
   case the emulator is the bottleneck, not the RL framework.
-- JAX JIT compilation overhead is visible in the first few steps but
-  amortizes quickly. Even after warmup, no advantage over PyTorch.
-- Verdict: SBX is not worth the added dependency for our use case.
-  Stick with SB3 + PyTorch.
+- Verdict: SBX is not worth the added dependency. Stick with SB3.
+
+### Round 3: ThreadedVecEnv vs SubprocVecEnv (2026-03-13)
+
+Our C++ emulator releases the GIL during step/reset, so threads can
+run emulators in parallel without subprocess IPC overhead.
+
+| Configuration                     | FPS   | Speedup | Wall clock |
+|-----------------------------------|-------|---------|------------|
+| SubprocVecEnv, GPU+FP16, 4 envs  | 117.9 | 3.46x   | 85s        |
+| ThreadedVecEnv, GPU+FP16, 4 envs | 115.0 | 3.37x   | 87s        |
+| SubprocVecEnv, GPU+FP16, 8 envs  | 160.0 | 4.69x   | 63s        |
+| ThreadedVecEnv, GPU+FP16, 8 envs | 165.5 | 4.85x   | 60s        |
+| SubprocVecEnv, GPU+FP16, 16 envs | 146.2 | 4.29x   | 68s        |
+| ThreadedVecEnv, GPU+FP16, 16 envs| 163.2 | 4.79x   | 61s        |
+
+Findings:
+- At 4 envs: roughly equal (SubprocVecEnv slightly ahead).
+- At 8 envs: ThreadedVecEnv edges ahead by ~3% (165 vs 160 FPS).
+- At 16 envs: ThreadedVecEnv wins clearly (163 vs 146 FPS, +12%).
+  SubprocVecEnv actually regresses past 8 envs due to IPC overhead
+  exceeding the CPU core count. ThreadedVecEnv holds steady.
+- ThreadedVecEnv avoids process spawning and observation serialization,
+  which matters more as env count grows beyond CPU cores.
+- Verdict: ThreadedVecEnv is the better default for our GIL-releasing
+  emulator, especially at higher env counts.
 
 ### Summary Table
 
-| Configuration                  | FPS   | vs baseline |
-|--------------------------------|-------|-------------|
-| CPU baseline (1 env)           | 34.1  | 1.0x        |
-| **SB3 + GPU + FP16 + 8 envs** | 160.0 | **4.69x**   |
-| SBX + GPU + 8 envs             | 137.6 | 4.04x       |
+| Configuration                          | FPS   | vs baseline |
+|----------------------------------------|-------|-------------|
+| CPU baseline (1 env)                   | 34.1  | 1.0x        |
+| SB3 + GPU + FP16 + 8 envs (subproc)   | 160.0 | 4.69x       |
+| **SB3 + GPU + FP16 + 8 envs (threaded)** | 165.5 | **4.85x** |
+| SB3 + GPU + FP16 + 16 envs (threaded) | 163.2 | 4.79x       |
 
-Best configuration so far: SB3 PPO + CUDA + FP16 + 8 parallel envs.
+Best configuration: SB3 PPO + CUDA + FP16 + 8 envs + ThreadedVecEnv.
 
 ### How to use
 
 ```bash
-# GPU + mixed precision + parallel envs
-python examples/gpu_training.py --rom roms/game.bin --bios roms/bios.bin --num-envs 8
-
-# Or via YAML config
-python -m retro_ai.training.cli train examples/configs/gpu_training.yaml
+# GPU + mixed precision + threaded parallel envs
+RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \
+  python scripts/benchmark_speedup.py --name my-run \
+    --device cuda --mixed-precision --num-envs 8 --vec-env-type threaded
 ```
 
 Config fields: `device` ("auto"/"cuda"/"cpu"), `mixed_precision` (bool),
-`num_envs` (int), `algorithm.name` ("PPO"/"DQN"/"SBX_PPO"/"SBX_DQN").
+`num_envs` (int), `vec_env_type` ("subproc"/"threaded"),
+`algorithm.name` ("PPO"/"DQN"/"SBX_PPO"/"SBX_DQN").
 
 ## Ideas — Not Yet Benchmarked
 
-### EnvPool — Priority: high (next)
+### EnvPool — Priority: low (revised)
 - C++ vectorized environment pool, replaces Python SubprocVecEnv
-- Zero Python overhead for env stepping
-- Our emulator is already C++, natural fit for an adapter
-- Could give 5-10x throughput on the env side
-- Effort: medium | Expected impact: high
+- Our ThreadedVecEnv already eliminates most IPC overhead since the
+  emulator releases the GIL. EnvPool's main advantage (C++ env pool)
+  is less relevant when the env is already C++ with GIL release.
+- Effort: medium | Expected impact: low (given ThreadedVecEnv results)
 
 ### Async Training (IMPALA-style) — Priority: medium
 - Decouple env stepping from model updates
@@ -112,7 +133,8 @@ Config fields: `device` ("auto"/"cuda"/"cpu"), `mixed_precision` (bool),
 ## Priority Ranking
 
 1. **GPU + parallel envs** — proven 4.7x with 8 envs ✅
-2. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
-3. **EnvPool** — next candidate, could reduce env stepping overhead
-4. **IMPALA** — high effort, better GPU utilization
-5. **CleanRL PPO** — more control, smaller gains
+2. **ThreadedVecEnv** — slight edge over SubprocVecEnv, better at 16+ envs ✅
+3. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
+4. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
+5. **IMPALA** — high effort, could help if GPU is underutilized
+6. **CleanRL PPO** — more control, smaller gains

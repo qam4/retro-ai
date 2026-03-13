@@ -205,5 +205,101 @@
       "gpu_memory_mb": null,
       "cpu_count": 8
     }
+  },
+  {
+    "name": "threaded-gpu-fp16-4env",
+    "timestamp": "2026-03-13T19:25:10.473107+00:00",
+    "wall_clock_seconds": 86.96,
+    "fps": 115.0,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "PPO",
+      "device": "cuda",
+      "num_envs": 4,
+      "mixed_precision": true,
+      "vec_env_type": "threaded",
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "threaded-gpu-fp16-8env",
+    "timestamp": "2026-03-13T19:26:23.803688+00:00",
+    "wall_clock_seconds": 60.43,
+    "fps": 165.5,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "PPO",
+      "device": "cuda",
+      "num_envs": 8,
+      "mixed_precision": true,
+      "vec_env_type": "threaded",
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "subproc-gpu-fp16-16env",
+    "timestamp": "2026-03-13T19:27:51.384104+00:00",
+    "wall_clock_seconds": 68.4,
+    "fps": 146.2,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "PPO",
+      "device": "cuda",
+      "num_envs": 16,
+      "mixed_precision": true,
+      "vec_env_type": "subproc",
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "threaded-gpu-fp16-16env",
+    "timestamp": "2026-03-13T19:29:06.322254+00:00",
+    "wall_clock_seconds": 61.29,
+    "fps": 163.2,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "PPO",
+      "device": "cuda",
+      "num_envs": 16,
+      "mixed_precision": true,
+      "vec_env_type": "threaded",
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
   }
 ]
