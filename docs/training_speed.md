@@ -83,14 +83,41 @@ Findings:
 
 ### Summary Table
 
-| Configuration                          | FPS   | vs baseline |
-|----------------------------------------|-------|-------------|
-| CPU baseline (1 env)                   | 34.1  | 1.0x        |
-| SB3 + GPU + FP16 + 8 envs (subproc)   | 160.0 | 4.69x       |
-| **SB3 + GPU + FP16 + 8 envs (threaded)** | 165.5 | **4.85x** |
-| SB3 + GPU + FP16 + 16 envs (threaded) | 163.2 | 4.79x       |
+| Configuration                              | FPS   | vs baseline |
+|--------------------------------------------|-------|-------------|
+| CPU baseline (1 env)                       | 34.1  | 1.0x        |
+| SB3 + GPU + FP16 + 8 envs (threaded)      | 165.5 | 4.85x       |
+| **SB3 + GPU + FP16 + 8 envs + PGO**       | 191.0 | **5.60x**   |
+
+Best configuration: SB3 PPO + CUDA + FP16 + 8 envs + ThreadedVecEnv + PGO.
 
 Best configuration: SB3 PPO + CUDA + FP16 + 8 envs + ThreadedVecEnv.
+
+### Round 5: PGO (Profile-Guided Optimization) (2026-03-13)
+
+Two-pass build: instrument with `-fprofile-generate`, run 5000 steps to
+collect branch/call data, rebuild with `-fprofile-use`.
+
+| Configuration                          | FPS   | vs baseline | vs non-PGO |
+|----------------------------------------|-------|-------------|------------|
+| Non-PGO, GPU+FP16+8env (threaded)     | 165.5 | 4.85x       | —          |
+| **PGO, GPU+FP16+8env (threaded)**     | 191.0 | **5.60x**   | **+15.4%** |
+
+PGO gives a clean 15% improvement by letting the compiler optimize
+branch prediction and code layout for the emulator's actual hot paths
+(VDC pixel rendering, MasterClock tick, CPU instruction dispatch).
+
+Build instructions:
+```bash
+# Pass 1: instrumented build
+cmake --preset ci-linux -DPGO_GENERATE=ON [python flags]
+cmake --build --preset ci-linux
+# Run representative workload
+python3.9 -c "... run 5000 steps ..."
+# Pass 2: optimized build
+cmake --preset ci-linux -DPGO_USE=ON [python flags]
+cmake --build --preset ci-linux
+```
 
 ### Round 4: Where's the Bottleneck? (2026-03-13)
 
