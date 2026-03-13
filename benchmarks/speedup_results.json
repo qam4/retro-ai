@@ -113,5 +113,97 @@
       "gpu_memory_mb": null,
       "cpu_count": 8
     }
+  },
+  {
+    "name": "sbx-ppo-1env",
+    "timestamp": "2026-03-13T17:39:03.495549+00:00",
+    "wall_clock_seconds": 419.24,
+    "fps": 23.9,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "SBX_PPO",
+      "device": "auto",
+      "num_envs": 1,
+      "mixed_precision": false,
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "sbx-gpu-1env",
+    "timestamp": "2026-03-13T17:44:36.143612+00:00",
+    "wall_clock_seconds": 261.46,
+    "fps": 38.2,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "SBX_PPO",
+      "device": "auto",
+      "num_envs": 1,
+      "mixed_precision": false,
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "sbx-gpu-4env",
+    "timestamp": "2026-03-13T17:46:25.470731+00:00",
+    "wall_clock_seconds": 96.21,
+    "fps": 103.9,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "SBX_PPO",
+      "device": "auto",
+      "num_envs": 4,
+      "mixed_precision": false,
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "sbx-gpu-8env",
+    "timestamp": "2026-03-13T17:47:50.523457+00:00",
+    "wall_clock_seconds": 72.67,
+    "fps": 137.6,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "SBX_PPO",
+      "device": "auto",
+      "num_envs": 8,
+      "mixed_precision": false,
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
   }
 ]

@@ -154,7 +154,7 @@ class TrainingConfigParser:
             if config.rom_path is None:
                 raise ConfigurationError("rom_path")
 
-        if config.algorithm.name not in {"PPO", "DQN"}:
+        if config.algorithm.name not in {"PPO", "DQN", "SBX_PPO", "SBX_DQN"}:
             raise ConfigurationError("algorithm.name")
 
         if config.total_timesteps <= 0:

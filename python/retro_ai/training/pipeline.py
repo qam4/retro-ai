@@ -38,6 +38,26 @@ ALGORITHM_MAP = {
     "DQN": DQN,
 }
 
+# SBX (JAX-based) variants — lazy-loaded to avoid hard dependency
+_SBX_ALGORITHM_MAP = {
+    "SBX_PPO": ("sbx", "PPO"),
+    "SBX_DQN": ("sbx", "DQN"),
+}
+
+
+def _resolve_algorithm(name: str):
+    """Look up algorithm class, supporting both SB3 and SBX variants."""
+    if name in ALGORITHM_MAP:
+        return ALGORITHM_MAP[name]
+    if name in _SBX_ALGORITHM_MAP:
+        module_name, cls_name = _SBX_ALGORITHM_MAP[name]
+        import importlib
+
+        mod = importlib.import_module(module_name)
+        return getattr(mod, cls_name)
+    raise ValueError(f"Unknown algorithm: {name}. "
+                     f"Options: {list(ALGORITHM_MAP) + list(_SBX_ALGORITHM_MAP)}")
+
 
 class TrainingPipeline:
     """Orchestrate end-to-end RL training runs."""
@@ -226,7 +246,7 @@ class TrainingPipeline:
 
     def _build_model(self, env):
         """Instantiate the SB3 algorithm from config."""
-        algo_cls = ALGORITHM_MAP[self.config.algorithm.name]
+        algo_cls = _resolve_algorithm(self.config.algorithm.name)
 
         policy = self.config.policy
         # Auto-select MlpPolicy for RAM observations (Requirement 6.4)
@@ -287,7 +307,7 @@ class TrainingPipeline:
         # Scale n_steps for vectorized environments so the effective
         # batch size (num_envs × n_steps) stays consistent.
         num_envs = self.config.num_envs
-        if num_envs > 1 and self.config.algorithm.name == "PPO":
+        if num_envs > 1 and self.config.algorithm.name in ("PPO", "SBX_PPO"):
             base_n_steps = kwargs.get("n_steps", 2048)
             adjusted_n_steps = max(1, base_n_steps // num_envs)
             kwargs["n_steps"] = adjusted_n_steps
@@ -391,7 +411,7 @@ class TrainingPipeline:
 
     def _load_checkpoint(self, checkpoint_path, env):
         """Load model from checkpoint, with fallback search."""
-        algo_cls = ALGORITHM_MAP[self.config.algorithm.name]
+        algo_cls = _resolve_algorithm(self.config.algorithm.name)
 
         # Try the specified path first
         if os.path.exists(checkpoint_path):

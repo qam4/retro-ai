@@ -142,7 +142,7 @@ def main():
     parser.add_argument("--sticky-actions", type=float, default=0.0)
     parser.add_argument("--reward-clip", type=float, default=0.0)
     parser.add_argument("--timesteps", type=int, default=10000)
-    parser.add_argument("--algorithm", default="PPO", choices=["PPO", "DQN"])
+    parser.add_argument("--algorithm", default="PPO", choices=["PPO", "DQN", "SBX_PPO", "SBX_DQN"])
     args = parser.parse_args()
     run_benchmark(args)
 
