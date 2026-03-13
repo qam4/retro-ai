@@ -197,12 +197,15 @@ class TrainingPipeline:
                     observation_mode=self.config.observation_mode,
                     action_mode=self.config.action_mode,
                 )
+
+                # Skip image preprocessing for RAM observations
+                is_ram = self.config.observation_mode == "ram"
                 pipeline = PreprocessingPipeline(
-                    grayscale=self.config.grayscale,
-                    resize=self.config.resize,
-                    frame_stack=self.config.frame_stack,
+                    grayscale=False if is_ram else self.config.grayscale,
+                    resize=None if is_ram else self.config.resize,
+                    frame_stack=1 if is_ram else self.config.frame_stack,
                     frame_skip=self.config.frame_skip,
-                    crop=self.config.crop,
+                    crop=None if is_ram else self.config.crop,
                 )
                 preprocessed = PreprocessedEnv(base, pipeline)
                 env = GymnasiumWrapper(preprocessed)

@@ -96,35 +96,37 @@ Best configuration: SB3 PPO + CUDA + FP16 + 8 envs + ThreadedVecEnv.
 
 Raw emulator throughput (random actions, no neural network):
 
+**Framebuffer observations (84×84 grayscale):**
+
 | Parallel envs | Emulator-only FPS | Scaling |
 |---------------|-------------------|---------|
 | 1             | 48                | 1.0x    |
-| 2             | 94                | 2.0x    |
 | 4             | 189               | 3.9x   |
 | 8             | 258               | 5.4x   |
-| 12            | 260               | 5.4x   |
-| 16            | 259               | 5.4x   |
+| 12-16         | ~260              | 5.4x   |
 
-The emulator saturates at ~260 FPS around 8 threads (on 8 vCPUs).
-Scaling is near-linear up to 4 envs, then tapers off.
+**RAM observations (192 bytes, no framebuffer extraction):**
 
-Bottleneck analysis at 8 envs:
+| Parallel envs | Emulator-only FPS | Scaling |
+|---------------|-------------------|---------|
+| 1             | 219               | 1.0x    |
+| 4             | 870               | 4.0x   |
+| 8             | 1156              | 5.3x   |
 
-```
-Emulator ceiling:     260 FPS (100%)
-Training throughput:  165 FPS (63%)
-NN overhead:          ~95 FPS (37%)
-```
+Framebuffer extraction is expensive — skipping it (RAM mode) raises the
+single-env ceiling from 48 to 219 FPS (4.6x), and the 8-env ceiling from
+258 to 1156 FPS.
 
-At 8 envs, the split is roughly 63% emulator / 37% neural network.
-We're not purely emulator-bound — the NN inference + gradient updates
-consume a meaningful chunk. This explains why GPU helped at higher
-env counts (batched inference) even though it didn't help at 1 env.
+**Training throughput vs emulator ceiling (8 envs):**
 
-To go faster from here, we'd need to either:
-1. Make the emulator faster (C++ optimization, PGO)
-2. Make the NN faster (smaller model, async updates)
-3. Add more CPU cores (bigger instance)
+| Mode        | Emulator ceiling | Training FPS | NN overhead |
+|-------------|-----------------|--------------|-------------|
+| Framebuffer | 258 FPS         | 165 FPS      | 36%         |
+| RAM         | 1156 FPS        | 175 FPS      | 85%         |
+
+With framebuffer observations, the split is ~64% emulator / 36% NN.
+With RAM observations, the NN becomes the clear bottleneck (85% of time),
+and the emulator has massive headroom.
 
 Reproduce with:
 ```bash
@@ -174,8 +176,8 @@ Config fields: `device` ("auto"/"cuda"/"cpu"), `mixed_precision` (bool),
 
 1. **GPU + parallel envs** — proven 4.7x with 8 envs ✅
 2. **ThreadedVecEnv** — slight edge over SubprocVecEnv, better at 16+ envs ✅
-3. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
-4. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
-5. **Emulator C++ optimization / PGO** — could raise the 260 FPS ceiling
-6. **IMPALA** — high effort, could help with the 37% NN overhead
-7. **Bigger instance (more vCPUs)** — brute force, linear scaling up to ~260 FPS ceiling
+3. **RAM observations** — eliminates framebuffer bottleneck, but NN becomes the bottleneck ✅ (measured)
+4. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
+5. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
+6. **IMPALA / async training** — high effort, would help with the 85% NN overhead in RAM mode
+7. **Emulator C++ optimization / PGO** — only helps framebuffer mode (already 64% of ceiling)

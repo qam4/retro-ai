@@ -47,12 +47,22 @@ class GymnasiumWrapper(gym.Env):
 
         # Build observation space
         obs = self._env.get_observation_space()
-        self.observation_space = spaces.Box(
-            low=0,
-            high=255,
-            shape=(obs["height"], obs["width"], obs["channels"]),
-            dtype=np.uint8,
-        )
+        # Build observation space
+        # For RAM observations (height=1, channels=1), use a flat 1D space
+        if obs["height"] == 1 and obs["channels"] == 1:
+            self.observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(obs["width"],),
+                dtype=np.uint8,
+            )
+        else:
+            self.observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(obs["height"], obs["width"], obs["channels"]),
+                dtype=np.uint8,
+            )
 
         # Build action space
         act = self._env.get_action_space()

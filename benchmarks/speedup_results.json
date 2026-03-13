@@ -301,5 +301,81 @@
       "gpu_memory_mb": null,
       "cpu_count": 8
     }
+  },
+  {
+    "name": "ram-obs-gpu-8env",
+    "timestamp": "2026-03-13T21:47:41.414265+00:00",
+    "wall_clock_seconds": 60.07,
+    "fps": 166.5,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "PPO",
+      "device": "cuda",
+      "num_envs": 8,
+      "mixed_precision": false,
+      "vec_env_type": "threaded",
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "ram-mlp-cpu-8env",
+    "timestamp": "2026-03-13T21:51:43.926454+00:00",
+    "wall_clock_seconds": 59.45,
+    "fps": 168.2,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "PPO",
+      "device": "cpu",
+      "num_envs": 8,
+      "mixed_precision": false,
+      "vec_env_type": "subproc",
+      "obs_mode": "ram",
+      "policy": "MlpPolicy",
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
+  },
+  {
+    "name": "ram-mlp-cpu-threaded-8env",
+    "timestamp": "2026-03-13T21:52:53.050828+00:00",
+    "wall_clock_seconds": 57.2,
+    "fps": 174.8,
+    "total_timesteps": 10000,
+    "config": {
+      "algorithm": "PPO",
+      "device": "cpu",
+      "num_envs": 8,
+      "mixed_precision": false,
+      "vec_env_type": "threaded",
+      "obs_mode": "ram",
+      "policy": "MlpPolicy",
+      "sticky_actions": 0.0,
+      "reward_clip": 0.0
+    },
+    "system": {
+      "python_version": "3.9.25",
+      "torch_version": "2.8.0+cu128",
+      "cuda_available": true,
+      "gpu_name": "NVIDIA A10G",
+      "gpu_memory_mb": null,
+      "cpu_count": 8
+    }
   }
 ]

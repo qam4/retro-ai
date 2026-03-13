@@ -68,11 +68,12 @@ def run_benchmark(args):
         total_timesteps=args.timesteps,
         game_profile="course_automobile",
         reward_mode="memory",
-        policy="CnnPolicy",
+        policy=args.policy,
         grayscale=True,
         resize=(84, 84),
         frame_stack=4,
         frame_skip=4,
+        observation_mode=args.obs_mode,
         num_envs=args.num_envs,
         device=args.device,
         mixed_precision=args.mixed_precision,
@@ -87,7 +88,8 @@ def run_benchmark(args):
 
     print(f"=== Benchmark: {args.name} ===")
     print(f"  device={args.device}, num_envs={args.num_envs}, "
-          f"mixed_precision={args.mixed_precision}, vec_env={args.vec_env_type}")
+          f"mixed_precision={args.mixed_precision}, vec_env={args.vec_env_type}, "
+          f"obs={args.obs_mode}, policy={args.policy}")
     print(f"  timesteps={args.timesteps}, algorithm={args.algorithm}")
     print()
 
@@ -111,6 +113,8 @@ def run_benchmark(args):
             "num_envs": args.num_envs,
             "mixed_precision": args.mixed_precision,
             "vec_env_type": args.vec_env_type,
+            "obs_mode": args.obs_mode,
+            "policy": args.policy,
             "sticky_actions": args.sticky_actions,
             "reward_clip": args.reward_clip,
         },
@@ -145,6 +149,8 @@ def main():
     parser.add_argument("--reward-clip", type=float, default=0.0)
     parser.add_argument("--timesteps", type=int, default=10000)
     parser.add_argument("--vec-env-type", default="subproc", choices=["subproc", "threaded"])
+    parser.add_argument("--obs-mode", default="framebuffer", choices=["framebuffer", "ram"])
+    parser.add_argument("--policy", default="CnnPolicy", choices=["CnnPolicy", "MlpPolicy"])
     parser.add_argument("--algorithm", default="PPO", choices=["PPO", "DQN", "SBX_PPO", "SBX_DQN"])
     args = parser.parse_args()
     run_benchmark(args)
