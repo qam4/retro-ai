@@ -241,26 +241,39 @@ class TrainingPipeline:
             )
             policy = "MlpPolicy"
 
+        # Resolve device
+        device = self.config.device
+        if device == "auto":
+            import torch
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+
         kwargs = {
             "policy": policy,
             "env": env,
             "learning_rate": self.config.algorithm.learning_rate,
             "batch_size": self.config.algorithm.batch_size,
+            "device": device,
             "verbose": 0,
             **self.config.algorithm.extra,
         }
+
+        self._logger.info(
+            "device_selected",
+            {"device": device},
+        )
 
         # Mixed precision support (Requirement 8)
         if self.config.mixed_precision:
             import torch
 
-            if torch.cuda.is_available():
+            if device == "cuda" and torch.cuda.is_available():
                 torch.set_float32_matmul_precision("medium")
                 kwargs["policy_kwargs"] = kwargs.get("policy_kwargs", {})
                 kwargs["policy_kwargs"]["optimizer_kwargs"] = {"fused": True}
                 self._logger.info(
                     "mixed_precision_enabled",
-                    {"device": "cuda"},
+                    {"device": device},
                 )
             else:
                 self._logger.warning(

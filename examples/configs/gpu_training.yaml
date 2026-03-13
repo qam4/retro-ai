@@ -1,0 +1,45 @@
+# GPU-accelerated training config
+# Usage: python -m retro_ai.training.cli train examples/configs/gpu_training.yaml
+
+algorithm:
+  name: PPO
+  learning_rate: 2.5e-4
+  batch_size: 256
+  extra:
+    n_steps: 2048
+    n_epochs: 4
+    clip_range: 0.1
+    ent_coef: 0.01
+
+total_timesteps: 2_000_000
+
+# Environment — set these or use game_profile
+# emulator_type: videopac
+# rom_path: roms/game.bin
+# bios_path: roms/videopac.bin
+game_profile: course-automobile-discrete-v1
+
+# Preprocessing
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+
+# GPU (D1 from training_speedup_ideas.md)
+device: auto
+mixed_precision: true
+
+# Parallel envs for throughput
+num_envs: 4
+
+# Sticky actions (B3) — 25% repeat probability
+sticky_actions: 0.25
+
+# Reward clipping (B2)
+reward_clip: 1.0
+
+# Output
+output_dir: output/gpu_run
+tensorboard: true
+checkpoint_interval: 50000
+log_interval: 2000

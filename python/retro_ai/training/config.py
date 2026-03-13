@@ -64,6 +64,7 @@ class TrainingConfig:
     observation_mode: str = "framebuffer"  # Requirement 6: "framebuffer" | "ram"
     action_mode: str = "discrete"  # "discrete" | "multi_discrete"
     mixed_precision: bool = False  # Requirement 8: FP16 training
+    device: str = "auto"  # "auto", "cuda", or "cpu"
     survival_bonus: float = 0.0  # per-step survival bonus added to reward
     sticky_actions: float = (
         0.0  # probability of repeating previous action (0 = disabled, 0.25 = standard)
