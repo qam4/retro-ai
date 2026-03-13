@@ -335,7 +335,23 @@ class TrainingPipeline:
         if self.config.tensorboard:
             tb_dir = os.path.join(self.config.output_dir, "tb")
             kwargs["tensorboard_log"] = tb_dir
-        return algo_cls(**kwargs)
+
+        model = algo_cls(**kwargs)
+
+        # torch.compile() the policy network for faster inference/training
+        if self.config.torch_compile:
+            import torch
+
+            if hasattr(torch, "compile") and device == "cuda":
+                model.policy = torch.compile(model.policy)
+                self._logger.info("torch_compile_enabled", {"device": device})
+            else:
+                self._logger.warning(
+                    "torch_compile_skipped",
+                    {"reason": "requires PyTorch 2.x + CUDA"},
+                )
+
+        return model
 
     def _build_callbacks(self) -> CallbackList:
         """Assemble the callback list."""

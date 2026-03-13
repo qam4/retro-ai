@@ -77,6 +77,7 @@ def run_benchmark(args):
         num_envs=args.num_envs,
         device=args.device,
         mixed_precision=args.mixed_precision,
+        torch_compile=args.torch_compile,
         vec_env_type=args.vec_env_type,
         sticky_actions=args.sticky_actions,
         reward_clip=args.reward_clip,
@@ -112,6 +113,7 @@ def run_benchmark(args):
             "device": args.device,
             "num_envs": args.num_envs,
             "mixed_precision": args.mixed_precision,
+            "torch_compile": args.torch_compile,
             "vec_env_type": args.vec_env_type,
             "obs_mode": args.obs_mode,
             "policy": args.policy,
@@ -145,6 +147,7 @@ def main():
     parser.add_argument("--device", default="cpu", choices=["cpu", "cuda", "auto"])
     parser.add_argument("--num-envs", type=int, default=1)
     parser.add_argument("--mixed-precision", action="store_true")
+    parser.add_argument("--torch-compile", action="store_true")
     parser.add_argument("--sticky-actions", type=float, default=0.0)
     parser.add_argument("--reward-clip", type=float, default=0.0)
     parser.add_argument("--timesteps", type=int, default=10000)

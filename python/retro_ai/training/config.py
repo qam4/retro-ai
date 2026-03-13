@@ -65,6 +65,7 @@ class TrainingConfig:
     action_mode: str = "discrete"  # "discrete" | "multi_discrete"
     mixed_precision: bool = False  # Requirement 8: FP16 training
     device: str = "auto"  # "auto", "cuda", or "cpu"
+    torch_compile: bool = False  # torch.compile() the policy network (PyTorch 2.x)
     vec_env_type: str = "subproc"  # "subproc" (SubprocVecEnv) or "threaded" (ThreadedVecEnv)
     survival_bonus: float = 0.0  # per-step survival bonus added to reward
     sticky_actions: float = (

@@ -158,7 +158,24 @@ RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \
   python3.9 scripts/benchmark_emulator.py --steps 1000 --max-envs 16
 ```
 
-### How to use
+### Round 6: torch.compile() (2026-03-13)
+
+PyTorch 2.x `torch.compile()` JIT-compiles the policy network.
+
+| Configuration (PGO + GPU + FP16 + 8 threaded envs) | 10k FPS | 50k FPS |
+|-----------------------------------------------------|---------|---------|
+| Without torch.compile                               | 191     | 163     |
+| With torch.compile                                  | 141     | 154     |
+
+Findings:
+- Steady-state FPS during rollout collection is slightly higher with
+  compile (~230 vs ~250), but JIT compilation overhead (first steps +
+  periodic recompilation) drags the average down.
+- At 10k steps: 26% slower due to upfront JIT cost.
+- At 50k steps: 6% slower, still not amortized.
+- Would likely break even around 200k+ steps, but the gain is marginal.
+- Verdict: not worth it for our model size and typical run lengths.
+
 
 ```bash
 # GPU + mixed precision + threaded parallel envs
@@ -200,7 +217,8 @@ Config fields: `device` ("auto"/"cuda"/"cpu"), `mixed_precision` (bool),
 
 1. **GPU + parallel envs** — proven 4.85x with 8 envs ✅
 2. **ThreadedVecEnv** — slight edge over SubprocVecEnv, better at 16+ envs ✅
-3. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
-4. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
-5. **Emulator C++ optimization / PGO** — 57% of time is emulator, hot paths already profiled
-6. **IMPALA / async training** — 43% of time is NN, async could overlap with env stepping
+3. **PGO** — +15% from profile-guided optimization of C++ emulator ✅
+4. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
+5. ~~torch.compile~~ — tested, JIT overhead exceeds gains at typical run lengths ❌
+6. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
+7. **IMPALA / async training** — 43% of time is NN, async could overlap with env stepping
