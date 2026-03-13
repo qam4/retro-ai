@@ -92,6 +92,46 @@ Findings:
 
 Best configuration: SB3 PPO + CUDA + FP16 + 8 envs + ThreadedVecEnv.
 
+### Round 4: Where's the Bottleneck? (2026-03-13)
+
+Raw emulator throughput (random actions, no neural network):
+
+| Parallel envs | Emulator-only FPS | Scaling |
+|---------------|-------------------|---------|
+| 1             | 48                | 1.0x    |
+| 2             | 94                | 2.0x    |
+| 4             | 189               | 3.9x   |
+| 8             | 258               | 5.4x   |
+| 12            | 260               | 5.4x   |
+| 16            | 259               | 5.4x   |
+
+The emulator saturates at ~260 FPS around 8 threads (on 8 vCPUs).
+Scaling is near-linear up to 4 envs, then tapers off.
+
+Bottleneck analysis at 8 envs:
+
+```
+Emulator ceiling:     260 FPS (100%)
+Training throughput:  165 FPS (63%)
+NN overhead:          ~95 FPS (37%)
+```
+
+At 8 envs, the split is roughly 63% emulator / 37% neural network.
+We're not purely emulator-bound — the NN inference + gradient updates
+consume a meaningful chunk. This explains why GPU helped at higher
+env counts (batched inference) even though it didn't help at 1 env.
+
+To go faster from here, we'd need to either:
+1. Make the emulator faster (C++ optimization, PGO)
+2. Make the NN faster (smaller model, async updates)
+3. Add more CPU cores (bigger instance)
+
+Reproduce with:
+```bash
+RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \
+  python3.9 scripts/benchmark_emulator.py --steps 1000 --max-envs 16
+```
+
 ### How to use
 
 ```bash
@@ -136,5 +176,6 @@ Config fields: `device` ("auto"/"cuda"/"cpu"), `mixed_precision` (bool),
 2. **ThreadedVecEnv** — slight edge over SubprocVecEnv, better at 16+ envs ✅
 3. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
 4. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
-5. **IMPALA** — high effort, could help if GPU is underutilized
-6. **CleanRL PPO** — more control, smaller gains
+5. **Emulator C++ optimization / PGO** — could raise the 260 FPS ceiling
+6. **IMPALA** — high effort, could help with the 37% NN overhead
+7. **Bigger instance (more vCPUs)** — brute force, linear scaling up to ~260 FPS ceiling

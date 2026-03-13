@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-03-13T19:45:00+00:00",
+  "description": "Raw emulator throughput with no neural network — random actions only",
+  "steps_per_env": 1000,
+  "hardware": "8 vCPUs, NVIDIA A10G (not used for emulation)",
+  "results": [
+    {"num_envs": 1,  "fps": 48,  "scaling": 1.0},
+    {"num_envs": 2,  "fps": 94,  "scaling": 1.97},
+    {"num_envs": 4,  "fps": 189, "scaling": 3.94},
+    {"num_envs": 8,  "fps": 258, "scaling": 5.38},
+    {"num_envs": 12, "fps": 260, "scaling": 5.43},
+    {"num_envs": 16, "fps": 259, "scaling": 5.42}
+  ]
+}
