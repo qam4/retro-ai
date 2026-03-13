@@ -94,39 +94,36 @@ Best configuration: SB3 PPO + CUDA + FP16 + 8 envs + ThreadedVecEnv.
 
 ### Round 4: Where's the Bottleneck? (2026-03-13)
 
-Raw emulator throughput (random actions, no neural network):
+Per-step cost breakdown (single env, framebuffer mode):
 
-**Framebuffer observations (84×84 grayscale):**
+| Component | Time | Notes |
+|-----------|------|-------|
+| C++ emulator (4 frames) | 18.8ms | frame_skip=4, ~4.7ms per frame |
+| Python preprocessing | 0.5ms | grayscale + resize + frame_stack |
+| **Total per agent step** | **19.3ms** | = ~52 agent FPS single-threaded |
 
-| Parallel envs | Emulator-only FPS | Scaling |
-|---------------|-------------------|---------|
-| 1             | 48                | 1.0x    |
-| 4             | 189               | 3.9x   |
-| 8             | 258               | 5.4x   |
-| 12-16         | ~260              | 5.4x   |
+The Python preprocessing (grayscale, resize, frame_stack) is negligible.
+The C++ emulator dominates the per-step cost.
 
-**RAM observations (192 bytes, no framebuffer extraction):**
+Raw env throughput (no neural network, full preprocessing pipeline):
 
-| Parallel envs | Emulator-only FPS | Scaling |
-|---------------|-------------------|---------|
-| 1             | 219               | 1.0x    |
-| 4             | 870               | 4.0x   |
-| 8             | 1156              | 5.3x   |
+| Parallel envs | Agent FPS | Emulator FPS | Scaling |
+|---------------|-----------|--------------|---------|
+| 1             | 55        | 219          | 1.0x    |
+| 4             | 216       | 862          | 3.9x   |
+| 8             | 289       | 1157         | 5.3x   |
 
-Framebuffer extraction is expensive — skipping it (RAM mode) raises the
-single-env ceiling from 48 to 219 FPS (4.6x), and the 8-env ceiling from
-258 to 1156 FPS.
+**Training throughput vs env ceiling (8 envs, framebuffer):**
 
-**Training throughput vs emulator ceiling (8 envs):**
+```
+Env ceiling (with preprocessing):  289 agent FPS
+Training throughput:               165 agent FPS
+NN overhead:                       43%
+```
 
-| Mode        | Emulator ceiling | Training FPS | NN overhead |
-|-------------|-----------------|--------------|-------------|
-| Framebuffer | 258 FPS         | 165 FPS      | 36%         |
-| RAM         | 1156 FPS        | 175 FPS      | 85%         |
-
-With framebuffer observations, the split is ~64% emulator / 36% NN.
-With RAM observations, the NN becomes the clear bottleneck (85% of time),
-and the emulator has massive headroom.
+The split is ~57% emulator / 43% NN. Both are significant contributors.
+To go faster: optimize the C++ emulator hot paths, or reduce NN overhead
+with async training.
 
 Reproduce with:
 ```bash
@@ -174,10 +171,9 @@ Config fields: `device` ("auto"/"cuda"/"cpu"), `mixed_precision` (bool),
 
 ## Priority Ranking
 
-1. **GPU + parallel envs** — proven 4.7x with 8 envs ✅
+1. **GPU + parallel envs** — proven 4.85x with 8 envs ✅
 2. **ThreadedVecEnv** — slight edge over SubprocVecEnv, better at 16+ envs ✅
-3. **RAM observations** — eliminates framebuffer bottleneck, but NN becomes the bottleneck ✅ (measured)
-4. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
-5. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
-6. **IMPALA / async training** — high effort, would help with the 85% NN overhead in RAM mode
-7. **Emulator C++ optimization / PGO** — only helps framebuffer mode (already 64% of ceiling)
+3. ~~SBX~~ — tested, no benefit for emulator-bound workloads ❌
+4. ~~EnvPool~~ — deprioritized, ThreadedVecEnv covers the same ground
+5. **Emulator C++ optimization / PGO** — 57% of time is emulator, hot paths already profiled
+6. **IMPALA / async training** — 43% of time is NN, async could overlap with env stepping
