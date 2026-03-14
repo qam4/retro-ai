@@ -909,3 +909,350 @@ Optional:
 - `tensorboard` (training visualization)
 - `opencv-python` (video recording)
 - `pyyaml` (YAML config support)
+
+
+## Phase 2: Agent Quality Improvements
+
+The following design sections cover data augmentation, curiosity-driven exploration, and frame max-pooling — three features aimed at improving sample efficiency and agent quality.
+
+### 18. Data Augmentation (DrQ-style) (Requirement 13)
+
+Data augmentation is applied inside `PreprocessingPipeline._process_single_frame()`, after grayscale/resize but before frame stacking. This ensures each frame in the stack receives independent random augmentation, matching the DrQ paper's approach.
+
+#### PreprocessingPipeline Changes
+
+```python
+class PreprocessingPipeline:
+    def __init__(
+        self,
+        ...,
+        augmentation: bool = False,
+        aug_pad: int = 4,
+        aug_jitter: int = 10,
+    ) -> None:
+        self.augmentation = augmentation
+        self.aug_pad = aug_pad
+        self.aug_jitter = aug_jitter
+        self._rng = np.random.default_rng()
+
+    def _process_single_frame(self, frame: np.ndarray) -> np.ndarray:
+        # ... existing crop, grayscale, resize ...
+
+        if self.augmentation:
+            frame = self._augment(frame)
+
+        return frame
+
+    def _augment(self, frame: np.ndarray) -> np.ndarray:
+        """Apply random crop + intensity jitter (pure NumPy)."""
+        h, w = frame.shape[:2]
+        pad = self.aug_pad
+
+        # Pad with edge values, then random crop back to original size
+        if frame.ndim == 3:
+            padded = np.pad(frame, ((pad, pad), (pad, pad), (0, 0)), mode="edge")
+        else:
+            padded = np.pad(frame, ((pad, pad), (pad, pad)), mode="edge")
+
+        y0 = self._rng.integers(0, 2 * pad + 1)
+        x0 = self._rng.integers(0, 2 * pad + 1)
+        frame = padded[y0 : y0 + h, x0 : x0 + w]
+
+        # Intensity jitter
+        jitter = self._rng.integers(-self.aug_jitter, self.aug_jitter + 1)
+        frame = np.clip(frame.astype(np.int16) + jitter, 0, 255).astype(np.uint8)
+
+        return frame
+```
+
+#### TrainingConfig Changes
+
+```python
+@dataclass
+class TrainingConfig:
+    # ... existing fields ...
+    augmentation: bool = False  # Requirement 13.7
+```
+
+#### Game Profile YAML
+
+```yaml
+augmentation: true  # enable DrQ-style augmentation
+```
+
+### 19. Curiosity-Driven Exploration — RND (Requirement 14)
+
+RND is implemented as a Gymnasium wrapper (`RNDRewardWrapper`) that adds an intrinsic reward bonus. The wrapper sits between GymnasiumWrapper and StartupSequenceWrapper in the environment chain.
+
+#### Architecture
+
+```
+BaseEnv → PreprocessedEnv → GymnasiumWrapper → RNDRewardWrapper → StartupSequenceWrapper
+```
+
+The wrapper maintains two small CNNs (or MLPs for RAM mode):
+- A fixed random target network (never trained)
+- A predictor network (trained to match the target's output)
+
+The prediction error serves as the intrinsic reward — high error means the state is novel.
+
+#### RNDRewardWrapper
+
+```python
+# training/rnd.py
+
+class RNDNetwork(nn.Module):
+    """Small CNN for RND target/predictor (framebuffer observations)."""
+    def __init__(self, input_shape: Tuple[int, ...], output_dim: int = 64):
+        super().__init__()
+        c, h, w = input_shape
+        self.conv = nn.Sequential(
+            nn.Conv2d(c, 32, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+        # Compute flattened size
+        with torch.no_grad():
+            dummy = torch.zeros(1, c, h, w)
+            flat_size = self.conv(dummy).shape[1]
+        self.fc = nn.Linear(flat_size, output_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fc(self.conv(x))
+
+
+class RNDMLPNetwork(nn.Module):
+    """Small MLP for RND target/predictor (RAM observations)."""
+    def __init__(self, input_dim: int, output_dim: int = 64):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+
+class RunningMeanStd:
+    """Welford's online algorithm for running mean/std."""
+    def __init__(self):
+        self.mean = 0.0
+        self.var = 1.0
+        self.count = 1e-4
+
+    def update(self, x: float) -> None:
+        self.count += 1
+        delta = x - self.mean
+        self.mean += delta / self.count
+        delta2 = x - self.mean
+        self.var += (delta * delta2 - self.var) / self.count
+
+    def normalize(self, x: float) -> float:
+        return (x - self.mean) / (max(self.var, 1e-8) ** 0.5)
+
+
+class RNDRewardWrapper(gym.Wrapper):
+    """Adds RND intrinsic reward bonus to the environment reward."""
+
+    def __init__(
+        self,
+        env: gym.Env,
+        coefficient: float = 1.0,
+        device: str = "cpu",
+        learning_rate: float = 1e-3,
+        update_freq: int = 1,
+    ):
+        super().__init__(env)
+        self.coefficient = coefficient
+        self.device = torch.device(device)
+        self.update_freq = update_freq
+        self._step_count = 0
+
+        obs_space = env.observation_space
+        obs_shape = obs_space.shape
+
+        # Choose CNN or MLP based on observation dimensionality
+        if len(obs_shape) == 3:
+            # (H, W, C) → (C, H, W) for PyTorch
+            c, h, w = obs_shape[2], obs_shape[0], obs_shape[1]
+            self._target = RNDNetwork((c, h, w)).to(self.device)
+            self._predictor = RNDNetwork((c, h, w)).to(self.device)
+            self._is_image = True
+        else:
+            input_dim = int(np.prod(obs_shape))
+            self._target = RNDMLPNetwork(input_dim).to(self.device)
+            self._predictor = RNDMLPNetwork(input_dim).to(self.device)
+            self._is_image = False
+
+        # Freeze target network
+        for p in self._target.parameters():
+            p.requires_grad = False
+
+        self._optimizer = torch.optim.Adam(
+            self._predictor.parameters(), lr=learning_rate
+        )
+        self._reward_stats = RunningMeanStd()
+
+    def step(self, action):
+        obs, reward, done, truncated, info = self.env.step(action)
+
+        # Compute intrinsic reward
+        with torch.no_grad():
+            obs_t = self._obs_to_tensor(obs)
+            target_out = self._target(obs_t)
+            pred_out = self._predictor(obs_t)
+            intrinsic = ((target_out - pred_out) ** 2).mean().item()
+
+        self._reward_stats.update(intrinsic)
+        normalized = self._reward_stats.normalize(intrinsic)
+
+        info["intrinsic_reward"] = intrinsic
+        info["intrinsic_reward_normalized"] = normalized
+
+        combined = reward + self.coefficient * normalized
+
+        # Update predictor
+        self._step_count += 1
+        if self._step_count % self.update_freq == 0:
+            self._update_predictor(obs)
+
+        return obs, combined, done, truncated, info
+
+    def _obs_to_tensor(self, obs: np.ndarray) -> torch.Tensor:
+        t = torch.from_numpy(obs.astype(np.float32) / 255.0).to(self.device)
+        if self._is_image:
+            t = t.permute(2, 0, 1)  # (H, W, C) → (C, H, W)
+        else:
+            t = t.flatten()
+        return t.unsqueeze(0)
+
+    def _update_predictor(self, obs: np.ndarray) -> None:
+        obs_t = self._obs_to_tensor(obs)
+        with torch.no_grad():
+            target_out = self._target(obs_t)
+        pred_out = self._predictor(obs_t)
+        loss = ((target_out - pred_out) ** 2).mean()
+        self._optimizer.zero_grad()
+        loss.backward()
+        self._optimizer.step()
+```
+
+#### TrainingConfig Changes
+
+```python
+@dataclass
+class IntrinsicRewardConfig:
+    enabled: bool = False
+    method: str = "rnd"        # only "rnd" for now
+    coefficient: float = 1.0
+
+@dataclass
+class TrainingConfig:
+    # ... existing fields ...
+    intrinsic_reward: IntrinsicRewardConfig = field(
+        default_factory=IntrinsicRewardConfig
+    )
+```
+
+#### Pipeline Integration
+
+```python
+# In TrainingPipeline._build_env():
+env = GymnasiumWrapper(preprocessed_env)
+
+if self.config.intrinsic_reward.enabled:
+    from retro_ai.training.rnd import RNDRewardWrapper
+    env = RNDRewardWrapper(
+        env,
+        coefficient=self.config.intrinsic_reward.coefficient,
+        device=self.config.device,
+    )
+
+if startup_sequence:
+    env = StartupSequenceWrapper(env, startup_sequence)
+```
+
+### 20. Frame Max-Pooling (Requirement 15)
+
+Frame max-pooling takes the pixel-wise maximum of two consecutive raw frames before any preprocessing. This prevents the agent from missing flickering sprites, which is common on Videopac where the VDC has per-scanline sprite limits.
+
+#### PreprocessedEnv Changes
+
+Max-pooling is handled in `PreprocessedEnv` rather than `PreprocessingPipeline` because it needs access to raw frames across consecutive `step()` calls:
+
+```python
+class PreprocessedEnv:
+    def __init__(self, env, preprocessing, frame_maxpool: bool = False):
+        self.env = env
+        self.preprocessing = preprocessing
+        self._frame_maxpool = frame_maxpool
+        self._prev_raw_frame: Optional[np.ndarray] = None
+
+    def reset(self, seed=None):
+        obs, info = self.env.reset(seed=seed)
+        if self._frame_maxpool:
+            self._prev_raw_frame = obs.copy()
+        return self.preprocessing.reset(obs), info
+
+    def step(self, action):
+        # ... existing frame skip logic returns obs, reward, done, truncated, info ...
+
+        if self._frame_maxpool:
+            if self._prev_raw_frame is not None:
+                obs = np.maximum(self._prev_raw_frame, obs)
+            self._prev_raw_frame = obs.copy()
+
+        processed_obs = self.preprocessing.process(obs)
+        return processed_obs, total_reward, done, truncated, info
+```
+
+#### TrainingConfig Changes
+
+```python
+@dataclass
+class TrainingConfig:
+    # ... existing fields ...
+    frame_maxpool: bool = False  # Requirement 15.7
+```
+
+#### Game Profile YAML
+
+```yaml
+frame_maxpool: true  # handle flickering sprites on Videopac
+```
+
+## Correctness Properties (Phase 2)
+
+### Property 18: Augmentation preserves output dimensions
+
+*For any* input frame of shape (H, W, C) and any augmentation parameters, the augmented frame SHALL have the same shape (H, W, C) as the input.
+
+**Validates: Requirements 13.2, 13.3**
+
+### Property 19: Augmentation disabled produces identical output
+
+*For any* input frame, when `augmentation=False`, the output of `_process_single_frame()` SHALL be identical to the output without the augmentation code path.
+
+**Validates: Requirements 13.6**
+
+### Property 20: RND intrinsic reward is non-negative
+
+*For any* observation, the raw intrinsic reward (MSE between target and predictor) SHALL be non-negative.
+
+**Validates: Requirements 14.3**
+
+### Property 21: Frame max-pooling produces element-wise maximum
+
+*For any* two consecutive raw frames A and B of the same shape, the max-pooled output SHALL equal `np.maximum(A, B)` element-wise.
+
+**Validates: Requirements 15.2**
+
+### Property 22: Frame max-pooling first frame passthrough
+
+*For any* single raw frame after reset (no previous frame), the max-pooled output SHALL equal the input frame unchanged.
+
+**Validates: Requirements 15.3**

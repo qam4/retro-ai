@@ -50,6 +50,8 @@ class GameProfile:
     resize: Optional[Tuple[int, int]] = (84, 84)
     frame_stack: int = 4
     frame_skip: int = 4
+    frame_maxpool: bool = False  # pixel-wise max of consecutive frames (Req 15.8)
+    augmentation: bool = False  # DrQ-style random crop + jitter (Req 13.8)
     frame_skip_rationale: Optional[str] = None
     resize_rationale: Optional[str] = None
     crop: Optional[Tuple[int, int, int, int]] = None  # (y, x, h, w)

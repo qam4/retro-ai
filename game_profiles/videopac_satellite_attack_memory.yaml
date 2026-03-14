@@ -42,3 +42,4 @@ grayscale: true
 resize: [84, 84]
 frame_stack: 4
 frame_skip: 4
+frame_maxpool: true

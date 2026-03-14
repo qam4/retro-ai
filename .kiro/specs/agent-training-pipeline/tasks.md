@@ -70,7 +70,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Property 6: Config merge precedence** — explicit TrainingConfig values retained, unset fields take GameProfile values
     - **Validates: Requirements 3.5, 10.2**
 
-- [ ] 3. Implement metrics tracking
+- [x] 3. Implement metrics tracking
   - [x] 3.1 Implement `MetricsTracker` in `training/metrics.py`
     - Implement `record_episode(reward, length, info)` to buffer episode data with timestamp
     - Implement `rolling_reward()` and `rolling_length()` returning mean of last `rolling_window` values
@@ -90,10 +90,10 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Property 15: Metrics summary JSON contains correct statistics** — total_episodes, mean_reward, best_reward match recorded data
     - **Validates: Requirements 8.3**
 
-- [ ] 4. Checkpoint - Verify data models and metrics
+- [x] 4. Checkpoint - Verify data models and metrics
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Implement SB3 callbacks
+- [x] 5. Implement SB3 callbacks
   - [x] 5.1 Implement `MetricsCallback` in `training/callbacks.py`
     - Subclass `stable_baselines3.common.callbacks.BaseCallback`
     - On each step, check for completed episodes in `self.locals` and record to MetricsTracker
@@ -119,7 +119,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Property 8: Checkpoint rolling deletion retains most recent N** — after M saves with max_checkpoints=N, exactly min(M, N) files remain and they are the N most recent
     - **Validates: Requirements 4.4**
 
-- [ ] 6. Implement training pipeline orchestrator
+- [x] 6. Implement training pipeline orchestrator
   - [x] 6.1 Implement `TrainingPipeline` in `training/pipeline.py`
     - Constructor takes `TrainingConfig` and optional `StructuredLogger`
     - Implement `_validate_config()` using `TrainingConfigParser.validate()`
@@ -148,10 +148,10 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Property 16: Weighted reward combination** — combined reward equals sum(weight_i * reward_i) for any set of modes and non-negative weights
     - **Validates: Requirements 10.3**
 
-- [ ] 7. Checkpoint - Verify training pipeline
+- [x] 7. Checkpoint - Verify training pipeline
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement evaluation module
+- [x] 8. Implement evaluation module
   - [x] 8.1 Implement `EvaluationModule` in `training/evaluation.py`
     - Constructor takes model_path, game_profile, num_episodes, base_seed, output_dir, optional video_path
     - Build env same way as pipeline (BaseEnv → PreprocessedEnv → GymnasiumWrapper → StartupSequenceWrapper)
@@ -170,7 +170,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Property 13: Evaluation deterministic seeding** — seeds used are [S, S+1, ..., S+N-1]
     - **Validates: Requirements 7.4**
 
-- [ ] 9. Implement inference runner
+- [x] 9. Implement inference runner
   - [x] 9.1 Implement `InferenceRunner` in `training/inference.py`
     - Constructor takes model_path, game_profile, target_fps (default 60.0), optional video_path
     - Build env same way as pipeline with StartupSequenceWrapper
@@ -181,7 +181,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - Execute startup sequence before gameplay via StartupSequenceWrapper
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 10. Implement video recorder
+- [x] 10. Implement video recorder
   - [x] 10.1 Implement `VideoRecorder` in `training/video.py`
     - `available()` static method checks for cv2 import
     - Constructor takes path, fps, overlay flag; logs warning and becomes no-op if cv2 unavailable
@@ -194,7 +194,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - **Property 17: Video overlay modifies frame** — for any RGB frame with overlay enabled and non-zero reward/step, output frame differs from input
     - **Validates: Requirements 11.3**
 
-- [ ] 11. Implement CLI entry points
+- [x] 11. Implement CLI entry points
   - [x] 11.1 Implement CLI in `training/cli.py`
     - `train` command: accepts config file path, optional `--resume` checkpoint path; loads config, creates TrainingPipeline, calls run() or resume()
     - `evaluate` command: accepts model path, `--profile`, `--episodes`, `--seed`, `--output`; creates EvaluationModule, calls run()
@@ -210,7 +210,7 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - Test missing required arguments show error
     - _Requirements: 12.5_
 
-- [ ] 12. Wire everything together and integration test
+- [x] 12. Wire everything together and integration test
   - [x] 12.1 Update `python/retro_ai/training/__init__.py` with all public exports
     - Export TrainingConfig, AlgorithmConfig, TrainingConfigParser, GameProfile, StartupSequence, GameProfileRegistry, TrainingPipeline, EvaluationModule, InferenceRunner, MetricsTracker, VideoRecorder
     - _Requirements: 9.1, 9.2_
@@ -226,8 +226,96 @@ Pure-Python training layer on top of the existing retro-ai framework. Uses Stabl
     - Test that model.learn() runs for a small number of steps without error
     - _Requirements: 1.1, 9.1, 9.3_
 
-- [ ] 13. Final checkpoint - Ensure all tests pass
+- [x] 13. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 2: Agent Quality Improvements
+
+- [x] 14. Frame max-pooling
+  - [x] 14.1 Add `frame_maxpool` parameter to `PreprocessedEnv.__init__()` in `python/retro_ai/core/preprocessing.py`
+    - Add `frame_maxpool: bool = False` parameter and `_prev_raw_frame: Optional[np.ndarray] = None` instance variable
+    - In `reset()`: store a copy of the raw observation when `frame_maxpool` is enabled
+    - In `step()`: before calling `self.preprocessing.process(obs)`, compute `np.maximum(self._prev_raw_frame, obs)` when max-pooling is enabled and a previous frame exists, then store the current raw frame
+    - When only one frame is available (first step after reset), pass through unchanged
+    - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6_
+
+  - [x] 14.2 Add `frame_maxpool` field to `TrainingConfig` and `GameProfile`
+    - Add `frame_maxpool: bool = False` to `TrainingConfig` in `python/retro_ai/training/config.py`
+    - Add `frame_maxpool: bool = False` to `GameProfile` in `python/retro_ai/training/game_profile.py`
+    - Wire `frame_maxpool` through `TrainingPipeline._build_env()` into `PreprocessedEnv` constructor
+    - _Requirements: 15.7, 15.8_
+
+  - [ ]* 14.3 Write property tests for frame max-pooling (Properties 21, 22)
+    - **Property 21: Frame max-pooling produces element-wise maximum**
+    - **Property 22: Frame max-pooling first frame passthrough**
+    - Test file: `tests/python/test_preprocessing.py`
+    - **Validates: Requirements 15.2, 15.3**
+
+- [x] 15. Checkpoint — Verify frame max-pooling
+  - Rebuild and run tests. Ensure existing preprocessing tests still pass and max-pooling works correctly.
+
+- [x] 16. Data augmentation (DrQ-style)
+  - [x] 16.1 Add augmentation support to `PreprocessingPipeline` in `python/retro_ai/core/preprocessing.py`
+    - Add `augmentation: bool = False`, `aug_pad: int = 4`, `aug_jitter: int = 10` parameters to `__init__()`
+    - Add `_rng = np.random.default_rng()` for reproducible randomness
+    - Implement `_augment(frame)` method: pad with edge values by `aug_pad` pixels, random crop back to original size, then apply random intensity jitter clamped to [0, 255]
+    - Call `_augment()` at the end of `_process_single_frame()` when `augmentation` is enabled (after grayscale/resize, before frame stacking)
+    - Pure NumPy only, no OpenCV
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6_
+
+  - [x] 16.2 Add `augmentation` field to `TrainingConfig` and `GameProfile`
+    - Add `augmentation: bool = False` to `TrainingConfig` in `python/retro_ai/training/config.py`
+    - Add `augmentation: bool = False` to `GameProfile` in `python/retro_ai/training/game_profile.py`
+    - Wire `augmentation` through `TrainingPipeline._build_env()` into `PreprocessingPipeline` constructor
+    - _Requirements: 13.7, 13.8_
+
+  - [ ]* 16.3 Write property tests for augmentation (Properties 18, 19)
+    - **Property 18: Augmentation preserves output dimensions**
+    - **Property 19: Augmentation disabled produces identical output**
+    - Test file: `tests/python/test_preprocessing.py`
+    - **Validates: Requirements 13.2, 13.3, 13.6**
+
+- [x] 17. Checkpoint — Verify data augmentation
+  - Rebuild and run tests. Ensure existing preprocessing tests still pass and augmentation works correctly.
+
+- [x] 18. Curiosity-driven exploration (RND)
+  - [x] 18.1 Create `python/retro_ai/training/rnd.py` with RND components
+    - Implement `RNDNetwork` (small CNN for framebuffer observations) and `RNDMLPNetwork` (small MLP for RAM observations) using PyTorch
+    - Implement `RunningMeanStd` using Welford's online algorithm for reward normalization
+    - Implement `RNDRewardWrapper(gym.Wrapper)`:
+      - Constructor accepts `coefficient`, `device`, `learning_rate`, `update_freq`
+      - Auto-detect CNN vs MLP based on observation space dimensionality
+      - Freeze target network parameters
+      - In `step()`: compute intrinsic reward as MSE between target and predictor outputs, normalize with running stats, add `intrinsic_reward` and `intrinsic_reward_normalized` to info dict, return combined reward
+      - In `_update_predictor()`: train predictor to match target output on current observation
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.8, 14.9_
+
+  - [x] 18.2 Add `IntrinsicRewardConfig` and wire into `TrainingConfig` and pipeline
+    - Add `IntrinsicRewardConfig` dataclass with `enabled: bool = False`, `method: str = "rnd"`, `coefficient: float = 1.0` to `python/retro_ai/training/config.py`
+    - Add `intrinsic_reward: IntrinsicRewardConfig` field to `TrainingConfig`
+    - In `TrainingPipeline._build_env()`: when `intrinsic_reward.enabled` is true, insert `RNDRewardWrapper` after `GymnasiumWrapper` and before `StartupSequenceWrapper`
+    - _Requirements: 14.6, 14.7_
+
+  - [ ]* 18.3 Write property test for RND intrinsic reward (Property 20)
+    - **Property 20: RND intrinsic reward is non-negative**
+    - Test file: `tests/python/test_training/test_rnd.py`
+    - **Validates: Requirements 14.3**
+
+- [x] 19. Checkpoint — Verify RND integration
+  - Run tests. Ensure RND wrapper can be constructed and produces valid combined rewards.
+
+- [x] 20. Update game profiles with new fields
+  - [x] 20.1 Update existing Videopac game profiles with `frame_maxpool: true`
+    - Videopac games benefit from frame max-pooling due to VDC sprite flickering
+    - Add `frame_maxpool: true` to Videopac game profiles
+    - _Requirements: 15.8_
+
+  - [x] 20.2 Document new fields in `game_profiles/README.md`
+    - Document `augmentation`, `frame_maxpool`, and `intrinsic_reward` configuration
+    - _Requirements: 13.8, 14.6, 15.8_
+
+- [x] 21. Final checkpoint — Verify all Phase 2 features
+  - Run full test suite. Ensure all new features work together and no regressions in existing functionality.
 
 ## Notes
 

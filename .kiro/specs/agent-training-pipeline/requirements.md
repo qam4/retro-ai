@@ -167,3 +167,49 @@ The Agent Training Pipeline extends the retro-ai framework with end-to-end capab
 3. THE CLI SHALL provide an "play" command that loads an Agent and runs real-time inference with optional video recording
 4. THE CLI SHALL provide a "list-games" command that lists all available Game_Profiles
 5. WHEN an invalid command or missing argument is provided, THE CLI SHALL display a usage message with available commands and required arguments
+
+### Requirement 13: Data Augmentation (DrQ)
+
+**User Story:** As a researcher, I want to apply random image augmentations to observations during training, so that the agent generalizes better and achieves higher sample efficiency without additional environment interactions.
+
+#### Acceptance Criteria
+
+1. THE PreprocessingPipeline SHALL support an optional `augmentation` parameter that enables random data augmentation during training.
+2. WHEN `augmentation` is enabled, THE PreprocessingPipeline SHALL apply random crop augmentation to each observation: pad the image by 4 pixels on each side, then randomly crop back to the original dimensions.
+3. WHEN `augmentation` is enabled, THE PreprocessingPipeline SHALL apply random intensity jitter (±10 pixel values, clamped to [0, 255]) to each observation.
+4. THE augmentation transforms SHALL be applied after grayscale/resize but before frame stacking, so that each frame in the stack receives independent augmentation.
+5. THE augmentation transforms SHALL use only NumPy (no OpenCV dependency), consistent with the existing preprocessing pipeline.
+6. WHEN `augmentation` is disabled (default), THE PreprocessingPipeline SHALL produce identical output to the current implementation.
+7. THE TrainingConfig SHALL include an `augmentation` boolean field (default: false) that controls whether data augmentation is enabled.
+8. THE Game_Profile YAML schema SHALL support an `augmentation` field to enable augmentation per game.
+
+### Requirement 14: Curiosity-Driven Exploration (RND)
+
+**User Story:** As a researcher, I want to add an intrinsic curiosity reward based on Random Network Distillation, so that the agent is motivated to explore novel states in games with sparse external rewards.
+
+#### Acceptance Criteria
+
+1. THE training package SHALL provide an `RNDRewardWrapper` Gymnasium wrapper that computes an intrinsic reward bonus based on Random Network Distillation.
+2. THE RNDRewardWrapper SHALL maintain a fixed random target network and a trainable predictor network, both accepting the current observation as input.
+3. THE intrinsic reward SHALL be the mean squared error between the target network output and the predictor network output for the current observation.
+4. THE RNDRewardWrapper SHALL normalize the intrinsic reward using a running mean and standard deviation to keep the bonus scale stable over time.
+5. THE combined reward returned by the wrapper SHALL be `external_reward + intrinsic_coefficient * normalized_intrinsic_reward`.
+6. THE TrainingConfig SHALL include an `intrinsic_reward` field with sub-fields `enabled` (bool, default false), `method` (str, default "rnd"), and `coefficient` (float, default 1.0).
+7. WHEN `intrinsic_reward.enabled` is true, THE TrainingPipeline SHALL insert the RNDRewardWrapper into the environment construction chain after GymnasiumWrapper and before StartupSequenceWrapper.
+8. THE RNDRewardWrapper SHALL update the predictor network using the observations collected during training, using the same device (CPU/GPU) as the main policy.
+9. THE RNDRewardWrapper SHALL work with both framebuffer and RAM observation modes.
+
+### Requirement 15: Frame Max-Pooling
+
+**User Story:** As a researcher, I want to apply pixel-wise max-pooling across consecutive frames before preprocessing, so that flickering sprites on hardware with per-scanline sprite limits are not missed by the agent.
+
+#### Acceptance Criteria
+
+1. THE PreprocessingPipeline SHALL support an optional `frame_maxpool` boolean parameter (default: false).
+2. WHEN `frame_maxpool` is enabled, THE PreprocessedEnv SHALL compute the pixel-wise maximum of the two most recent raw frames before passing the result to the preprocessing pipeline.
+3. WHEN `frame_maxpool` is enabled and the episode has just started (only one frame available), THE PreprocessedEnv SHALL use the single available frame without max-pooling.
+4. THE frame max-pooling SHALL operate on the raw emulator output before any preprocessing transforms (grayscale, resize, crop).
+5. THE frame max-pooling SHALL use only NumPy (no OpenCV dependency).
+6. WHEN `frame_maxpool` is disabled (default), THE PreprocessedEnv SHALL behave identically to the current implementation.
+7. THE TrainingConfig SHALL include a `frame_maxpool` boolean field (default: false).
+8. THE Game_Profile YAML schema SHALL support a `frame_maxpool` field to enable max-pooling per game.

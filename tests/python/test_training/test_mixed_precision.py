@@ -31,10 +31,11 @@ class TestMixedPrecisionNoCuda:
         mock_env.observation_space = MagicMock()
         mock_env.action_space = MagicMock()
 
-        with patch("retro_ai.training.pipeline.ALGORITHM_MAP") as algo_map:
-            mock_algo_cls = MagicMock()
-            algo_map.__getitem__ = MagicMock(return_value=mock_algo_cls)
-
+        mock_algo_cls = MagicMock()
+        with patch(
+            "retro_ai.training.pipeline._resolve_algorithm",
+            return_value=mock_algo_cls,
+        ):
             with patch("torch.cuda.is_available", return_value=False):
                 pipeline._build_model(mock_env)
 
@@ -62,9 +63,11 @@ class TestMixedPrecisionNoCuda:
 
         mock_env = MagicMock()
 
-        with patch("retro_ai.training.pipeline.ALGORITHM_MAP") as algo_map:
-            mock_algo_cls = MagicMock()
-            algo_map.__getitem__ = MagicMock(return_value=mock_algo_cls)
+        mock_algo_cls = MagicMock()
+        with patch(
+            "retro_ai.training.pipeline._resolve_algorithm",
+            return_value=mock_algo_cls,
+        ):
             pipeline._build_model(mock_env)
 
         pipeline._logger.warning.assert_not_called()
@@ -84,10 +87,11 @@ class TestMixedPrecisionWithCuda:
 
         mock_env = MagicMock()
 
-        with patch("retro_ai.training.pipeline.ALGORITHM_MAP") as algo_map:
-            mock_algo_cls = MagicMock()
-            algo_map.__getitem__ = MagicMock(return_value=mock_algo_cls)
-
+        mock_algo_cls = MagicMock()
+        with patch(
+            "retro_ai.training.pipeline._resolve_algorithm",
+            return_value=mock_algo_cls,
+        ):
             with (
                 patch("torch.cuda.is_available", return_value=True) as _,
                 patch("torch.set_float32_matmul_precision") as mock_precision,

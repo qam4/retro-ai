@@ -20,6 +20,15 @@ class AlgorithmConfig:
 
 
 @dataclass
+class IntrinsicRewardConfig:
+    """Configuration for curiosity-driven intrinsic reward (RND)."""
+
+    enabled: bool = False
+    method: str = "rnd"  # only "rnd" for now
+    coefficient: float = 1.0
+
+
+@dataclass
 class TrainingConfig:
     """Complete specification for a training run."""
 
@@ -40,6 +49,8 @@ class TrainingConfig:
     resize: Optional[Tuple[int, int]] = (84, 84)  # (H, W)
     frame_stack: int = 4
     frame_skip: int = 4
+    frame_maxpool: bool = False  # pixel-wise max of consecutive frames (Req 15.7)
+    augmentation: bool = False  # DrQ-style random crop + jitter (Req 13.7)
     crop: Optional[Tuple[int, int, int, int]] = None  # (y, x, h, w) crop before resize
 
     # Game profile
@@ -75,6 +86,11 @@ class TrainingConfig:
         0.0  # clip rewards to [-val, +val] (0 = disabled, 1.0 = standard)
     )
 
+    # Intrinsic reward (curiosity-driven exploration)
+    intrinsic_reward: IntrinsicRewardConfig = field(
+        default_factory=IntrinsicRewardConfig
+    )  # Requirement 14.6
+
 
 class TrainingConfigParser:
     """Serialize, deserialize, and validate TrainingConfig objects."""
@@ -92,6 +108,10 @@ class TrainingConfigParser:
         algo = data.get("algorithm")
         if isinstance(algo, dict):
             data["algorithm"] = AlgorithmConfig(**algo)
+        # Convert nested intrinsic_reward dict to IntrinsicRewardConfig
+        ir = data.get("intrinsic_reward")
+        if isinstance(ir, dict):
+            data["intrinsic_reward"] = IntrinsicRewardConfig(**ir)
         # YAML/JSON deserializes tuples as lists — convert resize back
         resize = data.get("resize")
         if isinstance(resize, list):
@@ -194,6 +214,8 @@ _TC_DEFAULTS: Dict[str, Any] = {
     "resize": (84, 84),
     "frame_stack": 4,
     "frame_skip": 4,
+    "frame_maxpool": False,
+    "augmentation": False,
     "crop": None,
     "observation_mode": "framebuffer",
 }

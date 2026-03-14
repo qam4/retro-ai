@@ -86,6 +86,7 @@ resize_rationale: >-
   relevant spatial detail (car positions, lane boundaries, oncoming traffic).
 frame_stack: 4
 frame_skip: 4
+frame_maxpool: true
 frame_skip_rationale: >-
   Racing at ~60 fps with frame_skip=4 gives the agent ~15 decisions/sec,
   which is sufficient for lane-change manoeuvres on a scrolling two-lane road.

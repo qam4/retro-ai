@@ -7,6 +7,7 @@ __all__ = [
     "GameProfile",
     "GameProfileRegistry",
     "InferenceRunner",
+    "IntrinsicRewardConfig",
     "MetricsCallback",
     "MetricsTracker",
     "StagnationCallback",
@@ -22,6 +23,7 @@ __version__ = "0.1.0"
 # Lazy imports: map name -> (module, attribute)
 _LAZY_IMPORTS = {
     "AlgorithmConfig": ("retro_ai.training.config", "AlgorithmConfig"),
+    "IntrinsicRewardConfig": ("retro_ai.training.config", "IntrinsicRewardConfig"),
     "TrainingConfig": ("retro_ai.training.config", "TrainingConfig"),
     "TrainingConfigParser": ("retro_ai.training.config", "TrainingConfigParser"),
     "GameProfile": ("retro_ai.training.game_profile", "GameProfile"),

@@ -21,6 +21,8 @@ Each profile is a YAML (`.yaml`) or JSON (`.json`) file with these fields:
 | `resize` | [H, W] | no | Resize frames (default: [84, 84]) |
 | `frame_stack` | int | no | Number of frames to stack (default: 4) |
 | `frame_skip` | int | no | Number of frames to skip (default: 4) |
+| `frame_maxpool` | bool | no | Pixel-wise max-pooling of consecutive frames (default: false) |
+| `augmentation` | bool | no | DrQ-style random data augmentation (default: false) |
 
 ### Reward Parameters
 
@@ -82,6 +84,56 @@ Use `scripts/ram_watcher.py` to discover score addresses for a new game.
 The `startup_sequence` object contains:
 - `actions`: list of `{action, frames}` pairs — each action index is held for the given number of frames
 - `post_delay_frames`: number of no-op frames to wait after the sequence completes
+
+### Frame Max-Pooling
+
+When `frame_maxpool` is enabled, the element-wise maximum of the two most recent raw frames is computed before any preprocessing (grayscale, resize). This is useful for emulators with sprite flickering caused by per-scanline sprite limits (e.g. Videopac VDC), ensuring the agent never misses a sprite that only appears on alternating frames.
+
+```yaml
+frame_maxpool: true
+```
+
+On the first frame after a reset only one frame is available, so it passes through unchanged. The operation uses only NumPy and adds negligible overhead.
+
+### Data Augmentation (DrQ)
+
+When `augmentation` is enabled, each frame receives random DrQ-style augmentation after grayscale/resize but before frame stacking. Each frame in the stack is augmented independently, improving sample efficiency and generalization.
+
+The augmentation pipeline applies two transforms:
+
+1. **Random crop** — pad the image by 4 pixels on each side (edge values), then randomly crop back to the original dimensions.
+2. **Intensity jitter** — add a uniform random offset in the range ±10 pixel values, clamped to [0, 255].
+
+```yaml
+augmentation: true
+```
+
+Augmentation uses only NumPy (no OpenCV dependency) and is disabled by default.
+
+### Intrinsic Reward (RND)
+
+Curiosity-driven exploration via Random Network Distillation (RND) is configured in the `TrainingConfig`, not in game profiles directly. When enabled, an `RNDRewardWrapper` is inserted into the environment chain and adds an intrinsic reward bonus based on observation novelty.
+
+The relevant `TrainingConfig` fields are:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `intrinsic_reward.enabled` | bool | false | Enable intrinsic reward |
+| `intrinsic_reward.method` | string | `"rnd"` | Exploration method (currently only `rnd`) |
+| `intrinsic_reward.coefficient` | float | 1.0 | Scaling factor for the intrinsic bonus |
+
+The combined reward is `external_reward + coefficient * normalized_intrinsic_reward`. The intrinsic reward (MSE between a fixed target network and a trainable predictor network) is normalized using a running mean and standard deviation to keep the bonus scale stable over time.
+
+Example training config snippet:
+
+```yaml
+intrinsic_reward:
+  enabled: true
+  method: rnd
+  coefficient: 0.5
+```
+
+RND works with both framebuffer and RAM observation modes.
 
 ## Usage
 

@@ -206,9 +206,20 @@ class TrainingPipeline:
                     frame_stack=1 if is_ram else self.config.frame_stack,
                     frame_skip=self.config.frame_skip,
                     crop=None if is_ram else self.config.crop,
+                    augmentation=False if is_ram else self.config.augmentation,
                 )
-                preprocessed = PreprocessedEnv(base, pipeline)
+                preprocessed = PreprocessedEnv(base, pipeline, frame_maxpool=self.config.frame_maxpool)
                 env = GymnasiumWrapper(preprocessed)
+
+                # Insert RND intrinsic reward wrapper if enabled (Req 14.7)
+                if self.config.intrinsic_reward.enabled:
+                    from retro_ai.training.rnd import RNDRewardWrapper
+
+                    env = RNDRewardWrapper(
+                        env,
+                        coefficient=self.config.intrinsic_reward.coefficient,
+                        device=self.config.device if self.config.device != "auto" else "cpu",
+                    )
 
                 # Wrap with startup sequence if profile defines one
                 if self._game_profile and self._game_profile.startup_sequence:

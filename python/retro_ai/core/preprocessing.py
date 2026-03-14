@@ -41,6 +41,9 @@ class PreprocessingPipeline:
         frame_stack: int = 1,
         frame_skip: int = 1,
         crop: Optional[Tuple[int, int, int, int]] = None,
+        augmentation: bool = False,
+        aug_pad: int = 4,
+        aug_jitter: int = 10,
     ) -> None:
         if not (1 <= frame_skip <= 16):
             raise ValueError(
@@ -52,6 +55,10 @@ class PreprocessingPipeline:
         self.frame_stack = frame_stack
         self.frame_skip = frame_skip
         self.crop = crop  # (y, x, height, width) — applied before grayscale/resize
+        self.augmentation = augmentation
+        self.aug_pad = aug_pad
+        self.aug_jitter = aug_jitter
+        self._rng = np.random.default_rng()
 
         if frame_stack > 1:
             self.frame_buffer: Optional[deque] = deque(maxlen=frame_stack)
@@ -94,7 +101,7 @@ class PreprocessingPipeline:
     # ------------------------------------------------------------------
 
     def _process_single_frame(self, frame: np.ndarray) -> np.ndarray:
-        """Apply crop, grayscale, and resize to one frame."""
+        """Apply crop, grayscale, resize, and optional augmentation to one frame."""
         # Crop to region of interest (applied first)
         if self.crop is not None:
             y, x, h, w = self.crop
@@ -112,6 +119,31 @@ class PreprocessingPipeline:
             row_idx = (np.arange(target_h) * src_h // target_h).astype(int)
             col_idx = (np.arange(target_w) * src_w // target_w).astype(int)
             frame = frame[np.ix_(row_idx, col_idx)]
+
+        # Data augmentation (Req 13.4 — after grayscale/resize, before stacking)
+        if self.augmentation:
+            frame = self._augment(frame)
+
+        return frame
+
+    def _augment(self, frame: np.ndarray) -> np.ndarray:
+        """Apply random crop + intensity jitter (pure NumPy, Req 13.2, 13.3, 13.5)."""
+        h, w = frame.shape[:2]
+        pad = self.aug_pad
+
+        # Pad with edge values, then random crop back to original size
+        if frame.ndim == 3:
+            padded = np.pad(frame, ((pad, pad), (pad, pad), (0, 0)), mode="edge")
+        else:
+            padded = np.pad(frame, ((pad, pad), (pad, pad)), mode="edge")
+
+        y0 = self._rng.integers(0, 2 * pad + 1)
+        x0 = self._rng.integers(0, 2 * pad + 1)
+        frame = padded[y0 : y0 + h, x0 : x0 + w]
+
+        # Intensity jitter
+        jitter = self._rng.integers(-self.aug_jitter, self.aug_jitter + 1)
+        frame = np.clip(frame.astype(np.int16) + jitter, 0, 255).astype(np.uint8)
 
         return frame
 
@@ -135,9 +167,11 @@ class PreprocessedEnv:
         The pipeline that will transform observations.
     """
 
-    def __init__(self, env: Any, preprocessing: PreprocessingPipeline) -> None:
+    def __init__(self, env: Any, preprocessing: PreprocessingPipeline, frame_maxpool: bool = False) -> None:
         self.env = env
         self.preprocessing = preprocessing
+        self._frame_maxpool = frame_maxpool
+        self._prev_raw_frame: Optional[np.ndarray] = None
 
     # ------------------------------------------------------------------
     # Core RL API
@@ -154,6 +188,8 @@ class PreprocessedEnv:
             Metadata from the underlying environment.
         """
         obs, info = self.env.reset(seed=seed)
+        if self._frame_maxpool:
+            self._prev_raw_frame = obs.copy()
         return self.preprocessing.reset(obs), info
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
@@ -169,6 +205,15 @@ class PreprocessedEnv:
             obs, reward, done, truncated, info = self.env.step_n(
                 action, self.preprocessing.frame_skip
             )
+
+            if self._frame_maxpool:
+                if self._prev_raw_frame is not None:
+                    maxpooled = np.maximum(self._prev_raw_frame, obs)
+                else:
+                    maxpooled = obs
+                self._prev_raw_frame = obs.copy()
+                obs = maxpooled
+
             processed_obs = self.preprocessing.process(obs)
             return processed_obs, reward, done, truncated, info
 
@@ -183,6 +228,14 @@ class PreprocessedEnv:
             total_reward += reward
             if done or truncated:
                 break
+
+        if self._frame_maxpool:
+            if self._prev_raw_frame is not None:
+                maxpooled = np.maximum(self._prev_raw_frame, obs)
+            else:
+                maxpooled = obs
+            self._prev_raw_frame = obs.copy()
+            obs = maxpooled
 
         processed_obs = self.preprocessing.process(obs)
         return processed_obs, total_reward, done, truncated, info
