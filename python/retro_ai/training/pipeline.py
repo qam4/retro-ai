@@ -55,8 +55,10 @@ def _resolve_algorithm(name: str):
 
         mod = importlib.import_module(module_name)
         return getattr(mod, cls_name)
-    raise ValueError(f"Unknown algorithm: {name}. "
-                     f"Options: {list(ALGORITHM_MAP) + list(_SBX_ALGORITHM_MAP)}")
+    raise ValueError(
+        f"Unknown algorithm: {name}. "
+        f"Options: {list(ALGORITHM_MAP) + list(_SBX_ALGORITHM_MAP)}"
+    )
 
 
 class TrainingPipeline:
@@ -208,7 +210,9 @@ class TrainingPipeline:
                     crop=None if is_ram else self.config.crop,
                     augmentation=False if is_ram else self.config.augmentation,
                 )
-                preprocessed = PreprocessedEnv(base, pipeline, frame_maxpool=self.config.frame_maxpool)
+                preprocessed = PreprocessedEnv(
+                    base, pipeline, frame_maxpool=self.config.frame_maxpool
+                )
                 env = GymnasiumWrapper(preprocessed)
 
                 # Insert RND intrinsic reward wrapper if enabled (Req 14.7)
@@ -218,7 +222,11 @@ class TrainingPipeline:
                     env = RNDRewardWrapper(
                         env,
                         coefficient=self.config.intrinsic_reward.coefficient,
-                        device=self.config.device if self.config.device != "auto" else "cpu",
+                        device=(
+                            self.config.device
+                            if self.config.device != "auto"
+                            else "cpu"
+                        ),
                     )
 
                 # Wrap with startup sequence if profile defines one
@@ -342,6 +350,30 @@ class TrainingPipeline:
                     "effective_batch": num_envs * adjusted_n_steps,
                 },
             )
+
+        # Prioritized Experience Replay for DQN (Requirement 4)
+        if self.config.prioritized_replay:
+            if self.config.algorithm.name in ("DQN", "SBX_DQN"):
+                try:
+                    from sb3_contrib.common.buffers import PrioritizedReplayBuffer
+                except ImportError:
+                    raise ImportError(
+                        "sb3-contrib is required for prioritized replay. "
+                        "Install with: pip install sb3-contrib"
+                    )
+                kwargs["replay_buffer_class"] = PrioritizedReplayBuffer
+                kwargs["replay_buffer_kwargs"] = {
+                    "alpha": self.config.prioritized_replay_alpha,
+                    "beta": self.config.prioritized_replay_beta,
+                }
+            else:
+                self._logger.warning(
+                    "prioritized_replay_ignored",
+                    {
+                        "message": "prioritized_replay is only supported with DQN algorithms, ignoring",
+                        "algorithm": self.config.algorithm.name,
+                    },
+                )
 
         if self.config.tensorboard:
             tb_dir = os.path.join(self.config.output_dir, "tb")

@@ -1,0 +1,22 @@
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+total_timesteps: 100000
+game_profile: satellite_attack_memory
+reward_mode: memory
+survival_bonus: 0
+reward_clip: 0
+action_mode: joystick
+policy: CnnPolicy
+num_envs: 4
+intrinsic_reward:
+  enabled: true
+  coefficient: 1.0
+augmentation: true
+sticky_actions: 0.25
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+output_dir: output/satellite_attack_rnd_drq

@@ -29,6 +29,20 @@ class IntrinsicRewardConfig:
 
 
 @dataclass
+class SimpleConfig:
+    """Configuration for SimPLe (Simulated Policy Learning) world model training."""
+
+    enabled: bool = False
+    num_rounds: int = 15
+    world_model_epochs: int = 50
+    world_model_lr: float = 1e-3
+    world_model_batch_size: int = 64
+    synthetic_ratio: int = 8  # synthetic steps per real step
+    rollout_horizon: int = 50  # max synthetic rollout length
+    quality_threshold: float = 0.1  # MSE warning threshold
+
+
+@dataclass
 class TrainingConfig:
     """Complete specification for a training run."""
 
@@ -77,7 +91,9 @@ class TrainingConfig:
     mixed_precision: bool = False  # Requirement 8: FP16 training
     device: str = "auto"  # "auto", "cuda", or "cpu"
     torch_compile: bool = False  # torch.compile() the policy network (PyTorch 2.x)
-    vec_env_type: str = "subproc"  # "subproc" (SubprocVecEnv) or "threaded" (ThreadedVecEnv)
+    vec_env_type: str = (
+        "subproc"  # "subproc" (SubprocVecEnv) or "threaded" (ThreadedVecEnv)
+    )
     survival_bonus: float = 0.0  # per-step survival bonus added to reward
     sticky_actions: float = (
         0.0  # probability of repeating previous action (0 = disabled, 0.25 = standard)
@@ -86,10 +102,18 @@ class TrainingConfig:
         0.0  # clip rewards to [-val, +val] (0 = disabled, 1.0 = standard)
     )
 
+    # Prioritized Experience Replay (DQN only, requires sb3-contrib)
+    prioritized_replay: bool = False
+    prioritized_replay_alpha: float = 0.6  # prioritization exponent
+    prioritized_replay_beta: float = 0.4  # importance-sampling correction
+
     # Intrinsic reward (curiosity-driven exploration)
     intrinsic_reward: IntrinsicRewardConfig = field(
         default_factory=IntrinsicRewardConfig
     )  # Requirement 14.6
+
+    # SimPLe (Simulated Policy Learning) world model
+    simple: SimpleConfig = field(default_factory=SimpleConfig)
 
 
 class TrainingConfigParser:
@@ -112,6 +136,10 @@ class TrainingConfigParser:
         ir = data.get("intrinsic_reward")
         if isinstance(ir, dict):
             data["intrinsic_reward"] = IntrinsicRewardConfig(**ir)
+        # Convert nested simple dict to SimpleConfig
+        simple = data.get("simple")
+        if isinstance(simple, dict):
+            data["simple"] = SimpleConfig(**simple)
         # YAML/JSON deserializes tuples as lists — convert resize back
         resize = data.get("resize")
         if isinstance(resize, list):

@@ -79,6 +79,14 @@ def main() -> None:
     dl_p.add_argument("agent_id", help="Agent ID (e.g. course-automobile-md-v1)")
     dl_p.add_argument("--output", default=".", help="Output directory")
 
+    # compare
+    cmp_p = sub.add_parser("compare", help="Compare training runs")
+    cmp_p.add_argument(
+        "output_dirs",
+        nargs="+",
+        help="Output directories containing summary.json",
+    )
+
     # leaderboard
     sub.add_parser("leaderboard", help="Regenerate the agent leaderboard")
 
@@ -100,6 +108,8 @@ def main() -> None:
         _cmd_publish(args)
     elif args.command == "download":
         _cmd_download(args)
+    elif args.command == "compare":
+        _cmd_compare(args)
     elif args.command == "leaderboard":
         _cmd_leaderboard()
 
@@ -165,6 +175,17 @@ def _cmd_list_games() -> None:
     print("Available game profiles:")
     for name in profiles:
         print(f"  - {name}")
+
+
+def _cmd_compare(args: argparse.Namespace) -> None:
+    from retro_ai.training.compare import RunComparator
+
+    comparator = RunComparator(args.output_dirs)
+    comparator.load_summaries()
+    table = comparator.compare()
+    print(table)
+    if table == "No valid training runs found":
+        sys.exit(1)
 
 
 if __name__ == "__main__":
