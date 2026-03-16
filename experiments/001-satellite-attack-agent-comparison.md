@@ -64,6 +64,53 @@ RND+DrQ baseline was not evaluated (no significant difference from Tuned PPO exp
 - All agents showed high reward variance (std > mean), typical for early
   training on sparse-reward games.
 
+## Post-Mortem: None of the Agents Learned to Play
+
+Deterministic evaluation of all four trained models reveals that none of them
+learned meaningful gameplay in 100k steps. The training reward numbers are
+misleading because they include the RND intrinsic reward bonus (curiosity),
+which rewards visiting novel states — not scoring points.
+
+### Deterministic Action Analysis
+
+| Config | Eval Reward | Unique Actions | Dominant Behavior |
+|--------|-------------|----------------|-------------------|
+| DQN+PER | 13.0 | 1 | Always action 10 (fire in one direction). Completely degenerate — Q-values collapsed to a single action. |
+| Tuned PPO | 4.0 | 11 | Mostly noop `(0,0,0)` and move right `(0,1,0)`. Rarely fires. |
+| RND+DrQ Baseline | 1.0 | 10 | Moves left and fires `(1,2,1)`, but ineffectively. |
+| SimPLe | 1.0 | 9 | Moves up/down `(1,0,0)/(2,0,0)`, almost never fires. |
+
+### Root Causes
+
+1. **RND reward dominates**: With `intrinsic_reward.coefficient: 1.0`, the
+   curiosity bonus overwhelms the sparse game score signal. The agents learn
+   to explore (visit novel frames) rather than score. Training mean rewards
+   of 1.7–6.3 are mostly intrinsic, not game score.
+
+2. **DQN Q-value collapse**: The DQN model converged to always selecting
+   action 10 (100% of the time deterministically). This is a known failure
+   mode where the Q-network assigns near-identical values to all actions and
+   one wins by a tiny margin. It scored 13.0 only because action 10 happens
+   to fire, and the game's starting position lines up a few hits.
+
+3. **PPO variants don't fire**: The joystick action space is `[3,3,2]`
+   (vertical, horizontal, fire). The PPO models learned to move but not to
+   coordinate firing with positioning. The fire dimension is binary and
+   sparse-reward, making it hard to discover via random exploration alone.
+
+4. **100k steps is very low**: For a game requiring coordinated movement +
+   firing with sparse rewards (+10 per hit, death on score drop), 100k steps
+   is insufficient for any of these algorithms to converge to useful policies.
+
+### Recommendations for Next Experiment
+
+- Reduce `intrinsic_reward.coefficient` to 0.1–0.3 so game score dominates
+- Try a shaped reward (e.g. small bonus for firing, proximity to targets)
+- Increase budget to 500k–1M steps
+- For DQN: increase `exploration_fraction` and `exploration_final_eps` to
+  prevent premature convergence
+- Consider curriculum learning: train on easier scenarios first
+
 ## Reproducing
 
 ### Prerequisites
