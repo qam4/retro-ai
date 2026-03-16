@@ -14,7 +14,6 @@ import concurrent.futures
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-
 from stable_baselines3.common.vec_env.base_vec_env import (
     VecEnv,
     VecEnvObs,

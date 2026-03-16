@@ -8,7 +8,6 @@ gym = pytest.importorskip("gymnasium")
 
 from retro_ai.wrappers.gymnasium_wrapper import GymnasiumWrapper
 
-
 # ------------------------------------------------------------------
 # Minimal mock BaseEnv for testing without native module
 # ------------------------------------------------------------------

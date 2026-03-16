@@ -1,22 +1,20 @@
 """Smoke tests for tasks 2.1-2.5: game profile system."""
 
-import os
 import json
+import os
 import tempfile
 
 import pytest
-
-from retro_ai.training.game_profile import (
-    StartupAction,
-    StartupSequence,
-    GameProfile,
-    GameProfileRegistry,
-)
 from retro_ai.training.config import (
     TrainingConfig,
     merge_config_with_profile,
 )
-
+from retro_ai.training.game_profile import (
+    GameProfile,
+    GameProfileRegistry,
+    StartupAction,
+    StartupSequence,
+)
 
 # ---- Task 2.1: Dataclasses ------------------------------------------------
 

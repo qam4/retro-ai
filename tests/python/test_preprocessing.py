@@ -2,9 +2,7 @@
 
 import numpy as np
 import pytest
-
 from retro_ai.core.preprocessing import PreprocessedEnv, PreprocessingPipeline
-
 
 # ------------------------------------------------------------------
 # Helpers

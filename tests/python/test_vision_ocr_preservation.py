@@ -20,7 +20,6 @@ direct access to the class internals.
 
 import os
 import subprocess
-import sys
 
 import pytest
 

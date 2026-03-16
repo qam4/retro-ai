@@ -2,10 +2,8 @@
 
 import json
 import os
-import tempfile
 
 import pytest
-
 from retro_ai.training.compare import RunComparator
 
 

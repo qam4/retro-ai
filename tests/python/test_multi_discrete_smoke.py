@@ -3,8 +3,8 @@
 Validates Requirements R1, R2, R3, R5, R6, R7.
 """
 
-import sys
 import os
+import sys
 
 import pytest
 
@@ -157,7 +157,7 @@ try:
     check(
         "Invalid action_mode raises InitializationError", False, "no exception raised"
     )
-except native.InitializationError as e:
+except native.InitializationError:
     check("Invalid action_mode raises InitializationError", True)
 except Exception as e:
     check(

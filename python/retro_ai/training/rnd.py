@@ -5,7 +5,8 @@ based on the prediction error of a randomly initialized target network.
 High prediction error indicates novel states, encouraging the agent to explore.
 
 Architecture:
-    BaseEnv → PreprocessedEnv → GymnasiumWrapper → RNDRewardWrapper → StartupSequenceWrapper
+    BaseEnv → PreprocessedEnv → GymnasiumWrapper
+    → RNDRewardWrapper → StartupSequenceWrapper
 """
 
 from typing import Tuple

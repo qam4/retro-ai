@@ -376,7 +376,10 @@ class TrainingPipeline:
                 self._logger.warning(
                     "prioritized_replay_ignored",
                     {
-                        "message": "prioritized_replay is only supported with DQN algorithms, ignoring",
+                        "message": (
+                            "prioritized_replay is only supported "
+                            "with DQN algorithms, ignoring"
+                        ),
                         "algorithm": self.config.algorithm.name,
                     },
                 )

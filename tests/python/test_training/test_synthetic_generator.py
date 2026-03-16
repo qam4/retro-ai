@@ -1,7 +1,9 @@
 """Unit tests for SyntheticGenerator."""
 
 import numpy as np
-import torch
+import pytest
+
+torch = pytest.importorskip("torch")
 
 from retro_ai.training.simple import SyntheticGenerator, Transition, WorldModel
 

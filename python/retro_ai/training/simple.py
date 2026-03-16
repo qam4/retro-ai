@@ -1,12 +1,21 @@
 """SimPLe (Simulated Policy Learning) data structures and training components."""
 
 import logging
+import os
+import time
 from dataclasses import dataclass
-from typing import List, Tuple
+from pathlib import Path
+from typing import List, Optional, Tuple
 
+import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
+from gymnasium import spaces
+
+from retro_ai.core.logging import StructuredLogger
+from retro_ai.training.config import TrainingConfig
+from retro_ai.training.metrics import MetricsTracker
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +318,8 @@ class SyntheticGenerator:
 
         Args:
             start_obs: Starting observations, (num_rollouts, C, H, W) uint8 numpy array.
-            policy: Any object with a ``.predict(obs, deterministic=True)`` method (SB3 API).
+            policy: Any object with a ``.predict(obs)``
+                method (SB3 API).
             num_rollouts: Number of rollouts to generate.
 
         Returns:
@@ -363,20 +373,6 @@ class SyntheticGenerator:
                     obs = next_obs
 
         return transitions
-
-
-import json
-import os
-import time
-from pathlib import Path
-from typing import Optional
-
-import gymnasium as gym
-from gymnasium import spaces
-
-from retro_ai.core.logging import StructuredLogger
-from retro_ai.training.config import TrainingConfig
-from retro_ai.training.metrics import MetricsTracker
 
 
 class DreamEnv(gym.Env):
