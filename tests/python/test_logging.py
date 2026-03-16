@@ -9,9 +9,7 @@ from retro_ai.core.logging import StructuredFormatter, StructuredLogger
 class TestStructuredFormatter:
     def test_json_output(self):
         fmt = StructuredFormatter()
-        record = logging.LogRecord(
-            "test", logging.INFO, "", 0, "hello", (), None
-        )
+        record = logging.LogRecord("test", logging.INFO, "", 0, "hello", (), None)
         line = fmt.format(record)
         data = json.loads(line)
         assert data["msg"] == "hello"
@@ -19,9 +17,7 @@ class TestStructuredFormatter:
 
     def test_extra_data(self):
         fmt = StructuredFormatter()
-        record = logging.LogRecord(
-            "test", logging.DEBUG, "", 0, "step", (), None
-        )
+        record = logging.LogRecord("test", logging.DEBUG, "", 0, "step", (), None)
         record._structured = {"step": 1}
         line = fmt.format(record)
         data = json.loads(line)
@@ -30,9 +26,7 @@ class TestStructuredFormatter:
 
 class TestStructuredLogger:
     def _make(self, **kw):
-        logger = StructuredLogger(
-            name=f"test_{id(self)}", level=logging.DEBUG, **kw
-        )
+        logger = StructuredLogger(name=f"test_{id(self)}", level=logging.DEBUG, **kw)
         return logger
 
     def test_set_level(self):

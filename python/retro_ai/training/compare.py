@@ -17,7 +17,8 @@ class RunComparator:
         """Load summary.json from each output directory.
 
         Skips missing or malformed files with a warning to stderr.
-        Each dict includes output_dir, config_name, plus all summary.json fields.
+        Each dict includes output_dir, config_name, functional flag,
+        plus all summary.json fields.
         """
         self._summaries = []
         for d in self.output_dirs:
@@ -36,6 +37,7 @@ class RunComparator:
                 continue
             data["output_dir"] = d
             data["config_name"] = os.path.basename(d.rstrip("/"))
+            data["functional"] = not self.flag_nonfunctional(data)
             self._summaries.append(data)
         return self._summaries
 
@@ -47,20 +49,25 @@ class RunComparator:
         """Return a formatted comparison table ranked by mean_reward descending.
 
         Flags non-functional runs (0 episodes) with a '*' marker.
-        Returns a message if no valid runs are found.
+        Prints 'No valid training runs found' and exits with code 1 if
+        no valid summaries were loaded.
         """
         if not self._summaries:
-            return "No valid training runs found"
+            print("No valid training runs found")
+            sys.exit(1)
 
         ranked = sorted(
             self._summaries, key=lambda s: s.get("mean_reward", 0), reverse=True
         )
 
         header = (
-            f"{'Rank':>4} | {'Config':<40} | {'Episodes':>8} | "
-            f"{'Mean Reward':>11} | {'Best Reward':>11} | {'Wall Clock':>10}"
+            f"{'Rank':>4} | {'Config':<30}| {'Episodes':>8} "
+            f"| {'Mean Reward':>11} | {'Best Reward':>11} | {'Wall Clock':>10}"
         )
-        sep = "-" * len(header)
+        sep = (
+            "-----+-------------------------------+----------"
+            "+-------------+-------------+-----------"
+        )
         lines = [header, sep]
 
         for i, s in enumerate(ranked, 1):
@@ -71,8 +78,8 @@ class RunComparator:
             best_r = s.get("best_reward", 0.0)
             wall = s.get("wall_clock_seconds", 0.0)
             lines.append(
-                f"{i:>4} | {config:<40} | {episodes:>8} | "
-                f"{mean_r:>11.1f} | {best_r:>11.1f} | {wall:>9.1f}s{nf}"
+                f"{i:>4} | {config:<30}| {episodes:>8} "
+                f"| {mean_r:>11.1f} | {best_r:>11.1f} | {wall:>9.1f}s{nf}"
             )
 
         return "\n".join(lines)

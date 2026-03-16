@@ -106,3 +106,47 @@ def test_generate_obs_chaining():
         np.testing.assert_array_equal(
             transitions[i].observation, transitions[i - 1].next_observation
         )
+
+
+def test_generate_early_termination_on_done():
+    """Rollout terminates early when predicted reward is below done_threshold."""
+    obs_shape = (4, 84, 84)
+    num_actions = 4
+    horizon = 10
+    num_rollouts = 1
+
+    model = WorldModel(obs_shape, num_actions)
+    # Set a high threshold so the untrained model's negative rewards trigger done
+    gen = SyntheticGenerator(model, horizon=horizon, device="cpu", done_threshold=0.0)
+    policy = _FakePolicy(num_actions)
+
+    start_obs = np.random.randint(0, 256, (num_rollouts, *obs_shape), dtype=np.uint8)
+    transitions = gen.generate(start_obs, policy, num_rollouts)
+
+    # With threshold=0.0, the untrained model predicts negative rewards,
+    # so the rollout should terminate on the very first step
+    assert len(transitions) < num_rollouts * horizon
+    # The last transition in each rollout must have done=True
+    assert transitions[-1].done is True
+
+
+def test_generate_rollout_length_bounded_by_horizon():
+    """Each rollout produces at most `horizon` transitions."""
+    obs_shape = (4, 84, 84)
+    num_actions = 4
+    horizon = 5
+    num_rollouts = 3
+
+    model = WorldModel(obs_shape, num_actions)
+    gen = SyntheticGenerator(model, horizon=horizon, device="cpu")
+    policy = _FakePolicy(num_actions)
+
+    start_obs = np.random.randint(0, 256, (num_rollouts, *obs_shape), dtype=np.uint8)
+    transitions = gen.generate(start_obs, policy, num_rollouts)
+
+    # Total transitions should be at most num_rollouts * horizon
+    assert len(transitions) <= num_rollouts * horizon
+    # Each rollout's last transition must have done=True
+    # Find rollout boundaries by scanning for done=True
+    done_count = sum(1 for t in transitions if t.done)
+    assert done_count == num_rollouts

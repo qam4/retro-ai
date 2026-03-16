@@ -356,16 +356,22 @@ class TrainingPipeline:
             if self.config.algorithm.name in ("DQN", "SBX_DQN"):
                 try:
                     from sb3_contrib.common.buffers import PrioritizedReplayBuffer
-                except ImportError:
-                    raise ImportError(
-                        "sb3-contrib is required for prioritized replay. "
-                        "Install with: pip install sb3-contrib"
+
+                    kwargs["replay_buffer_class"] = PrioritizedReplayBuffer
+                    kwargs["replay_buffer_kwargs"] = {
+                        "alpha": self.config.prioritized_replay_alpha,
+                        "beta": self.config.prioritized_replay_beta,
+                    }
+                except (ImportError, ModuleNotFoundError):
+                    self._logger.warning(
+                        "prioritized_replay_unavailable",
+                        {
+                            "message": "PrioritizedReplayBuffer not available in "
+                            "installed sb3-contrib version. Falling back to "
+                            "standard replay buffer. SB3 v2.x does not ship PER; "
+                            "install a compatible version or use standard DQN.",
+                        },
                     )
-                kwargs["replay_buffer_class"] = PrioritizedReplayBuffer
-                kwargs["replay_buffer_kwargs"] = {
-                    "alpha": self.config.prioritized_replay_alpha,
-                    "beta": self.config.prioritized_replay_beta,
-                }
             else:
                 self._logger.warning(
                     "prioritized_replay_ignored",

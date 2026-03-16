@@ -28,7 +28,9 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path to the C++ test binary (built by cmake)
 # ---------------------------------------------------------------------------
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 _BUILD_DIR = os.path.join(_REPO_ROOT, "build", "ci-linux")
 _TEST_BINARY = os.path.join(_BUILD_DIR, "tests", "retro_ai_tests")
 

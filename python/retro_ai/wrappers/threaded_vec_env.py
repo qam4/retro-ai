@@ -39,9 +39,7 @@ class ThreadedVecEnv(VecEnv):
             observation_space=env.observation_space,
             action_space=env.action_space,
         )
-        self._pool = concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(env_fns)
-        )
+        self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(env_fns))
         # Buffers
         self._obs = np.zeros(
             (self.num_envs,) + self.observation_space.shape,
@@ -53,6 +51,7 @@ class ThreadedVecEnv(VecEnv):
 
     def reset(self) -> VecEnvObs:
         """Reset all environments in parallel."""
+
         def _reset(i):
             obs, info = self._envs[i].reset()
             return i, obs, info
@@ -74,9 +73,7 @@ class ThreadedVecEnv(VecEnv):
                 action = action.item() if action.ndim == 0 else action.tolist()
             elif isinstance(action, (np.integer,)):
                 action = int(action)
-            self._pending.append(
-                self._pool.submit(self._step_one, i, action)
-            )
+            self._pending.append(self._pool.submit(self._step_one, i, action))
 
     def step_wait(self) -> VecEnvStepReturn:
         """Collect results from pending step calls."""
@@ -93,7 +90,12 @@ class ThreadedVecEnv(VecEnv):
             self._infos[i] = info
 
         self._pending = []
-        return self._obs.copy(), self._rewards.copy(), self._dones.copy(), self._infos.copy()
+        return (
+            self._obs.copy(),
+            self._rewards.copy(),
+            self._dones.copy(),
+            self._infos.copy(),
+        )
 
     def _step_one(self, i: int, action) -> Tuple:
         obs, reward, done, truncated, info = self._envs[i].step(action)
@@ -108,7 +110,10 @@ class ThreadedVecEnv(VecEnv):
     def env_method(self, method_name: str, *method_args, indices=None, **method_kwargs):
         if indices is None:
             indices = range(self.num_envs)
-        return [getattr(self._envs[i], method_name)(*method_args, **method_kwargs) for i in indices]
+        return [
+            getattr(self._envs[i], method_name)(*method_args, **method_kwargs)
+            for i in indices
+        ]
 
     def env_is_wrapped(self, wrapper_class, indices=None):
         if indices is None:

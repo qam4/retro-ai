@@ -286,15 +286,26 @@ def validate_world_model(
 class SyntheticGenerator:
     """Generates synthetic rollouts using the world model."""
 
-    def __init__(self, world_model: WorldModel, horizon: int = 50, device: str = "cpu"):
+    def __init__(
+        self,
+        world_model: WorldModel,
+        horizon: int = 50,
+        device: str = "cpu",
+        done_threshold: float = -10.0,
+    ):
         self.world_model = world_model
         self.horizon = horizon
         self.device = device
+        self.done_threshold = done_threshold
 
     def generate(
         self, start_obs: np.ndarray, policy, num_rollouts: int
     ) -> List[Transition]:
         """Unroll world model from starting observations using policy.
+
+        Each rollout terminates early if the world model predicts a reward
+        below ``done_threshold`` (indicating episode end) or when the
+        ``horizon`` is reached.
 
         Args:
             start_obs: Starting observations, (num_rollouts, C, H, W) uint8 numpy array.
@@ -332,15 +343,22 @@ class SyntheticGenerator:
                     )
                     reward = pred_reward.item()
 
+                    # Predict done: reward below threshold or horizon reached
+                    done = reward < self.done_threshold or step == self.horizon - 1
+
                     transitions.append(
                         Transition(
                             observation=obs,
                             action=action_int,
                             reward=reward,
                             next_observation=next_obs,
-                            done=(step == self.horizon - 1),
+                            done=done,
                         )
                     )
+
+                    # Early termination when world model predicts done
+                    if done:
+                        break
 
                     obs = next_obs
 

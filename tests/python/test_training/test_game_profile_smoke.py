@@ -20,6 +20,7 @@ from retro_ai.training.config import (
 
 # ---- Task 2.1: Dataclasses ------------------------------------------------
 
+
 class TestStartupAction:
     def test_defaults(self):
         sa = StartupAction(action=1)
@@ -48,9 +49,7 @@ class TestStartupSequence:
 
 class TestGameProfile:
     def test_required_fields(self):
-        gp = GameProfile(
-            name="test", emulator_type="videopac", rom_path="/rom.bin"
-        )
+        gp = GameProfile(name="test", emulator_type="videopac", rom_path="/rom.bin")
         assert gp.name == "test"
         assert gp.grayscale is True
         assert gp.resize == (84, 84)
@@ -64,7 +63,9 @@ class TestGameProfile:
     def test_from_yaml(self):
         path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..",
+            "..",
+            "..",
+            "..",
             "game_profiles",
             "videopac_satellite_attack.yaml",
         )
@@ -86,9 +87,7 @@ class TestGameProfile:
                 post_delay_frames=30,
             ),
         )
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(gp.to_dict(), f)
             tmp = f.name
         try:
@@ -120,11 +119,14 @@ class TestGameProfile:
 
 # ---- Task 2.2: Registry ---------------------------------------------------
 
+
 class TestGameProfileRegistry:
     def test_list_profiles(self):
         profiles_dir = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..",
+            "..",
+            "..",
+            "..",
             "game_profiles",
         )
         registry = GameProfileRegistry(profile_dirs=[profiles_dir])
@@ -134,7 +136,9 @@ class TestGameProfileRegistry:
     def test_load_by_name(self):
         profiles_dir = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..",
+            "..",
+            "..",
+            "..",
             "game_profiles",
         )
         registry = GameProfileRegistry(profile_dirs=[profiles_dir])
@@ -144,7 +148,9 @@ class TestGameProfileRegistry:
     def test_load_by_path(self):
         path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..",
+            "..",
+            "..",
+            "..",
             "game_profiles",
             "videopac_satellite_attack.yaml",
         )
@@ -159,6 +165,7 @@ class TestGameProfileRegistry:
 
 
 # ---- Task 2.3: Config merge -----------------------------------------------
+
 
 class TestMergeConfigWithProfile:
     def test_profile_fills_none_fields(self):
@@ -213,9 +220,7 @@ class TestMergeConfigWithProfile:
 
 class TestGameProfileObservationMode:
     def test_default_observation_mode_is_none(self):
-        gp = GameProfile(
-            name="test", emulator_type="videopac", rom_path="/rom.bin"
-        )
+        gp = GameProfile(name="test", emulator_type="videopac", rom_path="/rom.bin")
         assert gp.observation_mode is None
 
     def test_observation_mode_framebuffer(self):
@@ -250,7 +255,9 @@ class TestGameProfileObservationMode:
     def test_course_automobile_has_observation_mode(self):
         path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..",
+            "..",
+            "..",
+            "..",
             "game_profiles",
             "videopac_course_automobile.yaml",
         )

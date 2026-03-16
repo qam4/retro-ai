@@ -167,7 +167,12 @@ class PreprocessedEnv:
         The pipeline that will transform observations.
     """
 
-    def __init__(self, env: Any, preprocessing: PreprocessingPipeline, frame_maxpool: bool = False) -> None:
+    def __init__(
+        self,
+        env: Any,
+        preprocessing: PreprocessingPipeline,
+        frame_maxpool: bool = False,
+    ) -> None:
         self.env = env
         self.preprocessing = preprocessing
         self._frame_maxpool = frame_maxpool

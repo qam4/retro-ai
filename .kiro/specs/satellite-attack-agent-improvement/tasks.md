@@ -74,7 +74,7 @@ Graduated improvement strategy for training a Satellite Attack agent within 100k
     - Use Hypothesis to generate random alpha ∈ (0,1), beta ∈ (0,1)
     - **Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.6**
 
-- [ ] 4. Checkpoint — Verify Tier 2 DQN+PER
+- [x] 4. Checkpoint — Verify Tier 2 DQN+PER
   - Ensure all tests pass, ask the user if questions arise.
   - Verify DQN config parses and PER fields are wired correctly
 
@@ -126,8 +126,8 @@ Graduated improvement strategy for training a Satellite Attack agent within 100k
     - Compute validation error on random transitions, verify MSE ≥ 0
     - **Validates: Requirements 5.6**
 
-- [ ] 7. Implement SyntheticGenerator
-  - [ ] 7.1 Implement `SyntheticGenerator` in `python/retro_ai/training/simple.py`
+- [x] 7. Implement SyntheticGenerator
+  - [x] 7.1 Implement `SyntheticGenerator` in `python/retro_ai/training/simple.py`
     - Constructor takes `WorldModel`, `horizon` (default 50)
     - `generate()` unrolls world model from starting observations using current policy
     - Sample starting states from TransitionBuffer via `sample_starts()`
@@ -163,15 +163,15 @@ Graduated improvement strategy for training a Satellite Attack agent within 100k
     - For random T and N, verify each round collects ≈ T/N real steps (±10% tolerance for last round)
     - **Validates: Requirements 7.2**
 
-- [ ] 9. Checkpoint — Verify Tier 3 SimPLe module
+- [x] 9. Checkpoint — Verify Tier 3 SimPLe module
   - Ensure all tests pass, ask the user if questions arise.
   - Verify WorldModel forward pass, TransitionBuffer round-trip, and SimplePipeline structure
 
 
 ### Comparison Script
 
-- [ ] 10. Implement run comparison and CLI integration
-  - [ ] 10.1 Implement `RunComparator` in `python/retro_ai/training/compare.py`
+- [x] 10. Implement run comparison and CLI integration
+  - [x] 10.1 Implement `RunComparator` in `python/retro_ai/training/compare.py`
     - `load_summaries()` loads `summary.json` from each output directory, skipping missing/malformed files with warnings
     - `compare()` returns a formatted comparison table ranked by `mean_reward` descending
     - `flag_nonfunctional()` returns `True` when `total_episodes == 0`
@@ -179,7 +179,7 @@ Graduated improvement strategy for training a Satellite Attack agent within 100k
     - Exit with code 1 if no valid runs found
     - _Requirements: 8.3, 8.4, 8.5, 8.6_
 
-  - [ ] 10.2 Add `compare` subcommand to CLI in `python/retro_ai/training/cli.py`
+  - [x] 10.2 Add `compare` subcommand to CLI in `python/retro_ai/training/cli.py`
     - `retro-ai compare <output_dir1> <output_dir2> ...` accepts multiple output directories
     - Wire to `RunComparator.load_summaries()` → `compare()` → print table
     - _Requirements: 8.3_

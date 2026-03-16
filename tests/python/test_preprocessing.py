@@ -10,6 +10,7 @@ from retro_ai.core.preprocessing import PreprocessedEnv, PreprocessingPipeline
 # Helpers
 # ------------------------------------------------------------------
 
+
 def _random_rgb_frame(h: int = 60, w: int = 80, rng=None) -> np.ndarray:
     """Return a random (H, W, 3) uint8 frame."""
     if rng is None:
@@ -158,9 +159,7 @@ class TestFrameStacking:
         out = pipe.reset(frame)
         # Each slice of 3 channels should be the same
         for i in range(3):
-            np.testing.assert_array_equal(
-                out[..., i * 3 : (i + 1) * 3], frame
-            )
+            np.testing.assert_array_equal(out[..., i * 3 : (i + 1) * 3], frame)
 
     def test_new_frame_replaces_oldest(self):
         pipe = PreprocessingPipeline(grayscale=True, frame_stack=2)
@@ -185,9 +184,7 @@ class TestFrameStacking:
         np.testing.assert_array_equal(out, frame)
 
     def test_stacking_with_grayscale_and_resize(self):
-        pipe = PreprocessingPipeline(
-            grayscale=True, resize=(42, 42), frame_stack=4
-        )
+        pipe = PreprocessingPipeline(grayscale=True, resize=(42, 42), frame_stack=4)
         frame = _random_rgb_frame(60, 80)
         out = pipe.reset(frame)
         assert out.shape == (42, 42, 4)  # 1 channel × 4 stacked
@@ -300,7 +297,12 @@ class TestPreprocessedEnvObservationSpace:
         pipe = PreprocessingPipeline()
         wrapped = PreprocessedEnv(env, pipe)
         space = wrapped.get_observation_space()
-        assert space == {"width": 80, "height": 60, "channels": 3, "bits_per_channel": 8}
+        assert space == {
+            "width": 80,
+            "height": 60,
+            "channels": 3,
+            "bits_per_channel": 8,
+        }
 
     def test_with_grayscale(self):
         env = FakeEnv(60, 80, 3)
@@ -319,12 +321,15 @@ class TestPreprocessedEnvObservationSpace:
 
     def test_with_all_transforms(self):
         env = FakeEnv(60, 80, 3)
-        pipe = PreprocessingPipeline(
-            grayscale=True, resize=(42, 42), frame_stack=4
-        )
+        pipe = PreprocessingPipeline(grayscale=True, resize=(42, 42), frame_stack=4)
         wrapped = PreprocessedEnv(env, pipe)
         space = wrapped.get_observation_space()
-        assert space == {"width": 42, "height": 42, "channels": 4, "bits_per_channel": 8}
+        assert space == {
+            "width": 42,
+            "height": 42,
+            "channels": 4,
+            "bits_per_channel": 8,
+        }
 
 
 class TestPreprocessedEnvDelegation:
@@ -407,7 +412,7 @@ class TestStepNIntegration:
         wrapped.reset()
         _, reward, _, _, _ = wrapped.step(0)
 
-        assert not hasattr(env, 'step_n_called')
+        assert not hasattr(env, "step_n_called")
         assert reward == pytest.approx(4.0)
 
     def test_no_step_n_when_frame_skip_is_1(self):
