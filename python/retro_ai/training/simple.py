@@ -392,6 +392,8 @@ class DreamEnv(gym.Env):
         num_actions: int,
         rollout_horizon: int = 50,
         device: str = "cpu",
+        real_action_space=None,
+        real_obs_space=None,
     ):
         super().__init__()
         self._world_model = world_model
@@ -401,37 +403,65 @@ class DreamEnv(gym.Env):
         self._device = device
         self._step_count = 0
         self._current_obs: Optional[np.ndarray] = None
+        self._real_action_space = real_action_space
 
-        # Observation space matches buffer obs shape (C, H, W) uint8
-        obs_shape = buffer.obs_shape
-        self.observation_space = spaces.Box(
-            low=0, high=255, shape=obs_shape, dtype=np.uint8
-        )
-        self.action_space = spaces.Discrete(num_actions)
+        # Use real env's observation space if provided, else infer from buffer
+        if real_obs_space is not None:
+            self.observation_space = real_obs_space
+        else:
+            obs_shape = buffer.obs_shape
+            self.observation_space = spaces.Box(
+                low=0, high=255, shape=obs_shape, dtype=np.uint8
+            )
+
+        # Use real env's action space if provided
+        if real_action_space is not None:
+            self.action_space = real_action_space
+        else:
+            self.action_space = spaces.Discrete(num_actions)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
-        # Sample a random starting observation from the real buffer
+        # Sample a random starting observation from the real buffer (stored as C,H,W)
         starts = self._buffer.sample_starts(1)
-        self._current_obs = starts[0]
+        obs_chw = starts[0]
+        # Convert to (H,W,C) for Gymnasium
+        self._current_obs = np.transpose(obs_chw, (1, 2, 0)) if obs_chw.ndim == 3 else obs_chw
         self._step_count = 0
         return self._current_obs.copy(), {}
 
     def step(self, action):
         self._world_model.eval()
-        action_int = int(action)
 
-        obs_t = (
-            torch.from_numpy(self._current_obs).unsqueeze(0).float().to(self._device)
-        )
+        # Flatten MultiDiscrete action to single int for world model
+        if hasattr(action, '__len__') and len(action) > 1:
+            nvec = self._real_action_space.nvec if self._real_action_space is not None and hasattr(self._real_action_space, 'nvec') else None
+            if nvec is not None:
+                action_int = 0
+                multiplier = 1
+                for i in reversed(range(len(action))):
+                    action_int += int(action[i]) * multiplier
+                    multiplier *= int(nvec[i])
+            else:
+                action_int = int(action[0])
+        else:
+            action_int = int(action)
+
+        # World model works in (C,H,W) space — transpose from (H,W,C)
+        obs_chw = self._current_obs
+        if obs_chw.ndim == 3 and obs_chw.shape[2] < obs_chw.shape[0]:
+            # (H,W,C) → (C,H,W)
+            obs_chw = np.transpose(obs_chw, (2, 0, 1))
+
+        obs_t = torch.from_numpy(obs_chw).unsqueeze(0).float().to(self._device)
         act_t = torch.tensor([action_int], dtype=torch.long, device=self._device)
 
         with torch.no_grad():
             pred_obs, pred_reward = self._world_model(obs_t, act_t)
 
-        next_obs = (
-            (pred_obs.squeeze(0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
-        )
+        # World model outputs (C,H,W), convert back to (H,W,C) for Gymnasium
+        next_obs_chw = (pred_obs.squeeze(0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+        next_obs = np.transpose(next_obs_chw, (1, 2, 0)) if next_obs_chw.ndim == 3 else next_obs_chw
         reward = pred_reward.item()
 
         self._step_count += 1
@@ -493,7 +523,12 @@ class SimplePipeline:
 
         # Determine observation shape and action count
         obs_space = real_env.observation_space
-        obs_shape = obs_space.shape  # (C, H, W) after preprocessing
+        obs_shape = obs_space.shape  # (H, W, C) from Gymnasium
+        # WorldModel expects (C, H, W) — transpose for PyTorch convention
+        if len(obs_shape) == 3:
+            obs_shape_chw = (obs_shape[2], obs_shape[0], obs_shape[1])
+        else:
+            obs_shape_chw = obs_shape
         if hasattr(real_env.action_space, "n"):
             num_actions = real_env.action_space.n
         else:
@@ -505,11 +540,11 @@ class SimplePipeline:
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Initialize components
+        # Initialize components — buffer stores (C, H, W) observations
         buffer = TransitionBuffer(
-            capacity=self.config.total_timesteps, obs_shape=obs_shape
+            capacity=self.config.total_timesteps, obs_shape=obs_shape_chw
         )
-        world_model = WorldModel(obs_shape, num_actions)
+        world_model = WorldModel(obs_shape_chw, num_actions)
         world_model.to(device)
 
         # Initialize PPO policy on real env
@@ -567,6 +602,8 @@ class SimplePipeline:
                     num_actions=num_actions,
                     rollout_horizon=simple_cfg.rollout_horizon,
                     device=device,
+                    real_action_space=real_env.action_space,
+                    real_obs_space=real_env.observation_space,
                 )
                 dream_vec = DummyVecEnv([lambda: Monitor(dream_env)])
                 policy.set_env(dream_vec)
@@ -631,7 +668,25 @@ class SimplePipeline:
             next_obs, reward, terminated, truncated, info = env.step(action_val)
             done = terminated or truncated
 
-            buffer.add(obs, int(action_val), float(reward), next_obs, done)
+            # Flatten MultiDiscrete action to single int for world model
+            if np.isscalar(action_val) or (hasattr(action_val, 'ndim') and action_val.ndim == 0):
+                action_int = int(action_val)
+            else:
+                # MultiDiscrete: encode as flat index
+                nvec = env.action_space.nvec if hasattr(env.action_space, 'nvec') else None
+                if nvec is not None:
+                    action_int = 0
+                    multiplier = 1
+                    for i in reversed(range(len(action_val))):
+                        action_int += int(action_val[i]) * multiplier
+                        multiplier *= int(nvec[i])
+                else:
+                    action_int = int(action_val[0])
+
+            # Transpose (H,W,C) → (C,H,W) for world model buffer
+            obs_chw = np.transpose(obs, (2, 0, 1)) if obs.ndim == 3 else obs
+            next_obs_chw = np.transpose(next_obs, (2, 0, 1)) if next_obs.ndim == 3 else next_obs
+            buffer.add(obs_chw, action_int, float(reward), next_obs_chw, done)
             collected += 1
 
             if self._metrics is not None:

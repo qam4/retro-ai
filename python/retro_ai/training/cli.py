@@ -116,15 +116,25 @@ def main() -> None:
 
 def _cmd_train(args: argparse.Namespace) -> None:
     from retro_ai.training.config import TrainingConfigParser
-    from retro_ai.training.pipeline import TrainingPipeline
 
     config = TrainingConfigParser.from_yaml(args.config)
-    pipeline = TrainingPipeline(config)
 
-    if args.resume:
-        path = pipeline.resume(args.resume)
-    else:
+    # Route to SimplePipeline if simple.enabled is set
+    if config.simple.enabled:
+        from retro_ai.training.simple import SimplePipeline
+
+        pipeline = SimplePipeline(config)
+        if args.resume:
+            raise SystemExit("SimPLe does not support --resume")
         path = pipeline.run()
+    else:
+        from retro_ai.training.pipeline import TrainingPipeline
+
+        pipeline = TrainingPipeline(config)
+        if args.resume:
+            path = pipeline.resume(args.resume)
+        else:
+            path = pipeline.run()
     print(f"Model saved to {path}")
 
 
