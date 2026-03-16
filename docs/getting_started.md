@@ -27,6 +27,37 @@ cmake --preset ci-windows
 cmake --build --preset ci-windows
 ```
 
+## Python Dependencies
+
+Install the core training dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+This installs:
+- `gymnasium` — RL environment interface
+- `stable-baselines3` — PPO, DQN algorithms
+- `sb3-contrib` — Prioritized Experience Replay buffer for DQN
+- `numpy` — array operations
+- `pyyaml` — config file parsing
+- `torch` — neural network backend
+- `opencv-python` — video recording during evaluation
+- `imageio-ffmpeg` — bundled ffmpeg for H.264 re-encoding (no system install needed)
+
+For development and testing:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+### Optional Tools
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| `tensorboard` | Training visualization | `pip install tensorboard` |
+| `hypothesis` | Property-based testing | included in `requirements-dev.txt` |
+
 ## Setting Up Python
 
 Set `PYTHONPATH` so Python can find both the pure-Python package and the

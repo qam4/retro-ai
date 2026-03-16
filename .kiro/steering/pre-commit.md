@@ -54,3 +54,10 @@ SDL code must be guarded by `ENABLE_SDL` — Android and libretro builds have no
 - Use `debug/` for traces/logs, `screenshots/` for PNGs, `userdata/` for persistent session data
 - Prefer primary source documentation for hardware behavior over copying from other emulators
 - Keep the core library SDL-free — SDL dependencies belong in frontend files only
+
+# Training & Evaluation Rules
+
+- Before launching a long training run (>1000 steps), always run a quick smoke test first (50-100 steps) to catch import errors, config bugs, and shape mismatches
+- Before launching a long evaluation (>3 episodes), run a 1-episode eval first to verify the model loads and produces reasonable output
+- When generating eval videos, always verify the video file exists and has frames before declaring success
+- Video recording requires `opencv-python` and `imageio-ffmpeg` (both in requirements.txt)

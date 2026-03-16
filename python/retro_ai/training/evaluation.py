@@ -141,17 +141,22 @@ class EvaluationModule:
         raise ValueError(f"Could not load model from {self.model_path}")
 
     def _maybe_init_recorder(self) -> Optional[VideoRecorder]:
-        if self.video_path and VideoRecorder.available():
-            frame_skip = self.game_profile.frame_skip or 1
-            video_fps = 60.0 / frame_skip
-            return VideoRecorder(
-                path=self.video_path,
-                fps=video_fps,
-                overlay=True,
-                scale=1,
-                aspect_ratio="4:3",
-            )
-        return None
+        if not self.video_path:
+            return None
+        # Ensure the video's parent directory exists before OpenCV tries
+        # to create the file (VideoWriter silently fails otherwise).
+        os.makedirs(os.path.dirname(self.video_path) or ".", exist_ok=True)
+        # VideoRecorder.__init__ raises RuntimeError if cv2 is missing,
+        # so the user gets a clear error when --video is requested.
+        frame_skip = self.game_profile.frame_skip or 1
+        video_fps = 60.0 / frame_skip
+        return VideoRecorder(
+            path=self.video_path,
+            fps=video_fps,
+            overlay=True,
+            scale=1,
+            aspect_ratio="4:3",
+        )
 
     @staticmethod
     def _find_base_env(env):

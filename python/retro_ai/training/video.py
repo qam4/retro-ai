@@ -28,8 +28,10 @@ class VideoRecorder:
         self._cv2 = None
 
         if not self.available():
-            logger.warning("opencv-python not installed; " "video recording disabled")
-            return
+            raise RuntimeError(
+                "Video recording requested but opencv-python is not installed. "
+                "Install it with: pip install opencv-python"
+            )
 
         import cv2
 
@@ -101,12 +103,12 @@ class VideoRecorder:
         out = frame.copy()
         if self._overlay and (reward != 0.0 or step != 0):
             text = f"R:{reward:.0f}  Step:{step}"
-            font_scale = 0.5 * (self._scale / 2)
-            thickness = max(1, self._scale // 2)
+            font_scale = max(0.4, 0.4 * self._scale)
+            thickness = max(1, self._scale)
             self._cv2.putText(
                 out,
                 text,
-                (8, 20 * max(1, self._scale // 2)),
+                (4, 14 * max(1, self._scale)),
                 self._cv2.FONT_HERSHEY_SIMPLEX,
                 font_scale,
                 (255, 255, 255),
@@ -125,10 +127,22 @@ class VideoRecorder:
         cv2 = self._cv2
         h, w = frame.shape[:2]
 
+        # Unwrap 0-dim numpy arrays (e.g. from model.predict())
+        if isinstance(action, np.ndarray) and action.ndim == 0:
+            action = action.item()
+
         # Parse action into direction bools
-        if isinstance(action, (list, np.ndarray)) and len(action) >= 5:
+        if (
+            isinstance(action, (list, np.ndarray))
+            and np.ndim(action) > 0
+            and len(action) >= 5
+        ):
             up, down, left, right, fire = (bool(a) for a in action[:5])
-        elif isinstance(action, (list, np.ndarray)) and len(action) == 3:
+        elif (
+            isinstance(action, (list, np.ndarray))
+            and np.ndim(action) > 0
+            and len(action) == 3
+        ):
             # Joystick mode: [vertical(3), horizontal(3), fire(2)]
             # vertical: 0=neutral, 1=up, 2=down
             # horizontal: 0=neutral, 1=right, 2=left
@@ -186,12 +200,27 @@ class VideoRecorder:
             self._writer = None
             self._reencode_h264()
 
+    @staticmethod
+    def _find_ffmpeg() -> Optional[str]:
+        """Locate ffmpeg: system PATH first, then imageio-ffmpeg fallback."""
+        import shutil
+
+        path = shutil.which("ffmpeg")
+        if path:
+            return path
+        try:
+            import imageio_ffmpeg
+
+            return imageio_ffmpeg.get_ffmpeg_exe()
+        except (ImportError, RuntimeError):
+            return None
+
     def _reencode_h264(self) -> None:
         """Re-encode mp4v to H.264 using ffmpeg for browser compatibility."""
-        import shutil
+        import os
         import subprocess
 
-        ffmpeg = shutil.which("ffmpeg")
+        ffmpeg = self._find_ffmpeg()
         if not ffmpeg or not self._path.endswith(".mp4"):
             return
 
@@ -218,8 +247,6 @@ class VideoRecorder:
                 timeout=120,
             )
             if result.returncode == 0:
-                import os
-
                 os.replace(tmp, self._path)
             else:
                 logger.warning("ffmpeg re-encode failed: %s", result.stderr[:200])
@@ -227,8 +254,6 @@ class VideoRecorder:
                     os.unlink(tmp)
         except Exception as e:
             logger.warning("ffmpeg re-encode error: %s", e)
-            import os
-
             if os.path.exists(tmp):
                 os.unlink(tmp)
 
