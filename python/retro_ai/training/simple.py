@@ -244,7 +244,10 @@ def train_world_model(
 
             epoch_loss += loss.item()
 
-        loss_history.append(epoch_loss / steps_per_epoch)
+        avg_loss = epoch_loss / steps_per_epoch
+        loss_history.append(avg_loss)
+        if (_epoch + 1) % 10 == 0 or _epoch == 0:
+            logger.info("wm_epoch %d/%d loss=%.4f", _epoch + 1, epochs, avg_loss)
 
     return loss_history
 
@@ -554,7 +557,7 @@ class SimplePipeline:
             learning_rate=self.config.algorithm.learning_rate,
             batch_size=self.config.algorithm.batch_size,
             device=device,
-            verbose=0,
+            verbose=1,
         )
 
         steps_per_round = max(1, self.config.total_timesteps // simple_cfg.num_rounds)
@@ -607,7 +610,8 @@ class SimplePipeline:
                 )
                 dream_vec = DummyVecEnv([lambda: Monitor(dream_env)])
                 policy.set_env(dream_vec)
-                policy.learn(total_timesteps=synthetic_steps, reset_num_timesteps=False)
+                logger.info("simple_dream_train: %d synthetic steps", synthetic_steps)
+                policy.learn(total_timesteps=synthetic_steps, reset_num_timesteps=False, log_interval=1)
                 # Switch back to real env for next round's data collection
                 policy.set_env(
                     DummyVecEnv([lambda: real_env])
@@ -669,10 +673,7 @@ class SimplePipeline:
             done = terminated or truncated
 
             # Flatten MultiDiscrete action to single int for world model
-            if np.isscalar(action_val) or (hasattr(action_val, 'ndim') and action_val.ndim == 0):
-                action_int = int(action_val)
-            else:
-                # MultiDiscrete: encode as flat index
+            if hasattr(action_val, '__len__') and len(action_val) > 1:
                 nvec = env.action_space.nvec if hasattr(env.action_space, 'nvec') else None
                 if nvec is not None:
                     action_int = 0
@@ -682,12 +683,18 @@ class SimplePipeline:
                         multiplier *= int(nvec[i])
                 else:
                     action_int = int(action_val[0])
+            else:
+                action_int = int(action_val)
 
             # Transpose (H,W,C) → (C,H,W) for world model buffer
             obs_chw = np.transpose(obs, (2, 0, 1)) if obs.ndim == 3 else obs
             next_obs_chw = np.transpose(next_obs, (2, 0, 1)) if next_obs.ndim == 3 else next_obs
             buffer.add(obs_chw, action_int, float(reward), next_obs_chw, done)
             collected += 1
+
+            # Progress logging every 1000 steps
+            if collected % 1000 == 0:
+                logger.info("simple_collect: %d/%d steps", collected, num_steps)
 
             if self._metrics is not None:
                 if done:
