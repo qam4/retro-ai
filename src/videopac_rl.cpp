@@ -152,30 +152,12 @@ public:
         mem_reward->set_memory_reader([this](uint16_t addr) -> uint8_t {
             return read_ram_byte(addr);
         });
-
-        // If no score addresses were configured via the factory params,
-        // set up the Course Automobile defaults:
-        // Score = 2-byte BCD at IntRAM[54] (little-endian: low byte first)
-        int count = 0;
-        auto it = reward_params_.find("score_address_count");
-        if (it != reward_params_.end()) {
-            try { count = std::stoi(it->second); } catch (...) {}
-        }
-        if (count == 0) {
-            // Use the discovered addresses: IntRAM[54] (addr 54), 2 bytes BCD LE
-            std::vector<MemoryAddress> addrs;
-            addrs.push_back({54, 2, true, true, 1});  // 2-byte BCD LE score at IntRAM[54..55]
-            mem_reward->set_score_addresses(std::move(addrs));
-        }
     }
 
     /// Parse timer-related params for episode termination.
     void parse_timer_params() {
-        // Default timer addresses for Course Automobile:
-        // ExtRAM[0x01] (addr 65) = minutes, ExtRAM[0x02] (addr 66) = seconds
-        // Both BCD. Game over when both are 0.
-        timer_minutes_addr_ = 65;
-        timer_seconds_addr_ = 66;
+        timer_minutes_addr_ = -1;
+        timer_seconds_addr_ = -1;
         done_when_timer_zero_ = false;
         done_when_score_drops_ = false;
 
@@ -189,7 +171,6 @@ public:
             done_when_score_drops_ = true;
         }
 
-        // Allow overriding timer addresses from params
         it = reward_params_.find("timer_minutes_addr");
         if (it != reward_params_.end()) {
             try { timer_minutes_addr_ = std::stoi(it->second); } catch (...) {}
@@ -211,13 +192,16 @@ public:
     }
 
     /// Read the current score from the configured score addresses.
+    /// Returns -1 if no score addresses are configured.
     int64_t read_current_score() const {
         int count = 0;
         auto it = reward_params_.find("score_address_count");
         if (it != reward_params_.end()) {
             try { count = std::stoi(it->second); } catch (...) {}
         }
-        if (count == 0) return -1;  // no score addresses configured
+        if (count == 0) {
+            return -1;  // no score addresses configured
+        }
 
         int64_t total = 0;
         for (int i = 0; i < count; ++i) {
@@ -237,12 +221,37 @@ public:
         return total;
     }
 
+    /// Build the info JSON string with frame number and current game score.
+    std::string make_info_json() const {
+        int64_t score = read_current_score();
+        std::string json = "{\"frame_number\": " + std::to_string(frame_number_);
+        if (score >= 0) {
+            json += ", \"score\": " + std::to_string(peak_score_);
+        }
+        json += "}";
+        return json;
+    }
+
+    /// Build the info JSON string with an error field (for truncated results).
+    std::string make_info_json_error(const std::string& error) const {
+        int64_t score = read_current_score();
+        std::string json = "{\"frame_number\": " + std::to_string(frame_number_);
+        if (score >= 0) {
+            json += ", \"score\": " + std::to_string(peak_score_);
+        }
+        json += ", \"error\": \"" + error + "\"}";
+        return json;
+    }
+
     /// Check if the episode should end (any termination condition).
     bool is_episode_done() {
         if (is_timer_expired()) return true;
         if (done_when_score_drops_ && frame_number_ > 10) {
             // Read score directly from RAM — works regardless of reward mode.
             int64_t current_score = read_current_score();
+            if (current_score > peak_score_) {
+                peak_score_ = current_score;
+            }
             if (current_score >= 0 && current_score < previous_score_for_done_) {
                 return true;
             }
@@ -292,6 +301,7 @@ public:
         }
         last_reward_ = 0.0f;
         previous_score_for_done_ = 0;
+        peak_score_ = 0;
 
         StepResult result;
         const auto& fb = extract_framebuffer();
@@ -299,7 +309,7 @@ public:
         result.reward = 0.0f;
         result.done = false;
         result.truncated = false;
-        result.info = "{\"frame_number\": 0}";
+        result.info = make_info_json();
 
         previous_result_ = result;
         return result;
@@ -382,7 +392,12 @@ public:
 
         result.done = false;  // set after is_episode_done() check below
         result.truncated = false;
-        result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+        // Update peak score before building info JSON
+        {
+            int64_t s = read_current_score();
+            if (s > peak_score_) peak_score_ = s;
+        }
+        result.info = make_info_json();
 
         last_reward_ = result.reward;
         result.done = is_episode_done();
@@ -420,7 +435,7 @@ public:
             result.reward = 0.0f;
             result.done = false;
             result.truncated = false;
-            result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+            result.info = make_info_json();
             return result;
         }
 
@@ -470,11 +485,16 @@ public:
             // so it doesn't need the observation. Create a minimal StepResult
             // with just frame info for the reward computation.
             if (reward_system_) {
+                // Update peak score before building info JSON
+                {
+                    int64_t s = read_current_score();
+                    if (s > peak_score_) peak_score_ = s;
+                }
                 StepResult intermediate;
                 intermediate.reward = 0.0f;
                 intermediate.done = false;
                 intermediate.truncated = false;
-                intermediate.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+                intermediate.info = make_info_json();
                 float r = reward_system_->compute_reward(intermediate, previous_result_);
                 last_reward_ = r;
                 previous_result_ = intermediate;
@@ -497,7 +517,7 @@ public:
         result.reward = total_reward;
         result.done = done;
         result.truncated = false;
-        result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+        result.info = make_info_json();
 
         previous_result_ = result;
         return result;
@@ -750,8 +770,7 @@ private:
         result.reward = 0.0f;
         result.done = false;
         result.truncated = true;
-        result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                      ", \"error\": \"" + error + "\"}";
+        result.info = make_info_json_error(error);
         return result;
     }
 
@@ -774,6 +793,7 @@ private:
     bool done_when_score_drops_ = false;
     float last_reward_ = 0.0f;
     int64_t previous_score_for_done_ = 0;
+    int64_t peak_score_ = 0;  // high-water mark for info JSON reporting
 
 #ifdef RETRO_AI_PROFILING
     FrameTimings last_timings_{};

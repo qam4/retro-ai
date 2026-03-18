@@ -79,10 +79,16 @@ class ThreadedVecEnv(VecEnv):
         for f in concurrent.futures.as_completed(self._pending):
             i, obs, reward, done, truncated, info = f.result()
             if done or truncated:
-                # Auto-reset (SB3 convention)
+                # Auto-reset (SB3 convention): preserve terminal step info
+                # so callbacks can read the score at death, not after reset.
+                terminal_info = info.copy()
                 info["terminal_observation"] = obs
                 obs, reset_info = self._envs[i].reset()
-                info.update(reset_info)
+                info["terminal_info"] = terminal_info
+                # Merge reset_info but don't overwrite terminal fields
+                for k, v in reset_info.items():
+                    if k not in info:
+                        info[k] = v
             self._obs[i] = obs
             self._rewards[i] = reward
             self._dones[i] = done or truncated
