@@ -95,6 +95,7 @@ class TrainingConfig:
         "subproc"  # "subproc" (SubprocVecEnv) or "threaded" (ThreadedVecEnv)
     )
     survival_bonus: float = 0.0  # per-step survival bonus added to reward
+    max_episode_steps: int = 0  # truncate episodes after N steps (0 = disabled)
     sticky_actions: float = (
         0.0  # probability of repeating previous action (0 = disabled, 0.25 = standard)
     )

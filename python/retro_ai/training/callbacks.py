@@ -40,10 +40,14 @@ class MetricsCallback(BaseCallback):
                     info = infos[i]
                     ep_info = info.get("episode")
                     if ep_info:
+                        # After auto-reset, the top-level info is from the
+                        # new episode.  The terminal step's info is stored
+                        # under "terminal_info" by SB3's VecEnv wrappers.
+                        terminal_info = info.get("terminal_info", info)
                         self._metrics.record_episode(
                             reward=ep_info["r"],
                             length=ep_info["l"],
-                            info=info,
+                            info=terminal_info,
                         )
 
         # Flush and log at interval
@@ -53,11 +57,13 @@ class MetricsCallback(BaseCallback):
                 elapsed = time.monotonic() - self._step_start
                 fps = self._log_interval / elapsed if elapsed > 0 else 0
                 rolling = self._metrics.rolling_reward()
+                rolling_len = self._metrics.rolling_length()
                 total = self._total_timesteps
                 pct = f" ({100 * self.num_timesteps / total:.0f}%)" if total > 0 else ""
                 self._logger.info(
                     f"step {self.num_timesteps}/{total}{pct}"
                     f" | rolling_reward={rolling}"
+                    f" | rolling_ep_len={rolling_len}"
                     f" | fps={fps:.0f}",
                 )
             self._last_log_step = self.num_timesteps

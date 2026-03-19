@@ -33,6 +33,7 @@ class EvaluationModule:
         video_path: Optional[str] = None,
         action_mode: Optional[str] = None,
         reward_mode: Optional[str] = None,
+        deterministic: bool = True,
     ):
         self.model_path = model_path
         self.game_profile = game_profile
@@ -42,6 +43,7 @@ class EvaluationModule:
         self.video_path = video_path
         self._action_mode = action_mode
         self._reward_mode = reward_mode
+        self._deterministic = deterministic
         self._logger = StructuredLogger("evaluation")
 
     def run(self) -> Dict[str, Any]:
@@ -61,12 +63,16 @@ class EvaluationModule:
             step = 0
 
             while not done:
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=self._deterministic)
                 obs, reward, done, truncated, info = env.step(action)
                 done = done or truncated
                 episode_reward += reward
                 episode_length += 1
                 step += 1
+
+                # Safety limit: prevent runaway episodes in eval
+                if step >= 5000:
+                    break
 
                 if recorder and raw_env is not None:
                     recorder.add_frame(

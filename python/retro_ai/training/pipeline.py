@@ -241,6 +241,15 @@ class TrainingPipeline:
                     )
 
                     env = SurvivalBonusWrapper(env, self.config.survival_bonus)
+                # Add time limit if configured
+                if self.config.max_episode_steps > 0:
+                    from retro_ai.wrappers.time_limit import (
+                        TimeLimitWrapper,
+                    )
+
+                    env = TimeLimitWrapper(
+                        env, self.config.max_episode_steps
+                    )
                 # Add sticky actions if configured
                 if self.config.sticky_actions > 0:
                     from retro_ai.wrappers.sticky_actions import (

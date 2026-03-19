@@ -30,6 +30,17 @@ EVAL_EPISODES = 3
 EVAL_SEED = 42
 
 
+def _find_latest_model(phase_dir):
+    """Find the latest model in a phase output directory."""
+    import glob as g
+    final = os.path.join(phase_dir, "final_model.zip")
+    if os.path.exists(final):
+        return final
+    pattern = os.path.join(phase_dir, "model_step_*.zip")
+    files = sorted(g.glob(pattern))
+    return files[-1] if files else None
+
+
 def phase0_random_baseline(args):
     """Run 10 episodes with random actions to establish the floor."""
     from retro_ai import BaseEnv
@@ -120,7 +131,7 @@ def _make_training_config(phase_name, extra_config=None):
         reward_mode="memory",
         action_mode="joystick",
         policy="CnnPolicy",
-        num_envs=4,
+        num_envs=8,
         grayscale=True,
         resize=(84, 84),
         frame_stack=4,
@@ -143,8 +154,8 @@ def _make_training_config(phase_name, extra_config=None):
     return TrainingConfig(**base)
 
 
-def _run_training(config, smoke_only=False):
-    """Run training and return the output dir."""
+def _run_training(config, smoke_only=False, resume_from=None):
+    """Run training (or resume) and return the model path."""
     from retro_ai.training.pipeline import TrainingPipeline
 
     if smoke_only:
@@ -152,19 +163,23 @@ def _run_training(config, smoke_only=False):
         config = replace(config, total_timesteps=500, checkpoint_interval=1000)
 
     pipeline = TrainingPipeline(config)
-    model_path = pipeline.run()
+    if resume_from:
+        model_path = pipeline.resume(resume_from)
+    else:
+        model_path = pipeline.run()
     print(f"  Model saved to {model_path}")
     return model_path
 
 
-def _run_eval(model_path, phase_name):
-    """Run deterministic eval and return summary."""
+def _run_eval(model_path, phase_name, deterministic=True):
+    """Run eval and return summary."""
     from retro_ai.training.evaluation import EvaluationModule
     from retro_ai.training.game_profile import GameProfileRegistry
 
     registry = GameProfileRegistry()
     profile = registry.load(GAME_PROFILE)
-    out_dir = os.path.join(OUTPUT_BASE, phase_name, "eval")
+    mode = "deterministic" if deterministic else "stochastic"
+    out_dir = os.path.join(OUTPUT_BASE, phase_name, f"eval_{mode}")
 
     evaluator = EvaluationModule(
         model_path=str(model_path),
@@ -173,13 +188,54 @@ def _run_eval(model_path, phase_name):
         base_seed=EVAL_SEED,
         output_dir=out_dir,
         action_mode="joystick",
+        deterministic=deterministic,
     )
     summary = evaluator.run()
-    print(f"\n=== {phase_name} Eval ===")
+    print(f"\n=== {phase_name} Eval ({mode}) ===")
     print(f"  Mean reward: {summary['reward_mean']:.1f} ± {summary['reward_std']:.1f}")
     print(f"  Best reward: {summary['reward_max']:.1f}")
     print(f"  Mean length: {summary['length_mean']:.0f}")
     return summary
+
+
+def phase1b_shaped_reward(args):
+    """Phase 1b: PPO with reward shaping (survival bonus + time limit).
+
+    Reward design rationale:
+    - survival_bonus=0.01/step: over 900 steps = +9.0 total. A single hit
+      (+1 to +10) is worth 100-1000 steps of survival, so scoring always
+      dominates. But the dense signal helps PPO learn to stay alive.
+    - max_episode_steps=900: ~60 seconds of game time. Prevents degenerate
+      survive-forever strategies. Creates urgency to score within the window.
+    """
+    config = _make_training_config("phase1b_shaped_reward", {
+        "survival_bonus": 0.01,
+        "max_episode_steps": 900,
+    })
+    if args.timesteps:
+        from dataclasses import replace
+        config = replace(config, total_timesteps=args.timesteps)
+    if args.smoke:
+        print("=== Phase 1b: Smoke Test (500 steps) ===")
+        _run_training(config, smoke_only=True)
+        return
+    if args.eval:
+        model_path = os.path.join(OUTPUT_BASE, "phase1b_shaped_reward", "final_model.zip")
+        _run_eval(model_path, "phase1b_shaped_reward", deterministic=True)
+        _run_eval(model_path, "phase1b_shaped_reward", deterministic=False)
+        return
+    resume_from = None
+    if args.resume:
+        resume_from = _find_latest_model(os.path.join(OUTPUT_BASE, "phase1b_shaped_reward"))
+        if not resume_from:
+            print("No checkpoint found to resume from.")
+            sys.exit(1)
+        print(f"Resuming from: {resume_from}")
+    steps = args.timesteps or TIMESTEPS
+    print(f"=== Phase 1b: PPO + Shaped Reward ({steps:,} steps) ===")
+    model_path = _run_training(config, resume_from=resume_from)
+    _run_eval(model_path, "phase1b_shaped_reward", deterministic=True)
+    _run_eval(model_path, "phase1b_shaped_reward", deterministic=False)
 
 
 def phase1_vanilla_ppo(args):
@@ -289,6 +345,7 @@ def phase5_dqn_per(args):
 PHASES = {
     "phase0": phase0_random_baseline,
     "phase1": phase1_vanilla_ppo,
+    "phase1b": phase1b_shaped_reward,
     "phase2": phase2_ppo_rnd,
     "phase3": phase3_ppo_drq_sticky,
     "phase4": phase4_tuned_ppo,
@@ -301,6 +358,8 @@ def main():
     parser.add_argument("phase", choices=list(PHASES.keys()), help="Phase to run")
     parser.add_argument("--smoke", action="store_true", help="Smoke test only (500 steps)")
     parser.add_argument("--eval", action="store_true", help="Eval only (load existing model)")
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
+    parser.add_argument("--timesteps", type=int, help="Override total timesteps for this run")
     args = parser.parse_args()
     PHASES[args.phase](args)
 
