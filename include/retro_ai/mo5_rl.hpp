@@ -51,6 +51,10 @@ public:
     std::string emulator_name() const override;
     std::string game_name() const override;
 
+    // MO5-specific: keyboard input for game startup
+    void type_string(const std::string& text, int hold_frames = 3, int gap_frames = 3);
+    void wait_frames(int n);
+
 private:
     class Impl;
     std::unique_ptr<Impl> impl_;

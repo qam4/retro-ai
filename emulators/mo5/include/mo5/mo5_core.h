@@ -127,6 +127,9 @@ void emulator_reset(int seed = -1);
 /// Advance the emulator by one frame, applying the given action index [0, NUM_ACTIONS).
 void emulator_step(int action);
 
+/// Type a single ASCII character using AZERTY mapping. Handles SHIFT automatically.
+void emulator_type_char(char c);
+
 /// Get the name of the currently loaded ROM.
 std::string emulator_get_rom_name();
 

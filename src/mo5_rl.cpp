@@ -39,6 +39,13 @@ public:
         , reward_params_(reward_params)
         , reward_system_(RewardSystemFactory::create(reward_mode, reward_params))
     {
+        // Pass BIOS ROM paths to the MO5 adapter before init
+        auto basic_it = reward_params.find("basic_rom_path");
+        auto monitor_it = reward_params.find("monitor_rom_path");
+        if (basic_it != reward_params.end() && monitor_it != reward_params.end()) {
+            mo5::set_rom_paths(basic_it->second, monitor_it->second);
+        }
+
         if (!mo5::emulator_init(rom_path)) {
             throw InitializationError(
                 "Failed to initialize MO5 emulator with ROM '" +
@@ -144,6 +151,32 @@ public:
         return mo5::emulator_get_rom_name();
     }
 
+    /// Type a string on the MO5 keyboard with proper timing.
+    /// Each character is held for `hold_frames` then released for `gap_frames`.
+    void type_string(const std::string& text, int hold_frames = 3, int gap_frames = 3) {
+        for (char c : text) {
+            for (int i = 0; i < hold_frames; ++i) {
+                mo5::emulator_type_char(c);
+                mo5::video_render_frame();
+                ++frame_number_;
+            }
+            for (int i = 0; i < gap_frames; ++i) {
+                mo5::emulator_step(0);  // noop
+                mo5::video_render_frame();
+                ++frame_number_;
+            }
+        }
+    }
+
+    /// Run N noop frames (for waiting).
+    void wait_frames(int n) {
+        for (int i = 0; i < n; ++i) {
+            mo5::emulator_step(0);
+            mo5::video_render_frame();
+            ++frame_number_;
+        }
+    }
+
 private:
     /// Extract the current framebuffer as a flat RGB888 vector.
     std::vector<uint8_t> extract_framebuffer() const {
@@ -212,6 +245,14 @@ std::string MO5RLInterface::emulator_name() const {
 
 std::string MO5RLInterface::game_name() const {
     return impl_->game_name();
+}
+
+void MO5RLInterface::type_string(const std::string& text, int hold_frames, int gap_frames) {
+    impl_->type_string(text, hold_frames, gap_frames);
+}
+
+void MO5RLInterface::wait_frames(int n) {
+    impl_->wait_frames(n);
 }
 
 }  // namespace retro_ai

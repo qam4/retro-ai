@@ -11,6 +11,7 @@
 #include "emulator_core.h"
 #include "input_handler.h"
 #include "cassette_interface.h"
+#include "char_mapping.h"
 
 #include <memory>
 #include <cstring>
@@ -31,17 +32,71 @@ static std::string s_monitor_rom_path;
 static uint8_t s_rgb_buffer[FRAMEBUFFER_SIZE] = {};
 
 // Action-to-key mapping for RL discrete actions
-// MO5 games typically use arrow keys + space/enter
-static const crayon::MO5Key ACTION_KEYS[] = {
-    // 0: no-op (handled specially)
-    crayon::MO5Key::UP,      // 1: up
-    crayon::MO5Key::DOWN,    // 2: down
-    crayon::MO5Key::LEFT,    // 3: left
-    crayon::MO5Key::RIGHT,   // 4: right
-    crayon::MO5Key::SPACE,   // 5: space (fire/action)
-    crayon::MO5Key::ENTER,   // 6: enter
+// Actions 0-6: gameplay controls (arrows, space, enter)
+// Actions 7+: keyboard keys for startup sequences
+static const struct { int action; crayon::MO5Key key; } ACTION_MAP[] = {
+    // Gameplay controls
+    { 1, crayon::MO5Key::UP},
+    { 2, crayon::MO5Key::DOWN},
+    { 3, crayon::MO5Key::LEFT},
+    { 4, crayon::MO5Key::RIGHT},
+    { 5, crayon::MO5Key::SPACE},
+    { 6, crayon::MO5Key::ENTER},
+    // Letters (for typing commands like LOAD"")
+    { 7, crayon::MO5Key::A},
+    { 8, crayon::MO5Key::B},
+    { 9, crayon::MO5Key::C},
+    {10, crayon::MO5Key::D},
+    {11, crayon::MO5Key::E},
+    {12, crayon::MO5Key::F},
+    {13, crayon::MO5Key::G},
+    {14, crayon::MO5Key::H},
+    {15, crayon::MO5Key::I},
+    {16, crayon::MO5Key::J},
+    {17, crayon::MO5Key::K},
+    {18, crayon::MO5Key::L},
+    {19, crayon::MO5Key::M},
+    {20, crayon::MO5Key::N},
+    {21, crayon::MO5Key::O},
+    {22, crayon::MO5Key::P},
+    {23, crayon::MO5Key::Q},
+    {24, crayon::MO5Key::R},
+    {25, crayon::MO5Key::S},
+    {26, crayon::MO5Key::T},
+    {27, crayon::MO5Key::U},
+    {28, crayon::MO5Key::V},
+    {29, crayon::MO5Key::W},
+    {30, crayon::MO5Key::X},
+    {31, crayon::MO5Key::Y},
+    {32, crayon::MO5Key::Z},
+    // Numbers
+    {33, crayon::MO5Key::Key0},
+    {34, crayon::MO5Key::Key1},
+    {35, crayon::MO5Key::Key2},
+    {36, crayon::MO5Key::Key3},
+    {37, crayon::MO5Key::Key4},
+    {38, crayon::MO5Key::Key5},
+    {39, crayon::MO5Key::Key6},
+    {40, crayon::MO5Key::Key7},
+    {41, crayon::MO5Key::Key8},
+    {42, crayon::MO5Key::Key9},
+    // Special
+    {43, crayon::MO5Key::SHIFT},
+    {44, crayon::MO5Key::CNT},     // CTRL
+    {45, crayon::MO5Key::STOP},
+    {46, crayon::MO5Key::COMMA},
+    {47, crayon::MO5Key::AT},
+    {48, crayon::MO5Key::SLASH},
+    {49, crayon::MO5Key::STAR},
+    {50, crayon::MO5Key::MINUS},
+    {51, crayon::MO5Key::PLUS},
+    {52, crayon::MO5Key::ACC},
+    {53, crayon::MO5Key::EFF},     // Delete
+    {54, crayon::MO5Key::INS},
+    {55, crayon::MO5Key::RAZ},     // Home/Reset
+    {56, crayon::MO5Key::BASIC},
 };
-static constexpr int NUM_BASIC_ACTIONS = 7;  // 0-6
+static constexpr int ACTION_MAP_SIZE = sizeof(ACTION_MAP) / sizeof(ACTION_MAP[0]);
 
 // ---------------------------------------------------------------------------
 // CPU Interface
@@ -88,14 +143,15 @@ const uint8_t* video_get_framebuffer() {
 void video_render_frame() {
     if (!s_emu) return;
     // Crayon renders during run_frame(), framebuffer is already up to date.
-    // Convert ARGB32 → RGB888
-    const uint32_t* argb = reinterpret_cast<const uint32_t*>(s_emu->get_framebuffer());
-    if (!argb) return;
+    // Convert uint32 palette pixels → RGB888
+    // Default palette is RGBA format: 0xRRGGBBAA
+    const uint32_t* fb32 = reinterpret_cast<const uint32_t*>(s_emu->get_framebuffer());
+    if (!fb32) return;
     for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) {
-        uint32_t pixel = argb[i];
-        s_rgb_buffer[i * 3 + 0] = (pixel >> 16) & 0xFF;  // R
-        s_rgb_buffer[i * 3 + 1] = (pixel >>  8) & 0xFF;  // G
-        s_rgb_buffer[i * 3 + 2] = (pixel >>  0) & 0xFF;  // B
+        uint32_t pixel = fb32[i];
+        s_rgb_buffer[i * 3 + 0] = (pixel >> 24) & 0xFF;  // R
+        s_rgb_buffer[i * 3 + 1] = (pixel >> 16) & 0xFF;  // G
+        s_rgb_buffer[i * 3 + 2] = (pixel >>  8) & 0xFF;  // B
     }
 }
 
@@ -189,6 +245,8 @@ bool emulator_init(const std::string& rom_path) {
                 s_emu.reset();
                 return false;
             }
+            // Start cassette playback for fast loading
+            s_emu->play_cassette();
         } else if (ext == "mo5" || ext == "MO5") {
             auto result = s_emu->load_cartridge(rom_path);
             if (result.is_err()) {
@@ -218,11 +276,38 @@ void emulator_step(int action) {
     input.reset();
 
     // Map discrete action to key press
-    if (action > 0 && action < NUM_BASIC_ACTIONS) {
-        input.set_key_state(ACTION_KEYS[action], true);
+    if (action > 0) {
+        for (int i = 0; i < ACTION_MAP_SIZE; ++i) {
+            if (ACTION_MAP[i].action == action) {
+                input.set_key_state(ACTION_MAP[i].key, true);
+                break;
+            }
+        }
     }
 
     s_emu->run_frame();
+}
+
+/// Type a single ASCII character (using AZERTY char_to_mo5 mapping).
+/// Handles SHIFT automatically. Runs one frame with the key pressed.
+void emulator_type_char(char c) {
+    if (!s_emu) return;
+
+    crayon::CharMapping mapping;
+    if (!crayon::char_to_mo5(c, mapping)) {
+        // Unknown character — just run a noop frame
+        s_emu->run_frame();
+        return;
+    }
+
+    auto& input = s_emu->get_input_handler();
+    input.reset();
+    if (mapping.shift) {
+        input.set_key_state(crayon::MO5Key::SHIFT, true);
+    }
+    input.set_key_state(mapping.key, true);
+    s_emu->run_frame();
+    input.reset();
 }
 
 std::string emulator_get_rom_name() {

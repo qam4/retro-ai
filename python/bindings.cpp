@@ -367,6 +367,14 @@ PYBIND11_MODULE(retro_ai_native, m) {
              py::arg("rom_path"),
              py::arg("reward_mode") = "survival",
              py::arg("reward_params") = RewardParams{},
-             "Create a Thomson MO5 environment.");
+             "Create a Thomson MO5 environment.")
+        .def("type_string", &MO5RLInterface::type_string,
+             py::arg("text"),
+             py::arg("hold_frames") = 3,
+             py::arg("gap_frames") = 3,
+             "Type a string on the MO5 keyboard (AZERTY mapping).")
+        .def("wait_frames", &MO5RLInterface::wait_frames,
+             py::arg("n"),
+             "Run N noop frames.");
 #endif
 }
