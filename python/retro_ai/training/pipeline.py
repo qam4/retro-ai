@@ -423,6 +423,8 @@ class TrainingPipeline:
                 log_interval=self.config.log_interval,
                 total_timesteps=self.config.total_timesteps,
                 logger_inst=self._logger,
+                frame_skip=self.config.frame_skip,
+                num_envs=self.config.num_envs,
             )
         )
         ckpt_dir = os.path.join(self.config.output_dir, "checkpoints")

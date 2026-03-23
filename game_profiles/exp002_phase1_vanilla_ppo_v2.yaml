@@ -1,0 +1,24 @@
+# Experiment 002, Phase 1 (v2): Vanilla PPO, no extras
+# Emulator: videopac v0.5.0
+# Purpose: Verify basic PPO learns from score delta reward
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+total_timesteps: 100000
+game_profile: satellite_attack_memory
+reward_mode: memory
+survival_bonus: 0
+reward_clip: 0
+action_mode: joystick
+policy: CnnPolicy
+num_envs: 4
+intrinsic_reward:
+  enabled: false
+augmentation: false
+sticky_actions: 0
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+output_dir: output/exp002_v2/phase1_vanilla_ppo

@@ -21,6 +21,8 @@ class MetricsCallback(BaseCallback):
         total_timesteps: int = 0,
         logger_inst: Optional[StructuredLogger] = None,
         verbose: int = 0,
+        frame_skip: int = 1,
+        num_envs: int = 1,
     ):
         super().__init__(verbose)
         self._metrics = metrics
@@ -29,6 +31,8 @@ class MetricsCallback(BaseCallback):
         self._logger = logger_inst
         self._last_log_step = 0
         self._step_start = time.monotonic()
+        self._frame_skip = frame_skip
+        self._num_envs = num_envs
 
     def _on_step(self) -> bool:
         # Check for completed episodes in locals
@@ -60,11 +64,19 @@ class MetricsCallback(BaseCallback):
                 rolling_len = self._metrics.rolling_length()
                 total = self._total_timesteps
                 pct = f" ({100 * self.num_timesteps / total:.0f}%)" if total > 0 else ""
+                # fps = timesteps/sec (across all envs)
+                # emu_fps = raw emulator frames/sec (fps × frame_skip)
+                frame_skip = getattr(self, '_frame_skip', 4)
+                emu_fps = fps * frame_skip
+                # emu_fps = total emulator frames/sec across all envs
+                # per_env = emulator frames/sec per individual env
+                emu_fps = fps * self._frame_skip
+                per_env = emu_fps / self._num_envs if self._num_envs > 0 else emu_fps
                 self._logger.info(
                     f"step {self.num_timesteps}/{total}{pct}"
-                    f" | rolling_reward={rolling}"
-                    f" | rolling_ep_len={rolling_len}"
-                    f" | fps={fps:.0f}",
+                    f" | reward={rolling:.2f}"
+                    f" | ep_len={rolling_len:.0f}"
+                    f" | emu_fps={emu_fps:.0f} ({per_env:.0f}/env x{self._num_envs})",
                 )
             self._last_log_step = self.num_timesteps
             self._step_start = time.monotonic()

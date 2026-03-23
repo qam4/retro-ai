@@ -341,6 +341,59 @@ def phase5_dqn_per(args):
     model_path = _run_training(config)
     _run_eval(model_path, "phase5_dqn_per")
 
+def phase5b_dqn_shaped(args):
+    """Phase 5b: DQN + PER + shaped reward (survival bonus + time limit).
+
+    Combines DQN's sample efficiency (replay buffer, PER) with the
+    survival bonus that helped PPO learn. DQN requires discrete actions
+    (18 total from flattened joystick space).
+    """
+    from retro_ai.training.config import AlgorithmConfig
+    config = _make_training_config("phase5b_dqn_shaped", {
+        "algorithm": AlgorithmConfig(
+            name="DQN", learning_rate=1e-4, batch_size=32,
+            extra={
+                "buffer_size": 100000, "learning_starts": 1000,
+                "exploration_fraction": 0.3, "exploration_final_eps": 0.05,
+                "target_update_interval": 500, "train_freq": 4,
+            },
+        ),
+        "action_mode": "discrete",
+        "num_envs": 1,
+        "survival_bonus": 0.01,
+        "max_episode_steps": 900,
+    })
+    if args.timesteps:
+        from dataclasses import replace
+        config = replace(config, total_timesteps=args.timesteps)
+    phase_name = "phase5b_dqn_shaped"
+    out_dir = os.path.join(OUTPUT_BASE, phase_name)
+    if args.smoke:
+        print("=== Phase 5b: Smoke Test (500 steps) ===")
+        _run_training(config, smoke_only=True)
+        return
+    if args.eval:
+        model_path = _find_latest_model(out_dir)
+        if not model_path:
+            print(f"No model found in {out_dir}")
+            return
+        _run_eval(model_path, phase_name, deterministic=True)
+        _run_eval(model_path, phase_name, deterministic=False)
+        return
+    resume_from = None
+    if args.resume:
+        resume_from = _find_latest_model(out_dir)
+        if not resume_from:
+            print("No checkpoint found to resume from.")
+            sys.exit(1)
+        print(f"Resuming from: {resume_from}")
+    steps = config.total_timesteps
+    print(f"=== Phase 5b: DQN + PER + Shaped ({steps:,} steps) ===")
+    model_path = _run_training(config, resume_from=resume_from)
+    _run_eval(model_path, phase_name, deterministic=True)
+    _run_eval(model_path, phase_name, deterministic=False)
+
+
 
 PHASES = {
     "phase0": phase0_random_baseline,
@@ -350,6 +403,7 @@ PHASES = {
     "phase3": phase3_ppo_drq_sticky,
     "phase4": phase4_tuned_ppo,
     "phase5": phase5_dqn_per,
+    "phase5b": phase5b_dqn_shaped,
 }
 
 
