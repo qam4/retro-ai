@@ -1,39 +1,30 @@
-cmake_minimum_required(VERSION 3.20)
-project(mo5_core LANGUAGES CXX)
+# MO5 emulator core — wraps Crayon (Thomson MO5 emulator)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Build Crayon's core library (headless, no SDL, no tests)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
+set(BUILD_STANDALONE OFF CACHE BOOL "" FORCE)
+set(ENABLE_SDL OFF CACHE BOOL "" FORCE)
 
-# Collect source files
-# When the real emulator submodule is checked out, replace the stub with actual sources:
-#   file(GLOB_RECURSE MO5_SOURCES "src/*.cpp" "src/*.c")
-set(MO5_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/mo5_stub.cpp
+# Crayon uses include_directories(${CMAKE_SOURCE_DIR}/include) which resolves
+# wrong when built as a subdirectory. Override before adding.
+set(CRAYON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../crayon)
+add_subdirectory(${CRAYON_DIR}
+                 ${CMAKE_CURRENT_BINARY_DIR}/crayon
+                 EXCLUDE_FROM_ALL)
+
+# Fix Crayon's include directories (CMAKE_SOURCE_DIR pointed to retro-ai root)
+set_target_properties(crayon_core PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
+target_include_directories(crayon_core PUBLIC
+    $<BUILD_INTERFACE:${CRAYON_DIR}/include>
+    $<BUILD_INTERFACE:${CRAYON_DIR}/third_party>
 )
 
-# Build as static library
-add_library(mo5_core STATIC ${MO5_SOURCES})
-
-# Headless mode: disable SDL and graphics output
-target_compile_definitions(mo5_core
-    PUBLIC
-        HEADLESS_MODE=1
-        NO_SDL=1
+# Thin adapter library that maps mo5_core.h to Crayon's API
+add_library(mo5_core STATIC src/mo5_crayon_adapter.cpp)
+target_include_directories(mo5_core PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../crayon/include>
 )
-
-# Expose include directories for consumers
-target_include_directories(mo5_core
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-)
-
-# C++17 standard
-target_compile_features(mo5_core PUBLIC cxx_std_17)
-
-# Platform-specific settings
-if(MSVC)
-    target_compile_options(mo5_core PRIVATE /W3)
-else()
-    target_compile_options(mo5_core PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+target_link_libraries(mo5_core PRIVATE crayon_core)
+set_target_properties(mo5_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

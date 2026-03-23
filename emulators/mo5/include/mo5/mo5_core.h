@@ -130,6 +130,9 @@ void emulator_step(int action);
 /// Get the name of the currently loaded ROM.
 std::string emulator_get_rom_name();
 
+/// Set paths for BASIC and Monitor ROMs (must be called before emulator_init).
+void set_rom_paths(const std::string& basic_path, const std::string& monitor_path);
+
 // ---------------------------------------------------------------------------
 // State Serialization
 // ---------------------------------------------------------------------------

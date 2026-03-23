@@ -7,3 +7,6 @@
 	path = emulators/mo5
 	url = https://github.com/retro-ai/mo5-emulator.git
 	branch = stable
+[submodule "emulators/crayon"]
+	path = emulators/crayon
+	url = https://github.com/qam4/crayon.git

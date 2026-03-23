@@ -199,7 +199,8 @@ if(HAVE_VIDEOPAC)
     install(TARGETS videopac_rl videopac_core EXPORT retro_ai_targets)
 endif()
 if(HAVE_MO5)
-    install(TARGETS mo5_rl mo5_core EXPORT retro_ai_targets)
+    install(TARGETS mo5_rl EXPORT retro_ai_targets)
+    install(TARGETS mo5_core crayon_core EXPORT retro_ai_targets)
 endif()
 
 install(EXPORT retro_ai_targets
