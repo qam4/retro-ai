@@ -11,13 +11,13 @@ algorithm:
     n_epochs: 4
     ent_coef: 0.01
 
-total_timesteps: 500000
+total_timesteps: 2000000
 num_envs: 4
 device: auto
 mixed_precision: false
 vec_env_type: threaded
 
-output_dir: output/yeti/ppo_500k
+output_dir: output/yeti/ppo_2M
 tensorboard: false
 checkpoint_interval: 25000
 max_checkpoints: 4

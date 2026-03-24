@@ -35,6 +35,11 @@
 #   RAM offset 11095 (CPU 0x2B57)
 #   Starts at 5, decreases on death (snowball hit)
 #
+# Player position:
+#   X: RAM offset 11090 (CPU 0x2B52) — increases going right
+#   Y: RAM offset 11089 (CPU 0x2B51) — 182 at bottom, 150 platform 2, 96 platform 3
+#   Note: Y changes during jumps (182→172→182), not just climbing
+#
 # =============================================================================
 
 name: yeti
