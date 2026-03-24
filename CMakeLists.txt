@@ -151,10 +151,10 @@ if(HAVE_MO5)
     add_library(mo5_rl src/mo5_rl.cpp)
     target_link_libraries(mo5_rl
         PUBLIC retro_ai_core
-        PRIVATE mo5_core reward_systems
+        PRIVATE crayon_core reward_systems
     )
     target_include_directories(mo5_rl PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/emulators/mo5/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/emulators/crayon/include>
         $<INSTALL_INTERFACE:include>
     )
 endif()
@@ -200,7 +200,7 @@ if(HAVE_VIDEOPAC)
 endif()
 if(HAVE_MO5)
     install(TARGETS mo5_rl EXPORT retro_ai_targets)
-    install(TARGETS mo5_core crayon_core EXPORT retro_ai_targets)
+    install(TARGETS crayon_core EXPORT retro_ai_targets)
 endif()
 
 install(EXPORT retro_ai_targets
