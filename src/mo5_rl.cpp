@@ -151,6 +151,24 @@ public:
         return mo5::emulator_get_rom_name();
     }
 
+    std::vector<uint8_t> read_ram() const {
+        size_t size = 0;
+        const uint8_t* ram = mo5::memory_get_ram(size);
+        if (!ram || size == 0) return {};
+        return std::vector<uint8_t>(ram, ram + size);
+    }
+
+    uint8_t read_ram_byte(uint16_t address) const {
+        size_t size = 0;
+        const uint8_t* ram = mo5::memory_get_ram(size);
+        if (!ram || address >= size) return 0;
+        return ram[address];
+    }
+
+    int ram_size() const {
+        return static_cast<int>(mo5::RAM_SIZE);
+    }
+
     /// Type a string on the MO5 keyboard with proper timing.
     /// Each character is held for `hold_frames` then released for `gap_frames`.
     void type_string(const std::string& text, int hold_frames = 3, int gap_frames = 3) {
@@ -253,6 +271,18 @@ void MO5RLInterface::type_string(const std::string& text, int hold_frames, int g
 
 void MO5RLInterface::wait_frames(int n) {
     impl_->wait_frames(n);
+}
+
+std::vector<uint8_t> MO5RLInterface::read_ram() const {
+    return impl_->read_ram();
+}
+
+uint8_t MO5RLInterface::read_ram_byte(uint16_t address) const {
+    return impl_->read_ram_byte(address);
+}
+
+int MO5RLInterface::ram_size() const {
+    return impl_->ram_size();
 }
 
 }  // namespace retro_ai

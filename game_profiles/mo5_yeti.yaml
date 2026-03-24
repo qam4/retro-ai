@@ -1,0 +1,90 @@
+# =============================================================================
+# Yeti (Thomson MO5) — Memory-based reward
+# =============================================================================
+#
+# Game:     Yeti (1984, Loriciels)
+# Platform: Thomson MO5
+# Type:     Platform game (Donkey Kong clone)
+#
+# Description:
+#   The player starts at the bottom of a multi-level platform structure and
+#   must reach the princess at the top. A yeti throws snowballs that roll
+#   down the platforms and ladders. The player can jump over snowballs,
+#   climb ladders, and collect fruits for bonus points. Touching a snowball
+#   costs a life (5 lives total). A bonus countdown decreases over time —
+#   reaching the princess awards the remaining bonus. 4 levels total.
+#
+# Controls:
+#   Arrow keys: move left/right, climb up/down ladders
+#   Space: jump
+#
+# Startup sequence:
+#   1. Boot to BASIC prompt (~100 frames)
+#   2. Type LOAD"" + ENTER
+#   3. Wait for cassette to load (~200 frames in fast mode)
+#   4. Type RUN + ENTER
+#   5. Wait for title screen (~800 frames)
+#   6. Press 1 for 1 player
+#   7. Wait for gameplay to start (~300 frames)
+#
+# =============================================================================
+# RAM Map (discovered via RAM scanning)
+# =============================================================================
+#
+# The MO5 has 48KB RAM. Game variables are in user RAM (0x2000-0x9FFF),
+# which maps to offset 0x0000-0x7FFF in the read_ram() output.
+#
+# Score (16-bit big-endian):
+#   0x2B55 (high byte) + 0x2B56 (low byte)
+#   Displayed as 5 digits (00010 after collecting one fruit worth 10 pts)
+#   Increases on: fruit collection (+10 each), level completion (+bonus)
+#
+# Bonus countdown (16-bit big-endian):
+#   0x2B02 (high byte) + 0x2B03 (low byte)
+#   Starts at ~949, decreases over time
+#   Awarded as score when reaching the princess
+#
+# Lives:
+#   0x2B2F (1 byte)
+#   Starts at 4, decreases on death (snowball hit)
+#   Game over when reaches 0
+#
+# =============================================================================
+
+name: yeti
+display_name: "Yeti (Thomson MO5)"
+emulator_type: mo5
+rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/Yeti (1984) (Loriciels).k7"
+reward_mode: memory
+reward_params:
+  # Score: 16-bit big-endian at RAM offset 0x2B55-0x2B56
+  score_address_count: "1"
+  score_address_0_addr: "11093"
+  score_address_0_bytes: "2"
+  score_address_0_bcd: "0"
+  score_address_0_le: "0"
+  score_address_0_multiplier: "1"
+  # Episode ends when lives (0x2B2F = offset 11055) decrease
+  done_when_score_drops: "false"
+  # BIOS ROM paths (required for MO5)
+  basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
+  monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
+
+startup_sequence:
+  # Type LOAD"" + ENTER, wait, RUN + ENTER, wait, press 1
+  actions: []
+  post_delay_frames: 100
+  random_noop_max: 0
+  # Custom startup handled by game-specific code:
+  # type LOAD""\n, wait 200, type RUN\n, wait 800, type 1, wait 300
+
+# Observation
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true
+
+# Action space: 6 discrete actions
+# 0=noop, 1=up, 2=down, 3=left, 4=right, 5=jump(space)
+action_count: 6

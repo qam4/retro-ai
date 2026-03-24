@@ -51,6 +51,11 @@ public:
     std::string emulator_name() const override;
     std::string game_name() const override;
 
+    // RAM inspection
+    std::vector<uint8_t> read_ram() const override;
+    uint8_t read_ram_byte(uint16_t address) const override;
+    int ram_size() const override;
+
     // MO5-specific: keyboard input for game startup
     void type_string(const std::string& text, int hold_frames = 3, int gap_frames = 3);
     void wait_frames(int n);
