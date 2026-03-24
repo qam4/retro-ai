@@ -82,15 +82,23 @@ public:
     Impl& operator=(const Impl&) = delete;
 
     StepResult reset(int seed) {
-        mo5::emulator_reset(seed);
-        mo5::video_render_frame();
-        frame_number_ = 0;
+        if (!startup_state_.empty()) {
+            // Fast path: restore from cached post-startup state
+            mo5::state_load(startup_state_);
+            mo5::video_render_frame();
+            frame_number_ = 0;
+        } else {
+            mo5::emulator_reset(seed);
+            mo5::video_render_frame();
+            frame_number_ = 0;
 
-        // Run startup sequence if configured
-        // Format: "command1\nwait:N\ncommand2\nwait:N\n..."
-        auto it = reward_params_.find("startup_sequence");
-        if (it != reward_params_.end()) {
-            run_startup_sequence(it->second);
+            // Run startup sequence if configured
+            auto it = reward_params_.find("startup_sequence");
+            if (it != reward_params_.end()) {
+                run_startup_sequence(it->second);
+                // Cache the post-startup state for fast subsequent resets
+                startup_state_ = mo5::state_save();
+            }
         }
 
         // Initialize lives tracking
@@ -332,6 +340,7 @@ private:
     std::string action_mode_;
     int lives_addr_ = -1;
     int previous_lives_ = 0;
+    std::vector<uint8_t> startup_state_;  // cached post-startup state for fast reset
 };
 
 // ---------------------------------------------------------------------------

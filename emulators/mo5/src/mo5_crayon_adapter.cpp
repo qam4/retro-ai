@@ -12,6 +12,7 @@
 #include "input_handler.h"
 #include "cassette_interface.h"
 #include "char_mapping.h"
+#include "savestate.h"
 
 #include <memory>
 #include <cstring>
@@ -337,13 +338,32 @@ std::string emulator_get_rom_name() {
 // ---------------------------------------------------------------------------
 
 std::vector<uint8_t> state_save() {
-    // TODO: implement via Crayon's save_state
-    return {};
+    if (!s_emu) return {};
+
+    crayon::SaveState state;
+    state.cpu_state = s_emu->get_cpu_state();
+    state.gate_array_state = s_emu->get_gate_array_state();
+    state.memory_state = s_emu->get_memory_state();
+    state.pia_state = s_emu->get_pia_state();
+    state.frame_count = s_emu->get_frame_count();
+
+    auto result = crayon::SaveStateManager::serialize_to_buffer(state);
+    if (result.is_err() || !result.value.has_value()) return {};
+    return result.value.value();
 }
 
-bool state_load(const std::vector<uint8_t>& /*data*/) {
-    // TODO: implement via Crayon's load_state
-    return false;
+bool state_load(const std::vector<uint8_t>& data) {
+    if (!s_emu || data.empty()) return false;
+
+    auto result = crayon::SaveStateManager::deserialize_from_buffer(data.data(), data.size());
+    if (result.is_err() || !result.value.has_value()) return false;
+
+    const auto& state = result.value.value();
+    s_emu->get_cpu().set_state(state.cpu_state);
+    s_emu->get_gate_array().set_state(state.gate_array_state);
+    s_emu->get_memory().set_state(state.memory_state);
+    s_emu->get_pia().set_state(state.pia_state);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
