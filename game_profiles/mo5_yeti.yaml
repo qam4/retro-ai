@@ -45,8 +45,8 @@
 #   Awarded as score when reaching the princess
 #
 # Lives:
-#   0x2B2F (1 byte)
-#   Starts at 4, decreases on death (snowball hit)
+#   0x2B57 (1 byte, RAM offset 11095)
+#   Starts at 5, decreases on death (snowball hit)
 #   Game over when reaches 0
 #
 # =============================================================================
