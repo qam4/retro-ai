@@ -51,6 +51,12 @@ public:
                 "Failed to initialize MO5 emulator with ROM '" +
                 rom_path + "'");
         }
+
+        // Parse lives address for episode termination
+        auto lives_it = reward_params.find("lives_addr");
+        if (lives_it != reward_params.end()) {
+            try { lives_addr_ = std::stoi(lives_it->second); } catch (...) {}
+        }
     }
 
     ~Impl() {
@@ -66,6 +72,22 @@ public:
         mo5::video_render_frame();
         frame_number_ = 0;
 
+        // Run startup sequence if configured
+        // Format: "command1\nwait:N\ncommand2\nwait:N\n..."
+        auto it = reward_params_.find("startup_sequence");
+        if (it != reward_params_.end()) {
+            run_startup_sequence(it->second);
+        }
+
+        // Initialize lives tracking
+        if (lives_addr_ >= 0) {
+            size_t ram_size = 0;
+            const uint8_t* ram = mo5::memory_get_ram(ram_size);
+            if (ram && static_cast<size_t>(lives_addr_) < ram_size) {
+                previous_lives_ = ram[lives_addr_];
+            }
+        }
+
         if (reward_system_) {
             reward_system_->reset();
         }
@@ -75,7 +97,7 @@ public:
         result.reward = 0.0f;
         result.done = false;
         result.truncated = false;
-        result.info = "{\"frame_number\": 0}";
+        result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
 
         previous_result_ = result;
         return result;
@@ -109,7 +131,21 @@ public:
         } else {
             result.reward = 0.0f;
         }
+
+        // Check for life loss (episode termination)
         result.done = false;
+        if (lives_addr_ >= 0) {
+            size_t ram_size = 0;
+            const uint8_t* ram = mo5::memory_get_ram(ram_size);
+            if (ram && static_cast<size_t>(lives_addr_) < ram_size) {
+                int current_lives = ram[lives_addr_];
+                if (current_lives < previous_lives_ && previous_lives_ > 0) {
+                    result.done = true;
+                }
+                previous_lives_ = current_lives;
+            }
+        }
+
         result.truncated = false;
         result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
 
@@ -123,6 +159,32 @@ public:
 
     ActionSpace action_space() const {
         return {ActionType::DISCRETE, {kNumActions}};
+    }
+
+    /// Parse and execute a startup sequence string.
+    /// Format: pipe-separated commands: "wait:N|type:TEXT|wait:N|type:TEXT"
+    /// type: types the text using AZERTY mapping (\n = ENTER)
+    /// wait: runs N noop frames
+    void run_startup_sequence(const std::string& seq) {
+        size_t pos = 0;
+        while (pos < seq.size()) {
+            size_t next = seq.find('|', pos);
+            std::string cmd = seq.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+            pos = (next == std::string::npos) ? seq.size() : next + 1;
+
+            if (cmd.substr(0, 5) == "wait:") {
+                int frames = std::stoi(cmd.substr(5));
+                wait_frames(frames);
+            } else if (cmd.substr(0, 5) == "type:") {
+                std::string text = cmd.substr(5);
+                // Replace literal \n with newline
+                size_t p;
+                while ((p = text.find("\\n")) != std::string::npos) {
+                    text.replace(p, 2, "\n");
+                }
+                type_string(text);
+            }
+        }
     }
 
     std::vector<uint8_t> save_state() const {
@@ -207,6 +269,8 @@ private:
     RewardParams reward_params_;
     std::unique_ptr<RewardSystem> reward_system_;
     StepResult previous_result_;
+    int lives_addr_ = -1;
+    int previous_lives_ = 0;
 };
 
 // ---------------------------------------------------------------------------

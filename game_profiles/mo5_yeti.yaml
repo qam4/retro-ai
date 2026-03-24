@@ -64,15 +64,16 @@ reward_params:
   score_address_0_bcd: "0"
   score_address_0_le: "0"
   score_address_0_multiplier: "1"
-  # Episode ends when lives (0x2B2F = offset 11055) decrease
+  # Episode ends when lives decrease
   done_when_score_drops: "false"
+  lives_addr: "11095"
   # BIOS ROM paths (required for MO5)
   basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
   monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
+  # Startup: boot BASIC, load cassette, run game, select 1 player
+  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:300"
 
-startup_sequence:
-  # Type LOAD"" + ENTER, wait, RUN + ENTER, wait, press 1
-  actions: []
+# No startup_sequence wrapper needed — handled by C++ reset() via startup_sequence param
   post_delay_frames: 100
   random_noop_max: 0
   # Custom startup handled by game-specific code:
