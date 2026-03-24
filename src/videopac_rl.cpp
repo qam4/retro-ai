@@ -112,6 +112,7 @@ public:
         config.video_standard = VideoStandard::NTSC;
         config.bios_path = bios_path;
         config.enable_profile = false;
+        config.scanline_render = true;  // ~3x faster rendering
 
         emulator_ = std::make_unique<EmulatorCore>(config);
 
