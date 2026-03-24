@@ -322,6 +322,7 @@ class BaseEnv:
                 rom_path,
                 reward_mode,
                 reward_params=reward_params_flat,
+                action_mode=action_mode,
             )
 
         raise ValueError(

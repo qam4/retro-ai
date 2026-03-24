@@ -130,6 +130,9 @@ void emulator_step(int action);
 /// Type a single ASCII character using AZERTY mapping. Handles SHIFT automatically.
 void emulator_type_char(char c);
 
+/// Step with multiple simultaneous key actions.
+void emulator_step_multi(const std::vector<int>& actions);
+
 /// Get the name of the currently loaded ROM.
 std::string emulator_get_rom_name();
 

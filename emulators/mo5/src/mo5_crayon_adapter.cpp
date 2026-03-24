@@ -310,6 +310,24 @@ void emulator_type_char(char c) {
     input.reset();
 }
 
+void emulator_step_multi(const std::vector<int>& actions) {
+    if (!s_emu) return;
+
+    auto& input = s_emu->get_input_handler();
+    input.reset();
+
+    for (int action : actions) {
+        for (int i = 0; i < ACTION_MAP_SIZE; ++i) {
+            if (ACTION_MAP[i].action == action) {
+                input.set_key_state(ACTION_MAP[i].key, true);
+                break;
+            }
+        }
+    }
+
+    s_emu->run_frame();
+}
+
 std::string emulator_get_rom_name() {
     return s_rom_name;
 }

@@ -363,10 +363,11 @@ PYBIND11_MODULE(retro_ai_native, m) {
 #ifdef HAVE_MO5
     py::class_<MO5RLInterface, RLInterface, std::shared_ptr<MO5RLInterface>>(
             m, "MO5RLInterface")
-        .def(py::init<const std::string&, const std::string&, const RewardParams&>(),
+        .def(py::init<const std::string&, const std::string&, const RewardParams&, const std::string&>(),
              py::arg("rom_path"),
              py::arg("reward_mode") = "survival",
              py::arg("reward_params") = RewardParams{},
+             py::arg("action_mode") = "discrete",
              "Create a Thomson MO5 environment.")
         .def("type_string", &MO5RLInterface::type_string,
              py::arg("text"),

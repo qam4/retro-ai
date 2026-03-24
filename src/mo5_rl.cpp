@@ -10,6 +10,7 @@
 #include "retro_ai/mo5_rl.hpp"
 #include "retro_ai/exceptions.hpp"
 #include "retro_ai/reward_system.hpp"
+#include "retro_ai/reward_systems/memory.hpp"
 
 #include <mo5/mo5_core.h>
 
@@ -33,11 +34,13 @@ class MO5RLInterface::Impl {
 public:
     Impl(const std::string& rom_path,
          const std::string& reward_mode,
-         const RewardParams& reward_params = {})
+         const RewardParams& reward_params = {},
+         const std::string& action_mode = "discrete")
         : reward_mode_(reward_mode)
         , frame_number_(0)
         , reward_params_(reward_params)
         , reward_system_(RewardSystemFactory::create(reward_mode, reward_params))
+        , action_mode_(action_mode)
     {
         // Pass BIOS ROM paths to the MO5 adapter before init
         auto basic_it = reward_params.find("basic_rom_path");
@@ -57,6 +60,17 @@ public:
         if (lives_it != reward_params.end()) {
             try { lives_addr_ = std::stoi(lives_it->second); } catch (...) {}
         }
+
+        // Wire up memory reader for RAM-based reward systems
+        wire_memory_reward_system();
+    }
+
+    void wire_memory_reward_system() {
+        auto* mem_reward = dynamic_cast<MemoryRewardSystem*>(reward_system_.get());
+        if (!mem_reward) return;
+        mem_reward->set_memory_reader([this](uint16_t addr) -> uint8_t {
+            return read_ram_byte(addr);
+        });
     }
 
     ~Impl() {
@@ -106,21 +120,38 @@ public:
     StepResult step(const std::vector<int>& action) {
         StepResult result;
 
-        // Validate action: expect exactly one discrete action
-        if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
-            int bad_action = action.empty() ? -1 : action[0];
-            result.observation = extract_framebuffer();
-            result.reward = 0.0f;
-            result.done = false;
-            result.truncated = true;
-            result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
-                          ", \"error\": \"Invalid action " + std::to_string(bad_action) +
-                          ", must be in range [0, " + std::to_string(kNumActions) + ")\"}";
-            return result;
+        if (action_mode_ == "joystick") {
+            // Joystick mode: [vert, horiz, fire]
+            // vert: 0=neutral, 1=up, 2=down
+            // horiz: 0=neutral, 1=right, 2=left
+            // fire: 0=no, 1=yes (jump)
+            if (action.size() != 3) {
+                result.observation = extract_framebuffer();
+                result.reward = 0.0f;
+                result.done = false;
+                result.truncated = true;
+                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                              ", \"error\": \"Joystick action must have 3 elements\"}";
+                return result;
+            }
+            // Map to discrete actions: up=1, down=2, left=3, right=4, space=5
+            // Apply all simultaneously via emulator_step_multi
+            apply_joystick(action);
+        } else {
+            // Discrete mode: single action index
+            if (action.empty() || action[0] < 0 || action[0] >= kNumActions) {
+                int bad_action = action.empty() ? -1 : action[0];
+                result.observation = extract_framebuffer();
+                result.reward = 0.0f;
+                result.done = false;
+                result.truncated = true;
+                result.info = "{\"frame_number\": " + std::to_string(frame_number_) +
+                              ", \"error\": \"Invalid action " + std::to_string(bad_action) +
+                              ", must be in range [0, " + std::to_string(kNumActions) + ")\"}";
+                return result;
+            }
+            mo5::emulator_step(action[0]);
         }
-
-        int act = action[0];
-        mo5::emulator_step(act);
         mo5::video_render_frame();
         ++frame_number_;
 
@@ -158,7 +189,36 @@ public:
     }
 
     ActionSpace action_space() const {
+        if (action_mode_ == "joystick") {
+            // [vertical(3), horizontal(3), fire(2)]
+            return {ActionType::MULTI_DISCRETE, {3, 3, 2}};
+        }
         return {ActionType::DISCRETE, {kNumActions}};
+    }
+
+    /// Apply joystick action [vert, horiz, fire] and run one frame.
+    /// vert: 0=neutral, 1=up, 2=down
+    /// horiz: 0=neutral, 1=right, 2=left
+    /// fire: 0=no, 1=yes (jump/space)
+    void apply_joystick(const std::vector<int>& action) {
+        // Build a set of keys to press simultaneously
+        // We need a multi-key step in the adapter
+        std::vector<int> keys;
+        if (action[0] == 1) keys.push_back(1);  // up
+        if (action[0] == 2) keys.push_back(2);  // down
+        if (action[1] == 1) keys.push_back(4);  // right
+        if (action[1] == 2) keys.push_back(3);  // left
+        if (action[2] == 1) keys.push_back(5);  // space/jump
+
+        if (keys.empty()) {
+            mo5::emulator_step(0);  // noop
+        } else if (keys.size() == 1) {
+            mo5::emulator_step(keys[0]);
+        } else {
+            // Multiple keys: need to press all at once
+            // Use emulator_step_multi if available, otherwise just press first
+            mo5::emulator_step_multi(keys);
+        }
     }
 
     /// Parse and execute a startup sequence string.
@@ -269,6 +329,7 @@ private:
     RewardParams reward_params_;
     std::unique_ptr<RewardSystem> reward_system_;
     StepResult previous_result_;
+    std::string action_mode_;
     int lives_addr_ = -1;
     int previous_lives_ = 0;
 };
@@ -279,8 +340,9 @@ private:
 
 MO5RLInterface::MO5RLInterface(const std::string& rom_path,
                                 const std::string& reward_mode,
-                                const RewardParams& reward_params)
-    : impl_(std::make_unique<Impl>(rom_path, reward_mode, reward_params))
+                                const RewardParams& reward_params,
+                                const std::string& action_mode)
+    : impl_(std::make_unique<Impl>(rom_path, reward_mode, reward_params, action_mode))
 {
 }
 

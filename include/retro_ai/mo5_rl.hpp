@@ -21,7 +21,8 @@ public:
     /// @throws InitializationError if the emulator fails to initialize.
     explicit MO5RLInterface(const std::string& rom_path,
                             const std::string& reward_mode = "survival",
-                            const RewardParams& reward_params = {});
+                            const RewardParams& reward_params = {},
+                            const std::string& action_mode = "discrete");
 
     ~MO5RLInterface() override;
 
