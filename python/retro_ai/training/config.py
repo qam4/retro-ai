@@ -247,6 +247,7 @@ _TC_DEFAULTS: Dict[str, Any] = {
     "augmentation": False,
     "crop": None,
     "observation_mode": "framebuffer",
+    "action_mode": "discrete",
 }
 
 

@@ -1,0 +1,26 @@
+# Training config for Yeti (Thomson MO5)
+# Usage: python -m retro_ai.training.cli train game_profiles/mo5_yeti_training.yaml
+
+game_profile: yeti
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+  extra:
+    n_steps: 128
+    n_epochs: 4
+    ent_coef: 0.01
+
+total_timesteps: 500000
+num_envs: 4
+device: auto
+mixed_precision: false
+vec_env_type: threaded
+
+output_dir: output/yeti/ppo_500k
+tensorboard: false
+checkpoint_interval: 25000
+max_checkpoints: 4
+log_interval: 1000
+
+survival_bonus: 0.01

@@ -42,6 +42,7 @@ class GameProfile:
     bios_path: Optional[str] = None
     display_name: str = ""  # human-readable
     action_count: Optional[int] = None  # override action space size
+    action_mode: str = "multi_discrete"  # "discrete", "multi_discrete", or "joystick"
     reward_mode: str = "survival"
     reward_params: Dict[str, Any] = field(default_factory=dict)
     startup_sequence: Optional[StartupSequence] = None
@@ -93,6 +94,13 @@ class GameProfile:
             val = data.get(key)
             if isinstance(val, str) and val.startswith("$RETRO_AI_ROM_DIR"):
                 data[key] = val.replace("$RETRO_AI_ROM_DIR", rom_dir, 1)
+
+        # Also expand in reward_params values
+        reward_params = data.get("reward_params", {})
+        if reward_params and rom_dir:
+            for key, val in reward_params.items():
+                if isinstance(val, str) and "$RETRO_AI_ROM_DIR" in val:
+                    reward_params[key] = val.replace("$RETRO_AI_ROM_DIR", rom_dir, 1)
 
         # Validate reward_params before constructing the profile
         reward_params = data.get("reward_params", {})
