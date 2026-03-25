@@ -93,6 +93,16 @@ public:
             try { lives_addr_ = std::stoi(lives_it->second); } catch (...) {}
         }
 
+        // Parse height reward params
+        auto height_it = reward_params.find("height_reward_addr");
+        if (height_it != reward_params.end()) {
+            try { height_addr_ = std::stoi(height_it->second); } catch (...) {}
+        }
+        auto coeff_it = reward_params.find("height_reward_coeff");
+        if (coeff_it != reward_params.end()) {
+            try { height_coeff_ = std::stof(coeff_it->second); } catch (...) {}
+        }
+
         // Wire up memory reader for reward system
         wire_memory_reward_system();
     }
@@ -138,6 +148,11 @@ public:
         // Initialize lives tracking
         if (lives_addr_ >= 0) {
             previous_lives_ = read_ram_byte(static_cast<uint16_t>(lives_addr_));
+        }
+
+        // Initialize height tracking
+        if (height_addr_ >= 0) {
+            previous_y_ = read_ram_byte(static_cast<uint16_t>(height_addr_));
         }
 
         if (reward_system_) {
@@ -188,6 +203,16 @@ public:
             result.reward = reward_system_->compute_reward(result, previous_result_);
         } else {
             result.reward = 0.0f;
+        }
+
+        // Height reward: -delta(Y) * coefficient
+        // Y decreases when climbing (lower = higher on screen)
+        // So negative delta = going up = positive reward
+        if (height_addr_ >= 0 && height_coeff_ > 0.0f) {
+            int current_y = read_ram_byte(static_cast<uint16_t>(height_addr_));
+            int delta_y = current_y - previous_y_;
+            result.reward += static_cast<float>(-delta_y) * height_coeff_;
+            previous_y_ = current_y;
         }
 
         // Check for life loss
@@ -380,6 +405,9 @@ private:
     std::vector<uint8_t> rgb_buffer_;
     int lives_addr_ = -1;
     int previous_lives_ = 0;
+    int height_addr_ = -1;
+    float height_coeff_ = 0.0f;
+    int previous_y_ = 0;
     std::vector<uint8_t> startup_state_;
 };
 
