@@ -153,6 +153,7 @@ public:
         // Initialize height tracking
         if (height_addr_ >= 0) {
             previous_y_ = read_ram_byte(static_cast<uint16_t>(height_addr_));
+            best_y_ = previous_y_;  // reset best height each episode
         }
 
         if (reward_system_) {
@@ -205,14 +206,16 @@ public:
             result.reward = 0.0f;
         }
 
-        // Height reward: -delta(Y) * coefficient
-        // Y decreases when climbing (lower = higher on screen)
-        // So negative delta = going up = positive reward
+        // Height milestone reward: one-time bonus when reaching new platform levels
+        // Only rewards upward progress, no penalty for falling back
         if (height_addr_ >= 0 && height_coeff_ > 0.0f) {
             int current_y = read_ram_byte(static_cast<uint16_t>(height_addr_));
-            int delta_y = current_y - previous_y_;
-            result.reward += static_cast<float>(-delta_y) * height_coeff_;
-            previous_y_ = current_y;
+            if (current_y < best_y_) {
+                // Reached a new height — reward proportional to progress
+                int gain = best_y_ - current_y;
+                result.reward += static_cast<float>(gain) * height_coeff_;
+                best_y_ = current_y;
+            }
         }
 
         // Check for life loss
@@ -408,6 +411,7 @@ private:
     int height_addr_ = -1;
     float height_coeff_ = 0.0f;
     int previous_y_ = 0;
+    int best_y_ = 255;  // worst (lowest) height
     std::vector<uint8_t> startup_state_;
 };
 
