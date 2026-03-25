@@ -103,6 +103,20 @@ public:
             try { height_coeff_ = std::stof(coeff_it->second); } catch (...) {}
         }
 
+        // Parse bonus stall detection params
+        auto bhi = reward_params.find("bonus_addr_hi");
+        if (bhi != reward_params.end()) {
+            try { bonus_addr_hi_ = std::stoi(bhi->second); } catch (...) {}
+        }
+        auto blo = reward_params.find("bonus_addr_lo");
+        if (blo != reward_params.end()) {
+            try { bonus_addr_lo_ = std::stoi(blo->second); } catch (...) {}
+        }
+        auto bstall = reward_params.find("bonus_stall_frames");
+        if (bstall != reward_params.end()) {
+            try { bonus_stall_frames_ = std::stoi(bstall->second); } catch (...) {}
+        }
+
         // Wire up memory reader for reward system
         wire_memory_reward_system();
     }
@@ -154,6 +168,13 @@ public:
         if (height_addr_ >= 0) {
             previous_y_ = read_ram_byte(static_cast<uint16_t>(height_addr_));
             best_y_ = previous_y_;  // reset best height each episode
+        }
+
+        // Initialize bonus stall tracking
+        if (bonus_addr_hi_ >= 0) {
+            previous_bonus_ = (read_ram_byte(static_cast<uint16_t>(bonus_addr_hi_)) << 8)
+                            |  read_ram_byte(static_cast<uint16_t>(bonus_addr_lo_));
+            bonus_stall_count_ = 0;
         }
 
         if (reward_system_) {
@@ -226,6 +247,24 @@ public:
                 result.done = true;
             }
             previous_lives_ = current_lives;
+        }
+
+        // Check for bonus stall (death detection)
+        // The bonus countdown decreases every few frames during gameplay.
+        // When the player dies, the bonus freezes. If it hasn't changed
+        // for bonus_stall_frames_, the player is dead.
+        if (bonus_addr_hi_ >= 0 && bonus_stall_frames_ > 0) {
+            int bonus = (read_ram_byte(static_cast<uint16_t>(bonus_addr_hi_)) << 8)
+                      |  read_ram_byte(static_cast<uint16_t>(bonus_addr_lo_));
+            if (bonus != previous_bonus_) {
+                previous_bonus_ = bonus;
+                bonus_stall_count_ = 0;
+            } else {
+                ++bonus_stall_count_;
+                if (bonus_stall_count_ >= bonus_stall_frames_) {
+                    result.done = true;
+                }
+            }
         }
 
         result.truncated = false;
@@ -412,6 +451,11 @@ private:
     float height_coeff_ = 0.0f;
     int previous_y_ = 0;
     int best_y_ = 255;  // worst (lowest) height
+    int bonus_addr_hi_ = -1;
+    int bonus_addr_lo_ = -1;
+    int bonus_stall_frames_ = 0;
+    int previous_bonus_ = 0;
+    int bonus_stall_count_ = 0;
     std::vector<uint8_t> startup_state_;
 };
 

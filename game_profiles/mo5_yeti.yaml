@@ -57,8 +57,11 @@ reward_params:
   score_address_0_bcd: "0"
   score_address_0_le: "0"
   score_address_0_multiplier: "1"
-  # Episode termination: life loss
+  # Episode termination: life loss or bonus stall (death detection)
   lives_addr: "11095"
+  bonus_addr_hi: "11010"
+  bonus_addr_lo: "11011"
+  bonus_stall_frames: "10"
   # BIOS ROM paths
   basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
   monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
