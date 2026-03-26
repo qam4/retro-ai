@@ -17,7 +17,7 @@ device: auto
 mixed_precision: false
 vec_env_type: threaded
 
-output_dir: output/yeti/ppo_5M_height_1.0
+output_dir: output/yeti/ppo_5M_deltaY
 tensorboard: false
 checkpoint_interval: 25000
 max_checkpoints: 4

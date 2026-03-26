@@ -227,16 +227,14 @@ public:
             result.reward = 0.0f;
         }
 
-        // Height milestone reward: one-time bonus when reaching new platform levels
-        // Only rewards upward progress, no penalty for falling back
+        // Height reward: -delta(Y) * coefficient
+        // Y decreases when climbing = positive reward
+        // Bonus stall ends episode before death animation, so no false rewards
         if (height_addr_ >= 0 && height_coeff_ > 0.0f) {
             int current_y = read_ram_byte(static_cast<uint16_t>(height_addr_));
-            if (current_y < best_y_) {
-                // Reached a new height — reward proportional to progress
-                int gain = best_y_ - current_y;
-                result.reward += static_cast<float>(gain) * height_coeff_;
-                best_y_ = current_y;
-            }
+            int delta_y = current_y - previous_y_;
+            result.reward += static_cast<float>(-delta_y) * height_coeff_;
+            previous_y_ = current_y;
         }
 
         // Check for life loss
