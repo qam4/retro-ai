@@ -176,7 +176,13 @@ def main():
     parser.add_argument("--max-steps", type=int, default=5000)
     parser.add_argument("--output", help="CSV output path")
     parser.add_argument("--action-mode", default="joystick")
+    parser.add_argument("--heatmap", help="Generate heatmap PNG from CSV (provide CSV path)")
     args = parser.parse_args()
+
+    if args.heatmap:
+        heatmap_out = args.output or args.heatmap.replace(".csv", "_heatmap.png")
+        generate_heatmap(args.heatmap, heatmap_out)
+        return
 
     env, base_env, profile = make_env(args.profile, args.action_mode)
 
@@ -212,3 +218,42 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def generate_heatmap(csv_path, output_path, width=320, height=200):
+    """Generate a position heatmap from a reward monitor CSV."""
+    import csv as csv_mod
+    from PIL import Image
+
+    counts = np.zeros((height, width), dtype=np.float32)
+
+    with open(csv_path) as f:
+        reader = csv_mod.DictReader(f)
+        for row in reader:
+            x = int(row["x_pos"])
+            y = int(row["y_pos"])
+            if 0 <= x < width and 0 <= y < height:
+                counts[y, x] += 1
+
+    # Normalize and colorize
+    if counts.max() > 0:
+        counts = counts / counts.max()
+
+    # Simple heat colormap: black -> blue -> red -> yellow -> white
+    rgb = np.zeros((height, width, 3), dtype=np.uint8)
+    for y in range(height):
+        for x in range(width):
+            v = counts[y, x]
+            if v > 0.75:
+                rgb[y, x] = [255, int(255 * (v - 0.75) * 4), int(255 * (v - 0.75) * 4)]
+            elif v > 0.5:
+                rgb[y, x] = [int(255 * (v - 0.5) * 4), 0, int(255 * (1 - (v - 0.5) * 4))]
+            elif v > 0.25:
+                rgb[y, x] = [0, 0, int(255 * (v - 0.25) * 4)]
+            elif v > 0:
+                rgb[y, x] = [0, 0, int(64 * v * 4)]
+
+    img = Image.fromarray(rgb)
+    img = img.resize((width * 3, height * 3), Image.NEAREST)
+    img.save(output_path)
+    print(f"Heatmap saved to {output_path}")

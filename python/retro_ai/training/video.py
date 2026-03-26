@@ -61,11 +61,16 @@ class VideoRecorder:
         reward: float = 0.0,
         step: int = 0,
         action=None,
+        step_reward: float = 0.0,
     ) -> None:
         """Write a frame. Initializes writer on first call.
 
         Parameters
         ----------
+        reward : float
+            Cumulative reward so far.
+        step_reward : float
+            Reward received on this specific step.
         action : list or int or None
             For multi-discrete: [up, down, left, right, fire] binary list.
             For discrete: integer action index. None to skip action overlay.
@@ -103,6 +108,8 @@ class VideoRecorder:
         out = frame.copy()
         if self._overlay and (reward != 0.0 or step != 0):
             text = f"R:{reward:.0f}  Step:{step}"
+            if abs(step_reward) > 0.001:
+                text += f"  +{step_reward:.1f}" if step_reward > 0 else f"  {step_reward:.1f}"
             font_scale = max(0.4, 0.4 * self._scale)
             thickness = max(1, self._scale)
             self._cv2.putText(
