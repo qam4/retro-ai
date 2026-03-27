@@ -102,6 +102,10 @@ public:
         if (coeff_it != reward_params.end()) {
             try { height_coeff_ = std::stof(coeff_it->second); } catch (...) {}
         }
+        auto thresh_it = reward_params.find("height_threshold");
+        if (thresh_it != reward_params.end()) {
+            try { height_threshold_ = std::stoi(thresh_it->second); } catch (...) {}
+        }
 
         // Parse bonus stall detection params
         auto bhi = reward_params.find("bonus_addr_hi");
@@ -167,7 +171,8 @@ public:
         // Initialize height tracking
         if (height_addr_ >= 0) {
             previous_y_ = read_ram_byte(static_cast<uint16_t>(height_addr_));
-            best_y_ = previous_y_;  // reset best height each episode
+            best_y_ = previous_y_;
+            height_anchor_y_ = previous_y_;
         }
 
         // Initialize bonus stall tracking
@@ -227,14 +232,22 @@ public:
             result.reward = 0.0f;
         }
 
-        // Height reward: -delta(Y) * coefficient
-        // Y decreases when climbing = positive reward
-        // Bonus stall ends episode before death animation, so no false rewards
+        // Height reward: thresholded delta(Y)
+        // Only triggers when accumulated Y change exceeds threshold.
+        // Filters out jumping (~10px) but catches real climbing (~30px).
         if (height_addr_ >= 0 && height_coeff_ > 0.0f) {
             int current_y = read_ram_byte(static_cast<uint16_t>(height_addr_));
-            int delta_y = current_y - previous_y_;
-            result.reward += static_cast<float>(-delta_y) * height_coeff_;
-            previous_y_ = current_y;
+            int accumulated = height_anchor_y_ - current_y;  // positive = higher
+
+            if (accumulated >= height_threshold_) {
+                // Climbed past threshold — reward
+                result.reward += height_coeff_;
+                height_anchor_y_ = current_y;
+            } else if (accumulated <= -height_threshold_) {
+                // Fell past threshold — penalty
+                result.reward -= height_coeff_;
+                height_anchor_y_ = current_y;
+            }
         }
 
         // Check for life loss
@@ -448,7 +461,9 @@ private:
     int height_addr_ = -1;
     float height_coeff_ = 0.0f;
     int previous_y_ = 0;
-    int best_y_ = 255;  // worst (lowest) height
+    int best_y_ = 255;
+    int height_anchor_y_ = 0;
+    int height_threshold_ = 20;  // worst (lowest) height
     int bonus_addr_hi_ = -1;
     int bonus_addr_lo_ = -1;
     int bonus_stall_frames_ = 0;
