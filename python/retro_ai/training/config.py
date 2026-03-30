@@ -83,6 +83,7 @@ class TrainingConfig:
 
     # Policy network
     policy: str = "CnnPolicy"
+    feature_extractor: str = "nature"  # "nature" (default) or "impala" (ResNet)
 
     # Performance (training-performance spec)
     num_envs: int = 1  # Requirement 2: parallel environments

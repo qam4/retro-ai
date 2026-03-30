@@ -9,15 +9,16 @@ algorithm:
   extra:
     n_steps: 128
     n_epochs: 4
-    ent_coef: 0.05
+    ent_coef: 0.01
 
-total_timesteps: 10000000
+total_timesteps: 5000000
 num_envs: 8
 device: auto
 mixed_precision: false
 vec_env_type: threaded
+feature_extractor: impala
 
-output_dir: output/yeti/ppo_10M_highent
+output_dir: output/yeti/ppo_5M_impala
 tensorboard: false
 checkpoint_interval: 25000
 max_checkpoints: 4

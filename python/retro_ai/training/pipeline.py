@@ -317,6 +317,16 @@ class TrainingPipeline:
             **self.config.algorithm.extra,
         }
 
+        # Feature extractor selection
+        if self.config.feature_extractor == "impala":
+            from retro_ai.training.impala_cnn import ImpalaCNN
+
+            kwargs["policy_kwargs"] = kwargs.get("policy_kwargs", {})
+            kwargs["policy_kwargs"]["features_extractor_class"] = ImpalaCNN
+            kwargs["policy_kwargs"]["features_extractor_kwargs"] = {
+                "features_dim": 256,
+            }
+
         self._logger.info(
             "device_selected",
             {"device": device},

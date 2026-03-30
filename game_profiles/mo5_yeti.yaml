@@ -72,9 +72,9 @@ reward_params:
   # Startup: BASIC prompt -> LOAD -> RUN -> select 1 player
   startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:300"
 
-# Preprocessing
+# Preprocessing — full resolution, no resize
 grayscale: true
-resize: [84, 84]
+# resize: [84, 84]  # disabled — using full 320x200 with IMPALA CNN
 frame_stack: 4
 frame_skip: 4
 frame_maxpool: true
