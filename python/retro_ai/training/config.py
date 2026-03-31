@@ -266,7 +266,8 @@ def merge_config_with_profile(
     """
     from dataclasses import replace
 
-    explicit = getattr(config, "_explicit_keys", set())
+    tc_explicit = getattr(config, "_explicit_keys", set())
+    gp_explicit = getattr(profile, "_explicit_keys", set())
 
     merged = {}
     for field_name, default_val in _TC_DEFAULTS.items():
@@ -274,8 +275,14 @@ def merge_config_with_profile(
         gp_val = getattr(profile, field_name, None)
 
         # If the field was explicitly written in the training config, keep it
-        if field_name in explicit:
+        if field_name in tc_explicit:
             merged[field_name] = tc_val
+            continue
+
+        # If the field was explicitly set in the game profile, use it
+        # (handles resize: null overriding the (84,84) default)
+        if field_name in gp_explicit:
+            merged[field_name] = gp_val
             continue
 
         # For Optional fields (default is None): explicitly set means not None

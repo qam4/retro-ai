@@ -107,7 +107,10 @@ class GameProfile:
         if reward_params:
             GameProfile._validate_reward_params(reward_params)
 
-        return GameProfile(**data)
+        profile = GameProfile(**data)
+        # Track which keys were explicitly present in the YAML/JSON
+        profile._explicit_keys = set(data.keys())  # type: ignore[attr-defined]
+        return profile
 
     @staticmethod
     def _validate_reward_params(reward_params: Dict[str, Any]) -> None:
