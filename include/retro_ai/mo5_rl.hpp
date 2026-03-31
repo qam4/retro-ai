@@ -35,6 +35,7 @@ public:
     // Core RL methods
     StepResult reset(int seed = -1) override;
     StepResult step(const std::vector<int>& action) override;
+    StepResult step_n(const std::vector<int>& action, int n) override;
 
     // Space queries
     ObservationSpace observation_space() const override;

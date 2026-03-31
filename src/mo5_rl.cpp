@@ -284,6 +284,107 @@ public:
         return result;
     }
 
+    StepResult step_n(const std::vector<int>& action, int n) {
+        StepResult result;
+        if (n < 1) {
+            result.observation = std::vector<uint8_t>(rgb_buffer_.begin(), rgb_buffer_.end());
+            result.reward = 0.0f;
+            result.done = false;
+            result.truncated = false;
+            result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+            return result;
+        }
+
+        float total_reward = 0.0f;
+        bool done = false;
+
+        for (int i = 0; i < n; ++i) {
+            // Apply action
+            if (action_mode_ == "joystick") {
+                if (action.size() != 3) break;
+                apply_joystick(action);
+            } else {
+                if (action.empty() || action[0] < 0 || action[0] >= kNumActions) break;
+                apply_discrete_action(action[0]);
+            }
+
+            // Skip rendering on intermediate frames for performance.
+            // Render on the last frame, or peek ahead: if this frame
+            // might be the last (done detection), render it too.
+            // We render all frames where i == n-1. For early termination,
+            // we accept a stale framebuffer (agent won't act on done obs).
+            emulator_->run_frame(i == n - 1);
+            ++frame_number_;
+
+            // Compute reward (memory-based, no framebuffer needed)
+            StepResult intermediate;
+            intermediate.reward = 0.0f;
+            intermediate.done = false;
+            intermediate.truncated = false;
+            intermediate.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+            if (reward_system_) {
+                intermediate.reward = reward_system_->compute_reward(intermediate, previous_result_);
+            }
+
+            // Height reward
+            if (height_addr_ >= 0 && height_coeff_ > 0.0f) {
+                int current_y = read_ram_byte(static_cast<uint16_t>(height_addr_));
+                int accumulated = height_anchor_y_ - current_y;
+                if (accumulated >= height_threshold_) {
+                    intermediate.reward += height_coeff_;
+                    height_anchor_y_ = current_y;
+                } else if (accumulated <= -height_threshold_) {
+                    intermediate.reward -= height_coeff_;
+                    height_anchor_y_ = current_y;
+                }
+            }
+
+            total_reward += intermediate.reward;
+            previous_result_ = intermediate;
+
+            // Check life loss
+            if (lives_addr_ >= 0) {
+                int current_lives = read_ram_byte(static_cast<uint16_t>(lives_addr_));
+                if (current_lives < previous_lives_ && previous_lives_ > 0) {
+                    done = true;
+                }
+                previous_lives_ = current_lives;
+            }
+
+            // Check bonus stall
+            if (bonus_addr_hi_ >= 0 && bonus_stall_frames_ > 0) {
+                int bonus = (read_ram_byte(static_cast<uint16_t>(bonus_addr_hi_)) << 8)
+                          |  read_ram_byte(static_cast<uint16_t>(bonus_addr_lo_));
+                if (bonus != previous_bonus_) {
+                    previous_bonus_ = bonus;
+                    bonus_stall_count_ = 0;
+                } else {
+                    ++bonus_stall_count_;
+                    if (bonus_stall_count_ >= bonus_stall_frames_) {
+                        done = true;
+                    }
+                }
+            }
+
+            if (done) break;
+        }
+
+        // Render the final frame (always needed for observation).
+        // If the last run_frame was called with render=true (is_last),
+        // the framebuffer is already up to date. If done broke early,
+        // re-run one frame with rendering to get the current display.
+        // Actually, just always render from the gate array state —
+        // render_frame() reads the current framebuffer.
+        render_frame();
+        result.observation = std::vector<uint8_t>(rgb_buffer_.begin(), rgb_buffer_.end());
+        result.reward = total_reward;
+        result.done = done;
+        result.truncated = false;
+        result.info = "{\"frame_number\": " + std::to_string(frame_number_) + "}";
+        previous_result_ = result;
+        return result;
+    }
+
     ObservationSpace observation_space() const {
         return {kScreenWidth, kScreenHeight, kScreenChannels, 8};
     }
@@ -489,6 +590,7 @@ MO5RLInterface& MO5RLInterface::operator=(MO5RLInterface&&) noexcept = default;
 
 StepResult MO5RLInterface::reset(int seed) { return impl_->reset(seed); }
 StepResult MO5RLInterface::step(const std::vector<int>& action) { return impl_->step(action); }
+StepResult MO5RLInterface::step_n(const std::vector<int>& action, int n) { return impl_->step_n(action, n); }
 ObservationSpace MO5RLInterface::observation_space() const { return impl_->observation_space(); }
 ActionSpace MO5RLInterface::action_space() const { return impl_->action_space(); }
 std::vector<uint8_t> MO5RLInterface::save_state() const { return impl_->save_state(); }

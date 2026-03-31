@@ -87,7 +87,7 @@ static const struct { int action; crayon::MO5Key key; } ACTION_MAP[] = {
     {45, crayon::MO5Key::STOP},
     {46, crayon::MO5Key::COMMA},
     {47, crayon::MO5Key::AT},
-    {48, crayon::MO5Key::SLASH},
+    {48, crayon::MO5Key::DIV},
     {49, crayon::MO5Key::STAR},
     {50, crayon::MO5Key::MINUS},
     {51, crayon::MO5Key::PLUS},

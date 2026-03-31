@@ -477,7 +477,9 @@ public:
                 apply_action(action[0]);
             }
 
-            emulator_->run_frame();
+            // Skip rendering on intermediate frames — only render the last
+            bool is_last = (i == n - 1);
+            emulator_->run_frame(is_last || done);
             clear_input();
             ++frame_number_;
 
