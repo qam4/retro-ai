@@ -18,7 +18,7 @@ mixed_precision: false
 vec_env_type: threaded
 feature_extractor: impala
 
-output_dir: output/yeti/ppo_5M_impala
+output_dir: output/yeti/ppo_5M_impala_fullres
 tensorboard: false
 checkpoint_interval: 25000
 max_checkpoints: 4
