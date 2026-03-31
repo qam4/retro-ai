@@ -15,6 +15,9 @@
   run_frame(false) for intermediate frames on both videopac and crayon).
   Needs benchmarking: run emulator throughput test with and without skip-render
   to measure actual speedup. GPU-bound training may mask the improvement.
+- Re-run Satellite Attack training with latest videopac changes (scanline
+  rendering + skip-render in step_n). Previous best: 22.0 at 300k steps.
+  The skip-render should help more here (VDC was 71% of frame time).
 
 ## Tech Debt
 - MO5 BIOS paths passed via reward_params hack — should be proper
