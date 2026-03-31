@@ -1,0 +1,39 @@
+# Yeti RND exploration — intrinsic curiosity to escape snowball farming
+# Hypothesis: RND makes repetitive states (floor 1 snowball jumps) boring,
+# pushing the agent to explore higher floors.
+
+game_profile: yeti
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+  extra:
+    n_steps: 128
+    n_epochs: 4
+    ent_coef: 0.02
+
+total_timesteps: 5000000
+num_envs: 8
+device: auto
+mixed_precision: false
+vec_env_type: threaded
+
+# Back to 84x84 — full res didn't help, and this is faster
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true
+
+intrinsic_reward:
+  enabled: true
+  method: rnd
+  coefficient: 1.0
+
+output_dir: output/mo5/yeti/training/ppo_5M_rnd
+tensorboard: true
+checkpoint_interval: 25000
+max_checkpoints: 4
+log_interval: 1000
+
+survival_bonus: 0.01

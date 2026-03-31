@@ -23,7 +23,8 @@
 - MO5 BIOS paths passed via reward_params hack — should be proper
   constructor params on MO5RLInterface (like videopac has bios_path).
 - Videopac RL interface hardcodes NTSC — should be configurable per game
-  profile or auto-detected from BIOS.
+  profile or auto-detected from BIOS. NTSC is fine for training speed
+  (fewer scanlines/frame). The French BIOS works with NTSC timing.
 - Resume training passes total_timesteps to model.learn() without subtracting
   checkpoint's num_timesteps, causing it to train total+checkpoint steps
   instead of total steps. Fix: remaining = total - model.num_timesteps.

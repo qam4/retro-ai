@@ -301,34 +301,7 @@ def cmd_trajectories(args):
     Runs N eval episodes and draws every trajectory on one image.
     Color encodes episode index (rainbow). Start=green dot, end=red dot.
     """
-    from retro_ai.envs.base_env import BaseEnv
-    from retro_ai.core.preprocessing import PreprocessedEnv, PreprocessingPipeline
-    from retro_ai.wrappers.gymnasium_wrapper import GymnasiumWrapper
-    from retro_ai.training.game_profile import GameProfileRegistry
-    from stable_baselines3 import PPO
-
-    # Build env
-    registry = GameProfileRegistry()
-    profile = registry.load(args.profile)
-    config_dict = {}
-    if profile.reward_params:
-        config_dict["reward_params"] = profile.reward_params
-    base = BaseEnv(
-        emulator_type=profile.emulator_type,
-        rom_path=profile.rom_path,
-        reward_mode=profile.reward_mode,
-        config=config_dict or None,
-        action_mode="joystick",
-    )
-    pipeline = PreprocessingPipeline(
-        grayscale=profile.grayscale,
-        resize=profile.resize,
-        frame_stack=profile.frame_stack,
-        frame_skip=profile.frame_skip,
-    )
-    preprocessed = PreprocessedEnv(base, pipeline, frame_maxpool=profile.frame_maxpool)
-    env = GymnasiumWrapper(preprocessed)
-    model = PPO.load(args.model, env=env)
+    env, base, model = _build_eval_env(args.profile, args.model)
 
     # RAM addresses (Yeti-specific, but read from profile if possible)
     x_addr = 11090
@@ -412,6 +385,146 @@ def _hsv_to_rgb(h, s, v):
     return colorsys.hsv_to_rgb(h, s, v)
 
 
+def _build_eval_env(profile_name, model_path):
+    """Build env matching a saved model's observation space."""
+    from retro_ai.envs.base_env import BaseEnv
+    from retro_ai.core.preprocessing import PreprocessedEnv, PreprocessingPipeline
+    from retro_ai.wrappers.gymnasium_wrapper import GymnasiumWrapper
+    from retro_ai.training.game_profile import GameProfileRegistry
+    from stable_baselines3 import PPO
+
+    registry = GameProfileRegistry()
+    profile = registry.load(profile_name)
+
+    # Detect model's expected observation shape to set resize correctly
+    import zipfile, json
+
+    resize = profile.resize
+    with zipfile.ZipFile(model_path) as z:
+        with z.open("data") as f:
+            data = json.load(f)
+            shape = data.get("observation_space", {}).get("_shape")
+            if shape and len(shape) == 3:
+                _, h, w = shape
+                if profile.resize is None and (h != 200 or w != 320):
+                    resize = (h, w)
+                elif profile.resize is not None:
+                    resize = (h, w)
+
+    config_dict = {}
+    if profile.reward_params:
+        config_dict["reward_params"] = profile.reward_params
+    base = BaseEnv(
+        emulator_type=profile.emulator_type,
+        rom_path=profile.rom_path,
+        reward_mode=profile.reward_mode,
+        config=config_dict or None,
+        action_mode="joystick",
+    )
+    pipeline = PreprocessingPipeline(
+        grayscale=profile.grayscale,
+        resize=resize,
+        frame_stack=profile.frame_stack,
+        frame_skip=profile.frame_skip,
+    )
+    preprocessed = PreprocessedEnv(base, pipeline, frame_maxpool=profile.frame_maxpool)
+    env = GymnasiumWrapper(preprocessed)
+    model = PPO.load(model_path, env=env)
+    return env, base, model
+
+
+def cmd_trajectory_video(args):
+    """Animated video: one dot per episode at each timestep.
+
+    All episodes play simultaneously. Each dot is colored by episode index
+    (rainbow). Trails fade behind the current position.
+    """
+    import imageio
+
+    env, base, model = _build_eval_env(args.profile, args.model)
+
+    x_addr = 11090
+    y_addr = 11089
+
+    # Collect trajectories
+    trajectories = []
+    bg = None
+    for ep in range(args.episodes):
+        obs, _ = env.reset()
+        if bg is None:
+            bg = base._last_raw_obs.copy()
+        positions = []
+        for step in range(args.max_steps):
+            action, _ = model.predict(obs, deterministic=(not args.stochastic))
+            obs, reward, done, truncated, _ = env.step(action)
+            x = base._interface.read_ram_byte(x_addr)
+            y = base._interface.read_ram_byte(y_addr)
+            positions.append((x, y))
+            if done or truncated:
+                break
+        trajectories.append(positions)
+        print(f"  Episode {ep+1}/{args.episodes}: {len(positions)} steps")
+
+    env.close()
+    if bg is None:
+        print("No background frame captured")
+        return
+
+    # Build colors per episode
+    n = len(trajectories)
+    colors = []
+    for i in range(n):
+        r, g, b = _hsv_to_rgb(i / max(1, n), 0.9, 0.95)
+        colors.append((int(r * 255), int(g * 255), int(b * 255)))
+
+    max_len = max(len(t) for t in trajectories)
+    bg_dim = (bg.astype(np.float32) * 0.35).clip(0, 255).astype(np.uint8)
+    trail_len = args.trail
+
+    out = args.output or "trajectory_video.mp4"
+    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+    writer = imageio.get_writer(out, fps=args.fps, codec="libx264")
+
+    for t in range(max_len):
+        frame = Image.fromarray(bg_dim.copy())
+        draw = ImageDraw.Draw(frame)
+
+        for i, positions in enumerate(trajectories):
+            if t >= len(positions):
+                # Episode ended — draw final position as X
+                px, py = positions[-1][0] * 4, positions[-1][1]
+                draw.line([(px - 2, py - 2), (px + 2, py + 2)], fill=(100, 100, 100))
+                draw.line([(px - 2, py + 2), (px + 2, py - 2)], fill=(100, 100, 100))
+                continue
+
+            # Draw trail
+            start = max(0, t - trail_len)
+            for j in range(start, t):
+                x0, y0 = positions[j][0] * 4, positions[j][1]
+                x1, y1 = positions[j + 1][0] * 4, positions[j + 1][1]
+                fade = int(255 * (j - start) / max(1, trail_len))
+                c = (
+                    colors[i][0] * fade // 255,
+                    colors[i][1] * fade // 255,
+                    colors[i][2] * fade // 255,
+                )
+                draw.line([(x0, y0), (x1, y1)], fill=c, width=1)
+
+            # Draw current dot
+            px, py = positions[t][0] * 4, positions[t][1]
+            r = 3
+            draw.ellipse([px - r, py - r, px + r, py + r], fill=colors[i])
+
+        # Timestamp
+        draw.text((5, 5), f"t={t}", fill=(255, 255, 255))
+        draw.text((5, 190), f"{n} episodes", fill=(200, 200, 200))
+
+        writer.append_data(np.array(frame))
+
+    writer.close()
+    print(f"Saved {out} ({max_len} frames)")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
@@ -445,6 +558,24 @@ def main():
     )
     p_traj.add_argument("--output", "-o", help="Output PNG path")
 
+    # trajectory video
+    p_vid = sub.add_parser(
+        "trajectory-video", help="Animated video of eval trajectories"
+    )
+    p_vid.add_argument("--model", required=True, help="Model .zip path")
+    p_vid.add_argument("--profile", default="yeti", help="Game profile name")
+    p_vid.add_argument("--episodes", type=int, default=10)
+    p_vid.add_argument("--max-steps", type=int, default=5000)
+    p_vid.add_argument("--stochastic", action="store_true")
+    p_vid.add_argument("--fps", type=int, default=15)
+    p_vid.add_argument(
+        "--trail",
+        type=int,
+        default=30,
+        help="Trail length in frames behind current dot",
+    )
+    p_vid.add_argument("--output", "-o", help="Output MP4 path")
+
     args = parser.parse_args()
     if args.command == "curve":
         cmd_curve(args)
@@ -452,6 +583,8 @@ def main():
         cmd_compare(args)
     elif args.command == "trajectories":
         cmd_trajectories(args)
+    elif args.command == "trajectory-video":
+        cmd_trajectory_video(args)
     else:
         parser.print_help()
 
