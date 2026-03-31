@@ -70,7 +70,7 @@ reward_params:
   basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
   monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
   # Startup: BASIC prompt -> LOAD -> RUN -> select 1 player
-  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:50"
+  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:100"
 
 # Preprocessing — full resolution for IMPALA CNN
 grayscale: true
