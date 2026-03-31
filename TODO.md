@@ -11,11 +11,10 @@
   sequence (LOAD/RUN/menu for MO5, BIOS/Key1 for videopac) runs once,
   saves state, then restore_state on every reset(). Saves ~32s per reset
   on MO5 Yeti, ~5s on videopac Satellite Attack.
-- Skip rendering on intermediate frame_skip frames. During step_n(action, 4),
-  only render the last frame. Use run_frame(render=false) for the first 3.
-  Videopac VDC is 71% of frame time — skipping 3/4 renders saves ~53%.
-  API: run_frame(bool render = true) — default param, no backward compat break.
-  Both videopac and crayon need this.
+- ~~Skip rendering on intermediate frame_skip frames~~ — DONE (step_n uses
+  run_frame(false) for intermediate frames on both videopac and crayon).
+  Needs benchmarking: run emulator throughput test with and without skip-render
+  to measure actual speedup. GPU-bound training may mask the improvement.
 
 ## Tech Debt
 - MO5 BIOS paths passed via reward_params hack — should be proper
