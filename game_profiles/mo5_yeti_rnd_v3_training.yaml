@@ -1,0 +1,39 @@
+# Yeti RND v3 — extend v1 (coeff 1.0) to 10M steps
+# v1 was still climbing at 5M (reward 227, ep_len 1014).
+# v2 (coeff 5.0) was worse — intrinsic reward drowned game signal.
+# Plan: keep v1's coefficient, train longer, slightly lower entropy.
+
+game_profile: yeti
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+  extra:
+    n_steps: 128
+    n_epochs: 4
+    ent_coef: 0.01
+
+total_timesteps: 10000000
+num_envs: 8
+device: auto
+mixed_precision: false
+vec_env_type: threaded
+
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true
+
+intrinsic_reward:
+  enabled: true
+  method: rnd
+  coefficient: 1.0
+
+output_dir: output/mo5/yeti/training/ppo_10M_rnd_v3
+tensorboard: true
+checkpoint_interval: 50000
+max_checkpoints: 4
+log_interval: 1000
+
+survival_bonus: 0.01

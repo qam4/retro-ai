@@ -1,0 +1,37 @@
+# Yeti RND v2 — stronger exploration to escape snowball farming
+# RND coeff 5.0 (was 1.0) + higher entropy 0.05 (was 0.02)
+
+game_profile: yeti
+algorithm:
+  name: PPO
+  learning_rate: 0.0003
+  batch_size: 64
+  extra:
+    n_steps: 128
+    n_epochs: 4
+    ent_coef: 0.05
+
+total_timesteps: 5000000
+num_envs: 8
+device: auto
+mixed_precision: false
+vec_env_type: threaded
+
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true
+
+intrinsic_reward:
+  enabled: true
+  method: rnd
+  coefficient: 5.0
+
+output_dir: output/mo5/yeti/training/ppo_5M_rnd_v2
+tensorboard: true
+checkpoint_interval: 25000
+max_checkpoints: 4
+log_interval: 1000
+
+survival_bonus: 0.01

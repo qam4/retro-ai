@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Start TensorBoard",
+  "description": "Ensures TensorBoard is running on port 6006 whenever a training run is launched, pointing at the output/ directory so all runs are visible.",
+  "version": "1",
+  "when": {
+    "type": "postToolUse",
+    "toolTypes": [
+      "shell"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "If the tool just launched a training run (via kiro-monitor or directly), check if tensorboard is already running with `pgrep -f tensorboard`. If not, start it with `nohup tensorboard --logdir output/ --port 6006 --bind_all > /dev/null 2>&1 &`. If it's already running, do nothing. Do not mention this check to the user unless tensorboard failed to start."
+  }
+}

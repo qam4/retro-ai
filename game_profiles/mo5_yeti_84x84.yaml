@@ -1,0 +1,30 @@
+# Yeti eval profile — matches 84x84 training preprocessing
+# Use this for evaluating models trained with resize: [84, 84]
+
+name: yeti_84x84
+display_name: "Yeti (Thomson MO5) — 84x84"
+emulator_type: mo5
+rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/Yeti (1984) (Loriciels).k7"
+action_mode: joystick
+reward_mode: memory
+
+reward_params:
+  score_address_count: "1"
+  score_address_0_addr: "11093"
+  score_address_0_bytes: "2"
+  score_address_0_bcd: "0"
+  score_address_0_le: "0"
+  score_address_0_multiplier: "1"
+  lives_addr: "11095"
+  bonus_addr_hi: "11010"
+  bonus_addr_lo: "11011"
+  bonus_stall_frames: "10"
+  basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
+  monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
+  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:100"
+
+grayscale: true
+resize: [84, 84]
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true
