@@ -138,24 +138,16 @@ public:
     }
 
     StepResult reset(int /*seed*/) {
-        if (!startup_state_.empty()) {
-            // Fast path: restore cached post-startup state
-            auto result = crayon::SaveStateManager::deserialize_from_buffer(
-                startup_state_.data(), startup_state_.size());
-            if (result.is_ok() && result.value.has_value()) {
-                const auto& state = result.value.value();
-                emulator_->get_cpu().set_state(state.cpu_state);
-                emulator_->get_gate_array().set_state(state.gate_array_state);
-                emulator_->get_memory().set_state(state.memory_state);
-                emulator_->get_pia().set_state(state.pia_state);
-            }
-        } else {
-            emulator_->reset();
-            // Run startup sequence if configured
-            auto it = reward_params_.find("startup_sequence");
-            if (it != reward_params_.end()) {
-                run_startup_sequence(it->second);
-                // Cache state for fast subsequent resets
+        // Full reset + startup replay for determinism.
+        // Save/restore has a subtle state leak that causes framebuffer
+        // drift after ~5 frames and RAM drift after ~182 frames.
+        // The cached state is used only for load_state() in Go-Explore,
+        // where restore-to-restore determinism is sufficient.
+        emulator_->reset();
+        auto it = reward_params_.find("startup_sequence");
+        if (it != reward_params_.end()) {
+            run_startup_sequence(it->second);
+            if (startup_state_.empty()) {
                 cache_startup_state();
             }
         }
@@ -541,6 +533,11 @@ private:
         state.gate_array_state = emulator_->get_gate_array_state();
         state.memory_state = emulator_->get_memory_state();
         state.pia_state = emulator_->get_pia_state();
+        state.audio_state = emulator_->get_audio().get_state();
+        state.input_state = emulator_->get_input_handler().get_state();
+        state.light_pen_state = emulator_->get_light_pen().get_state();
+        state.cassette_state = emulator_->get_cassette().get_state();
+        state.master_clock_state = emulator_->get_master_clock().get_state();
         state.frame_count = emulator_->get_frame_count();
         auto result = crayon::SaveStateManager::serialize_to_buffer(state);
         if (result.is_ok() && result.value.has_value()) {

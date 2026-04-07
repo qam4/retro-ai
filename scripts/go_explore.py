@@ -105,11 +105,11 @@ class CellArchive:
                 / (1.0 + info["times_chosen"])
                 / (1.0 + info["times_chosen_since_new"])
             )
-            # Bonus for higher floors (lower y_bucket = higher floor... wait,
-            # y_bucket 0 = bottom. So higher y_bucket = higher floor)
-            # Actually: y_bucket 4 = top. Give bonus for higher y_bucket.
+            # Bonus for higher floors (y_bucket 4 = top)
             floor_bonus = 1.0 + cell_key[0] * 0.5
-            w *= floor_bonus
+            # Bonus for higher score (fruit collection)
+            score_bonus = 1.0 + cell_key[2] * 0.1
+            w *= floor_bonus * score_bonus
             weights.append(w)
 
         weights = np.array(weights)
@@ -258,9 +258,9 @@ def explore(args):
     init_cell = make_cell(state["x_pos"], state["y_pos"], state["score"])
     archive.add_or_update(init_cell, init_state, 0, 0, [])
 
-    print(f"Go-Explore Phase 1: {args.steps} steps, profile={args.profile}")
-    print(f"Output: {args.output}")
-    print()
+    print(f"Go-Explore Phase 1: {args.steps} steps, profile={args.profile}", flush=True)
+    print(f"Output: {args.output}", flush=True)
+    print(flush=True)
 
     while total_steps < args.steps:
         iteration += 1
@@ -281,7 +281,9 @@ def explore(args):
         prev_bonus = state["bonus"]
         prev_lives = state["lives"]
         stall_count = 0
-        explore_trajectory = list(chosen_info["trajectory"])
+        # Full trajectory from game start = parent's trajectory + new actions
+        base_trajectory = list(chosen_info["trajectory"])
+        new_actions = []
         explore_steps = 0
         explore_score = state["score"]
 
@@ -293,7 +295,7 @@ def explore(args):
             prev_action = action
 
             state = read_state(env)
-            explore_trajectory.append(action)
+            new_actions.append(action)
 
             # Track bonus stall for death detection
             if state["bonus"] == prev_bonus:
@@ -307,19 +309,30 @@ def explore(args):
                 break
             prev_lives = state["lives"]
 
-            # Record cell
+            # Record cell — only save state if it's a new or improved cell
             cell = make_cell(state["x_pos"], state["y_pos"], state["score"])
-            cell_state = env.save_state()
-            is_new = archive.add_or_update(
-                cell,
-                cell_state,
-                state["score"],
-                len(explore_trajectory),
-                explore_trajectory.copy(),
+            existing = archive.cells.get(cell)
+            should_save = (
+                existing is None
+                or state["score"] > existing["score"]
+                or (
+                    state["score"] == existing["score"]
+                    and (len(base_trajectory) + len(new_actions)) < existing["steps"]
+                )
             )
-            if is_new:
-                new_cells_this_iter += 1
-                archive.reset_since_new()
+            if should_save:
+                full_trajectory = base_trajectory + new_actions
+                cell_state = env.save_state()
+                is_new = archive.add_or_update(
+                    cell,
+                    cell_state,
+                    state["score"],
+                    len(full_trajectory),
+                    full_trajectory.copy(),
+                )
+                if is_new:
+                    new_cells_this_iter += 1
+                    archive.reset_since_new()
 
             explore_score = state["score"]
 
@@ -327,10 +340,10 @@ def explore(args):
             floor = cell[0]
             if floor > best_floor:
                 best_floor = floor
-                print(f"  NEW FLOOR: {best_floor} at step {total_steps}")
+                print(f"  NEW FLOOR: {best_floor} at step {total_steps}", flush=True)
             if explore_score > best_score:
                 best_score = explore_score
-                best_trajectory = explore_trajectory.copy()
+                best_trajectory = (base_trajectory + new_actions).copy()
 
             if total_steps >= args.steps:
                 break
@@ -353,12 +366,13 @@ def explore(args):
         )
         log_file.flush()
 
-        if iteration % 100 == 0:
+        if iteration % 10 == 0:
             fps = total_steps / elapsed if elapsed > 0 else 0
             print(
                 f"  iter={iteration} steps={total_steps}/{args.steps} "
                 f"cells={len(archive.cells)} best_score={best_score} "
-                f"best_floor={best_floor} fps={fps:.0f}"
+                f"best_floor={best_floor} fps={fps:.0f}",
+                flush=True,
             )
 
     log_file.close()
@@ -410,43 +424,93 @@ def explore(args):
 
 
 def visualize_archive(env, archive, output_dir):
-    """Draw discovered cells on the game background."""
+    """Draw discovered cells as a heatmap on the game background.
+
+    Color intensity = number of unique cells discovered in each region.
+    Cold (blue) = barely explored, hot (red/yellow) = heavily explored.
+    """
     env.reset()
+    # Run a few steps to get an actual gameplay frame
+    for _ in range(10):
+        env.step([0, 0, 0])
     bg = env._last_raw_obs
     if bg is None:
         return
 
-    img = Image.fromarray((bg.astype(np.float32) * 0.3).clip(0, 255).astype(np.uint8))
-    draw = ImageDraw.Draw(img)
+    img = Image.fromarray(bg.copy())
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
 
-    # Color by floor
-    floor_colors = {
-        0: (255, 100, 100),  # red - floor 1
-        1: (255, 200, 50),  # orange - floor 2
-        2: (50, 255, 50),  # green - floor 3
-        3: (50, 150, 255),  # blue - floor 4
-        4: (255, 50, 255),  # magenta - top
+    # Floor Y ranges (pixel coordinates)
+    floor_y_ranges = {
+        0: (170, 200),  # floor 1 - bottom
+        1: (140, 170),  # floor 2
+        2: (110, 140),  # floor 3
+        3: (80, 110),  # floor 4
+        4: (40, 80),  # top area / princess
     }
 
-    for cell_key, info in archive.cells.items():
-        y_bucket, x_bucket, score = cell_key
-        # Map back to approximate pixel positions
-        px = x_bucket * 10 * 4 + 20  # center of bucket, scaled by 4
-        py_map = {0: 180, 1: 155, 2: 125, 3: 95, 4: 70}
-        py = py_map.get(y_bucket, 100)
-        color = floor_colors.get(y_bucket, (200, 200, 200))
-        r = 2
-        draw.ellipse([px - r, py - r, px + r, py + r], fill=color)
+    x_bucket_px = 320 // 8  # 40px per bucket
+
+    # Count cells per region
+    region_counts = {}
+    for cell_key in archive.cells:
+        y_bucket, x_bucket, _score = cell_key
+        region = (y_bucket, x_bucket)
+        region_counts[region] = region_counts.get(region, 0) + 1
+
+    if not region_counts:
+        return
+
+    max_count = max(region_counts.values())
+
+    for (y_bucket, x_bucket), count in region_counts.items():
+        y_min, y_max = floor_y_ranges.get(y_bucket, (0, 200))
+        x_min = x_bucket * x_bucket_px
+        x_max = x_min + x_bucket_px
+
+        # Heatmap: blue (cold) -> green -> yellow -> red (hot)
+        t = count / max_count
+        if t < 0.33:
+            r, g, b = 0, int(255 * t * 3), 255
+        elif t < 0.66:
+            r, g, b = int(255 * (t - 0.33) * 3), 255, int(255 * (1 - (t - 0.33) * 3))
+        else:
+            r, g, b = 255, int(255 * (1 - (t - 0.66) * 3)), 0
+
+        draw.rectangle([x_min, y_min, x_max, y_max], fill=(r, g, b, 90))
+        # Show count in the cell
+        cx = (x_min + x_max) // 2 - 4
+        cy = (y_min + y_max) // 2 - 4
+        draw.text((cx, cy), str(count), fill=(255, 255, 255, 200))
+
+    # Grid lines
+    for y_bucket, (y_min, y_max) in floor_y_ranges.items():
+        draw.line([(0, y_min), (320, y_min)], fill=(255, 255, 255, 40), width=1)
+    for i in range(9):
+        x = i * x_bucket_px
+        draw.line([(x, 40), (x, 200)], fill=(255, 255, 255, 40), width=1)
+
+    # Composite
+    img = img.convert("RGBA")
+    img = Image.alpha_composite(img, overlay)
+    img = img.convert("RGB")
 
     # Legend
-    y = 5
-    for floor, color in sorted(floor_colors.items()):
-        draw.rectangle([5, y, 15, y + 8], fill=color)
-        draw.text((18, y - 2), f"Floor {floor + 1}", fill=(255, 255, 255))
-        y += 12
+    draw2 = ImageDraw.Draw(img)
+    draw2.text(
+        (5, 2),
+        f"{len(region_counts)} regions / {len(archive.cells)} cells",
+        fill=(255, 255, 255),
+    )
+    draw2.text(
+        (5, 13),
+        f"best score: {max(c['score'] for c in archive.cells.values())}",
+        fill=(255, 255, 255),
+    )
 
     img.save(os.path.join(output_dir, "cells.png"))
-    print(f"  Saved cells visualization to {output_dir}/cells.png")
+    print(f"  Saved cells visualization to {output_dir}/cells.png", flush=True)
 
 
 def main():
