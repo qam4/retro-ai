@@ -295,7 +295,7 @@ def explore(args):
             prev_action = action
 
             state = read_state(env)
-            new_actions.append(action)
+            new_actions.append(list(action))
 
             # Track bonus stall for death detection
             if state["bonus"] == prev_bonus:

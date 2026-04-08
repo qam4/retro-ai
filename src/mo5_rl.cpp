@@ -138,16 +138,15 @@ public:
     }
 
     StepResult reset(int /*seed*/) {
-        // Full reset + startup replay for determinism.
-        // Save/restore has a subtle state leak that causes framebuffer
-        // drift after ~5 frames and RAM drift after ~182 frames.
-        // The cached state is used only for load_state() in Go-Explore,
-        // where restore-to-restore determinism is sufficient.
-        emulator_->reset();
-        auto it = reward_params_.find("startup_sequence");
-        if (it != reward_params_.end()) {
-            run_startup_sequence(it->second);
-            if (startup_state_.empty()) {
+        if (!startup_state_.empty()) {
+            // Fast path: restore cached post-startup state
+            emulator_->load_state_from_buffer(
+                startup_state_.data(), startup_state_.size());
+        } else {
+            emulator_->reset();
+            auto it = reward_params_.find("startup_sequence");
+            if (it != reward_params_.end()) {
+                run_startup_sequence(it->second);
                 cache_startup_state();
             }
         }
