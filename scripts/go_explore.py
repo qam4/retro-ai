@@ -420,6 +420,22 @@ def explore(args):
     # Visualize cells on game background
     visualize_archive(env, archive, args.output)
 
+    # Save archive for Phase 2 (save states + trajectories)
+    import pickle
+
+    archive_path = os.path.join(args.output, "archive.pkl")
+    archive_data = {}
+    for cell_key, info in archive.cells.items():
+        archive_data[cell_key] = {
+            "state": bytes(info["state"]),
+            "trajectory": info["trajectory"],
+            "score": info["score"],
+            "steps": info["steps"],
+        }
+    with open(archive_path, "wb") as f:
+        pickle.dump(archive_data, f)
+    print(f"  Saved archive ({len(archive_data)} cells) to {archive_path}", flush=True)
+
     env.reset()  # cleanup (no close method on BaseEnv)
 
 
