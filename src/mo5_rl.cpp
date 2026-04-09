@@ -121,6 +121,12 @@ public:
             try { bonus_stall_frames_ = std::stoi(bstall->second); } catch (...) {}
         }
 
+        // Parse fruit tracking
+        auto fruit_it = reward_params.find("fruits_remaining_addr");
+        if (fruit_it != reward_params.end()) {
+            try { fruits_remaining_addr_ = std::stoi(fruit_it->second); } catch (...) {}
+        }
+
         // Wire up memory reader for reward system
         wire_memory_reward_system();
     }
@@ -171,6 +177,11 @@ public:
             previous_bonus_ = (read_ram_byte(static_cast<uint16_t>(bonus_addr_hi_)) << 8)
                             |  read_ram_byte(static_cast<uint16_t>(bonus_addr_lo_));
             bonus_stall_count_ = 0;
+        }
+
+        // Initialize fruit tracking
+        if (fruits_remaining_addr_ >= 0) {
+            previous_fruits_remaining_ = read_ram_byte(static_cast<uint16_t>(fruits_remaining_addr_));
         }
 
         if (reward_system_) {
@@ -239,6 +250,17 @@ public:
                 result.reward -= height_coeff_;
                 height_anchor_y_ = current_y;
             }
+        }
+
+        // Fruit collection reward: +10 per fruit collected
+        // This replaces score-based reward to avoid snowball farming
+        if (fruits_remaining_addr_ >= 0) {
+            int current_fruits = read_ram_byte(static_cast<uint16_t>(fruits_remaining_addr_));
+            if (current_fruits < previous_fruits_remaining_) {
+                int fruits_collected = previous_fruits_remaining_ - current_fruits;
+                result.reward += fruits_collected * 10.0f;
+            }
+            previous_fruits_remaining_ = current_fruits;
         }
 
         // Check for life loss
@@ -566,6 +588,8 @@ private:
     int bonus_stall_frames_ = 0;
     int previous_bonus_ = 0;
     int bonus_stall_count_ = 0;
+    int fruits_remaining_addr_ = -1;
+    int previous_fruits_remaining_ = 4;
     std::vector<uint8_t> startup_state_;
 };
 

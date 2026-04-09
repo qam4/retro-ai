@@ -71,6 +71,8 @@ reward_params:
   # height_reward_addr: "11089"
   # height_reward_coeff: "10.0"
   # height_threshold: "20"
+  # Fruit collection reward (not score — avoids snowball farming)
+  fruits_remaining_addr: "11055"
   # BIOS ROM paths
   basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
   monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"

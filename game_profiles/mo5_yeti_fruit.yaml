@@ -1,0 +1,32 @@
+# Yeti — fruit-only reward profile
+# Uses memory reward mode with no score addresses (0 base reward).
+# Fruit collection reward (+10 per fruit) comes from fruits_remaining_addr in C++.
+# Survival bonus (0.01/step) added by the training pipeline wrapper.
+
+name: yeti_fruit
+display_name: "Yeti (fruit reward)"
+emulator_type: mo5
+rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/Yeti (1984) (Loriciels).k7"
+action_mode: joystick
+reward_mode: memory
+
+reward_params:
+  # No score addresses — fruit reward comes from C++ fruit tracking
+  score_address_count: "0"
+  # Episode termination
+  lives_addr: "11095"
+  bonus_addr_hi: "11010"
+  bonus_addr_lo: "11011"
+  bonus_stall_frames: "10"
+  # Fruit collection tracking
+  fruits_remaining_addr: "11055"
+  # BIOS ROM paths
+  basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
+  monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
+  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:100"
+
+grayscale: true
+resize: null
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true
