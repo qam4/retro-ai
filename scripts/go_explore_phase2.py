@@ -87,14 +87,6 @@ class BackwardCurriculumEnv(gym.Env):
             self.cells_by_floor[floor].append(info)
 
         self.floors_desc = sorted(self.cells_by_floor.keys(), reverse=True)
-        self.num_stages = len(self.floors_desc) + 1  # +1 for game start
-
-        # Curriculum state
-        self.current_stage = 0
-        self.stage_episode_count = 0
-        self.stage_rewards = []
-        self.advance_threshold = 5.0  # mean reward to advance
-        self.advance_window = 50  # episodes to average over
 
         # Episode state
         self._step_count = 0
@@ -104,11 +96,48 @@ class BackwardCurriculumEnv(gym.Env):
         self._stall = 0
         self._initialized = False
 
+    # Global curriculum state (shared across all env instances)
+    _global_stage = 0
+    _global_rewards = []
+    _global_episode_count = 0
+    _advance_threshold = 20.0  # mean score delta to advance (2 fruits)
+    _advance_window = 100  # episodes to average over
+    _frontier_ratio = 0.5  # 50% frontier, 50% earlier stages
+
+    @property
+    def current_stage(self):
+        return BackwardCurriculumEnv._global_stage
+
+    @property
+    def num_stages(self):
+        return len(self.floors_desc) + 1
+
     def _get_stage_floor(self):
         """Return the floor for the current stage, or None for game start."""
         if self.current_stage < len(self.floors_desc):
             return self.floors_desc[self.current_stage]
         return None  # game start
+
+    def _pick_starting_floor(self):
+        """Pick a floor to start from, mixing frontier and earlier stages."""
+        if self.current_stage == 0:
+            # Only one option — the highest floor
+            return self.floors_desc[0]
+
+        if self.current_stage >= len(self.floors_desc):
+            # Past all floors — mix game start with all floors
+            if random.random() < self._frontier_ratio:
+                return None  # game start
+            else:
+                return random.choice(self.floors_desc)
+
+        # Mix: 50% current frontier floor, 50% any earlier (higher) floor
+        if random.random() < self._frontier_ratio:
+            return self.floors_desc[self.current_stage]
+        else:
+            # Pick from stages 0..current_stage-1 (higher floors)
+            earlier_idx = random.randint(0, self.current_stage - 1)
+            return self.floors_desc[earlier_idx]
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -117,7 +146,7 @@ class BackwardCurriculumEnv(gym.Env):
             self.gym_env.reset(seed=seed)
             self._initialized = True
 
-        floor = self._get_stage_floor()
+        floor = self._pick_starting_floor()
 
         if floor is not None and floor in self.cells_by_floor:
             # Start from a random cell on this floor
@@ -171,30 +200,30 @@ class BackwardCurriculumEnv(gym.Env):
 
         # Track episode reward for curriculum advancement
         if done or truncated:
-            ep_reward = score_delta
-            self.stage_rewards.append(ep_reward)
-            self.stage_episode_count += 1
+            BackwardCurriculumEnv._global_rewards.append(score_delta)
+            BackwardCurriculumEnv._global_episode_count += 1
             self._check_advance()
 
         return obs, reward, done, truncated, info
 
     def _check_advance(self):
         """Advance to next stage if performance is good enough."""
-        if len(self.stage_rewards) < self.advance_window:
+        cls = BackwardCurriculumEnv
+        if len(cls._global_rewards) < cls._advance_window:
             return
-        recent = self.stage_rewards[-self.advance_window :]
+        recent = cls._global_rewards[-cls._advance_window :]
         mean_reward = np.mean(recent)
         if (
-            mean_reward >= self.advance_threshold
-            and self.current_stage < self.num_stages - 1
+            mean_reward >= cls._advance_threshold
+            and cls._global_stage < self.num_stages - 1
         ):
             old_floor = self._get_stage_floor()
-            self.current_stage += 1
+            cls._global_stage += 1
             new_floor = self._get_stage_floor()
-            self.stage_rewards = []
-            self.stage_episode_count = 0
+            cls._global_rewards = []
+            cls._global_episode_count = 0
             print(
-                f"  STAGE ADVANCE: {self.current_stage}/{self.num_stages} "
+                f"  STAGE ADVANCE: {cls._global_stage}/{self.num_stages} "
                 f"(floor {old_floor} -> {new_floor}, mean_reward={mean_reward:.1f})",
                 flush=True,
             )
@@ -217,6 +246,11 @@ def train(args):
         print(f"  Floor {f}: {floors[f]} cells", flush=True)
 
     os.makedirs(args.output, exist_ok=True)
+
+    # Reset global curriculum state
+    BackwardCurriculumEnv._global_stage = 0
+    BackwardCurriculumEnv._global_rewards = []
+    BackwardCurriculumEnv._global_episode_count = 0
 
     # Multi-env setup
     def make_env(rank):
@@ -250,15 +284,7 @@ def train(args):
                 emu_fps = fps * self._frame_skip
                 pct = 100 * self.num_timesteps / self._total
                 # Get stage from first env
-                stage = "?"
-                try:
-                    if hasattr(self.training_env, "envs"):
-                        inner = self.training_env.envs[0]
-                        while hasattr(inner, "env"):
-                            inner = inner.env
-                        stage = f"{inner.current_stage}/{inner.num_stages}"
-                except Exception:
-                    pass
+                stage = f"{BackwardCurriculumEnv._global_stage}"
                 print(
                     f"step {self.num_timesteps}/{self._total} ({pct:.0f}%) "
                     f"| emu_fps={emu_fps:.0f} | stage={stage}",

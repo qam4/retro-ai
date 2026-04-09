@@ -40,6 +40,11 @@
 #   Y: RAM offset 11089 (CPU 0x2B51) — 182 at bottom, 150 platform 2, 96 platform 3
 #   Note: Y changes during jumps (182→172→182), not just climbing
 #
+# Fruits remaining:
+#   RAM offset 11055 (CPU 0x2B2F)
+#   Starts at 4, decreases on fruit collection, resets on death/new level
+#   Use (4 - value) = fruits collected. Distinguishes fruit score from snowball jumps.
+#
 # =============================================================================
 
 name: yeti
