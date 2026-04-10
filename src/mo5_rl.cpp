@@ -352,6 +352,16 @@ public:
                 }
             }
 
+            // Fruit collection reward
+            if (fruits_remaining_addr_ >= 0) {
+                int current_fruits = read_ram_byte(static_cast<uint16_t>(fruits_remaining_addr_));
+                if (current_fruits < previous_fruits_remaining_) {
+                    int fruits_collected = previous_fruits_remaining_ - current_fruits;
+                    intermediate.reward += fruits_collected * 10.0f;
+                }
+                previous_fruits_remaining_ = current_fruits;
+            }
+
             total_reward += intermediate.reward;
             previous_result_ = intermediate;
 
