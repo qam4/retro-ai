@@ -291,6 +291,18 @@ def train(args):
     print(f"  Timesteps: {args.timesteps}", flush=True)
     print(f"  Output: {args.output}", flush=True)
 
+    # Seed checkpoint buffers from Go-Explore archive if provided
+    if args.seed_archive:
+        import pickle
+        print(f"  Seeding from {args.seed_archive}", flush=True)
+        with open(args.seed_archive, "rb") as f:
+            archive = pickle.load(f)
+        for cell_key, info in archive.items():
+            fruits_collected = 4 - cell_key[2]
+            if fruits_collected > 0:
+                _manager.save_checkpoint(fruits_collected, info["state"])
+        print(f"  Seeded: {_manager.summary()}", flush=True)
+
     os.makedirs(args.output, exist_ok=True)
 
     # Multi-env
@@ -348,6 +360,7 @@ def main():
         "--output", default="output/mo5/yeti/training/checkpoint_curriculum"
     )
     parser.add_argument("--resume", help="Path to model .zip to resume from")
+    parser.add_argument("--seed-archive", help="Path to Go-Explore archive.pkl to seed checkpoints")
     args = parser.parse_args()
     train(args)
 

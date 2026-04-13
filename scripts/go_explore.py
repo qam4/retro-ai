@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw
 # ── Cell definition ──────────────────────────────────────────────────────────
 
 
-def make_cell(x, y, score):
+def make_cell(x, y, score, fruits_remaining=4):
     """Discretize game state into a cell.
 
     Y buckets (floors):
@@ -35,7 +35,7 @@ def make_cell(x, y, score):
       4: y < 80 (top area / princess)
 
     X buckets: divide into 8 regions (0-39 each on raw X 0-79)
-    Score: keep as-is (each unique score is a different cell)
+    Fruits remaining: 4=none collected, 0=all collected
     """
     if y >= 170:
         y_bucket = 0
@@ -49,7 +49,7 @@ def make_cell(x, y, score):
         y_bucket = 4
 
     x_bucket = min(x // 10, 7)
-    return (y_bucket, x_bucket, score)
+    return (y_bucket, x_bucket, fruits_remaining)
 
 
 # ── Archive ──────────────────────────────────────────────────────────────────
@@ -95,9 +95,6 @@ class CellArchive:
             return None
 
         cells = list(self.cells.items())
-        # Weight: 1 / (1 + times_chosen) * (1 + times_chosen_since_new)
-        # This prefers cells that haven't been chosen much, especially
-        # those that were recently discovered or led to new discoveries.
         weights = []
         for cell_key, info in cells:
             w = (
@@ -105,11 +102,13 @@ class CellArchive:
                 / (1.0 + info["times_chosen"])
                 / (1.0 + info["times_chosen_since_new"])
             )
-            # Bonus for higher floors (y_bucket 4 = top)
+            # Bonus for more fruits collected (fewer remaining = better)
+            # fruits_remaining is cell_key[2]: 4=none, 0=all
+            fruits_collected = 4 - cell_key[2]
+            fruit_bonus = 1.0 + fruits_collected * 2.0
+            # Bonus for higher floors
             floor_bonus = 1.0 + cell_key[0] * 0.5
-            # Bonus for higher score (fruit collection)
-            score_bonus = 1.0 + cell_key[2] * 0.1
-            w *= floor_bonus * score_bonus
+            w *= fruit_bonus * floor_bonus
             weights.append(w)
 
         weights = np.array(weights)
@@ -136,6 +135,7 @@ YETI_ADDRS = {
     "lives": 11095,
     "bonus_hi": 11010,
     "bonus_lo": 11011,
+    "fruits_remaining": 11055,
 }
 
 
@@ -255,7 +255,9 @@ def explore(args):
     env.reset()
     state = read_state(env)
     init_state = env.save_state()
-    init_cell = make_cell(state["x_pos"], state["y_pos"], state["score"])
+    init_cell = make_cell(
+        state["x_pos"], state["y_pos"], state["score"], state["fruits_remaining"]
+    )
     archive.add_or_update(init_cell, init_state, 0, 0, [])
 
     print(f"Go-Explore Phase 1: {args.steps} steps, profile={args.profile}", flush=True)
@@ -310,7 +312,15 @@ def explore(args):
             prev_lives = state["lives"]
 
             # Record cell — only save state if it's a new or improved cell
-            cell = make_cell(state["x_pos"], state["y_pos"], state["score"])
+            # Skip death animation states (Y < 30 is above the game area)
+            if state["y_pos"] < 30:
+                continue
+            cell = make_cell(
+                state["x_pos"],
+                state["y_pos"],
+                state["score"],
+                state["fruits_remaining"],
+            )
             existing = archive.cells.get(cell)
             should_save = (
                 existing is None
@@ -395,10 +405,15 @@ def explore(args):
         "best_floor": best_floor,
         "wall_time": time.time() - start_time,
         "cells_by_floor": {},
+        "cells_by_fruits_collected": {},
     }
     for cell_key in archive.cells:
         floor = str(cell_key[0])
         summary["cells_by_floor"][floor] = summary["cells_by_floor"].get(floor, 0) + 1
+        fc = str(4 - cell_key[2])
+        summary["cells_by_fruits_collected"][fc] = (
+            summary["cells_by_fruits_collected"].get(fc, 0) + 1
+        )
 
     with open(os.path.join(args.output, "summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
