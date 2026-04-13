@@ -75,19 +75,33 @@ class CheckpointManager:
     def pick_start(self):
         """Pick a starting checkpoint level.
 
-        Returns (checkpoint_level, state_bytes_or_none).
-        Level 0 with None = game start (reset).
-        Level N with bytes = load state where N fruits collected.
+        Distribution:
+        - 40% game start (keeps full-chain skill sharp)
+        - 40% highest available checkpoint (pushes frontier)
+        - 20% random other checkpoint (maintains intermediate skills)
         """
-        # Available levels: 0 (always) + any with saved states
-        available = [0]  # game start always available
-        for i in range(1, self.FRUITS_TOTAL + 1):
+        # Find highest checkpoint with states
+        highest = 0
+        for i in range(self.FRUITS_TOTAL, 0, -1):
             if len(self.checkpoints[i]) > 0:
-                available.append(i)
+                highest = i
+                break
 
-        # Weight: equal probability for each available level
-        # This ensures the agent practices all segments
-        level = random.choice(available)
+        roll = random.random()
+        if roll < 0.4 or highest == 0:
+            # Game start
+            level = 0
+        elif roll < 0.8:
+            # Frontier — highest checkpoint
+            level = highest
+        else:
+            # Random intermediate (including game start)
+            available = [0]
+            for i in range(1, highest):
+                if len(self.checkpoints[i]) > 0:
+                    available.append(i)
+            level = random.choice(available)
+
         self.stats["starts"][level] += 1
 
         if level == 0:
@@ -308,6 +322,12 @@ def train(args):
         device="auto",
     )
 
+    if args.resume:
+        print(f"  Resuming from {args.resume}", flush=True)
+        model = PPO.load(
+            args.resume, env=vec_env, tensorboard_log=os.path.join(args.output, "tb")
+        )
+
     print(f"\nTraining...", flush=True)
     model.learn(
         total_timesteps=args.timesteps,
@@ -327,6 +347,7 @@ def main():
     parser.add_argument(
         "--output", default="output/mo5/yeti/training/checkpoint_curriculum"
     )
+    parser.add_argument("--resume", help="Path to model .zip to resume from")
     args = parser.parse_args()
     train(args)
 
