@@ -117,6 +117,33 @@ class CheckpointManager:
             f"saves={self.stats['saves']}, starts={self.stats['starts']}"
         )
 
+    def save_to_disk(self, path):
+        """Persist checkpoint buffers to disk."""
+        import pickle
+
+        data = {
+            "checkpoints": [
+                list(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)
+            ],
+            "stats": self.stats,
+        }
+        with open(path, "wb") as f:
+            pickle.dump(data, f)
+
+    def load_from_disk(self, path):
+        """Load checkpoint buffers from disk."""
+        import pickle
+
+        if not os.path.exists(path):
+            return
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        for i, states in enumerate(data["checkpoints"]):
+            for s in states:
+                self.checkpoints[i].append(s)
+        self.stats = data.get("stats", self.stats)
+        print(f"  Loaded checkpoints from {path}: {self.summary()}", flush=True)
+
 
 # Global manager shared across envs
 _manager = CheckpointManager()
@@ -294,6 +321,7 @@ def train(args):
     # Seed checkpoint buffers from Go-Explore archive if provided
     if args.seed_archive:
         import pickle
+
         print(f"  Seeding from {args.seed_archive}", flush=True)
         with open(args.seed_archive, "rb") as f:
             archive = pickle.load(f)
@@ -339,6 +367,11 @@ def train(args):
         model = PPO.load(
             args.resume, env=vec_env, tensorboard_log=os.path.join(args.output, "tb")
         )
+        # Load persisted checkpoints if available
+        ckpt_path = os.path.join(os.path.dirname(args.resume), "checkpoints.pkl")
+        _manager.load_from_disk(ckpt_path)
+        # Also try from the output dir
+        _manager.load_from_disk(os.path.join(args.output, "checkpoints.pkl"))
 
     print(f"\nTraining...", flush=True)
     model.learn(
@@ -346,6 +379,7 @@ def train(args):
         callback=CurriculumCallback(args.timesteps),
     )
     model.save(os.path.join(args.output, "final_model"))
+    _manager.save_to_disk(os.path.join(args.output, "checkpoints.pkl"))
     print(f"\nSaved model to {args.output}/final_model.zip", flush=True)
     print(f"Final: {_manager.summary()}", flush=True)
 
@@ -360,7 +394,9 @@ def main():
         "--output", default="output/mo5/yeti/training/checkpoint_curriculum"
     )
     parser.add_argument("--resume", help="Path to model .zip to resume from")
-    parser.add_argument("--seed-archive", help="Path to Go-Explore archive.pkl to seed checkpoints")
+    parser.add_argument(
+        "--seed-archive", help="Path to Go-Explore archive.pkl to seed checkpoints"
+    )
     args = parser.parse_args()
     train(args)
 
