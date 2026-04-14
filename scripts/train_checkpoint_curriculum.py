@@ -212,9 +212,10 @@ class CheckpointCurriculumEnv(gym.Env):
         level, state_bytes = _manager.pick_start()
 
         if state_bytes is not None:
-            # Load checkpoint state
+            # Load checkpoint state and run a few frames to let game settle
             self.base._interface.load_state(state_bytes)
-            obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
+            for _ in range(5):
+                obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
         else:
             # Game start
             obs, _ = self.gym_env.reset()
@@ -263,7 +264,7 @@ class CheckpointCurriculumEnv(gym.Env):
         else:
             self._stall = 0
             self._prev_bonus = bonus
-        if self._stall >= 10:
+        if self._stall >= 15:
             done = True
 
         if self._step_count >= self.max_steps:
