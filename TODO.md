@@ -28,3 +28,8 @@
 - Resume training passes total_timesteps to model.learn() without subtracting
   checkpoint's num_timesteps, causing it to train total+checkpoint steps
   instead of total steps. Fix: remaining = total - model.num_timesteps.
+- Crayon save/restore: ~10% of save states produce a frozen game after load.
+  The bonus countdown and player position never change regardless of input.
+  Root cause unknown — likely a transient CPU/emulator state not being
+  serialized. Workaround: validate checkpoints by running 20 frames after
+  load and checking if bonus changes. See train_checkpoint_curriculum.py.

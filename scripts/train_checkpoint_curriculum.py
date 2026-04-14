@@ -199,6 +199,7 @@ class CheckpointCurriculumEnv(gym.Env):
         self._prev_bonus = 0
         self._stall = 0
         self._start_fruits = 4
+        self._want_checkpoint = 0
         self._initialized = False
 
     def reset(self, seed=None, options=None):
@@ -228,6 +229,7 @@ class CheckpointCurriculumEnv(gym.Env):
             self.iface.read_ram_byte(self.BONUS_HI) << 8
         ) | self.iface.read_ram_byte(self.BONUS_LO)
         self._stall = 0
+        self._want_checkpoint = 0
 
         return obs, {}
 
@@ -246,11 +248,17 @@ class CheckpointCurriculumEnv(gym.Env):
         if fruits < self._prev_fruits:
             fruits_collected = self._prev_fruits - fruits
             reward += fruits_collected * 10.0
-
-            # Save checkpoint: state where N fruits have been collected
             collected_total = 4 - fruits
             state_bytes = self.base._interface.save_state()
-            _manager.save_checkpoint(collected_total, state_bytes)
+            # WORKAROUND: ~10% of save states produce a frozen game state
+            # after load (bonus/position never change). This is a crayon
+            # save/restore bug where some transient CPU/emulator state isn't
+            # serialized, causing the game to enter an infinite loop.
+            # We validate by loading the state, running a few frames, and
+            # checking if the bonus changes. Invalid states are discarded.
+            # TODO: fix the root cause in crayon's state serialization.
+            if self._validate_checkpoint(state_bytes):
+                _manager.save_checkpoint(collected_total, state_bytes)
 
         self._prev_fruits = fruits
 
@@ -271,6 +279,30 @@ class CheckpointCurriculumEnv(gym.Env):
             truncated = True
 
         return obs, reward, done, truncated, info
+
+    def _validate_checkpoint(self, state_bytes):
+        """Check if a save state produces a playable game.
+
+        WORKAROUND for crayon save/restore bug. See comment above.
+        Loads the state, runs 20 noop frames, checks if bonus changes.
+        Restores the original state afterward.
+        """
+        original = self.base._interface.save_state()
+        self.base._interface.load_state(state_bytes)
+        bonus_start = (
+            self.iface.read_ram_byte(self.BONUS_HI) << 8
+        ) | self.iface.read_ram_byte(self.BONUS_LO)
+        changed = False
+        for _ in range(20):
+            self.base.step([0, 0, 0])
+            b = (
+                self.iface.read_ram_byte(self.BONUS_HI) << 8
+            ) | self.iface.read_ram_byte(self.BONUS_LO)
+            if b != bonus_start:
+                changed = True
+                break
+        self.base._interface.load_state(original)
+        return changed
 
 
 class CurriculumCallback(BaseCallback):
