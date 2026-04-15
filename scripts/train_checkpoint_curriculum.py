@@ -51,6 +51,16 @@ class CheckpointManager:
             "saves": [0] * (self.FRUITS_TOTAL + 1),
             "starts": [0] * (self.FRUITS_TOTAL + 1),
         }
+        # Success tracking: episodes started from level N that reached N+1
+        self.segment_attempts = [0] * (self.FRUITS_TOTAL + 1)
+        self.segment_successes = [0] * (self.FRUITS_TOTAL + 1)
+
+    def record_episode(self, start_level, reached_level):
+        """Record an episode's outcome for success rate tracking."""
+        if 0 <= start_level <= self.FRUITS_TOTAL:
+            self.segment_attempts[start_level] += 1
+            if reached_level > start_level:
+                self.segment_successes[start_level] += 1
 
     def save_checkpoint(self, fruits_collected, state_bytes):
         """Save a state at the given checkpoint level."""
@@ -112,9 +122,15 @@ class CheckpointManager:
 
     def summary(self):
         sizes = [len(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)]
+        rates = []
+        for i in range(self.FRUITS_TOTAL + 1):
+            if self.segment_attempts[i] > 0:
+                pct = 100 * self.segment_successes[i] / self.segment_attempts[i]
+                rates.append(f"{i}->{i+1}:{pct:.0f}%")
+            else:
+                rates.append(f"{i}->{i+1}:N/A")
         return (
-            f"checkpoints: {sizes}, frontier={self.frontier}, "
-            f"saves={self.stats['saves']}, starts={self.stats['starts']}"
+            f"cp={sizes} saves={self.stats['saves']} " f"success=[{', '.join(rates)}]"
         )
 
     def save_to_disk(self, path):
@@ -243,11 +259,13 @@ class CheckpointCurriculumEnv(gym.Env):
             self.iface.read_ram_byte(self.BONUS_HI) << 8
         ) | self.iface.read_ram_byte(self.BONUS_LO)
 
-        # Reward: +10 per fruit collected this step
+        # Reward: bonus_remaining * 0.01 per fruit collected.
+        # Faster collection = higher bonus = more reward.
+        # No flat reward — the bonus IS the incentive.
         reward = 0.0
         if fruits < self._prev_fruits:
             fruits_collected = self._prev_fruits - fruits
-            reward += fruits_collected * 10.0
+            reward += fruits_collected * bonus * 0.01
             collected_total = 4 - fruits
             state_bytes = self.base._interface.save_state()
             # WORKAROUND: ~10% of save states produce a frozen game state
@@ -277,6 +295,12 @@ class CheckpointCurriculumEnv(gym.Env):
 
         if self._step_count >= self.max_steps:
             truncated = True
+
+        # Record episode outcome for success rate tracking
+        if done or truncated:
+            start_level = 4 - self._start_fruits
+            reached_level = 4 - fruits
+            _manager.record_episode(start_level, reached_level)
 
         return obs, reward, done, truncated, info
 
