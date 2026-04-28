@@ -2,17 +2,22 @@
 """Checkpoint curriculum training for Yeti.
 
 Trains a single PPO policy progressively:
+
 1. Start from game reset, learn to collect fruit 1
 2. Save states when fruit 1 is collected
-3. Mix: 50% game start, 50% fruit-1 checkpoints → learn fruit 2
-4. Save states when fruit 2 is collected
-5. Continue mixing all segments until all fruits + princess
+3. Mix game-start + frontier-checkpoint starts for the next segment
+4. Continue until all fruits + princess
 
-Usage:
-    python scripts/train_checkpoint_curriculum.py \
-        --profile yeti_fruit --timesteps 10000000 \
-        --output output/mo5/yeti/training/checkpoint_curriculum
+Configuration is YAML-driven — pass ``--config`` pointing at a file with
+``training``, ``env``, ``ppo``, ``reward``, and ``curriculum`` sections.
+
+Example::
+
+    python scripts/train_checkpoint_curriculum.py \\
+        --config experiments/003-yeti/configs/curriculum_v6.yaml
 """
+
+from __future__ import annotations
 
 import argparse
 import hashlib
@@ -29,10 +34,9 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
 
-from retro_ai.envs.base_env import BaseEnv
-from retro_ai.core.preprocessing import PreprocessedEnv, PreprocessingPipeline
-from retro_ai.wrappers.gymnasium_wrapper import GymnasiumWrapper
-from retro_ai.training.game_profile import GameProfileRegistry
+from retro_ai.training.env_builder import build_training_env
+from retro_ai.training.rewards import RewardContext, RewardFn, create as create_reward
+from retro_ai.training.run_config import RunConfig
 from retro_ai.training.run_manifest import (
     EpisodeLogger,
     RunManifest,
@@ -41,7 +45,7 @@ from retro_ai.training.run_manifest import (
 )
 
 
-# Yeti-specific RAM addresses
+# Yeti RAM addresses
 FRUITS_ADDR = 11055
 LIVES_ADDR = 11095
 BONUS_HI = 11010
@@ -52,7 +56,7 @@ X_POS = 11090
 Y_POS = 11089
 
 
-# Shared global-step & episode-id counters (thread-safe, same pattern as segment script)
+# Shared global-step & episode-id counters across threaded envs.
 _global_step = 0
 _global_step_lock = threading.Lock()
 _episode_counter = 0
@@ -77,20 +81,41 @@ def _get_global_step() -> int:
         return _global_step
 
 
-# Shared checkpoint buffers across all env instances
 class CheckpointManager:
-    """Manages save state buffers for each fruit checkpoint."""
+    """Manages save state buffers for each fruit checkpoint.
 
-    MAX_STATES_PER_CHECKPOINT = 100
+    ``reset_fraction`` / ``frontier_fraction`` / ``earlier_fraction``
+    control the start distribution. All three must sum to 1.0 (validated
+    on construction).
+    """
+
     FRUITS_TOTAL = 4
 
-    def __init__(self):
+    def __init__(
+        self,
+        max_states_per_checkpoint: int,
+        min_states_to_advance: int,
+        reset_fraction: float,
+        frontier_fraction: float,
+        earlier_fraction: float,
+    ):
+        total = reset_fraction + frontier_fraction + earlier_fraction
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(
+                f"Curriculum fractions must sum to 1.0, got {total}: "
+                f"reset={reset_fraction}, frontier={frontier_fraction}, "
+                f"earlier={earlier_fraction}"
+            )
+        self.max_states_per_checkpoint = max_states_per_checkpoint
+        self.min_states_to_advance = min_states_to_advance
+        self.reset_fraction = reset_fraction
+        self.frontier_fraction = frontier_fraction
+
         self.checkpoints = [
-            deque(maxlen=self.MAX_STATES_PER_CHECKPOINT)
+            deque(maxlen=max_states_per_checkpoint)
             for _ in range(self.FRUITS_TOTAL + 1)
         ]
         self.frontier = 0
-        self.min_states_to_advance = 20
         self.stats = {
             "saves": [0] * (self.FRUITS_TOTAL + 1),
             "starts": [0] * (self.FRUITS_TOTAL + 1),
@@ -125,10 +150,10 @@ class CheckpointManager:
     def pick_start(self):
         """Pick a starting checkpoint level.
 
-        Distribution:
-        - 40% game start (keeps full-chain skill sharp)
-        - 40% highest available checkpoint (pushes frontier)
-        - 20% random other checkpoint (maintains intermediate skills)
+        Distribution (configurable via run config):
+        - reset_fraction: game start
+        - frontier_fraction: highest available checkpoint
+        - earlier_fraction: random intermediate (including game start)
         """
         highest = 0
         for i in range(self.FRUITS_TOTAL, 0, -1):
@@ -137,9 +162,11 @@ class CheckpointManager:
                 break
 
         roll = random.random()
-        if roll < 0.4 or highest == 0:
+        reset_thresh = self.reset_fraction
+        frontier_thresh = self.reset_fraction + self.frontier_fraction
+        if roll < reset_thresh or highest == 0:
             level = 0
-        elif roll < 0.8:
+        elif roll < frontier_thresh:
             level = highest
         else:
             available = [0]
@@ -152,9 +179,8 @@ class CheckpointManager:
 
         if level == 0:
             return 0, None
-        else:
-            state = random.choice(self.checkpoints[level])
-            return level, state
+        state = random.choice(self.checkpoints[level])
+        return level, state
 
     def summary(self):
         sizes = [len(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)]
@@ -193,7 +219,8 @@ class CheckpointManager:
         print(f"  Loaded checkpoints from {path}: {self.summary()}", flush=True)
 
 
-_manager = CheckpointManager()
+# Module-level singleton. Populated in train(); shared across envs.
+_manager: Optional[CheckpointManager] = None
 
 
 class CheckpointCurriculumEnv(gym.Env):
@@ -203,46 +230,22 @@ class CheckpointCurriculumEnv(gym.Env):
 
     def __init__(
         self,
-        profile_name: str,
+        cfg: RunConfig,
+        reward_fn: RewardFn,
         env_id: int,
         episode_logger: Optional[EpisodeLogger] = None,
-        max_steps: int = 1000,
-        stall_threshold: int = 15,
-        reward_scale: float = 0.01,
     ):
         super().__init__()
-        registry = GameProfileRegistry()
-        profile = registry.load(profile_name)
-        config_dict = {}
-        if profile.reward_params:
-            config_dict["reward_params"] = profile.reward_params
+        stack = build_training_env(cfg.env.profile, cfg.env)
+        self.base = stack.base
+        self.gym_env = stack.gym
+        self.observation_space = stack.gym.observation_space
+        self.action_space = stack.gym.action_space
+        self.iface = stack.base._interface
 
-        self.base = BaseEnv(
-            emulator_type=profile.emulator_type,
-            rom_path=profile.rom_path,
-            reward_mode=profile.reward_mode,
-            config=config_dict or None,
-            action_mode="joystick",
-        )
-        self.pipeline = PreprocessingPipeline(
-            grayscale=profile.grayscale,
-            resize=(84, 84),
-            frame_stack=profile.frame_stack,
-            frame_skip=profile.frame_skip,
-        )
-        self.preprocessed = PreprocessedEnv(
-            self.base,
-            self.pipeline,
-            frame_maxpool=profile.frame_maxpool,
-        )
-        self.gym_env = GymnasiumWrapper(self.preprocessed)
-
-        self.observation_space = self.gym_env.observation_space
-        self.action_space = self.gym_env.action_space
-        self.iface = self.base._interface
-        self.max_steps = max_steps
-        self.stall_threshold = stall_threshold
-        self.reward_scale = reward_scale
+        self.max_steps = cfg.env.max_steps
+        self.stall_threshold = cfg.env.stall_threshold
+        self._reward_fn = reward_fn
 
         self.env_id = env_id
         self.episode_logger = episode_logger
@@ -252,12 +255,12 @@ class CheckpointCurriculumEnv(gym.Env):
         self._prev_fruits = 4
         self._prev_lives = 5
         self._prev_bonus = 0
+        self._prev_score = 0
         self._stall = 0
         self._start_fruits = 4
-        self._want_checkpoint = 0
         self._initialized = False
 
-        # For metrics & logging
+        # Logging state
         self._start_xy = (0, 0)
         self._start_score = 0
         self._start_bonus = 0
@@ -266,7 +269,7 @@ class CheckpointCurriculumEnv(gym.Env):
         self._fruits_collected_this_ep = 0
         self._episode_id = 0
 
-    # --- helpers ------------------------------------------------------
+    # -- helpers -------------------------------------------------------
 
     def _read_bonus(self) -> int:
         return (self.iface.read_ram_byte(BONUS_HI) << 8) | self.iface.read_ram_byte(
@@ -284,10 +287,11 @@ class CheckpointCurriculumEnv(gym.Env):
             self.iface.read_ram_byte(Y_POS),
         )
 
-    # --- gym API ------------------------------------------------------
+    # -- gym API -------------------------------------------------------
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        assert _manager is not None, "CheckpointManager not initialized"
 
         if not self._initialized:
             self.gym_env.reset(seed=seed)
@@ -312,10 +316,10 @@ class CheckpointCurriculumEnv(gym.Env):
         self._prev_lives = self.iface.read_ram_byte(LIVES_ADDR)
         self._prev_bonus = self._read_bonus()
         self._start_bonus = self._prev_bonus
+        self._prev_score = self._read_score()
+        self._start_score = self._prev_score
         self._start_xy = self._read_pos()
-        self._start_score = self._read_score()
         self._stall = 0
-        self._want_checkpoint = 0
         self._episode_reward = 0.0
         self._fruits_collected_this_ep = 0
         self._episode_id = _next_episode_id()
@@ -323,19 +327,31 @@ class CheckpointCurriculumEnv(gym.Env):
         return obs, {}
 
     def step(self, action):
+        assert _manager is not None
         obs, _, done, truncated, info = self.gym_env.step(action)
         self._step_count += 1
 
         fruits = self.iface.read_ram_byte(FRUITS_ADDR)
         lives = self.iface.read_ram_byte(LIVES_ADDR)
         bonus = self._read_bonus()
+        score = self._read_score()
 
-        # Reward: bonus_remaining * reward_scale per fruit collected.
-        reward = 0.0
+        ctx = RewardContext(
+            prev_fruits=self._prev_fruits,
+            curr_fruits=fruits,
+            prev_bonus=self._prev_bonus,
+            curr_bonus=bonus,
+            prev_score=self._prev_score,
+            curr_score=score,
+            prev_lives=self._prev_lives,
+            curr_lives=lives,
+            step_count=self._step_count,
+        )
+        reward = float(self._reward_fn(ctx))
+
+        # Save checkpoint on fruit collection (validated via _validate_checkpoint)
         if fruits < self._prev_fruits:
-            fruits_collected = self._prev_fruits - fruits
-            reward += fruits_collected * bonus * self.reward_scale
-            self._fruits_collected_this_ep += fruits_collected
+            self._fruits_collected_this_ep += self._prev_fruits - fruits
             collected_total = 4 - fruits
             state_bytes = self.base._interface.save_state()
             # WORKAROUND: ~10% of save states produce a frozen game state
@@ -346,9 +362,10 @@ class CheckpointCurriculumEnv(gym.Env):
                 _manager.save_checkpoint(collected_total, state_bytes)
 
         self._prev_fruits = fruits
+        self._prev_score = score
         self._episode_reward += reward
 
-        # Death detection
+        # Termination
         end_reason = None
         if lives < self._prev_lives and self._prev_lives > 0:
             done = True
@@ -376,11 +393,13 @@ class CheckpointCurriculumEnv(gym.Env):
             _manager.record_episode(start_level, reached_level)
             if end_reason is None:
                 end_reason = "env_done" if done else "env_truncated"
-            self._log_episode(end_reason, fruits, bonus)
+            self._log_episode(end_reason, fruits, bonus, score)
 
         return obs, reward, done, truncated, info
 
-    def _log_episode(self, end_reason: str, fruits: int, bonus: int) -> None:
+    def _log_episode(
+        self, end_reason: str, fruits: int, bonus: int, final_score: int
+    ) -> None:
         if self.episode_logger is None:
             return
         final_xy = self._read_pos()
@@ -402,7 +421,7 @@ class CheckpointCurriculumEnv(gym.Env):
             start_bonus=self._start_bonus,
             final_x=final_xy[0],
             final_y=final_xy[1],
-            final_score=self._read_score(),
+            final_score=final_score,
             final_bonus=bonus,
             start_state_hash=self._start_state_hash,
         )
@@ -452,6 +471,7 @@ class CurriculumCallback(BaseCallback):
                     rewards.append(ep["r"])
             reward_str = f"{np.mean(rewards):.1f}" if rewards else "N/A"
 
+            assert _manager is not None
             print(
                 f"step {self.num_timesteps}/{self._total} ({pct:.0f}%) "
                 f"| reward={reward_str} "
@@ -463,24 +483,35 @@ class CurriculumCallback(BaseCallback):
         return True
 
 
-def train(args: argparse.Namespace) -> None:
+def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     global _manager
-    _manager = CheckpointManager()
 
-    seed = seed_everything(args.seed)
+    if cfg.curriculum is None:
+        raise ValueError(
+            "train_checkpoint_curriculum.py requires a 'curriculum' section in the run config"
+        )
+
+    seed = seed_everything(cfg.training.seed)
+
+    _manager = CheckpointManager(
+        max_states_per_checkpoint=cfg.curriculum.max_states_per_checkpoint,
+        min_states_to_advance=cfg.curriculum.min_states_to_advance,
+        reset_fraction=cfg.curriculum.reset_fraction,
+        frontier_fraction=cfg.curriculum.frontier_fraction,
+        earlier_fraction=cfg.curriculum.earlier_fraction,
+    )
 
     print("Checkpoint Curriculum Training", flush=True)
-    print(f"  Profile: {args.profile}", flush=True)
-    print(f"  Timesteps: {args.timesteps}", flush=True)
-    print(f"  Output: {args.output}", flush=True)
+    print(f"  Profile: {cfg.env.profile}", flush=True)
+    print(f"  Timesteps: {cfg.training.timesteps}", flush=True)
+    print(f"  Output: {cfg.training.output}", flush=True)
     print(f"  Seed: {seed}", flush=True)
 
-    # Seed checkpoint buffers from Go-Explore archive if provided
-    if args.seed_archive:
+    if cfg.curriculum.seed_archive:
         import pickle
 
-        print(f"  Seeding from {args.seed_archive}", flush=True)
-        with open(args.seed_archive, "rb") as f:
+        print(f"  Seeding from {cfg.curriculum.seed_archive}", flush=True)
+        with open(cfg.curriculum.seed_archive, "rb") as f:
             archive = pickle.load(f)
         for cell_key, info in archive.items():
             fruits_collected = 4 - cell_key[2]
@@ -488,93 +519,84 @@ def train(args: argparse.Namespace) -> None:
                 _manager.save_checkpoint(fruits_collected, info["state"])
         print(f"  Seeded: {_manager.summary()}", flush=True)
 
-    os.makedirs(args.output, exist_ok=True)
+    os.makedirs(cfg.training.output, exist_ok=True)
 
-    # --- persist run config + machine context -----------------------------
-    ppo_hparams = {
-        "learning_rate": 3e-4,
-        "batch_size": 64,
-        "n_steps": max(1, 128 // args.num_envs),
-        "n_epochs": 4,
-        "ent_coef": 0.01,
-    }
-    extras = {
-        "script": "scripts/train_checkpoint_curriculum.py",
-        "resolved_seed": seed,
-        "ppo": ppo_hparams,
-        "env": {
-            "max_steps": args.max_steps,
-            "stall_threshold": 15,
-            "reward_formula": "fruits_collected * bonus_remaining * reward_scale",
-            "reward_scale": 0.01,
-            "action_mode": "joystick",
-        },
-        "curriculum": {
-            "start_mix": "40% reset / 40% frontier / 20% random earlier",
-            "max_states_per_checkpoint": CheckpointManager.MAX_STATES_PER_CHECKPOINT,
-            "min_states_to_advance": CheckpointManager().min_states_to_advance,
-        },
-        "resume": args.resume,
-        "seed_archive": args.seed_archive,
-    }
-    manifest = RunManifest.capture(args, args.output, extras=extras)
-    episode_logger = EpisodeLogger(args.output)
+    reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
 
-    # Multi-env
+    # Persist full, resolved config.
+    manifest_extras = cfg.to_dict()
+    manifest_extras["resolved_seed"] = seed
+    manifest_extras["script"] = "scripts/train_checkpoint_curriculum.py"
+    manifest = RunManifest.capture(
+        {"config_path": config_path},
+        cfg.training.output,
+        extras=manifest_extras,
+    )
+    episode_logger = EpisodeLogger(cfg.training.output)
+
     from retro_ai.wrappers.threaded_vec_env import ThreadedVecEnv
 
     def make_env(rank: int):
         def _init():
             env = CheckpointCurriculumEnv(
-                profile_name=args.profile,
+                cfg=cfg,
+                reward_fn=reward_fn,
                 env_id=rank,
                 episode_logger=episode_logger,
-                max_steps=args.max_steps,
-                stall_threshold=15,
-                reward_scale=0.01,
             )
             return Monitor(env)
 
         return _init
 
-    num_envs = args.num_envs
+    num_envs = cfg.training.num_envs
     vec_env = ThreadedVecEnv([make_env(i) for i in range(num_envs)])
     print(f"  Envs: {num_envs} threaded", flush=True)
+
+    n_steps = cfg.ppo.n_steps
+    if n_steps is None:
+        n_steps = max(1, 128 // num_envs)
 
     model = PPO(
         "CnnPolicy",
         vec_env,
-        learning_rate=ppo_hparams["learning_rate"],
-        batch_size=ppo_hparams["batch_size"],
-        n_steps=ppo_hparams["n_steps"],
-        n_epochs=ppo_hparams["n_epochs"],
-        ent_coef=ppo_hparams["ent_coef"],
+        learning_rate=cfg.ppo.learning_rate,
+        batch_size=cfg.ppo.batch_size,
+        n_steps=n_steps,
+        n_epochs=cfg.ppo.n_epochs,
+        ent_coef=cfg.ppo.ent_coef,
+        clip_range=cfg.ppo.clip_range,
+        gamma=cfg.ppo.gamma,
+        gae_lambda=cfg.ppo.gae_lambda,
         verbose=0,
-        tensorboard_log=os.path.join(args.output, "tb"),
+        tensorboard_log=os.path.join(cfg.training.output, "tb"),
         device="auto",
         seed=seed,
     )
 
-    if args.resume:
-        print(f"  Resuming from {args.resume}", flush=True)
+    if cfg.training.resume:
+        print(f"  Resuming from {cfg.training.resume}", flush=True)
         model = PPO.load(
-            args.resume, env=vec_env, tensorboard_log=os.path.join(args.output, "tb")
+            cfg.training.resume,
+            env=vec_env,
+            tensorboard_log=os.path.join(cfg.training.output, "tb"),
         )
-        ckpt_path = os.path.join(os.path.dirname(args.resume), "checkpoints.pkl")
+        ckpt_path = os.path.join(
+            os.path.dirname(cfg.training.resume), "checkpoints.pkl"
+        )
         _manager.load_from_disk(ckpt_path)
-        _manager.load_from_disk(os.path.join(args.output, "checkpoints.pkl"))
+        _manager.load_from_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
 
     print("\nTraining...", flush=True)
     status = "COMPLETED"
     exit_code: Optional[int] = 0
     try:
         model.learn(
-            total_timesteps=args.timesteps,
-            callback=CurriculumCallback(args.timesteps),
+            total_timesteps=cfg.training.timesteps,
+            callback=CurriculumCallback(cfg.training.timesteps),
         )
-        model.save(os.path.join(args.output, "final_model"))
-        _manager.save_to_disk(os.path.join(args.output, "checkpoints.pkl"))
-        print(f"\nSaved model to {args.output}/final_model.zip", flush=True)
+        model.save(os.path.join(cfg.training.output, "final_model"))
+        _manager.save_to_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
+        print(f"\nSaved model to {cfg.training.output}/final_model.zip", flush=True)
         print(f"Final: {_manager.summary()}", flush=True)
     except Exception:
         status = "FAILED"
@@ -586,26 +608,15 @@ def train(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Checkpoint Curriculum Training")
-    parser.add_argument("--profile", default="yeti_fruit")
-    parser.add_argument("--timesteps", type=int, default=10000000)
-    parser.add_argument("--max-steps", type=int, default=1000)
-    parser.add_argument("--num-envs", type=int, default=8)
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--output", default="output/mo5/yeti/training/checkpoint_curriculum"
-    )
-    parser.add_argument("--resume", help="Path to model .zip to resume from")
-    parser.add_argument(
-        "--seed-archive", help="Path to Go-Explore archive.pkl to seed checkpoints"
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="RNG seed. If omitted, derived from current time and recorded in run.yaml.",
+        "--config",
+        required=True,
+        help="Path to run-config YAML (must include a 'curriculum' section).",
     )
     args = parser.parse_args()
-    train(args)
+    cfg = RunConfig.from_yaml(args.config)
+    train(cfg, config_path=args.config)
 
 
 if __name__ == "__main__":
