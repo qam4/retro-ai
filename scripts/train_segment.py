@@ -13,9 +13,14 @@ Usage:
 """
 
 import argparse
+import hashlib
 import os
 import pickle
 import random
+import threading
+import time
+from collections import deque
+from typing import Optional
 
 import gymnasium as gym
 import numpy as np
@@ -27,18 +32,69 @@ from retro_ai.envs.base_env import BaseEnv
 from retro_ai.core.preprocessing import PreprocessedEnv, PreprocessingPipeline
 from retro_ai.wrappers.gymnasium_wrapper import GymnasiumWrapper
 from retro_ai.training.game_profile import GameProfileRegistry
+from retro_ai.training.run_manifest import (
+    EpisodeLogger,
+    RunManifest,
+    iter_inner_envs,
+    seed_everything,
+)
+
+
+# Yeti-specific RAM addresses (kept here so this script stays self-contained;
+# these mirror the constants discovered during the experiment-003 work).
+FRUITS_ADDR = 11055
+LIVES_ADDR = 11095
+BONUS_HI = 11010
+BONUS_LO = 11011
+SCORE_HI = 11093
+SCORE_LO = 11094
+X_POS = 11090
+Y_POS = 11089
+
+
+# Global step counter shared across envs — ProgressCallback updates it.
+# Used by each env's step() to tag episode rows with the current global step.
+_global_step = 0
+_global_step_lock = threading.Lock()
+
+# Global episode ID generator, also shared across envs.
+_episode_counter = 0
+_episode_counter_lock = threading.Lock()
+
+
+def _next_episode_id() -> int:
+    global _episode_counter
+    with _episode_counter_lock:
+        _episode_counter += 1
+        return _episode_counter
+
+
+def _set_global_step(step: int) -> None:
+    global _global_step
+    with _global_step_lock:
+        _global_step = step
+
+
+def _get_global_step() -> int:
+    with _global_step_lock:
+        return _global_step
 
 
 class SegmentEnv(gym.Env):
     """Env that always starts from a specific checkpoint level."""
 
     metadata = {"render_modes": []}
-    FRUITS_ADDR = 11055
-    LIVES_ADDR = 11095
-    BONUS_HI = 11010
-    BONUS_LO = 11011
 
-    def __init__(self, profile_name, checkpoint_states, max_steps=1000):
+    def __init__(
+        self,
+        profile_name: str,
+        checkpoint_states,
+        env_id: int,
+        episode_logger: Optional[EpisodeLogger] = None,
+        max_steps: int = 1000,
+        stall_threshold: int = 15,
+        reward_scale: float = 0.01,
+    ):
         super().__init__()
         registry = GameProfileRegistry()
         profile = registry.load(profile_name)
@@ -71,15 +127,54 @@ class SegmentEnv(gym.Env):
         self.iface = self.base._interface
 
         self.checkpoint_states = checkpoint_states
+        self.env_id = env_id
+        self.episode_logger = episode_logger
         self.max_steps = max_steps
+        self.stall_threshold = stall_threshold
+        self.reward_scale = reward_scale
+
+        # Per-episode state
         self._step_count = 0
         self._prev_fruits = 4
         self._prev_lives = 5
         self._prev_bonus = 0
         self._stall = 0
         self._initialized = False
+
+        # For metrics & logging
+        self._start_fruits = 4
+        self._start_xy = (0, 0)
+        self._start_score = 0
+        self._start_bonus = 0
+        self._start_state_hash = ""
+        self._episode_reward = 0.0
+        self._fruits_collected_this_ep = 0
+        self._episode_id = 0
+
+        # Aggregates (still kept for legacy ProgressCallback readout)
         self.successes = 0
         self.episodes = 0
+        self.collected_states = deque(maxlen=100)
+
+    # --- helpers ------------------------------------------------------
+
+    def _read_bonus(self) -> int:
+        return (self.iface.read_ram_byte(BONUS_HI) << 8) | self.iface.read_ram_byte(
+            BONUS_LO
+        )
+
+    def _read_score(self) -> int:
+        return (self.iface.read_ram_byte(SCORE_HI) << 8) | self.iface.read_ram_byte(
+            SCORE_LO
+        )
+
+    def _read_pos(self):
+        return (
+            self.iface.read_ram_byte(X_POS),
+            self.iface.read_ram_byte(Y_POS),
+        )
+
+    # --- gym API ------------------------------------------------------
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -91,35 +186,49 @@ class SegmentEnv(gym.Env):
         self.base._interface.load_state(state)
         obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
 
+        # Snapshot the starting game state for this episode
         self._step_count = 0
-        self._prev_fruits = self.iface.read_ram_byte(self.FRUITS_ADDR)
-        self._prev_lives = self.iface.read_ram_byte(self.LIVES_ADDR)
-        self._prev_bonus = (
-            self.iface.read_ram_byte(self.BONUS_HI) << 8
-        ) | self.iface.read_ram_byte(self.BONUS_LO)
+        self._prev_fruits = self.iface.read_ram_byte(FRUITS_ADDR)
+        self._start_fruits = self._prev_fruits
+        self._prev_lives = self.iface.read_ram_byte(LIVES_ADDR)
+        self._prev_bonus = self._read_bonus()
+        self._start_bonus = self._prev_bonus
+        self._start_xy = self._read_pos()
+        self._start_score = self._read_score()
+        # Hash of start state bytes — cheap 8-byte identifier for analysis.
+        self._start_state_hash = hashlib.blake2b(state, digest_size=8).hexdigest()
         self._stall = 0
+        self._episode_reward = 0.0
+        self._fruits_collected_this_ep = 0
+        self._episode_id = _next_episode_id()
         return obs, {}
 
     def step(self, action):
         obs, _, done, truncated, info = self.gym_env.step(action)
         self._step_count += 1
 
-        fruits = self.iface.read_ram_byte(self.FRUITS_ADDR)
-        lives = self.iface.read_ram_byte(self.LIVES_ADDR)
-        bonus = (
-            self.iface.read_ram_byte(self.BONUS_HI) << 8
-        ) | self.iface.read_ram_byte(self.BONUS_LO)
+        fruits = self.iface.read_ram_byte(FRUITS_ADDR)
+        lives = self.iface.read_ram_byte(LIVES_ADDR)
+        bonus = self._read_bonus()
 
-        # Reward: bonus * 0.01 per fruit collected
+        # Reward: bonus_remaining * reward_scale per fruit collected.
+        # Faster collection = higher bonus = higher reward.
         reward = 0.0
         if fruits < self._prev_fruits:
-            reward += bonus * 0.01
-            self.successes += 1
+            collected = self._prev_fruits - fruits
+            reward += collected * bonus * self.reward_scale
+            self.successes += collected
+            self._fruits_collected_this_ep += collected
+            self.collected_states.append(self.iface.save_state())
         self._prev_fruits = fruits
 
+        self._episode_reward += reward
+
         # Death detection
+        end_reason = None
         if lives < self._prev_lives and self._prev_lives > 0:
             done = True
+            end_reason = "death"
         self._prev_lives = lives
 
         if bonus == self._prev_bonus:
@@ -127,60 +236,87 @@ class SegmentEnv(gym.Env):
         else:
             self._stall = 0
             self._prev_bonus = bonus
-        if self._stall >= 15:
+        if self._stall >= self.stall_threshold:
             done = True
+            if end_reason is None:
+                end_reason = "stall"
 
         if self._step_count >= self.max_steps:
             truncated = True
+            if end_reason is None:
+                end_reason = "max_steps"
 
         if done or truncated:
             self.episodes += 1
+            if end_reason is None:
+                end_reason = "env_done" if done else "env_truncated"
+            self._log_episode(end_reason, fruits, bonus)
 
         return obs, reward, done, truncated, info
 
+    def _log_episode(self, end_reason: str, fruits: int, bonus: int) -> None:
+        if self.episode_logger is None:
+            return
+        final_xy = self._read_pos()
+        start_level = 4 - self._start_fruits
+        reached_level = 4 - fruits
+        self.episode_logger.log(
+            global_step=_get_global_step(),
+            env_id=self.env_id,
+            episode_id=self._episode_id,
+            start_level=start_level,
+            reached_level=reached_level,
+            n_fruits_collected=self._fruits_collected_this_ep,
+            length=self._step_count,
+            total_reward=round(self._episode_reward, 4),
+            end_reason=end_reason,
+            start_x=self._start_xy[0],
+            start_y=self._start_xy[1],
+            start_score=self._start_score,
+            start_bonus=self._start_bonus,
+            final_x=final_xy[0],
+            final_y=final_xy[1],
+            final_score=self._read_score(),
+            final_bonus=bonus,
+            start_state_hash=self._start_state_hash,
+        )
+
 
 class ProgressCallback(BaseCallback):
-    def __init__(self, total, env, log_interval=5000):
+    def __init__(self, total: int, log_interval: int = 5000):
         super().__init__()
         self._total = total
-        self._env = env
         self._log_interval = log_interval
         self._last_log = 0
         self._last_successes = 0
         self._last_episodes = 0
-        import time
-
         self._start = time.monotonic()
 
-    def _on_step(self):
-        if self.num_timesteps - self._last_log >= self._log_interval:
-            import time
+    def _on_step(self) -> bool:
+        # Keep the global step counter up to date so env rows can reference it.
+        _set_global_step(self.num_timesteps)
 
+        if self.num_timesteps - self._last_log >= self._log_interval:
             elapsed = time.monotonic() - self._start
             fps = self.num_timesteps / elapsed if elapsed > 0 else 0
             pct = 100 * self.num_timesteps / self._total
 
-            # Get success rate from envs
             total_s = 0
             total_e = 0
-            if hasattr(self.training_env, "envs"):
-                for e in self.training_env.envs:
-                    inner = e
-                    while hasattr(inner, "env"):
-                        inner = inner.env
-                    if hasattr(inner, "successes"):
-                        total_s += inner.successes
-                        total_e += inner.episodes
+            for inner in iter_inner_envs(self.training_env):
+                if hasattr(inner, "successes"):
+                    total_s += inner.successes
+                    total_e += inner.episodes
 
             new_s = total_s - self._last_successes
             new_e = total_e - self._last_episodes
-            rate = f"{100*new_s/new_e:.0f}%" if new_e > 0 else "N/A"
+            rate = f"{100 * new_s / new_e:.0f}%" if new_e > 0 else "N/A"
             self._last_successes = total_s
             self._last_episodes = total_e
 
             print(
                 f"step {self.num_timesteps}/{self._total} ({pct:.0f}%) "
-                f"| emu_fps={fps*4:.0f} "
+                f"| emu_fps={fps * 4:.0f} "
                 f"| success={rate} ({new_s}/{new_e})",
                 flush=True,
             )
@@ -188,8 +324,11 @@ class ProgressCallback(BaseCallback):
         return True
 
 
-def train(args):
+def train(args: argparse.Namespace) -> None:
     print(f"Segment Training: checkpoint {args.segment} -> {args.segment + 1}")
+
+    seed = seed_everything(args.seed)
+    print(f"  Seed: {seed}", flush=True)
 
     with open(args.checkpoints, "rb") as f:
         data = pickle.load(f)
@@ -203,11 +342,44 @@ def train(args):
 
     os.makedirs(args.output, exist_ok=True)
 
+    # --- persist run config + machine context -----------------------------
+    ppo_hparams = {
+        "learning_rate": 3e-4,
+        "batch_size": 64,
+        "n_steps": max(1, 128 // args.num_envs),
+        "n_epochs": 4,
+        "ent_coef": 0.01,
+    }
+    extras = {
+        "script": "scripts/train_segment.py",
+        "resolved_seed": seed,
+        "ppo": ppo_hparams,
+        "env": {
+            "max_steps": args.max_steps,
+            "stall_threshold": 15,
+            "reward_formula": "fruits_collected * bonus_remaining * reward_scale",
+            "reward_scale": 0.01,
+            "action_mode": "joystick",
+        },
+        "checkpoints_source": args.checkpoints,
+        "num_checkpoint_states": len(states),
+    }
+    manifest = RunManifest.capture(args, args.output, extras=extras)
+    episode_logger = EpisodeLogger(args.output)
+
     from retro_ai.wrappers.threaded_vec_env import ThreadedVecEnv
 
-    def make_env(rank):
+    def make_env(rank: int):
         def _init():
-            env = SegmentEnv(args.profile, states, max_steps=args.max_steps)
+            env = SegmentEnv(
+                profile_name=args.profile,
+                checkpoint_states=states,
+                env_id=rank,
+                episode_logger=episode_logger,
+                max_steps=args.max_steps,
+                stall_threshold=15,
+                reward_scale=0.01,
+            )
             return Monitor(env)
 
         return _init
@@ -218,26 +390,51 @@ def train(args):
     model = PPO(
         "CnnPolicy",
         vec_env,
-        learning_rate=3e-4,
-        batch_size=64,
-        n_steps=max(1, 128 // num_envs),
-        n_epochs=4,
-        ent_coef=0.01,
+        learning_rate=ppo_hparams["learning_rate"],
+        batch_size=ppo_hparams["batch_size"],
+        n_steps=ppo_hparams["n_steps"],
+        n_epochs=ppo_hparams["n_epochs"],
+        ent_coef=ppo_hparams["ent_coef"],
         verbose=0,
         tensorboard_log=os.path.join(args.output, "tb"),
         device="auto",
+        seed=seed,
     )
 
     print(f"  {num_envs} envs, {args.timesteps} steps")
-    model.learn(
-        total_timesteps=args.timesteps,
-        callback=ProgressCallback(args.timesteps, vec_env),
-    )
-    model.save(os.path.join(args.output, "final_model"))
-    print(f"\nSaved to {args.output}/final_model.zip")
+    status = "COMPLETED"
+    exit_code: Optional[int] = 0
+    try:
+        model.learn(
+            total_timesteps=args.timesteps,
+            callback=ProgressCallback(args.timesteps),
+        )
+        model.save(os.path.join(args.output, "final_model"))
+
+        # Save collected states (for chaining into next segment)
+        all_states = []
+        for inner in iter_inner_envs(vec_env):
+            if hasattr(inner, "collected_states"):
+                all_states.extend(inner.collected_states)
+        if all_states:
+            pkl_path = os.path.join(args.output, "collected_states.pkl")
+            with open(pkl_path, "wb") as f:
+                pickle.dump({"states": all_states, "segment": args.segment + 1}, f)
+            print(f"\nSaved {len(all_states)} collected states to {pkl_path}")
+        else:
+            print("\nNo states collected (agent never reached next checkpoint)")
+
+        print(f"\nSaved to {args.output}/final_model.zip")
+    except Exception:
+        status = "FAILED"
+        exit_code = 1
+        raise
+    finally:
+        episode_logger.close()
+        manifest.finalize(status=status, exit_code=exit_code)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoints", required=True)
     parser.add_argument(
@@ -251,6 +448,12 @@ def main():
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--num-envs", type=int, default=8)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed. If omitted, derived from current time and recorded in run.yaml.",
+    )
     args = parser.parse_args()
     train(args)
 
