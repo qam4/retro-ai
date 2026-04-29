@@ -1,11 +1,10 @@
-# Ablation A: Reset-only baseline
-# Always start from game reset. No checkpoint curriculum at all.
-# Tests whether the agent can discover fruit collection purely from
-# exploration (spoiler from earlier runs: it can't — snowball farming).
+# Smoke test for ablation C — 50k steps to validate the pipeline.
+# Same settings as ablation_C_mix.yaml but shorter budget and
+# separate output directory.
 
 training:
-  timesteps: 5_000_000
-  output: output/mo5/yeti/training/ablation_A_reset_only
+  timesteps: 50_000
+  output: output/mo5/yeti/training/ablation_C_smoke
   num_envs: 8
   seed: 42
 
@@ -31,8 +30,9 @@ ppo:
   gae_lambda: 0.95
 
 curriculum:
-  reset_fraction: 1.0
-  frontier_fraction: 0.0
-  earlier_fraction: 0.0
+  reset_fraction: 0.4
+  frontier_fraction: 0.4
+  earlier_fraction: 0.2
   max_states_per_checkpoint: 100
   min_states_to_advance: 20
+  seed_archive: output/mo5/yeti/go_explore_fruit/archive.pkl

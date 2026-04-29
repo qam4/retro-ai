@@ -11,7 +11,7 @@ training:
   seed: 42
 
 env:
-  profile: mo5_yeti_training
+  profile: yeti_fruit
   action_mode: joystick
   max_steps: 1000
   stall_threshold: 15
@@ -37,4 +37,4 @@ curriculum:
   earlier_fraction: 0.0
   max_states_per_checkpoint: 100
   min_states_to_advance: 20
-  seed_archive: output/mo5/yeti/go_explore_v8/archive.pkl
+  seed_archive: output/mo5/yeti/go_explore_fruit/archive.pkl

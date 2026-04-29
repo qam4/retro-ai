@@ -10,7 +10,7 @@ training:
   seed: 42
 
 env:
-  profile: mo5_yeti_training
+  profile: yeti_fruit
   action_mode: joystick
   max_steps: 1000
   stall_threshold: 15
