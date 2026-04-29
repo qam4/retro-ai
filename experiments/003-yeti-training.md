@@ -77,6 +77,70 @@ a local optimum that's hard to escape because the reward is dense and risk-free.
 
 ---
 
+### 9. Checkpoint Curriculum Ablation (in progress)
+Goal: figure out which knob in the checkpoint-curriculum training actually
+matters — so far the curriculum design has been mostly guesswork. Run
+`train_checkpoint_curriculum.py` five times with one knob changed at a
+time, everything else held equal (5M steps, 8 envs, `fruit_bonus` reward,
+seed 42, yeti_fruit profile).
+
+Configs live in `experiments/003-yeti/configs/`:
+
+| ID | reset | frontier | earlier | seed archive  | stall | Hypothesis                                   |
+|----|-------|----------|---------|---------------|-------|----------------------------------------------|
+| A  | 1.0   | 0.0      | 0.0     | —             | 15    | baseline; no curriculum → snowball farming   |
+| B  | 0.0   | 1.0      | 0.0     | go_explore_fruit | 15 | no reset practice → agent forgets how to start |
+| C  | 0.4   | 0.4      | 0.2     | go_explore_fruit | 15 | main hypothesis — balanced mix + seed works  |
+| D  | 0.4   | 0.4      | 0.2     | —             | 15    | same as C but no seed → is the seed critical? |
+| E  | 0.8   | 0.15     | 0.05    | go_explore_fruit | 10 | reset-heavy with occasional frontier starts  |
+
+Two config bugs caught during smoke-testing:
+
+- **Profile name.** The configs originally referenced
+  `mo5_yeti_training` (a filename), but `GameProfileRegistry.load()`
+  resolves by the `name:` field inside the YAML, not the filename.
+  Correct profile is `yeti_fruit`.
+- **Seed archive format.** The original plan pointed at
+  `go_explore_v8/archive.pkl`, whose `cell_key = (y_bucket, x_bucket,
+  score_bucket)`. The seeding code in `train_checkpoint_curriculum.py`
+  expects `cell_key[2]` to be `fruits_remaining`. Silently dropped all
+  but 5 cells. Switched to `go_explore_fruit/archive.pkl`, which does
+  use the `fruits_remaining` format (32 cells at CP1, 29 at CP2,
+  nothing at CP3/CP4).
+
+Both fixes are in commit `b5a3ffd`.
+
+**Run C (main hypothesis) — complete (2h14m, 24,330 episodes)**
+- Final checkpoint buffer: `cp=[0, 100, 100, 0, 0]`. Never discovered
+  CP3 or CP4 in 5M steps.
+- Last 20% of training, end-to-end chaining from reset:
+  - 0→0 fruits: 1.7%
+  - 0→1 fruit: 19.2%
+  - 0→2 fruits: 79.1%
+- From CP1 (1 fruit already): 76.4% advance to CP2.
+- From CP2 (2 fruits already): 0% advance to CP3 — complete wall.
+
+What this tells us so far:
+- **Snowball farming is broken.** The agent consistently chains reset →
+  fruit 1 → fruit 2. Every prior approach plateaued around score 20 on
+  floor 1; this one is reliably collecting the first two fruits.
+- **A new wall at CP2.** The agent doesn't discover fruit 3 even once in
+  5M steps, despite 40% of episodes starting from a CP2 state. Two
+  possible causes: (1) genuinely hard exploration from CP2 under the
+  current reward, (2) insufficient frontier time because 60% of episodes
+  start earlier. Runs B and D should disambiguate.
+- **The tracked `success=[0→1: x%, 1→2: y%, ...]` metric is lossy.** It
+  only counts "start at N, reach ≥ N+1", so `0→1: 97%` hides that most
+  of those episodes actually reached fruit 2. Full transitions live in
+  `episodes.csv`. Worth surfacing this better in the CSV summary or a
+  plot helper. (TODO)
+
+**Run A (reset-only baseline) — in progress.**
+
+Remaining: B, D, E to be launched in sequence.
+
+---
+
 ## Technical Findings
 
 ### Emulator Determinism
