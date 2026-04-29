@@ -1,0 +1,38 @@
+# Ablation D: Balanced mix, no Go-Explore seed
+# Same 40/40/20 distribution as C, but checkpoints must be discovered
+# by the agent itself (no seed_archive). Tests whether the curriculum
+# can bootstrap from scratch or if Go-Explore seeding is essential.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/ablation_D_mix_no_seed
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: mo5_yeti_training
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus
+  params:
+    scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.4
+  frontier_fraction: 0.4
+  earlier_fraction: 0.2
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
