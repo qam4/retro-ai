@@ -25,12 +25,10 @@ from collections import deque
 from typing import Optional
 
 import gymnasium as gym
-from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.monitor import Monitor
-
+from retro_ai.training.callbacks import EpisodeMetricsCallback
 from retro_ai.training.env_builder import build_training_env
-from retro_ai.training.rewards import RewardContext, RewardFn, create as create_reward
+from retro_ai.training.rewards import RewardContext, RewardFn
+from retro_ai.training.rewards import create as create_reward
 from retro_ai.training.run_config import RunConfig
 from retro_ai.training.run_manifest import (
     EpisodeLogger,
@@ -38,7 +36,9 @@ from retro_ai.training.run_manifest import (
     iter_inner_envs,
     seed_everything,
 )
-
+from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.monitor import Monitor
 
 # Yeti-specific RAM addresses.
 FRUITS_ADDR = 11055
@@ -317,7 +317,8 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     seed = seed_everything(cfg.training.seed)
     print(
-        f"Segment Training: checkpoint {cfg.segment.segment} -> {cfg.segment.segment + 1}"
+        f"Segment Training: checkpoint {cfg.segment.segment} "
+        f"-> {cfg.segment.segment + 1}"
     )
     print(f"  Seed: {seed}", flush=True)
 
@@ -390,7 +391,10 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     try:
         model.learn(
             total_timesteps=cfg.training.timesteps,
-            callback=ProgressCallback(cfg.training.timesteps),
+            callback=[
+                ProgressCallback(cfg.training.timesteps),
+                EpisodeMetricsCallback(episode_logger, log_interval=10_000),
+            ],
         )
         model.save(os.path.join(cfg.training.output, "final_model"))
 

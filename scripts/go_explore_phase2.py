@@ -28,6 +28,7 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
+from retro_ai.training.callbacks import EpisodeMetricsCallback
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.rewards import RewardContext, RewardFn
 from retro_ai.training.rewards import create as create_reward
@@ -467,7 +468,10 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     try:
         model.learn(
             total_timesteps=cfg.training.timesteps,
-            callback=ProgressCallback(cfg.training.timesteps),
+            callback=[
+                ProgressCallback(cfg.training.timesteps),
+                EpisodeMetricsCallback(episode_logger, log_interval=10_000),
+            ],
         )
         model.save(os.path.join(cfg.training.output, "final_model"))
         print(f"\nSaved model to {cfg.training.output}/final_model.zip", flush=True)
