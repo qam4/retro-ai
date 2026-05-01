@@ -2,210 +2,363 @@
 
 ## Game
 Yeti (1984, Loriciels) — Thomson MO5 platform game (Donkey Kong clone).
-4 floors, 4 fruits to collect, reach princess at top. Snowballs roll down.
-Jumping over snowballs gives +10 score (unlimited). Fruits give +10/+20/+30/+40 by floor.
+4 floors, 4 fruits to collect on the way up, reach the princess at the top.
+Snowballs roll down. Jumping over a snowball gives +10 score (unlimited).
+Fruits give +10/+20/+30/+40 by floor. Level completes on princess-touch;
+the game then restarts with all fruits repopulated on the same layout.
 
 ## The Core Problem
-Every RL approach converges to **snowball farming** on floor 1 — the agent
-learns to jump over snowballs for +10 each, never climbing higher. This is
-a local optimum that's hard to escape because the reward is dense and risk-free.
+
+Every RL approach plateaus in the early-game. The observed mode has been
+**snowball farming** on floor 1 — repeatedly jump snowballs for +10 score
+and never climb. Score stays around 20-30. This note tracks what we've
+tried, what disk evidence there is, and what the current-best understanding
+of the failure mode is.
+
+**Terminology used throughout:** CP0 = game reset (0 fruits collected),
+CP1 = 1 fruit collected, … CP4 = 4 fruits collected (next step is
+princess). "Per-segment success" = probability of advancing at least one
+CP when the episode *starts* at a given CP. "End-to-end chain" = probability
+of reaching a CP within the same episode that started at CP0.
+
+A note on evidence: pre-Apr-2026 runs don't have `episodes.csv` — only a
+`final_model.zip` and a checkpoint buffer (where applicable). Claims
+about those runs come from old logs / prior conversations and are marked
+"narrative" vs "verified".
 
 ---
 
 ## Approaches Tried
 
-### 1. PPO + Score Reward + Survival Bonus
-- **Runs**: ppo_500k, ppo_2M, ppo_5M, ppo_10M
+### 1. PPO + Score Reward + Survival Bonus  *(narrative)*
+- **Runs**: `ppo_500k`, `ppo_2M`, `ppo_5M`, `ppo_10M` (config.yaml era)
 - **Result**: Score ~20, stays on floor 1, farms snowball jumps
-- **Insight**: Survival bonus keeps it alive, score reward reinforces jumping
+- **Insight**: Survival bonus keeps the agent alive, score reward reinforces
+  jumping. Local optimum is dense and safe, so PPO stays there.
 
-### 2. Height Reward Shaping
-- **Milestone height** (ppo_5M_height, height_1.0, height_v2): Agent climbs to
-  floor 2, comes back down for fruits, gets stuck
-- **Delta(Y)** (ppo_5M_deltaY): Agent just jumps constantly (±reward oscillation)
-- **Thresholded delta(Y)** (ppo_5M_thresh, thresh_100): Filters jumping, catches
-  climbing. Coeff=10 works, coeff=100 causes oscillation/death
-- **Insight**: Height reward is counterproductive — agent needs to go both up AND
-  down to collect all 4 fruits before reaching princess
+### 2. Height Reward Shaping  *(narrative)*
+- **Milestone height** (`ppo_5M_height`, `_1.0`, `_v2`): Agent climbs to
+  floor 2, returns for fruits, gets stuck
+- **Delta(Y)** (`ppo_5M_deltaY`): Agent jumps constantly (±reward oscillation)
+- **Thresholded delta(Y)** (`ppo_5M_thresh`, `_100`): Filters jumping,
+  catches climbing. Coeff=10 works, coeff=100 causes oscillation/death
+- **Insight**: Height reward is counterproductive — the game requires both
+  up AND down motion to collect fruits before reaching the princess.
 
-### 3. Higher Entropy (ppo_10M_highent)
-- ent_coef=0.05 instead of 0.01
-- **Result**: Similar to baseline, no improvement
-- **Insight**: More randomness doesn't help when the local optimum is so attractive
+### 3. Higher Entropy (ppo_10M_highent)  *(narrative)*
+- `ent_coef=0.05` instead of 0.01
+- **Result**: Similar to baseline
+- **Insight**: More action randomness doesn't escape the snowball-farming
+  basin when the reward gradient points into it.
 
-### 4. IMPALA CNN at Full Resolution (ppo_5M_impala_fullres)
-- 320×200 input, 4-block IMPALA ResNet (4.5M params)
+### 4. IMPALA CNN at Full Resolution (ppo_5M_impala_fullres)  *(narrative)*
+- 320×200 input, 4-block IMPALA ResNet (~4.5M params)
 - **Result**: Same snowball farming, reward ~23, plateaus by 500k steps
-- **Insight**: Visual resolution isn't the bottleneck — reward landscape is
-- **Bug found**: config merge ignored `resize: null` from game profile (fixed)
+- **Insight**: Visual resolution isn't the bottleneck. The reward landscape
+  is.
+- **Bug found**: config merge ignored `resize: null` from game profile
+  (fixed by tracking explicit keys in GameProfile).
 
-### 5. RND Intrinsic Exploration
-- **v1** (ppo_5M_rnd, coeff=1.0): Score 224, ep_len 1005 — much better survival
-  but still snowball farming. RND made it a better farmer, not a climber.
-- **v2** (ppo_5M_rnd_v2, coeff=5.0, ent=0.05): Similar curves to v1
-- **v3** (ppo_10M_rnd_v3, coeff=1.0, 10M steps): Peaked at mean 77.6 around
-  episode 15k, then regressed to ~50. Never consistently discovered climbing.
-- **Insight**: RND makes repetitive states boring, but snowball jumping gives
-  +10 extrinsic reward each time, which outweighs the novelty penalty
+### 5. RND Intrinsic Exploration  *(narrative)*
+- **v1** (`ppo_5M_rnd`, coeff=1.0): Score 224, ep_len 1005 — much better
+  survival but still snowball farming. RND made it a better farmer.
+- **v2** (`ppo_5M_rnd_v2`, coeff=5.0, ent=0.05): Similar to v1
+- **v3** (`ppo_10M_rnd_v3`, coeff=1.0, 10M steps): Peaked at mean 77.6
+  around episode 15k, regressed to ~50. Never consistently discovered
+  climbing.
+- **Insight**: RND makes repeated states boring, but +10 per snowball
+  jump outweighs the novelty penalty.
 
-### 6. Go-Explore Phase 1 (Exploration)
-- Random actions + save state teleportation, no neural network
-- **Result**: Mapped entire game in 8 minutes. 1134 cells across all 5 floors.
-  Best score 500. All floors discovered including princess area.
-- **Key**: Save states allow teleporting to any discovered position and exploring
-  from there. No need to survive the journey.
-- **Bug found**: Crayon's AudioSystem.cycle_counter not serialized, causing
-  save/restore non-determinism after ~182 frames. Fixed by serializing full
-  audio state.
+### 6. Go-Explore Phase 1 (state-space mapping)  *(partially verified)*
+- Random actions + save-state teleportation, no neural network.
+- **`go_explore_v8`** (verified): 1134 cells, cell_key =
+  (y_bucket, x_bucket, score_bucket). Scores 0..500. All 5 y-buckets
+  covered (top of screen = y_bucket 4 = floor 4 vicinity). No direct
+  evidence the princess was ever *touched* in this archive — we checked
+  `0x0A23` as a level counter today and it isn't; no other level byte
+  known yet. So "reached the princess area" is the conservative
+  formulation; "touched the princess" is unverified.
+- **`go_explore_fruit`** (verified): 85 cells, cell_key =
+  (y_bucket, x_bucket, fruits_remaining). Distribution:
+  24 @ CP0, 32 @ CP1, 29 @ CP2. **Zero cells at CP3 or CP4.** This is
+  the archive the ablation used for seeding.
+- Earlier `go_explore_v2..v7`, `go_explore_fruit_v2`,
+  `go_explore_phase2_smoke` dirs exist on disk but have no `archive.pkl`
+  — incomplete or unstarted runs.
+- **Key capability**: save states let you teleport to any discovered
+  position and explore from there. No need to survive the journey.
+- **Bug found**: Crayon's AudioSystem state wasn't serialized, causing
+  save/restore non-determinism after ~182 frames. Fixed by serializing
+  the full audio state (cycle_counter, cycles_since_toggle, prev_sample,
+  dac_sample, dac_active, write_pos, read_pos, toggle_count,
+  porta_toggle_count). Also added MasterClock state and cassette cycle
+  state to the save format (v3).
 
-### 7. Go-Explore Phase 2 — Random Starting States
-- PPO trained starting from random archive save states (all floors)
-- **Result**: Score 10 from game start. Agent learned to play from floor 4 but
-  can't get there from floor 1.
-- **Insight**: Starting from random positions doesn't teach the agent to chain
-  the journey from start to finish.
+### 7. Go-Explore Phase 2 — Random Starting States  *(narrative)*
+- `go_explore_phase2` dir on disk has `final_model.zip` + TB events,
+  no episodes.csv (pre-config-driven). Narrative from prior sessions:
+- PPO trained starting from random archive save states (all floors).
+- **Result**: Score 10 from game start. Agent could play from a floor-4
+  start but couldn't chain up from a reset start.
+- **Insight**: Random starts don't teach the agent to chain — each start
+  position is a separate sub-problem, and they don't cohere into a
+  single policy that knows the journey.
 
-### 8. Go-Explore Phase 2 — Backward Curriculum
-- Start from floor 4, advance to floor 3, 2, 1, 0 as performance improves
-- **Result**: Score 20-30 from game start. Curriculum advanced through all stages
-  but agent forgot earlier stages (catastrophic forgetting).
-- **Problems identified**:
-  - Advance threshold too low (5.0) — advances before mastering each stage
-  - No mixing of stages — forgets old skills
-  - Stage advancement per-env not global (8 envs advance independently)
-  - Single policy for visually different floors
+### 8. Go-Explore Phase 2 — Backward Curriculum  *(narrative)*
+- `go_explore_phase2_v2`, `_v3` on disk with final_model.zip only.
+- Narrative: Start from floor 4, advance to 3, 2, 1, 0 as performance
+  crossed a reward threshold.
+- **Result**: Score 20-30 from game start.
+- **Problems identified at the time**: advance threshold too low
+  (advanced before mastering each stage); no mixing of stages →
+  forgetting; per-env (not global) stage advancement; single policy for
+  visually different floors.
+- *Today's reading*: the "catastrophic forgetting" framing may have
+  overstated what was actually happening. The ablation's D run (no seed,
+  balanced mix) shows the same external symptom — 3% CP0→CP2 chain rate
+  — without any forgetting dynamics. A lower-CP state simply gets very
+  little training signal if the frontier keeps advancing. Some of what
+  looked like forgetting was probably just "never learned this segment".
 
----
+### 8.5. Checkpoint Curriculum (pre-ablation)  *(verified — buffers only)*
 
-### 9. Checkpoint Curriculum Ablation
-Goal: figure out which knob in the checkpoint-curriculum training actually
-matters — so far the curriculum design has been mostly guesswork. Run
-`train_checkpoint_curriculum.py` five times with one knob changed at a
-time, everything else held equal (5M steps, 8 envs, `fruit_bonus` reward,
-seed 42, yeti_fruit profile).
+Between the phase-2 work and the ablation, we iterated on a different
+curriculum design: a **checkpoint curriculum** where the agent starts
+most episodes from game reset and a subset from saved states captured
+whenever it previously reached CP1, CP2, etc. See
+`scripts/train_checkpoint_curriculum.py`.
 
-Configs live in `experiments/003-yeti/configs/`:
+Three runs on disk with `checkpoints.pkl`:
 
-| ID | reset | frontier | earlier | seed archive  | stall | Hypothesis                                   |
-|----|-------|----------|---------|---------------|-------|----------------------------------------------|
-| A  | 1.0   | 0.0      | 0.0     | —             | 15    | baseline; no curriculum → snowball farming   |
-| B  | 0.0   | 1.0      | 0.0     | go_explore_fruit | 15 | no reset practice → agent forgets how to start |
-| C  | 0.4   | 0.4      | 0.2     | go_explore_fruit | 15 | main hypothesis — balanced mix + seed works  |
-| D  | 0.4   | 0.4      | 0.2     | —             | 15    | same as C but no seed → is the seed critical? |
-| E  | 0.8   | 0.15     | 0.05    | go_explore_fruit | 10 | reset-heavy with occasional frontier starts  |
+| Run                    | CP0 | CP1 saves | CP2 saves | CP3 saves | CP4 saves |
+|------------------------|----:|----------:|----------:|----------:|----------:|
+| `curriculum_vanilla_v2` |  0  |    19,006 |       260 |         0 |         0 |
+| `curriculum_v4`        |  0  |    45,407 |    22,584 |         2 |         0 |
+| `curriculum_v5` (+10M, resumed from v4) | 0 | 67,411 | 22,602 | 2 | **1** |
 
-Two config bugs caught during smoke-testing:
+The ratio `CP2_saves / CP1_saves` is a proxy for "once the agent
+reached CP1 in a reset chain, how often did it continue to CP2?":
 
-- **Profile name.** The configs originally referenced
-  `mo5_yeti_training` (a filename), but `GameProfileRegistry.load()`
-  resolves by the `name:` field inside the YAML, not the filename.
-  Correct profile is `yeti_fruit`.
-- **Seed archive format.** The original plan pointed at
-  `go_explore_v8/archive.pkl`, whose `cell_key = (y_bucket, x_bucket,
-  score_bucket)`. The seeding code in `train_checkpoint_curriculum.py`
-  expects `cell_key[2]` to be `fruits_remaining`. Silently dropped all
-  but 5 cells. Switched to `go_explore_fruit/archive.pkl`, which does
-  use the `fruits_remaining` format (32 cells at CP1, 29 at CP2,
-  nothing at CP3/CP4).
+- vanilla_v2: 260/19006 ≈ **1.4%**
+- v4: 22584/45407 ≈ **49.7%**
+- v5: near-flat after v4 — only 18 new CP2 saves in 10M additional steps
 
-Both fixes are in commit `b5a3ffd`.
+Live per-segment success as reported in the training logs was
+`[0→1:≥90%, 1→2:0%, 2→3:0%, 3→4:0%]` for all of these. **Meaning: the
+agent never learned to succeed when starting at CP1 or higher.** The
+CP2/CP3/CP4 saves in v4 and v5 came from *reset chains* where PPO
+happened to reach those checkpoints as a side effect of a successful
+reset episode, not from targeted learning of the segments.
 
-**Results — last 20% of episodes, fraction of reset starts that reached ≥2 fruits:**
+v5's single CP4 save is a curiosity — one end-to-end reset chain
+reached CP4 in 10M steps. We haven't verified whether that save is a
+viable state or an unrecoverable one (snowball-adjacent, like the CP4
+save that poisoned ablation B).
 
-| Run | reset / frontier / earlier | seeded | reach ≥ 2 | reach ≥ 3 |
-|-----|---------------------------:|:------:|----------:|----------:|
-| A   | 1.0 / 0.0 / 0.0            |   —    |    1.4%   |    0.0%   |
-| B   | 0.0 / 1.0 / 0.0            |   ✓    |   collapsed — frontier trap (see below) |
-| C   | 0.4 / 0.4 / 0.2            |   ✓    |   79.1%   |    0.0%   |
-| D   | 0.4 / 0.4 / 0.2            |   —    |    3.1%   |    0.0%   |
-| E   | 0.8 / 0.15 / 0.05          |   ✓    |   80.9%   |    0.0%   |
+### 9. Checkpoint Curriculum Ablation  *(verified)*
 
-**Headline: the Go-Explore seed archive is the load-bearing ingredient.**
+Goal: figure out which knob in the checkpoint curriculum actually does
+the work. Five runs of `train_checkpoint_curriculum.py`, one knob
+changed at a time, everything else held equal (5M steps, 8 envs,
+`fruit_bonus` reward, seed 42, `yeti_fruit` profile).
 
-- Seeded runs (C, E) reach fruit 2 from reset ~80% of the time.
-- Unseeded runs (A, D) reach fruit 2 <5% of the time — D with the
-  balanced mix is barely better than A with no curriculum at all.
-- The reset/frontier mix matters much less than seeding. 40% reset (C)
-  and 80% reset (E) give essentially the same result.
+Configs in `experiments/003-yeti/configs/`:
 
-**B's frontier-only collapse.** The one run where the curriculum went
-degenerate. The checkpoint buffer accumulated a single CP4 save
-(`fruits_rem=0`, 4 fruits collected) very early, and since
-`frontier_fraction=1.0` means "always pick the highest level with ≥1
-cell", every subsequent episode loaded that one state. Inspection of
-the state showed a snowball already adjacent to the player with no time
-to react — agent dies within ~100 frames, episode ends, reload, repeat.
-4.9M 1-step episodes in 5M steps, fps collapsed 6× over the run due to
-repeated reset/load overhead. Not a failure of the "frontier-only"
-idea per se — a failure of *unfiltered* frontier selection. A quality
-signal on frontier saves (e.g. require the agent to have survived N
-frames from the save in past attempts) would fix it. (TODO)
+| ID | reset | frontier | earlier | seed archive        | stall |
+|----|------:|---------:|--------:|---------------------|------:|
+| A  |   1.0 |      0.0 |     0.0 | —                   |    15 |
+| B  |   0.0 |      1.0 |     0.0 | `go_explore_fruit`  |    15 |
+| C  |   0.4 |      0.4 |     0.2 | `go_explore_fruit`  |    15 |
+| D  |   0.4 |      0.4 |     0.2 | —                   |    15 |
+| E  |   0.8 |     0.15 |    0.05 | `go_explore_fruit`  |    10 |
 
-**The wall at fruit 3.** No run collected fruit 3 even once in 5M
-steps, including C and E despite 40-15% of episodes starting from a
-CP2 state. The seed archive (`go_explore_fruit/archive.pkl`, 85 cells)
-caps at 2 fruits collected, so there's no bootstrap, and PPO can't
-discover fruit 3 from CP2 on its own under the current reward. Two
-plausible next moves: (1) extend the Go-Explore archive to include
-CP3/CP4 states, and re-run with a better seed; (2) notice that fruit 3
-is geometrically harder (higher floor, more snowballs, longer path
-from CP2) and deserves its own investigation.
+**Two config bugs caught during smoke-testing** (fixed in `b5a3ffd`):
 
-**Reward gap at the princess.** Observed while debugging B: when the
-agent reaches the princess, the game increments level and repopulates
-`fruits_remaining` from 0 back to 4. The `fruit_bonus` reward formula
-only fires on `curr_fruits < prev_fruits`, so princess = 0 reward. Even
-if the curriculum could push the agent to fruit 4, it has no incentive
-to actually *touch* the princess rather than just dying. A new reward
-`fruit_princess_bonus` that detects level-complete (fruits jump up,
-lives preserved, bonus reset) and pays a one-shot bonus has been added
-(commit `705cd7d`) — not used in this ablation, available for future
-runs.
+1. **Profile name.** Configs originally referenced `mo5_yeti_training`
+   (a filename). `GameProfileRegistry.load()` matches on the YAML's
+   `name:` field. The correct profile name is `yeti_fruit`.
+2. **Seed archive format.** The plan pointed at `go_explore_v8/archive.pkl`,
+   whose `cell_key[2]` is `score_bucket` (not `fruits_remaining` as the
+   seeding code assumes). Silently dropped nearly all cells. Switched
+   to `go_explore_fruit/archive.pkl` (24@CP0, 32@CP1, 29@CP2,
+   0@CP3/CP4).
+
+**Per-segment results — last 20% of episodes, fraction that advanced
+at least one CP from their start level:**
+
+| Run | start=CP0 (n)   | start=CP1 (n) | start=CP2 (n)   | notes              |
+|-----|-----------------|---------------|-----------------|--------------------|
+| A   | **98.3%** (2578)| —             | —               | no curriculum      |
+| C   | 98.3% (2360)    | **76.4%** (518) | 0% (1988)     | seeded, balanced   |
+| D   | 95.9% (2116)    | 2.9% (238)    | 0% (269)        | unseeded, balanced |
+| E   | 99.5% (2719)    | 75.0% (80)    | 0% (529)        | seeded, reset-heavy |
+| B   | —               | —             | —               | collapsed (see below) |
+
+**The per-segment picture cuts cleanly:**
+
+- **CP0 → CP1**: ~98% across *all* runs, including the no-curriculum
+  baseline A. **The curriculum doesn't do anything for this segment.**
+  Snowball-farming is NOT about "can't reach fruit 1"; agents learn
+  that fine given enough time. All the prior "score ~20" results were
+  plateau-at-one-fruit + occasional snowball jumps, not a total failure
+  to ever collect any fruit.
+- **CP1 → CP2**: 75-76% seeded, ~3% unseeded. **This is where the
+  curriculum earns its keep, but only if seeded.** Without CP1 seeds,
+  the agent barely ever gets to practice the segment from a CP1 start
+  — unseeded D only logged 238 CP1-start episodes vs seeded C's 518
+  despite identical start-distribution fractions. CP1 saves have to
+  accumulate organically from reset chains and that's slow.
+- **CP2 → CP3**: **0% for every run.** The agent never collected fruit
+  3 even once in 5M steps. The seed archive has zero CP2 cells — wait,
+  it has 29 CP2 cells. The issue is different: the agent starts at CP2
+  and dies/stalls before reaching fruit 3. Fruit 3 must be a genuinely
+  harder segment to solve via PPO-from-scratch, or the current reward
+  isn't pushing toward it.
+
+**B's pathology.** Same shape as what was tentatively called
+"catastrophic forgetting" in Phase 2 backward curriculum. Here, the
+checkpoint buffer accumulated a single CP4 save very early (4 fruits
+collected, snowball already adjacent to the player — unwinnable).
+With `frontier_fraction=1.0`, every subsequent episode loaded that one
+state, the agent died within ~100 frames, episode ended, reload,
+repeat. 4.9M 1-step episodes in 5M training steps; fps decayed 6×
+because of reset/load overhead. Not a failure of the "frontier only"
+curriculum idea — a failure of **unfiltered** frontier selection.
+Fix: add a quality signal to frontier cells (e.g., require past
+survival ≥ N frames from the save), or require ≥ K cells at a level
+before using it as frontier. TODO.
+
+**Reward gap at the princess.** When the agent reaches the princess,
+the game repopulates `fruits_remaining` from 0 back to 4 for the new
+level. `fruit_bonus` only pays on `curr_fruits < prev_fruits`, so
+princess = 0 reward. Even if training could push the agent past CP4,
+there's currently no incentive to actually *touch* the princess rather
+than die. Added `fruit_princess_bonus` in commit `705cd7d` (detects
+level-complete via `fruits↑ + bonus↑ + lives_preserved`, pays using
+`prev_bonus` so fast finishes pay more). Not used by the ablation
+runs — they didn't get close enough for it to matter.
 
 **Tooling produced during the ablation:**
 
-- `python/retro_ai/training/episode_metrics.py` — pure aggregation
-  function over episode rows. Returns a flat `{tag: scalar}` dict.
+- `python/retro_ai/training/episode_metrics.py` — pure
+  `aggregate(rows, max_level) -> {tag: scalar}` function.
 - `python/retro_ai/training/callbacks.py::EpisodeMetricsCallback` —
-  SB3 callback that pulls episodes from the `EpisodeLogger`'s ring
-  buffer and pushes aggregates to TB via `self.logger.record`. Wired
-  into all three training scripts.
-- `scripts/episodes_to_tb.py` — one-shot replay of `episodes.csv` into
-  a TB event file, using the same aggregator so tag schemes don't drift.
-  Useful for runs that finished before the callback existed (used to
-  visualize A/B/C/D/E).
+  SB3 callback; wired into all three training scripts; writes the
+  per-segment metrics above to TB alongside default SB3 tags.
+- `scripts/episodes_to_tb.py` — one-shot replay of `episodes.csv`
+  into a TB event dir, sharing the same aggregator so tag schemes
+  don't drift. Used to visualize A/B/C/D/E.
 
-The ablation runs' TB replays live at
-`output/mo5/yeti/training/ablation_*/tb_replay/`.
+---
+
+## Consolidated Takeaways
+
+1. **CP0→CP1 is trivial given training time.** Any PPO run, curriculum
+   or not, gets ~98% success on this. The "snowball farming" narrative
+   was partly misleading — the agent does reach fruit 1, it just
+   spends most of its episode on floor 1 along the way.
+
+2. **CP1→CP2 is the first real wall.** Reset-only training learns it
+   only via the few-percent chain rate that accumulates over many
+   episodes. Seeded curriculum learns it directly: 75-76% per-segment
+   success within 5M steps.
+
+3. **CP2→CP3 is the current frontier we don't understand.** Seeded C/E
+   have plenty of CP2-start episodes (500-2000 in last 20%) and fail
+   100%. Possible reasons, in order of plausibility:
+   a) The reward landscape past CP2 is harder (fruit 3 is on a higher
+      floor with more snowballs; the path from CP2 to the CP3 fruit
+      requires climbing).
+   b) The CP2 seed cells may be in unfavorable positions (saved right
+      after fruit 2 collection, with snowball pressure). Worth
+      examining like we did for CP4 in B.
+   c) The `fruit_bonus` reward pays the same for any fruit-collected
+      event; there's no differential pressure toward the harder fruits.
+
+4. **Seed archive is the curriculum's lever.** No seed → curriculum
+   is a wrapper around reset-only training. With seeds at level N, the
+   curriculum can teach segment N→N+1 directly. Without seeds at N,
+   segment N→N+1 learning depends on the agent's own reset chains
+   populating it — slow at best, absent at worst.
+
+5. **The "reached the princess" claim in approach 6 is unverified.**
+   Go-Explore Phase 1 reached high y_bucket cells (floor 4 area) but
+   we have no evidence it ever *touched* the princess — all the
+   "archive says score 500" evidence could be consistent with 40 score
+   from fruits + 460 from snowball jumps while looping around floor
+   1-3. We'd need either a level-byte RAM address (we tried `0x0A23`
+   today; it's not it) or to load the archive's top cell and watch
+   frames.
+
+6. **The curriculum's live `success=[...]` metric is lossy.** It only
+   tracks "start at N, reach > N" — it hides whether the episode
+   reached exactly N+1 vs N+2 vs N+3. Full per-start/per-reached
+   matrix lives in `episodes.csv`.
+
+---
+
+## Candidate Next Steps
+
+In rough priority for "reach the princess":
+
+1. **Verify Go-Explore Phase 1 actually touches the princess.** Load
+   the top cells of `go_explore_v8`, watch frames, see if the princess
+   is touched. If yes, identify the level-byte RAM address by diffing
+   before/after. If no, design a Go-Explore run whose reward encourages
+   reaching higher floors with all 4 fruits collected.
+
+2. **Extend Go-Explore to CP3 and CP4.** The `go_explore_fruit`
+   archive caps at CP2. A longer run (or one biased toward cells with
+   more fruits collected) could populate CP3 and CP4. With those, the
+   curriculum gets seeds at higher levels, same way it did for CP1.
+
+3. **Investigate why CP2→CP3 fails at 100%.** Inspect a handful of
+   seeded CP2 cells the way we inspected B's CP4 save. Are they
+   winnable positions? If some are and the agent still fails, that's
+   a learning problem; if most aren't, that's a quality problem in
+   the archive.
+
+4. **Run a longer curriculum (10-20M steps) with the post-ablation
+   defaults** (C's config) once 1-3 shed some light. See whether CP3
+   gets cracked.
+
+5. **Use `fruit_princess_bonus` once runs get close to CP4.** Currently
+   not helping because nothing reaches CP4. Add it as soon as we see
+   CP3 starts succeeding.
+
+6. **Quality filter on frontier cells.** Required for any frontier-
+   heavy curriculum to be robust (B's pathology). Simple version: only
+   use cells at level N where, across past attempts, the agent
+   survived ≥ K frames from that save with non-zero probability.
+
+Lower priority:
+- Multi-seed confirmation of D vs C gap (one seed each is thin evidence).
+- Cleaner directory layout (split `exploration/` vs `training/` vs
+  `smoke/` vs `eval/` under `output/mo5/yeti/`).
 
 ---
 
 ## Technical Findings
 
 ### Emulator Determinism
-- MO5 emulator (Crayon) is deterministic from a cold start
-- Save/restore had non-determinism due to unserialized AudioSystem state
-- Fixed: serialize cycle_counter, cycles_since_toggle, prev_sample, dac_sample,
-  dac_active, write_pos, read_pos, toggle_count, porta_toggle_count
-- Also added MasterClock state and cassette cycle state to save format (v3)
-- Remaining: first reset (live startup) differs slightly from cached restore
-  (cosmetic framebuffer difference, doesn't affect game logic)
+- MO5 emulator (Crayon) is deterministic from a cold start.
+- Save/restore was non-deterministic until the AudioSystem + MasterClock
+  + cassette cycle state were all serialized. Save format v3 now
+  round-trips correctly.
+- Remaining: the first reset (live startup) differs slightly from a
+  cached restore (cosmetic framebuffer difference, doesn't affect game
+  logic).
 
 ### Performance
-- MO5/Crayon: ~1900 emu_fps at 84×84 with 8 envs, ~800 at 320×200
-- Videopac: ~250 emu_fps at 84×84 with 8 envs (VDC rendering is expensive)
-- Skip-render optimization: run_frame(false) for intermediate frame_skip frames
-- Go-Explore Phase 1: ~2000 fps (no neural network, pure emulator speed)
+- MO5/Crayon: ~1900 emu_fps at 84×84 with 8 envs, ~800 at 320×200.
+- Videopac: ~250 emu_fps at 84×84 with 8 envs (VDC rendering is
+  expensive).
+- Skip-render optimization: `run_frame(false)` for intermediate
+  frame_skip frames.
+- Go-Explore Phase 1: ~2000 fps (no neural network, pure emulator
+  speed).
 
 ### Config Merge Bug
-- `resize: null` in game profile was ignored because merge logic didn't track
-  explicit keys in GameProfile. Fixed by adding `_explicit_keys` tracking.
-
----
-
-## Next Steps
-- Fix Phase 2 backward curriculum: mix 50% current frontier + 50% earlier stages
-- Increase advance threshold to require mastery before progressing
-- Global stage tracking across all envs
-- Consider: is backward curriculum the right approach, or should we use
-  the discovered trajectories as demonstrations for imitation learning?
+- `resize: null` in a game profile was ignored because the merge logic
+  didn't track explicit keys. Fixed by adding `_explicit_keys` tracking
+  on `GameProfile`.
