@@ -22,6 +22,7 @@ Typical use
 
 from __future__ import annotations
 
+import collections
 import csv
 import json
 import os
@@ -32,7 +33,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 try:
     import yaml  # type: ignore
@@ -243,9 +244,18 @@ class EpisodeLogger:
     terminates (done or truncated). Columns are defined by
     :data:`EPISODE_COLUMNS`; any unknown keys are ignored silently, any
     missing keys are written as empty strings.
+
+    A small in-memory ring buffer of recently-logged episodes is also
+    maintained, so callers like a live-metrics TensorBoard callback can
+    pull the last N episodes without re-reading the CSV.
     """
 
-    def __init__(self, output_dir: str, filename: str = "episodes.csv") -> None:
+    def __init__(
+        self,
+        output_dir: str,
+        filename: str = "episodes.csv",
+        ring_size: int = 4096,
+    ) -> None:
         os.makedirs(output_dir, exist_ok=True)
         self._path = os.path.join(output_dir, filename)
         self._lock = threading.Lock()
@@ -258,6 +268,11 @@ class EpisodeLogger:
         if new_file:
             self._writer.writeheader()
             self._fh.flush()
+        # Ring buffer of recent episodes. Uses a deque for O(1) append/pop;
+        # ring_size is chosen to comfortably cover any reasonable TB window.
+        self._recent: "collections.deque[Dict[str, Any]]" = collections.deque(
+            maxlen=ring_size
+        )
 
     def log(self, **row: Any) -> None:
         """Write one episode row. Keys must match :data:`EPISODE_COLUMNS`."""
@@ -267,6 +282,19 @@ class EpisodeLogger:
             # buffering=1 is line-buffered for text files; explicit flush is
             # still cheap insurance against interpreter-crash loss.
             self._fh.flush()
+            self._recent.append(dict(row))
+
+    def recent(self, n: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Return a snapshot of the most recently logged episodes.
+
+        If ``n`` is ``None`` (default), returns all episodes currently in
+        the ring buffer (up to ``ring_size``). Otherwise returns up to the
+        last ``n`` episodes.
+        """
+        with self._lock:
+            if n is None or n >= len(self._recent):
+                return list(self._recent)
+            return list(self._recent)[-n:]
 
     def close(self) -> None:
         with self._lock:

@@ -175,3 +175,66 @@ class StagnationCallback(BaseCallback):
                 )
             self._warned = True
         return True
+
+
+class EpisodeMetricsCallback(BaseCallback):
+    """Push domain-specific episode aggregates to TensorBoard.
+
+    Pulls episodes out of an :class:`~retro_ai.training.run_manifest.EpisodeLogger`'s
+    in-memory ring buffer, aggregates them over a sliding window via
+    :func:`~retro_ai.training.episode_metrics.aggregate`, and records the
+    resulting ``{tag: scalar}`` dict through SB3's own logger (so it lands
+    in the same TB event file as ``rollout/ep_rew_mean`` et al.).
+
+    Why pull from the logger's ring buffer? The env threads already write
+    episodes there as they finish. Maintaining a second buffer inside the
+    callback would duplicate memory and invite race conditions — this way
+    the logger is the single source of truth.
+    """
+
+    def __init__(
+        self,
+        episode_logger,
+        log_interval: int = 10_000,
+        window_size: int = 2048,
+        min_n: int = 5,
+        verbose: int = 0,
+    ):
+        super().__init__(verbose)
+        self._episode_logger = episode_logger
+        self._log_interval = max(1, log_interval)
+        self._window_size = window_size
+        self._min_n = min_n
+        self._last_log_step = 0
+        self._max_level_seen = 0
+
+    def _on_step(self) -> bool:
+        if self.num_timesteps - self._last_log_step < self._log_interval:
+            return True
+        self._flush_metrics()
+        self._last_log_step = self.num_timesteps
+        return True
+
+    def _on_training_end(self) -> None:
+        # One more flush so the final window isn't lost.
+        self._flush_metrics()
+
+    def _flush_metrics(self) -> None:
+        # Imported lazily so the callbacks module doesn't grow a hard
+        # dep on episode_metrics for users who don't wire this in.
+        from retro_ai.training.episode_metrics import aggregate, infer_max_level
+
+        episodes = self._episode_logger.recent(self._window_size)
+        if not episodes:
+            return
+
+        # Max level can grow over time; keep track of the largest seen so
+        # early empty tags still appear once they start having data.
+        self._max_level_seen = max(self._max_level_seen, infer_max_level(episodes))
+        metrics = aggregate(episodes, max_level=self._max_level_seen, min_n=self._min_n)
+        for tag, value in metrics.items():
+            # exclude="stdout" keeps SB3's verbose printer from polluting
+            # the console with dozens of tag lines each dump.
+            self.logger.record(tag, value, exclude="stdout")
+        # Dump under our step so all tags share the same x-coordinate.
+        self.logger.dump(step=self.num_timesteps)
