@@ -251,90 +251,108 @@ runs — they didn't get close enough for it to matter.
 
 ---
 
-## Consolidated Takeaways
+## Where we stand after all this
 
-1. **CP0→CP1 is trivial given training time.** Any PPO run, curriculum
-   or not, gets ~98% success on this. The "snowball farming" narrative
-   was partly misleading — the agent does reach fruit 1, it just
-   spends most of its episode on floor 1 along the way.
+Reframed in plain terms:
 
-2. **CP1→CP2 is the first real wall.** Reset-only training learns it
-   only via the few-percent chain rate that accumulates over many
-   episodes. Seeded curriculum learns it directly: 75-76% per-segment
-   success within 5M steps.
+- **CP0 → CP1** is learnable by plain PPO given enough training. Agents
+  across every approach reach fruit 1 with high reliability. "Snowball
+  farming" isn't "agent can't find fruit 1" — it's "agent collects fruit 1,
+  then spends the rest of the episode on floor 1 racking up +10 snowball
+  jumps".
+- **CP1 → CP2** is learnable by PPO, but only if it gets direct exposure
+  to CP1-start episodes. Reset-only training almost never gives PPO that
+  exposure (the agent has to reach CP1 on its own, and only ~3% of CP1
+  episodes under reset-only go on to CP2 — so the signal stays sparse).
+  The checkpoint curriculum fixes that by injecting CP1-start episodes
+  directly, but only if there are CP1 save-states in its "bag" to sample
+  from. The bag starts empty unless it's pre-populated; the ablation
+  showed a pre-populated bag (32 CP1 saves, from Go-Explore) pushes CP1→CP2
+  success to ~76%, while an empty bag leaves it near baseline (~3%).
+- **CP2 → CP3** is the current wall. It's 0% across every run we have —
+  including the two ablation runs with 29 CP2 saves in the bag and ~2000
+  CP2-start episodes of practice. More CP2 practice isn't helping. Either
+  the CP2 save-states are bad starting points (some we've inspected are
+  literally unwinnable — snowball adjacent at load time), or CP2→CP3 is a
+  harder task than CP1→CP2 for some other reason (longer climb, more
+  snowballs, or a reward signal that doesn't push hard enough toward
+  fruit 3).
+- **CP3 → CP4** — we have two CP3 saves total across all runs (from
+  curriculum_v4 and v5, over ~20M combined training steps). No reliable
+  data on whether CP3→CP4 is solvable.
+- **CP4 → princess** — we have one CP4 save (curriculum_v5) and one in
+  ablation B's doomed state. We don't know whether either captures a
+  viable starting position. We don't have a confirmed princess-touch yet.
 
-3. **CP2→CP3 is the current frontier we don't understand.** Seeded C/E
-   have plenty of CP2-start episodes (500-2000 in last 20%) and fail
-   100%. Possible reasons, in order of plausibility:
-   a) The reward landscape past CP2 is harder (fruit 3 is on a higher
-      floor with more snowballs; the path from CP2 to the CP3 fruit
-      requires climbing).
-   b) The CP2 seed cells may be in unfavorable positions (saved right
-      after fruit 2 collection, with snowball pressure). Worth
-      examining like we did for CP4 in B.
-   c) The `fruit_bonus` reward pays the same for any fruit-collected
-      event; there's no differential pressure toward the harder fruits.
-
-4. **Seed archive is the curriculum's lever.** No seed → curriculum
-   is a wrapper around reset-only training. With seeds at level N, the
-   curriculum can teach segment N→N+1 directly. Without seeds at N,
-   segment N→N+1 learning depends on the agent's own reset chains
-   populating it — slow at best, absent at worst.
-
-5. **The "reached the princess" claim in approach 6 is unverified.**
-   Go-Explore Phase 1 reached high y_bucket cells (floor 4 area) but
-   we have no evidence it ever *touched* the princess — all the
-   "archive says score 500" evidence could be consistent with 40 score
-   from fruits + 460 from snowball jumps while looping around floor
-   1-3. We'd need either a level-byte RAM address (we tried `0x0A23`
-   today; it's not it) or to load the archive's top cell and watch
-   frames.
-
-6. **The curriculum's live `success=[...]` metric is lossy.** It only
-   tracks "start at N, reach > N" — it hides whether the episode
-   reached exactly N+1 vs N+2 vs N+3. Full per-start/per-reached
-   matrix lives in `episodes.csv`.
+**One infrastructure gap matters more than anything else:** we don't have a
+way to tell whether a given save-state is a *viable* starting point.
+The existing `_validate_checkpoint` runs 20 noop frames and passes the
+save if the bonus counter changed — that passed B's unwinnable CP4.
+Everything downstream of "use save N as a curriculum seed" is on shaky
+ground until we can filter out doomed states.
 
 ---
 
-## Candidate Next Steps
+## Plan: reaching the princess
 
-In rough priority for "reach the princess":
+The plan is a single loop, run once by hand to test the assumption, then
+productionized if it works. Each iteration pushes the frontier up one
+checkpoint.
 
-1. **Verify Go-Explore Phase 1 actually touches the princess.** Load
-   the top cells of `go_explore_v8`, watch frames, see if the princess
-   is touched. If yes, identify the level-byte RAM address by diffing
-   before/after. If no, design a Go-Explore run whose reward encourages
-   reaching higher floors with all 4 fruits collected.
+At the current frontier (CP2 → CP3):
 
-2. **Extend Go-Explore to CP3 and CP4.** The `go_explore_fruit`
-   archive caps at CP2. A longer run (or one biased toward cells with
-   more fruits collected) could populate CP3 and CP4. With those, the
-   curriculum gets seeds at higher levels, same way it did for CP1.
+1. **Write a real state validator.** Inputs: a save-state and a small
+   sampling budget (say, N random-action rollouts of 200 frames each).
+   Output: survival rate, average length, any-fruit-change flag. A
+   state is "viable" if the agent survives past some threshold in a
+   non-trivial fraction of rollouts. This is a strict upgrade over the
+   current 20-frame noop check.
+2. **Collect every CP2 save-state we have on disk** — from
+   `go_explore_fruit/archive.pkl` (29 cells), every `curriculum_*` run's
+   `checkpoints.pkl`, and the seeded ablation runs. Dedupe by byte hash.
+   Run the validator on each. Output: a clean CP2 seed pool, plus a
+   count of how many got filtered out (helpful: if most are doomed,
+   the CP2-saving logic in `train_checkpoint_curriculum.py` needs
+   fixing — it probably saves too eagerly on fruit collection frames).
+3. **Add a `--seed-states` flag to `scripts/go_explore.py`** so it can
+   teleport to a random save from the pool instead of cold-starting at
+   game reset. Behaviorally the same Go-Explore search, just starting
+   from CP2 instead of CP0.
+4. **Run Go-Explore from the validated CP2 seed pool, target CP3.** If
+   it finds CP3 states, great — that says CP3 is reachable and we now
+   have fresh seeds. If it doesn't, that tells us CP2→CP3 is hard for
+   Go-Explore *with random actions*, which narrows the failure mode
+   (it's a reachability/geometry problem, not a PPO learning problem).
+5. **If CP3 states found**: validate them, add to the bag, re-run
+   ablation C's config (10M steps this time) with the enriched seed
+   archive. Measure CP2→CP3 success. If the "seeded → segment
+   learnable" pattern from CP1→CP2 repeats, we should see non-trivial
+   CP2→CP3 success.
 
-3. **Investigate why CP2→CP3 fails at 100%.** Inspect a handful of
-   seeded CP2 cells the way we inspected B's CP4 save. Are they
-   winnable positions? If some are and the agent still fails, that's
-   a learning problem; if most aren't, that's a quality problem in
-   the archive.
+Iterate the same recipe for CP3→CP4 and CP4→princess as each frontier
+opens.
 
-4. **Run a longer curriculum (10-20M steps) with the post-ablation
-   defaults** (C's config) once 1-3 shed some light. See whether CP3
-   gets cracked.
+If the loop works end-to-end and we reach the princess, the payoff is
+not just "Yeti is done" — it's a reusable pipeline for any game where
+Go-Explore can find rare states and PPO needs them as seeds. The
+`fruit_princess_bonus` reward is waiting for the first princess-touch
+to start paying off.
 
-5. **Use `fruit_princess_bonus` once runs get close to CP4.** Currently
-   not helping because nothing reaches CP4. Add it as soon as we see
-   CP3 starts succeeding.
+### Followups not on the critical path
 
-6. **Quality filter on frontier cells.** Required for any frontier-
-   heavy curriculum to be robust (B's pathology). Simple version: only
-   use cells at level N where, across past attempts, the agent
-   survived ≥ K frames from that save with non-zero probability.
-
-Lower priority:
-- Multi-seed confirmation of D vs C gap (one seed each is thin evidence).
-- Cleaner directory layout (split `exploration/` vs `training/` vs
-  `smoke/` vs `eval/` under `output/mo5/yeti/`).
+- **Quality-filter the curriculum's frontier selection.** B's pathology
+  happens when one bad save at the highest CP becomes the entire
+  frontier sample. Require ≥ K validated saves at a level before it's
+  usable as frontier, or weight-sample proportional to past survival.
+- **Multi-seed confirmation of the ablation.** C vs D with 3-5 different
+  random seeds, to confirm the 76% vs 3% gap isn't seed-42 noise.
+- **Reconcile `train_segment.py`'s 0% CP1→CP2 result** with the
+  ablation's 76% on the same segment. Different pools of CP1 states
+  (v5's vs go_explore_fruit's), different training objective (fresh
+  policy per segment vs shared policy). Worth understanding before
+  deciding whether "train per-segment" is a useful architecture.
+- **Directory reorg**: `output/mo5/yeti/` into
+  `training/ | exploration/ | smoke/ | eval/`.
 
 ---
 
