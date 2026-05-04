@@ -20,7 +20,6 @@ import time
 import numpy as np
 from PIL import Image, ImageDraw
 
-
 # ── Cell definition ──────────────────────────────────────────────────────────
 
 
@@ -59,9 +58,9 @@ class CellArchive:
     """Archive of discovered cells with save states and trajectories."""
 
     def __init__(self):
-        self.cells = (
-            {}
-        )  # cell -> {state, score, steps, trajectory, times_chosen, times_chosen_since_new}
+        # cell -> {state, score, steps, trajectory, times_chosen,
+        #          times_chosen_since_new}
+        self.cells = {}
         self.total_cells_found = 0
 
     def add_or_update(self, cell, state_bytes, score, steps, trajectory):
@@ -218,6 +217,83 @@ def random_action(prev_action, sticky_prob=0.85):
     return random.choice(ACTIONS)
 
 
+# ── Seeding helpers ──────────────────────────────────────────────────────────
+
+
+def _seed_archive(env, archive, args):
+    """Load seed cells from ``args.seed_archive``, validate, add to archive.
+
+    Skips cells whose ``fruits_collected`` is below ``--seed-min-cp``
+    (so callers can say "only seed from CP2 or higher"). Validates each
+    candidate state via :func:`state_validator.validate_state` before
+    adding it so doomed/frozen states don't become Go-Explore starts.
+    """
+    import pickle
+
+    from retro_ai.training.state_validator import validate_state
+
+    print(f"  Seeding from {args.seed_archive}", flush=True)
+    with open(args.seed_archive, "rb") as f:
+        seed = pickle.load(f)
+
+    # Save the env's current state so validation probes don't disturb it.
+    saved = env.save_state()
+
+    def _load(state_bytes):
+        env.load_state(state_bytes)
+
+    def _step_noop():
+        env.step([0, 0, 0])
+
+    def _read_bonus():
+        i = env._interface
+        return (i.read_ram_byte(YETI_ADDRS["bonus_hi"]) << 8) | i.read_ram_byte(
+            YETI_ADDRS["bonus_lo"]
+        )
+
+    total = len(seed)
+    filtered_cp = 0
+    rejected = 0
+    added = 0
+    min_cp = args.seed_min_cp
+    for cell_key, entry in seed.items():
+        # For go_explore-style archives, cell_key[2] is fruits_remaining.
+        # CP level = 4 - fruits_remaining.
+        if len(cell_key) >= 3:
+            fr = cell_key[2]
+            cp = 4 - fr if 0 <= fr <= 4 else None
+        else:
+            cp = None
+        if min_cp is not None and (cp is None or cp < min_cp):
+            filtered_cp += 1
+            continue
+        state_bytes = entry["state"]
+        if args.seed_validate:
+            result = validate_state(
+                state_bytes=state_bytes,
+                load_state=_load,
+                step_noop=_step_noop,
+                read_counter=_read_bonus,
+            )
+            if not result.viable:
+                rejected += 1
+                continue
+        score = entry.get("score", 0)
+        steps = entry.get("steps", 0)
+        trajectory = entry.get("trajectory", [])
+        archive.add_or_update(cell_key, state_bytes, score, steps, trajectory)
+        added += 1
+
+    # Restore env to avoid disturbing the main loop that starts right after.
+    env.load_state(saved)
+
+    print(
+        f"  Seeded: {added} cells added, {rejected} rejected by validator, "
+        f"{filtered_cp} filtered by --seed-min-cp ({total} total)",
+        flush=True,
+    )
+
+
 # ── Main exploration loop ────────────────────────────────────────────────────
 
 
@@ -263,6 +339,12 @@ def explore(args):
     print(f"Go-Explore Phase 1: {args.steps} steps, profile={args.profile}", flush=True)
     print(f"Output: {args.output}", flush=True)
     print(flush=True)
+
+    # Optional: seed the archive from a prior archive.pkl. States are
+    # run through the viability validator first so we don't teleport
+    # Go-Explore into a frozen/doomed state.
+    if args.seed_archive:
+        _seed_archive(env, archive, args)
 
     while total_steps < args.steps:
         iteration += 1
@@ -388,7 +470,7 @@ def explore(args):
     log_file.close()
 
     # Save results
-    print(f"\n=== Go-Explore Phase 1 Complete ===")
+    print("\n=== Go-Explore Phase 1 Complete ===")
     print(f"  Total steps: {total_steps}")
     print(f"  Total iterations: {iteration}")
     print(f"  Cells discovered: {len(archive.cells)}")
@@ -564,6 +646,32 @@ def main():
     )
     parser.add_argument(
         "--output", default="output/mo5/yeti/go_explore", help="Output directory"
+    )
+    parser.add_argument(
+        "--seed-archive",
+        default=None,
+        help="Optional path to a prior archive.pkl; its cells are added to "
+        "the in-memory archive as extra starting points.",
+    )
+    parser.add_argument(
+        "--seed-min-cp",
+        type=int,
+        default=None,
+        help="If --seed-archive is set, skip cells whose CP level "
+        "(4 - fruits_remaining) is below this value. Useful for "
+        "'explore only from CP2+' runs.",
+    )
+    parser.add_argument(
+        "--seed-validate",
+        action="store_true",
+        default=True,
+        help="Validate each seeded state and drop non-viable ones. Default: on.",
+    )
+    parser.add_argument(
+        "--no-seed-validate",
+        action="store_false",
+        dest="seed_validate",
+        help="Disable validation of seeded states.",
     )
     args = parser.parse_args()
     explore(args)
