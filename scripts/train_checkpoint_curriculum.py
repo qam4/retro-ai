@@ -428,20 +428,23 @@ class CheckpointCurriculumEnv(gym.Env):
     def _validate_checkpoint(self, state_bytes) -> bool:
         """Check if a save state produces a playable game.
 
-        WORKAROUND for crayon save/restore bug. Loads the state, runs 20
-        noop frames, checks if bonus changes. Restores original state.
+        Delegates to :func:`retro_ai.training.state_validator.validate_state`.
+        Wraps it with a save/restore of the env's current state so training
+        isn't disturbed by the probe.
         """
+        from retro_ai.training.state_validator import validate_state
+
         original = self.base._interface.save_state()
-        self.base._interface.load_state(state_bytes)
-        bonus_start = self._read_bonus()
-        changed = False
-        for _ in range(20):
-            self.base.step([0, 0, 0])
-            if self._read_bonus() != bonus_start:
-                changed = True
-                break
-        self.base._interface.load_state(original)
-        return changed
+        try:
+            result = validate_state(
+                state_bytes=state_bytes,
+                load_state=self.base._interface.load_state,
+                step_noop=lambda: self.base.step([0, 0, 0]),
+                read_counter=self._read_bonus,
+            )
+        finally:
+            self.base._interface.load_state(original)
+        return result.viable
 
 
 class CurriculumCallback(BaseCallback):
