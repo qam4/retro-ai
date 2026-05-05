@@ -365,88 +365,90 @@ ground until we can filter out doomed states.
 
 ## Plan: reaching the princess
 
-The plan is a single loop, run once by hand to test the assumption, then
-productionized if it works. Each iteration pushes the frontier up one
-checkpoint.
+Approach 10 (Go-Explore from CP2) confirmed a hard fact: random-action
+search does **not** cross CP2→CP3, even from 13 validated CP2 seeds in
+5M steps. The "closed-loop PPO ↔ Go-Explore" plan in its original form
+is therefore blocked — Go-Explore isn't going to hand us CP3 states for
+the seeding step.
 
-**Status**: partially scouted during this session. We found a usable
-signal for state validation (see below) and sketched what the validator
-and the loop should look like, but neither is committed code yet.
+The live question is what alternative **does** work. The most promising
+lead is one we already have evidence for but haven't followed up on:
 
-### Validator design (provisional — not yet committed)
+**Per-segment training (one fresh agent per CP segment).**
 
-A state is **unusable** if either of these is true with noop actions:
+Why per-segment is worth a serious look:
 
-- `bonus == 0` at load time (no time left).
-- `bonus` does not decrement over ~30 noop frames (game clock is
-  frozen, meaning the agent has no effective control — typically
-  mid-death-animation or similar).
+- Each agent has a single, narrow task: "start at CP_N, reach CP_N+1".
+  Smaller credit-assignment problem than a shared policy that has to
+  behave correctly at every floor.
+- As Agent_N gets good, its own play produces more (and probably
+  higher-quality) CP_N+1 saves. Those feed Agent_{N+1}'s starts.
+- Doesn't need Go-Explore at all for the core loop — each agent
+  generates the starts for the next one.
+- The `fruit_princess_bonus` reward (already implemented) makes the
+  last segment, CP4→princess, actually pay reward.
 
-Both conditions were spot-checked against:
-- **Known-doomed** state: ablation B's CP4 save. Bonus=767 at load,
-  drops by 1 over 30 frames → flagged.
-- **Visually-problematic** CP1 states from `go_explore_fruit`: 6 cells
-  where the player loads on top of a snowball. All 6 show
-  bonus-frozen. Correctly flagged.
-- **Visually-clean-but-still-doomed** states: 3 cells where the player
-  loads standing still, not obviously threatened, but bonus is 0 at
-  load and lives is lost after ~240 frames of noop with the character
-  drifting upward off-screen. Mechanism unknown (maybe a time-up
-  penalty); operationally correct to reject them.
+But we already *tried* per-segment training once (`segment_1to2`) and it
+got 0% success on CP1→CP2 — the exact same segment the shared-policy
+ablation C hit 76% on. Before we invest in per-segment training end to
+end, we need to understand why `segment_1to2` failed.
 
-Applying this provisional rule to `go_explore_fruit/archive.pkl` (85
-cells): ≈55% viable (47/85). CP0 71% viable, CP1 53%, CP2 45%.
+### Investigation plan
 
-Open concerns: we haven't tested the rule at scale, and haven't tried
-to find false positives (states the rule rejects but a trained policy
-could actually play). If the rule over-rejects, refine it. The rule is
-not set in stone.
+1. **Validate v5's 100 CP1 states** through
+   `python/retro_ai/training/state_validator.py`. `segment_1to2` used
+   those states as its only starts — if a large fraction are frozen
+   (the pattern we saw in `go_explore_fruit`), that alone could
+   explain the 0% success. If so, segment training is fine; we just
+   fed it bad data.
+2. **Re-run `segment_1to2` with validated starts.** Point
+   `train_segment.py` at the filtered checkpoints.pkl (either via
+   `scripts/filter_archive.py` applied to a converted archive, or by
+   extending the segment script to call the validator on load).
+   5M steps, same config otherwise. If it now hits non-trivial
+   success, per-segment training is viable. If it stays at 0%, the
+   fresh-agent-per-segment design itself is broken and we stay with
+   shared-policy.
 
-### Render-after-load bug (separate issue)
+This investigation is cheap (validator is seconds; a 5M segment run
+is ~40 min) and gives a clean fork in the road.
 
-While dumping frames for manual review we noticed the full-size
-(320×200) framebuffer from a `load_state`-restored env is missing the
-HUD (score + bonus text area) compared to a cold-reset render. The 84×84
-downsampled observation doesn't make this visible, but it suggests the
-render path or some state isn't fully restored on load. Worth a
-separate C++-focused session to investigate — doesn't block the plan
-here.
+### If per-segment works (segmented pipeline)
 
-### Planned next steps
+- **Agent_0→1**: train from CP0 starts. Already known to work in any
+  PPO run (98% in ablation A).
+- **Agent_1→2**: train from validated CP1 starts produced by Agent_0→1
+  or (cheaper for now) by the existing Go-Explore archive. Re-uses the
+  fix from step 2 above.
+- **Agent_2→3**: train from validated CP2 starts. The CP2 starts we
+  have today (29 from go_explore_fruit, 13 validated) are small but
+  real; Agent_1→2's own play should produce more. This is the segment
+  where everything has failed before; a dedicated per-segment agent
+  is our best shot at cracking it.
+- **Agent_3→4**: train from validated CP3 starts. v5 gave us 2 CP3
+  states that validate today; Agent_2→3's play should produce more.
+- **Agent_4→princess**: train from validated CP4 starts with
+  `fruit_princess_bonus`. v5 has 1 validated CP4 state; same
+  expectation (Agent_3→4's play generates more).
 
-1. **Finish the validator.**
-   - New module `python/retro_ai/training/state_validator.py` with the
-     two-condition bonus-drop rule above.
-   - Unit tests against known-good (fresh reset at various frame
-     counts) and known-bad (B's CP4, the 9 frozen CP1 cells).
-   - Thin CLI `scripts/filter_archive.py` that reads an archive.pkl
-     and writes a filtered archive.pkl alongside.
+### If per-segment fails
 
-2. **Closed-loop experiment (PPO ↔ Go-Explore).**
-   - Add `--seed-states` flag to `scripts/go_explore.py` so Go-Explore
-     can teleport to a random save-state instead of cold-starting.
-   - Run the filter over every seed archive we have. Produce a
-     validated CP2 seed pool.
-   - Run Go-Explore from the validated CP2 pool, target CP3. Validate
-     any CP3 states it finds, add them to the archive.
-   - Re-run ablation C's config (10M steps) with the enriched + filtered
-     archive. Measure CP2→CP3 and CP3→CP4.
-   - Iterate the same recipe for CP3→CP4→princess.
+Stay with shared-policy, and invest in whatever helps CP2→CP3 inside
+the shared-policy frame. The main levers there:
+
+- Multi-seed runs of the ablation, to confirm the 76%/3% gap replicates.
+- Reward shaping that biases toward fruit 3 specifically (differential
+  per-fruit reward, or a floor-reach bonus).
+- Much longer runs — v5 reached CP3 twice and CP4 once in ~20M steps
+  of reset-chain play, so raw time alone might push CP3 success off 0%.
 
 ### Followups not on the critical path
 
-- **Quality-filter the curriculum's frontier selection.** B's pathology
-  happens when one bad save at the highest CP becomes the entire
-  frontier sample. Require ≥ K validated saves at a level before it's
-  usable as frontier, or weight-sample proportional to past survival.
-- **HUD-after-load render bug** (see above).
+- **Quality-filter the curriculum's frontier selection** (B's pathology).
+- **HUD-after-load render bug** (separate C++ session).
 - **Characterize the "bonus=0 → lose-a-life after ~240 frames"
-  behavior.** Validator correctly rejects those states regardless of
-  mechanism, but we shouldn't have a mystery in our game model.
-- **Multi-seed confirmation of the ablation.** C vs D with 3-5 different
-  random seeds, to confirm the 76% vs 3% gap isn't seed-42 noise.
-- **Reconcile `train_segment.py`'s 0% CP1→CP2 result** with the
-  ablation's 76% on the same segment.
+  behavior.**
+- **Multi-seed confirmation of the ablation.**
 - **Directory reorg**: `output/mo5/yeti/` into
   `training/ | exploration/ | smoke/ | eval/`.
 
