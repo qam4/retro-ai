@@ -517,7 +517,18 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         with open(cfg.curriculum.seed_archive, "rb") as f:
             archive = pickle.load(f)
         for cell_key, info in archive.items():
-            fruits_collected = 4 - cell_key[2]
+            # Support both archive formats:
+            #   new: cell_key[2] is a frozenset of collected floor numbers
+            #   old: cell_key[2] is an int fruits_remaining (0..4)
+            if len(cell_key) < 3:
+                continue
+            v = cell_key[2]
+            if isinstance(v, (frozenset, set, list, tuple)):
+                fruits_collected = len(v)
+            elif isinstance(v, int) and 0 <= v <= 4:
+                fruits_collected = 4 - v
+            else:
+                continue
             if fruits_collected > 0:
                 _manager.save_checkpoint(fruits_collected, info["state"])
         print(f"  Seeded: {_manager.summary()}", flush=True)

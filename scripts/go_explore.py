@@ -23,32 +23,67 @@ from PIL import Image, ImageDraw
 # ── Cell definition ──────────────────────────────────────────────────────────
 
 
-def make_cell(x, y, score, fruits_remaining=4):
+def make_cell(x, y, fruits_collected):
     """Discretize game state into a cell.
 
-    Y buckets (floors):
-      0: y >= 170 (floor 1 - bottom)
-      1: 140 <= y < 170 (floor 2)
-      2: 110 <= y < 140 (floor 3)
-      3: 80 <= y < 110 (floor 4)
-      4: y < 80 (top area / princess)
+    Cell key = (floor_bucket, x_bucket, fruits_collected_frozenset).
 
-    X buckets: divide into 8 regions (0-39 each on raw X 0-79)
-    Fruits remaining: 4=none collected, 0=all collected
+    Y-buckets are 32 px tall anchored at the bottom of the screen so each
+    floor lands in exactly one bucket. Game-y 200 is the bottom.
+      floor 0 (bottom, floor 1): 168 <= y < 200
+      floor 1 (floor 2):         136 <= y < 168
+      floor 2 (floor 3):         104 <= y < 136
+      floor 3 (floor 4):          72 <= y < 104
+      floor 4 (princess area):    y < 72
+
+    X-buckets are 8 px in game-x space (player x is 0..79 → 10 buckets).
+
+    ``fruits_collected`` is a frozenset of floor numbers 1..4 for the
+    fruits that have been collected so far — the full subset, not a
+    count, so e.g. "fruit 2 collected only" and "fruit 3 collected
+    only" are distinct cells.
     """
-    if y >= 170:
+    y_from_bottom = 200 - y
+    if y_from_bottom < 32:
         y_bucket = 0
-    elif y >= 140:
+    elif y_from_bottom < 64:
         y_bucket = 1
-    elif y >= 110:
+    elif y_from_bottom < 96:
         y_bucket = 2
-    elif y >= 80:
+    elif y_from_bottom < 128:
         y_bucket = 3
     else:
         y_bucket = 4
 
-    x_bucket = min(x // 10, 7)
-    return (y_bucket, x_bucket, fruits_remaining)
+    x_bucket = min(x // 8, 9)
+    return (y_bucket, x_bucket, frozenset(fruits_collected))
+
+
+# ── Per-fruit RAM addresses ──────────────────────────────────────────────────
+#
+# The MO5 video RAM stores 2-byte sprite-character pairs for each of the
+# four fruits. When a fruit is collected the game zeroes out those bytes
+# so the sprite disappears. We only need to read ONE byte per fruit to
+# detect collection; non-zero = present, zero = collected.
+#
+# The specific addresses were found by snapshotting RAM at CP0..CP4
+# states in curriculum_v5 and looking for bytes that went to zero when
+# a specific fruit was collected (see approach 10 in 003-yeti-training).
+FRUIT_PRESENCE_ADDR = {
+    1: 0x2FAD,  # fruit on floor 1 (+10 score)
+    2: 0x2F00,  # fruit on floor 2 (+20 score)
+    3: 0x2E68,  # fruit on floor 3 (+30 score)
+    4: 0x2DD8,  # fruit on floor 4 (+40 score)
+}
+
+
+def read_fruits_collected(iface):
+    """Read the set of floor numbers whose fruit has been collected."""
+    collected = set()
+    for floor, addr in FRUIT_PRESENCE_ADDR.items():
+        if iface.read_ram_byte(addr) == 0:
+            collected.add(floor)
+    return collected
 
 
 # ── Archive ──────────────────────────────────────────────────────────────────
@@ -63,14 +98,23 @@ class CellArchive:
         self.cells = {}
         self.total_cells_found = 0
 
-    def add_or_update(self, cell, state_bytes, score, steps, trajectory):
-        """Add a new cell or update if this trajectory is better."""
+    def add_or_update(
+        self, cell, state_bytes, score, steps, trajectory, fruits_order
+    ):
+        """Add a new cell or update if this trajectory is better.
+
+        ``fruits_order`` is the ordered list of floor numbers reflecting
+        which fruit was collected at which step of the trajectory —
+        preserved for debugging/analysis. It is NOT part of the cell key;
+        the cell key already captures the *set* of fruits collected.
+        """
         if cell not in self.cells:
             self.cells[cell] = {
                 "state": state_bytes,
                 "score": score,
                 "steps": steps,
                 "trajectory": trajectory,
+                "fruits_order": list(fruits_order),
                 "times_chosen": 0,
                 "times_chosen_since_new": 0,
             }
@@ -86,6 +130,7 @@ class CellArchive:
                 existing["score"] = score
                 existing["steps"] = steps
                 existing["trajectory"] = trajectory
+                existing["fruits_order"] = list(fruits_order)
             return False  # existing cell
 
     def choose_cell(self):
@@ -101,11 +146,12 @@ class CellArchive:
                 / (1.0 + info["times_chosen"])
                 / (1.0 + info["times_chosen_since_new"])
             )
-            # Bonus for more fruits collected (fewer remaining = better)
-            # fruits_remaining is cell_key[2]: 4=none, 0=all
-            fruits_collected = 4 - cell_key[2]
-            fruit_bonus = 1.0 + fruits_collected * 2.0
-            # Bonus for higher floors
+            # Bonus for more fruits collected.
+            # cell_key[2] is a frozenset of floor numbers whose fruit
+            # has been collected.
+            n_collected = len(cell_key[2])
+            fruit_bonus = 1.0 + n_collected * 2.0
+            # Bonus for higher floors (y_bucket 0 = bottom, 4 = princess)
             floor_bonus = 1.0 + cell_key[0] * 0.5
             w *= fruit_bonus * floor_bonus
             weights.append(w)
@@ -166,6 +212,7 @@ def read_state(env):
         state[name] = iface.read_ram_byte(addr)
     state["score"] = (state["score_hi"] << 8) | state["score_lo"]
     state["bonus"] = (state["bonus_hi"] << 8) | state["bonus_lo"]
+    state["fruits_collected"] = read_fruits_collected(iface)
     return state
 
 
@@ -227,6 +274,10 @@ def _seed_archive(env, archive, args):
     (so callers can say "only seed from CP2 or higher"). Validates each
     candidate state via :func:`state_validator.validate_state` before
     adding it so doomed/frozen states don't become Go-Explore starts.
+
+    Accepts both archive shapes:
+      - new: ``cell_key[2]`` is a frozenset of collected floor numbers.
+      - old: ``cell_key[2]`` is an int ``fruits_remaining`` (0..4).
     """
     import pickle
 
@@ -251,19 +302,24 @@ def _seed_archive(env, archive, args):
             YETI_ADDRS["bonus_lo"]
         )
 
+    def _cp_of(cell_key):
+        """Derive CP level from a cell_key regardless of archive version."""
+        if len(cell_key) < 3:
+            return None
+        v = cell_key[2]
+        if isinstance(v, (frozenset, set, list, tuple)):
+            return len(v)
+        if isinstance(v, int) and 0 <= v <= 4:
+            return 4 - v
+        return None
+
     total = len(seed)
     filtered_cp = 0
     rejected = 0
     added = 0
     min_cp = args.seed_min_cp
     for cell_key, entry in seed.items():
-        # For go_explore-style archives, cell_key[2] is fruits_remaining.
-        # CP level = 4 - fruits_remaining.
-        if len(cell_key) >= 3:
-            fr = cell_key[2]
-            cp = 4 - fr if 0 <= fr <= 4 else None
-        else:
-            cp = None
+        cp = _cp_of(cell_key)
         if min_cp is not None and (cp is None or cp < min_cp):
             filtered_cp += 1
             continue
@@ -281,7 +337,10 @@ def _seed_archive(env, archive, args):
         score = entry.get("score", 0)
         steps = entry.get("steps", 0)
         trajectory = entry.get("trajectory", [])
-        archive.add_or_update(cell_key, state_bytes, score, steps, trajectory)
+        fruits_order = entry.get("fruits_order", [])
+        archive.add_or_update(
+            cell_key, state_bytes, score, steps, trajectory, fruits_order
+        )
         added += 1
 
     # Restore env to avoid disturbing the main loop that starts right after.
@@ -332,9 +391,9 @@ def explore(args):
     state = read_state(env)
     init_state = env.save_state()
     init_cell = make_cell(
-        state["x_pos"], state["y_pos"], state["score"], state["fruits_remaining"]
+        state["x_pos"], state["y_pos"], state["fruits_collected"]
     )
-    archive.add_or_update(init_cell, init_state, 0, 0, [])
+    archive.add_or_update(init_cell, init_state, 0, 0, [], [])
 
     print(f"Go-Explore Phase 1: {args.steps} steps, profile={args.profile}", flush=True)
     print(f"Output: {args.output}", flush=True)
@@ -370,6 +429,11 @@ def explore(args):
         new_actions = []
         explore_steps = 0
         explore_score = state["score"]
+        # Ordered list of fruits picked up along the way, starting from
+        # the parent cell's known order. We extend it whenever a new
+        # fruit appears in the ``fruits_collected`` set.
+        fruits_order = list(chosen_info.get("fruits_order", []))
+        prev_fruits_collected = set(state["fruits_collected"])
 
         for step in range(args.explore_steps):
             action = random_action(prev_action, args.sticky_prob)
@@ -380,6 +444,13 @@ def explore(args):
 
             state = read_state(env)
             new_actions.append(list(action))
+
+            # Track any new fruit collection.
+            new_fruits = state["fruits_collected"] - prev_fruits_collected
+            if new_fruits:
+                for f in sorted(new_fruits):
+                    fruits_order.append(f)
+                prev_fruits_collected = set(state["fruits_collected"])
 
             # Track bonus stall for death detection
             if state["bonus"] == prev_bonus:
@@ -400,8 +471,7 @@ def explore(args):
             cell = make_cell(
                 state["x_pos"],
                 state["y_pos"],
-                state["score"],
-                state["fruits_remaining"],
+                state["fruits_collected"],
             )
             existing = archive.cells.get(cell)
             should_save = (
@@ -421,6 +491,7 @@ def explore(args):
                     state["score"],
                     len(full_trajectory),
                     full_trajectory.copy(),
+                    fruits_order,
                 )
                 if is_new:
                     new_cells_this_iter += 1
@@ -492,7 +563,8 @@ def explore(args):
     for cell_key in archive.cells:
         floor = str(cell_key[0])
         summary["cells_by_floor"][floor] = summary["cells_by_floor"].get(floor, 0) + 1
-        fc = str(4 - cell_key[2])
+        # cell_key[2] is a frozenset of collected floor numbers.
+        fc = str(len(cell_key[2]))
         summary["cells_by_fruits_collected"][fc] = (
             summary["cells_by_fruits_collected"].get(fc, 0) + 1
         )
@@ -526,6 +598,7 @@ def explore(args):
         archive_data[cell_key] = {
             "state": bytes(info["state"]),
             "trajectory": info["trajectory"],
+            "fruits_order": list(info.get("fruits_order", [])),
             "score": info["score"],
             "steps": info["steps"],
         }
