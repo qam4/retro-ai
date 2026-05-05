@@ -249,6 +249,74 @@ runs — they didn't get close enough for it to matter.
   into a TB event dir, sharing the same aggregator so tag schemes
   don't drift. Used to visualize A/B/C/D/E.
 
+### 10. Go-Explore from validated CP2 seeds  *(verified)*
+
+First half of the closed-loop plan from approach 9's followup: use
+Go-Explore to push past the CP2→CP3 wall, starting from CP2 save-states
+rather than game reset. Implemented via
+`scripts/go_explore.py --seed-archive ... --seed-min-cp 2`, which loads
+the given archive, filters it through the state validator, and adds
+the viable cells to the exploration archive before the main loop starts.
+
+Two prerequisites added for this experiment:
+
+- **State validator** (`python/retro_ai/training/state_validator.py` +
+  `scripts/filter_archive.py`). Rule: load state, noop probe, reject if
+  bonus==0 at load OR bonus doesn't drop by min_drop=2 over 30 frames.
+  Unit-tested, spot-checked against B's known-doomed CP4 and
+  `go_explore_fruit` cells. The curriculum's inline `_validate_checkpoint`
+  was refactored to delegate to this module, so training and offline
+  filtering now share one rule.
+- **Go-Explore `--seed-archive`** (commit `f833790`). Loads a prior
+  archive.pkl, optionally filters by CP level, runs the validator,
+  adds survivors to the in-memory `CellArchive`.
+
+**Run**:
+- 5M exploration steps, seed `go_explore_fruit/archive.pkl`,
+  `--seed-min-cp 2`.
+- 85 seed cells → 56 filtered by CP level (CP0/CP1) → 16 rejected by
+  validator (frozen / bonus=0) → **13 cells seeded** (all CP2).
+- Output: `output/mo5/yeti/go_explore_from_cp2/`.
+
+**Result**: 103 cells discovered total. 5 y-buckets covered (including
+11 cells at y_bucket 4, the princess area). Best score 470.
+**Zero CP3 or CP4 cells.** Fruit 3 was never collected.
+
+Breakdown of the final archive:
+
+| fruits_remaining | interpretation | cells |
+|:---:|---|:---:|
+| 4 | CP0 (no fruits collected) | 34 |
+| 3 | CP1 | 37 |
+| 2 | CP2 | 32 |
+| 1 | CP3 | 0 |
+| 0 | CP4 | 0 |
+
+The CP0 and CP1 cells are new — they accumulated as dying exploration
+attempts (re)populated them, even though seeding only started at CP2.
+So random-action search from CP2 didn't push up to CP3; it mostly
+died back down to CP0/CP1.
+
+**What this rules out**:
+
+- "Just give Go-Explore CP2 seeds and it will find CP3." 5M steps,
+  13 viable starting points, all of Go-Explore's weighting heuristics,
+  no CP3. The closed-loop plan as written in approach 9's followups
+  is blocked at this step.
+
+**What this doesn't rule out**:
+
+- Much longer Go-Explore (20-50M steps) might eventually hit CP3 by
+  chance. Random-action search is theoretically complete; we just ran
+  out of patience.
+- Different Go-Explore knobs (sticky_prob, cell resolution, death
+  detection threshold) might help — we used the defaults that worked
+  at lower CPs.
+- The 2 CP3 saves and 1 CP4 save that `curriculum_v5` accumulated (via
+  PPO reset chains over ~20M steps) haven't been validated yet. If any
+  are usable, they could seed a CP3 curriculum without needing
+  Go-Explore at CP3 at all.
+
 ---
 
 ## Where we stand after all this
@@ -276,7 +344,9 @@ Reframed in plain terms:
   literally unwinnable — snowball adjacent at load time), or CP2→CP3 is a
   harder task than CP1→CP2 for some other reason (longer climb, more
   snowballs, or a reward signal that doesn't push hard enough toward
-  fruit 3).
+  fruit 3). **Approach 10 tried random-action Go-Explore from 13 validated
+  CP2 seeds for 5M steps and still found zero CP3 cells**, which narrows
+  the cause: random actions can't cross the boundary either.
 - **CP3 → CP4** — we have two CP3 saves total across all runs (from
   curriculum_v4 and v5, over ~20M combined training steps). No reliable
   data on whether CP3→CP4 is solvable.
