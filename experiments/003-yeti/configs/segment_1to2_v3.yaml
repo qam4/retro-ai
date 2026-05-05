@@ -1,0 +1,46 @@
+# Segment 1→2 with validated CP1 seeds.
+# Follow-up to segment_1to2 and segment_1to2_v2, which both got ≤44%
+# success on CP1→CP2 despite the shared-policy ablation C hitting 76%
+# on the same segment.
+#
+# Differences from the prior segment_1to2 runs:
+#   - 5 settle frames after load_state (matches train_checkpoint_curriculum;
+#     previous segment runs only ran 1 frame post-load)
+#   - CP1 seeds pulled from curriculum_v5 (all 100 validate clean under
+#     state_validator — no frozen/doomed states)
+#   - Reward formula explicit (fruit_bonus, scale 0.01) — matches ablation C.
+#
+# Hypothesis: if per-segment training is a viable architecture, this run
+# should hit success rates comparable to ablation C's 76% CP1→CP2.
+# If it doesn't, per-segment has a deeper issue vs shared-policy.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_1to2_v3
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus
+  params:
+    scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/training/curriculum_v5/checkpoints.pkl
+  segment: 1

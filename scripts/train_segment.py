@@ -156,7 +156,19 @@ class SegmentEnv(gym.Env):
 
         state = random.choice(self.checkpoint_states)
         self.base._interface.load_state(state)
-        obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
+        # load_state restores the emulator's RAM + framebuffer but does
+        # NOT reset the preprocessing pipeline's frame_stack buffer
+        # (see python/retro_ai/core/preprocessing.py). On the first step
+        # after load the buffer still contains 3 pre-load frames + 1
+        # post-load frame. Running 5 noop steps before returning lets
+        # the frame stack refill entirely with post-load frames, so the
+        # first observation the policy sees is consistent with what
+        # steady-state gameplay would produce. Same rationale applies
+        # in CheckpointCurriculumEnv (commit add2400 introduced the
+        # value 5; any frame_stack-sized number of settle steps would
+        # do).
+        for _ in range(5):
+            obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
 
         self._step_count = 0
         self._prev_fruits = self.iface.read_ram_byte(FRUITS_ADDR)

@@ -81,8 +81,13 @@ def validate_state(
         (``bonus`` for Yeti).
     settle_frames
         Number of no-op frames to run after load before reading the
-        starting counter value. Absorbs any mid-transition RAM state
-        right after load.
+        starting counter value. Necessary because the counter ticks on
+        a multi-frame cycle (every 4-5 frames for Yeti's bonus), and a
+        save state may land mid-cycle. Without a settle, the baseline
+        read at load time is not comparable to the read after the
+        probe, so a state that ticks once then freezes can look like a
+        healthy decrement. Default 5 is ≥ the typical tick period so
+        the baseline is taken at a stable cycle boundary.
     probe_frames
         Number of no-op frames used to measure the counter's drop.
     min_drop
