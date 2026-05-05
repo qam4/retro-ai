@@ -1,0 +1,47 @@
+# Curriculum seeded from go_explore_v9 (fruit-subset cell keys,
+# includes 9 CP4 states). Tests whether, with validated seeds at
+# every CP level, PPO can chain CP0→CP1→CP2→CP3→CP4→princess.
+#
+# Differences from ablation C (the prior best):
+#   - seed_archive points at go_explore_v9 (432 cells, every CP
+#     level including CP4)
+#   - reward is fruit_princess_bonus rather than fruit_bonus, so
+#     touching the princess (level-complete) actually pays reward
+#   - 10M steps instead of 5M to give the deeper CP2→CP3 and
+#     CP3→CP4 segments time to learn
+
+training:
+  timesteps: 10_000_000
+  output: output/mo5/yeti/training/curriculum_v9_seeded
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_princess_bonus
+  params:
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.4
+  frontier_fraction: 0.4
+  earlier_fraction: 0.2
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  seed_archive: output/mo5/yeti/go_explore_v9/archive.pkl
