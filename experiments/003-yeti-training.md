@@ -317,6 +317,87 @@ died back down to CP0/CP1.
   are usable, they could seed a CP3 curriculum without needing
   Go-Explore at CP3 at all.
 
+### 11. Go-Explore with richer cell keys  *(verified)*
+
+Revisiting approach 10 after realising the cell-key scheme was
+collapsing meaningfully distinct game states into one bucket.
+
+Two fixes to `scripts/go_explore.py`:
+
+- **Cell-key grid rework**: y-buckets are 32 px tall anchored at the
+  bottom of the screen (one bucket per floor); x-buckets are 8 px in
+  game-x space (1 sprite-width, 10 buckets). The previous grid had
+  30-px y-buckets anchored at the top, which mid-jump states from
+  floor 3 to hit the "floor 4" bucket. Replacing with bottom-anchored
+  32-px buckets resolves this.
+- **Cell key third element: frozenset of collected fruit-floors**
+  instead of the `fruits_remaining` count. A state "collected fruit 1
+  only" and a state "collected fruit 3 only" now occupy different
+  cells instead of collapsing into the same "1 fruit collected"
+  bucket. Per-fruit presence is read directly from 4 RAM addresses
+  identified via CP0..CP4 diff (fruit on floor n: 0x2FAD/0x2F00/
+  0x2E68/0x2DD8 — non-zero when sprite is present, zero when
+  collected).
+- **`fruits_order` list persisted per-cell** in the archive: the
+  chronological sequence of floor numbers as fruits were picked.
+  Not part of the key (two physical histories ending in the same
+  fruit-set collapse to one cell) — kept only for analysis.
+
+Commit: `2c62c72`.
+
+**Run** (output/mo5/yeti/go_explore_v9): 5M steps, fresh start (no
+seed), 41 minutes wall time.
+
+**Result: 432 cells discovered**, a 5× jump from prior runs. Breakdown:
+
+| fruits-collected set                 | cells |
+|:-------------------------------------|------:|
+| none                                 |    41 |
+| singletons {1}, {2}, {3}, {4}        | 35, 37, 38, 21 |
+| pairs {1,2}, {1,3}, {1,4}, {2,3}, {2,4}, {3,4} | 37, 31, 5, 33, 7, 41 |
+| triples {1,2,3}, {1,2,4}, {1,3,4}, {2,3,4}     | 32, 23, 19, 23 |
+| all four (CP4)                       |     9 |
+
+Notable findings:
+
+- **All 15 non-empty fruit-subsets found.** {1,4} and {2,4} are rare
+  (5 and 7 cells), suggesting those pairs need specific navigation
+  random actions rarely produce.
+- **9 CP4 cells — all 4 fruits collected.** First time any run has
+  captured this state. Scores 200-230 (consistent with fruits + a
+  handful of snowball jumps). Validated: 6/9 viable.
+- **`fruits_order` for the 9 CP4 cells is uniformly `[1, 2, 4, 3]`.**
+  Random actions found ONE path to all 4 fruits, and it isn't the
+  "natural" floor-order. Worth remembering when interpreting learned
+  policies later.
+- **Zero cells at y_bucket 4 with all fruits collected.** None of the
+  CP4 states are "at the princess with all fruits"; they're
+  somewhere else on the map. The agent didn't touch the princess —
+  `fruits_order` length never exceeded 4, which would have been the
+  tell (collected-then-re-appeared after level-complete).
+- The agent hit all 5 y-buckets including 30 cells in the princess
+  area (y_bucket 4), just never with a complete fruit set.
+
+Why this unblocked us (approach 10 got zero CP3 cells from 5M steps
+with the old scheme):
+
+With the old key, many distinct game states collapsed into the same
+cell — e.g. "collected fruit 2, on floor 3" and "collected nothing,
+on floor 3" shared a cell, and only one got saved. Go-Explore's
+teleport-and-extend loop needs distinct cells to make progress: if
+saving a "more progress" state overwrites the "less progress"
+state at the same key, the frontier can't accumulate. The richer key
+lets every incremental subset-of-fruits become its own starting
+point, and the chain of short random walks compounds.
+
+**Viability breakdown of the 432 cells** (via state_validator):
+CP0 32/41, CP1 88/131, CP2 81/154, CP3 43/97, CP4 6/9. Higher CPs
+have more frozen states (random actions save more often at risky
+moments), but every level has viable seeds.
+
+This archive is the first we've had that covers every CP (including
+CP4) with validated save-states from a single source.
+
 ---
 
 ## Where we stand after all this
