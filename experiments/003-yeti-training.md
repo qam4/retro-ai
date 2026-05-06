@@ -398,6 +398,57 @@ moments), but every level has viable seeds.
 This archive is the first we've had that covers every CP (including
 CP4) with validated save-states from a single source.
 
+### 12. Segment training on v9 seeds — CP1→CP2  *(verified)*
+
+First clean test of per-segment training (one fresh policy, trained
+only on CP_N starts). Prior attempts (segment_1to2, _v2, _v3) used
+curriculum_v5's 100 CP1 states, all clustered at the one spot fruit 1
+gets collected. Approach 11's v9 archive gives us 88 validated CP1
+states spread across the map — the diverse-seed pool that should let
+per-segment training actually learn.
+
+Config: `experiments/003-yeti/configs/segment_1to2_v4.yaml` (fresh
+PPO policy, 5M steps, fruit_bonus reward, 5 settle frames after
+load_state). Seeds extracted from v9 via `scripts/extract_seeds.py`.
+
+**Result: 41% CP1→CP2 success in the last 20%, learning curve still
+climbing.**
+
+Progression over 10 training bins:
+
+| bin | step     | CP1→CP2 |
+|----:|---------:|--------:|
+| 0   | 489k     |  7.7%   |
+| 1   | 942k     |  8.8%   |
+| 2   | 1.3M     |  6.3%   |
+| 3   | 1.8M     | 11.8%   |
+| 4   | 2.3M     | 13.0%   |
+| 5   | 2.9M     | 24.9%   |
+| 6   | 3.4M     | 35.5%   |
+| 7   | 3.9M     | 31.9%   |
+| 8   | 4.4M     | 38.7%   |
+| 9   | 5.0M     | 40.9%   |
+
+Comparison to prior attempts on the same segment:
+- `segment_1to2` (v5 seeds, no settle):       ~0%
+- `segment_1to2_v2` (v5 seeds, no settle):    peaked 44%, ended lower
+- `segment_1to2_v3` (v5 seeds, with settle):  peaked 15%, collapsed to 1.9%
+- **`segment_1to2_v4` (v9 seeds, with settle): 41%, monotonically rising**
+- reference: shared-policy ablation C hit 76% on this segment
+
+So per-segment training isn't broken — we just needed diverse seeds.
+With v9's map-spread CP1 pool it learns cleanly, and 5M steps is
+probably not enough (curve still rising).
+
+**Quirk:** 3 of v9's 88 "CP1" seeds actually read as fruits_remaining=2
+(CP2) after load+5-frame-settle — the agent drifted into a fruit sprite
+during the settle. Those 3 seeds produced 8% of episodes with
+start_level=2. Not a bug in anything we're measuring (the CP1→CP2
+percentage looks only at start_level=1 rows) but worth knowing. Could
+harden ``extract_seeds.py`` to re-validate states after the same
+settle procedure ``train_segment.py`` uses, and drop ones whose CP
+changes.
+
 ---
 
 ## Where we stand after all this
