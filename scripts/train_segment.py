@@ -397,6 +397,14 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         seed=seed,
     )
 
+    if cfg.training.resume:
+        print(f"  Resuming from {cfg.training.resume}", flush=True)
+        model = PPO.load(
+            cfg.training.resume,
+            env=vec_env,
+            tensorboard_log=os.path.join(cfg.training.output, "tb"),
+        )
+
     print(f"  {num_envs} envs, {cfg.training.timesteps} steps", flush=True)
     status = "COMPLETED"
     exit_code: Optional[int] = 0

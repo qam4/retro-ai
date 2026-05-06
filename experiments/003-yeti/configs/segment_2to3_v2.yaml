@@ -1,0 +1,42 @@
+# segment_2to3 v2 — warm-started from segment_1to2_v4.
+#
+# v1 was a fresh policy: 3.4% flat on CP2→CP3 across 5M steps.
+# Episodes died fast (median 31 frames) because the fresh policy had
+# never seen floor 2+ and couldn't survive long enough to learn.
+#
+# v2 starts from segment_1to2_v4's final_model (41% on CP1→CP2,
+# knows floor 1-2 navigation) so the agent only needs to extend
+# its skills upward. 15M steps to give it room to learn a harder
+# segment.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/segment_2to3_v2
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/training/segment_1to2_v4/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus
+  params:
+    scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints.pkl
+  segment: 2
