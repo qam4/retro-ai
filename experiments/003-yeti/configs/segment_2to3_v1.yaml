@@ -1,0 +1,39 @@
+# segment_2to3 v1 — fresh policy, CP2 seeds from go_explore_v9.
+#
+# Tests whether per-segment training can crack CP2→CP3, which is the
+# wall that no prior shared-policy run has crossed (ablation C: 0%,
+# curriculum_v5: 0%). v9 gives us 81 validated CP2 seeds spread across
+# the map.
+#
+# Same architecture and hyperparameters as segment_1to2_v4.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_2to3_v1
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus
+  params:
+    scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints.pkl
+  segment: 2
