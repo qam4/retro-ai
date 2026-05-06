@@ -1,0 +1,43 @@
+# segment_1to2 v4 — fresh policy, CP1 seeds from go_explore_v9.
+#
+# The key distinction vs prior segment_1to2* runs: v9 seeds are
+# diverse CP1 positions spread across the map (Go-Explore's walk),
+# not the 100 near-identical "just-collected-fruit-1" states from
+# curriculum_v5. Earlier we saw the latter pool was too narrow for
+# per-segment training to work.
+#
+# Other fixes in this run vs earlier segment_1to2:
+#   - 5 settle frames after load_state (commit 4fa7d6c)
+#   - validated seeds (non-frozen, bonus-decrements)
+#   - fruit_bonus reward matches ablation C
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_1to2_v4
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus
+  params:
+    scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints.pkl
+  segment: 1
