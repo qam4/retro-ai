@@ -434,13 +434,16 @@ class CheckpointCurriculumEnv(gym.Env):
         """
         from retro_ai.training.state_validator import validate_state
 
+        def _step_noop() -> bool:
+            _, _, done, _, _ = self.base.step([0, 0, 0])
+            return bool(done)
+
         original = self.base._interface.save_state()
         try:
             result = validate_state(
                 state_bytes=state_bytes,
                 load_state=self.base._interface.load_state,
-                step_noop=lambda: self.base.step([0, 0, 0]),
-                read_counter=self._read_bonus,
+                step_noop=_step_noop,
             )
         finally:
             self.base._interface.load_state(original)

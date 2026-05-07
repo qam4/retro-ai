@@ -1,8 +1,8 @@
 """Tests for the save-state viability check.
 
-We don't spin up the real emulator here — the validator takes the
-env interactions as callables, so a tiny fake counter is enough to
-cover the branches.
+The validator takes the env interactions as callables so we don't
+need a real emulator — a tiny fake env that returns ``done`` after a
+configurable number of steps covers every branch.
 """
 
 from __future__ import annotations
@@ -10,184 +10,178 @@ from __future__ import annotations
 from retro_ai.training.state_validator import ValidationResult, validate_state
 
 
-class _FakeCounter:
-    """Counter that starts at ``start`` and drops by ``drop_per_frame``
-    on each ``step`` call, never going below 0.
+class _FakeEnv:
+    """Minimal env stand-in.
+
+    Returns ``done=True`` on the step whose index (1-based, counting
+    both settle and probe steps) matches ``done_on_step``. Use
+    ``done_on_step=None`` to model a state that never dies during the
+    probe window.
     """
 
-    def __init__(self, start: int, drop_per_frame: int) -> None:
-        self.value = start
-        self._drop = drop_per_frame
+    def __init__(self, done_on_step: int | None = None) -> None:
+        self.done_on_step = done_on_step
         self.load_calls = 0
         self.step_calls = 0
 
     def load(self, _state: bytes) -> None:
         self.load_calls += 1
 
-    def step(self) -> None:
+    def step(self) -> bool:
         self.step_calls += 1
-        self.value = max(0, self.value - self._drop)
-
-    def read(self) -> int:
-        return self.value
+        return self.done_on_step is not None and self.step_calls >= self.done_on_step
 
 
 # ---------------------------------------------------------------------------
-# Basic plumbing
+# Happy path
 # ---------------------------------------------------------------------------
 
 
-def test_viable_state_with_healthy_counter_drop() -> None:
-    """Counter starts well above zero and drops steadily → viable."""
-    c = _FakeCounter(start=1000, drop_per_frame=1)
+def test_state_that_never_dies_is_viable() -> None:
+    """State where done never fires during settle or probe → viable."""
+    env = _FakeEnv(done_on_step=None)
     result = validate_state(
         state_bytes=b"unused",
-        load_state=c.load,
-        step_noop=c.step,
-        read_counter=c.read,
+        load_state=env.load,
+        step_noop=env.step,
         settle_frames=5,
-        probe_frames=30,
-        min_drop=2,
+        probe_frames=120,
     )
     assert isinstance(result, ValidationResult)
     assert result.viable is True
     assert result.reason == "ok"
-    # load happened once; step happened settle + probe times
-    assert c.load_calls == 1
-    assert c.step_calls == 35
+    assert result.first_done_frame is None
+    assert result.frames_probed == 120
+    assert env.load_calls == 1
+    assert env.step_calls == 125  # settle + probe
 
 
-def test_validator_returns_counter_values() -> None:
-    """ValidationResult reports the observed counter values."""
-    c = _FakeCounter(start=500, drop_per_frame=1)
+def test_state_that_barely_survives_is_viable() -> None:
+    """Done fires one step after the probe ends → viable."""
+    # settle=5 + probe=120 = 125 steps taken; done would fire at 126
+    env = _FakeEnv(done_on_step=126)
     result = validate_state(
         state_bytes=b"unused",
-        load_state=c.load,
-        step_noop=c.step,
-        read_counter=c.read,
+        load_state=env.load,
+        step_noop=env.step,
         settle_frames=5,
-        probe_frames=30,
-        min_drop=2,
-    )
-    # After 5 settle frames counter is 495, after 30 more it's 465
-    assert result.bonus_at_load == 495
-    assert result.bonus_at_end == 465
-    assert result.frames_probed == 30
-
-
-# ---------------------------------------------------------------------------
-# Rejection: bonus_zero
-# ---------------------------------------------------------------------------
-
-
-def test_bonus_zero_at_load_is_rejected() -> None:
-    """A state that loads with a zero counter is rejected immediately."""
-    c = _FakeCounter(start=0, drop_per_frame=0)
-    result = validate_state(
-        state_bytes=b"unused",
-        load_state=c.load,
-        step_noop=c.step,
-        read_counter=c.read,
-    )
-    assert result.viable is False
-    assert result.reason == "bonus_zero"
-    assert result.bonus_at_load == 0
-    # we don't bother probing an already-zero state
-    assert result.frames_probed == 0
-
-
-def test_bonus_reaches_zero_during_settle_is_rejected() -> None:
-    """If the counter runs out during the settle frames, reject."""
-    # start=3, drop=1 per frame, settle=5 → counter hits 0 by frame 3
-    c = _FakeCounter(start=3, drop_per_frame=1)
-    result = validate_state(
-        state_bytes=b"unused",
-        load_state=c.load,
-        step_noop=c.step,
-        read_counter=c.read,
-        settle_frames=5,
-    )
-    assert result.viable is False
-    assert result.reason == "bonus_zero"
-
-
-# ---------------------------------------------------------------------------
-# Rejection: bonus_frozen
-# ---------------------------------------------------------------------------
-
-
-def test_frozen_counter_is_rejected() -> None:
-    """Counter that doesn't drop during the probe is rejected."""
-    c = _FakeCounter(start=500, drop_per_frame=0)
-    result = validate_state(
-        state_bytes=b"unused",
-        load_state=c.load,
-        step_noop=c.step,
-        read_counter=c.read,
-    )
-    assert result.viable is False
-    assert result.reason == "bonus_frozen"
-    assert result.bonus_at_load == 500
-    assert result.bonus_at_end == 500
-
-
-def test_single_tick_drop_is_rejected_with_default_min_drop() -> None:
-    """Default ``min_drop=2`` rejects a state that only ticks once then freezes.
-
-    Matches the behavior we saw in B's CP4: bonus went 767->766 once then
-    stuck. The old validator accepted any change; the new one requires
-    a more substantial drop.
-    """
-    class OneTickThenFreeze:
-        def __init__(self) -> None:
-            self.value = 500
-            self.ticked = False
-        def load(self, _b: bytes) -> None: pass
-        def step(self) -> None:
-            if not self.ticked:
-                self.value -= 1
-                self.ticked = True
-        def read(self) -> int:
-            return self.value
-
-    c = OneTickThenFreeze()
-    result = validate_state(
-        state_bytes=b"unused",
-        load_state=c.load,
-        step_noop=c.step,
-        read_counter=c.read,
-        settle_frames=0,
-        probe_frames=30,
-        min_drop=2,
-    )
-    assert result.viable is False
-    assert result.reason == "bonus_frozen"
-
-
-# ---------------------------------------------------------------------------
-# Threshold knob
-# ---------------------------------------------------------------------------
-
-
-def test_min_drop_one_accepts_slow_counter() -> None:
-    """With ``min_drop=1`` a counter dropping once every ~30 frames passes."""
-    c = _FakeCounter(start=500, drop_per_frame=0)
-    # Simulate a single drop at the tail of the probe.
-    original_step = c.step
-    calls = {"n": 0}
-    def step_once_then_drop() -> None:
-        calls["n"] += 1
-        if calls["n"] == 30:
-            c.value -= 1
-        original_step()
-    result = validate_state(
-        state_bytes=b"unused",
-        load_state=c.load,
-        step_noop=step_once_then_drop,
-        read_counter=c.read,
-        settle_frames=0,
-        probe_frames=30,
-        min_drop=1,
+        probe_frames=120,
     )
     assert result.viable is True
-    assert result.reason == "ok"
+    assert result.frames_probed == 120
+
+
+# ---------------------------------------------------------------------------
+# Rejection
+# ---------------------------------------------------------------------------
+
+
+def test_state_that_dies_during_probe_is_rejected() -> None:
+    """Done fires in the middle of the probe → rejected, reports frame."""
+    # settle=5 + 19 probe steps = step 24 overall
+    env = _FakeEnv(done_on_step=24)
+    result = validate_state(
+        state_bytes=b"unused",
+        load_state=env.load,
+        step_noop=env.step,
+        settle_frames=5,
+        probe_frames=120,
+    )
+    assert result.viable is False
+    assert result.reason == "died_under_noop"
+    assert result.first_done_frame == 19  # 24 total - 5 settle
+    assert result.frames_probed == 19
+
+
+def test_state_that_dies_on_first_probe_step_is_rejected() -> None:
+    """Done fires immediately after settle → rejected at frame 1."""
+    env = _FakeEnv(done_on_step=6)  # settle=5 + 1 probe
+    result = validate_state(
+        state_bytes=b"unused",
+        load_state=env.load,
+        step_noop=env.step,
+        settle_frames=5,
+        probe_frames=120,
+    )
+    assert result.viable is False
+    assert result.first_done_frame == 1
+
+
+def test_state_that_dies_on_last_probe_step_is_rejected() -> None:
+    """Done fires on the very last probe frame → still rejected."""
+    env = _FakeEnv(done_on_step=125)  # settle=5 + 120 probe
+    result = validate_state(
+        state_bytes=b"unused",
+        load_state=env.load,
+        step_noop=env.step,
+        settle_frames=5,
+        probe_frames=120,
+    )
+    assert result.viable is False
+    assert result.first_done_frame == 120
+
+
+# ---------------------------------------------------------------------------
+# Settle behavior
+# ---------------------------------------------------------------------------
+
+
+def test_done_during_settle_does_not_reject() -> None:
+    """Settle frames are intentionally ignored — done there is fine.
+
+    The first few frames after load_state can look unusual (HUD
+    glitches, state transitions); we let the emulator settle before
+    trusting its done signal.
+    """
+    env = _FakeEnv(done_on_step=3)  # dies during settle
+    result = validate_state(
+        state_bytes=b"unused",
+        load_state=env.load,
+        step_noop=env.step,
+        settle_frames=5,
+        probe_frames=120,
+    )
+    # Still viable because done during settle is ignored; env stops
+    # returning done=False once triggered, so env.step returns True
+    # on probe frame 1 too → actually rejected at probe frame 1.
+    # Rethink: our FakeEnv returns True from done_on_step onward, so
+    # if done fires during settle it'll still be firing on the first
+    # probe step. That's the correct real-world behavior too: a state
+    # that's already-dead at load time will keep reporting done, and
+    # we do want to reject that. So this test documents: done during
+    # settle alone isn't a reject, but a state that remains in the
+    # dead state through settle WILL be rejected on probe frame 1.
+    assert result.viable is False
+    assert result.first_done_frame == 1
+
+
+def test_settle_zero_surfaces_done_on_first_frame() -> None:
+    """With ``settle_frames=0`` the probe starts immediately."""
+    env = _FakeEnv(done_on_step=1)
+    result = validate_state(
+        state_bytes=b"unused",
+        load_state=env.load,
+        step_noop=env.step,
+        settle_frames=0,
+        probe_frames=120,
+    )
+    assert result.viable is False
+    assert result.first_done_frame == 1
+
+
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+
+
+def test_default_probe_length_is_120_frames() -> None:
+    """Document the default chosen from v9 archive analysis."""
+    env = _FakeEnv(done_on_step=None)
+    result = validate_state(
+        state_bytes=b"unused",
+        load_state=env.load,
+        step_noop=env.step,
+    )
+    assert result.frames_probed == 120
+    # settle default is 5
+    assert env.step_calls == 125

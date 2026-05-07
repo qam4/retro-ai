@@ -98,9 +98,7 @@ class CellArchive:
         self.cells = {}
         self.total_cells_found = 0
 
-    def add_or_update(
-        self, cell, state_bytes, score, steps, trajectory, fruits_order
-    ):
+    def add_or_update(self, cell, state_bytes, score, steps, trajectory, fruits_order):
         """Add a new cell or update if this trajectory is better.
 
         ``fruits_order`` is the ordered list of floor numbers reflecting
@@ -293,14 +291,9 @@ def _seed_archive(env, archive, args):
     def _load(state_bytes):
         env.load_state(state_bytes)
 
-    def _step_noop():
-        env.step([0, 0, 0])
-
-    def _read_bonus():
-        i = env._interface
-        return (i.read_ram_byte(YETI_ADDRS["bonus_hi"]) << 8) | i.read_ram_byte(
-            YETI_ADDRS["bonus_lo"]
-        )
+    def _step_noop() -> bool:
+        _, _, done, _, _ = env.step([0, 0, 0])
+        return bool(done)
 
     def _cp_of(cell_key):
         """Derive CP level from a cell_key regardless of archive version."""
@@ -329,7 +322,6 @@ def _seed_archive(env, archive, args):
                 state_bytes=state_bytes,
                 load_state=_load,
                 step_noop=_step_noop,
-                read_counter=_read_bonus,
             )
             if not result.viable:
                 rejected += 1
@@ -390,9 +382,7 @@ def explore(args):
     env.reset()
     state = read_state(env)
     init_state = env.save_state()
-    init_cell = make_cell(
-        state["x_pos"], state["y_pos"], state["fruits_collected"]
-    )
+    init_cell = make_cell(state["x_pos"], state["y_pos"], state["fruits_collected"])
     archive.add_or_update(init_cell, init_state, 0, 0, [], [])
 
     print(f"Go-Explore Phase 1: {args.steps} steps, profile={args.profile}", flush=True)

@@ -2,38 +2,62 @@
 
 A curriculum bag of save-states is only as useful as the states in it.
 Some states are unusable — either the game clock is already at zero,
-or it's frozen in an animation the agent can't interrupt. Training
-episodes starting from these states contribute nothing: they die fast
-(or stall forever) regardless of the policy.
+the agent is mid-jump into a snowball, or the state is frozen in a
+dying animation. Training episodes starting from these states
+contribute nothing: they die within the first few frames regardless
+of policy.
 
-The validator runs a short no-op probe from a loaded state and checks
-two things on the in-game countdown counter ("bonus" in Yeti):
+The validator delegates to the same death rule the training environment
+uses. It loads the candidate state, runs a short no-op probe, and
+checks whether the env reports ``done=True`` at any point. If it does,
+the state is unplayable and the validator rejects it.
 
-- At load time the counter must be non-zero. A zero counter means
-  the state has no time left, and the game will end almost
-  immediately regardless of input.
-- Across a small number of no-op frames, the counter must drop by at
-  least ``min_drop``. If it doesn't, the game clock is frozen — the
-  state is mid-animation or otherwise non-interactive — and the agent
-  has no effective control.
+Why "done from the env" and not a hand-rolled counter rule
+-----------------------------------------------------------
 
-The first check is necessary because a zero counter looks superficially
-fine (bonus==0 is technically "unchanged" too) but is semantically
-different from "the clock is frozen above zero".
+Earlier versions of this module re-implemented the "player is dead"
+detection in Python (bonus counter must drop by ``min_drop`` over
+``probe_frames``). That drifted from the C++ detection the training
+env actually uses (bonus unchanged for ``bonus_stall_frames`` in a row
+→ ``done=True``). States could pass the Python rule and still be
+terminated on the very first step in training — validator said fine,
+training said dead within 20 frames.
+
+By reading ``done`` from the env, the validator now uses the exact
+same rule as training by construction.
+
+Probe length
+------------
+
+Empirically (v9 archive, 432 cells, noop probe), ``probe_frames=120``
+cleanly separates playable and unplayable states:
+
+- 284 cells die within 120 noop frames; human review confirmed every
+  sample is unplayable (already-dead, landing on a snowball, or
+  falling to a lower floor with no time to react).
+- 148 cells survive 120 noops; human review confirmed the sampled
+  ones are playable.
+
+Longer probes reject additional states (343/432 at 200 frames, 351/432
+at 500 frames), but those extra rejected states were also confirmed
+playable on video — they just have a snowball arriving further away.
+A policy gets its chance to act; the validator shouldn't pre-emptively
+reject states where an agent could reasonably respond.
 
 Design notes
 ------------
 
-- The validator is game-agnostic: it takes callables for loading the
-  state and reading the counter, so it also works for any other game
-  that has a countdown we can read from RAM.
-- Noop-only. Random actions produce noisier survival data in Yeti
-  (some directional inputs immediately push the agent off a platform)
-  which makes them a bad probe for state viability. Noops just let
-  the simulation run; if the clock is advancing, the state is alive.
-- Doesn't touch the caller's env state. The caller is expected to
-  save the env's current state before validating and restore it
-  after, since we load the candidate state into the same env.
+- The validator is game-agnostic: it takes callables for loading and
+  stepping, so it works for any game whose env provides a ``done``
+  signal.
+- Noop-only. Some directional inputs push the agent off a platform
+  immediately, which would make the probe noisier. Noop lets the
+  simulation run; if ``done`` doesn't fire, the state gave the agent
+  time to think.
+- Settle frames run before the probe and are intentionally not counted
+  as "died" — the frame right after load_state can briefly look
+  unusual (HUD glitches, state transitions), so we give the emulator
+  a few frames to settle before trusting its ``done`` output.
 """
 
 from __future__ import annotations
@@ -51,20 +75,17 @@ class ValidationResult:
     """
 
     viable: bool
-    reason: str                 # "ok", "bonus_zero", or "bonus_frozen"
-    bonus_at_load: int          # the counter after loading + settle
-    bonus_at_end: int           # the counter after the noop probe
-    frames_probed: int          # how many noop frames we ran
+    reason: str  # "ok" or "died_under_noop"
+    first_done_frame: int | None  # 1-indexed frame where done fired, or None
+    frames_probed: int  # how many probe frames we ran
 
 
 def validate_state(
     state_bytes: bytes,
     load_state: Callable[[bytes], None],
-    step_noop: Callable[[], None],
-    read_counter: Callable[[], int],
+    step_noop: Callable[[], bool],
     settle_frames: int = 5,
-    probe_frames: int = 30,
-    min_drop: int = 2,
+    probe_frames: int = 120,
 ) -> ValidationResult:
     """Run a no-op probe from ``state_bytes`` and report viability.
 
@@ -75,25 +96,20 @@ def validate_state(
     load_state
         Loads ``state_bytes`` into whatever env the caller owns.
     step_noop
-        Advances the env one frame with a no-op action.
-    read_counter
-        Returns the current value of the in-game countdown
-        (``bonus`` for Yeti).
+        Advances the env one frame with a no-op action and returns the
+        env's ``done`` flag. During settle frames the return value is
+        ignored.
     settle_frames
-        Number of no-op frames to run after load before reading the
-        starting counter value. Necessary because the counter ticks on
-        a multi-frame cycle (every 4-5 frames for Yeti's bonus), and a
-        save state may land mid-cycle. Without a settle, the baseline
-        read at load time is not comparable to the read after the
-        probe, so a state that ticks once then freezes can look like a
-        healthy decrement. Default 5 is ≥ the typical tick period so
-        the baseline is taken at a stable cycle boundary.
+        Number of no-op frames to run after load before the probe
+        starts. The frame right after ``load_state`` can briefly look
+        unusual (HUD glitches, state transitions) so we give the
+        emulator a few frames to settle before trusting its ``done``
+        signal. Default 5.
     probe_frames
-        Number of no-op frames used to measure the counter's drop.
-    min_drop
-        Minimum required drop over ``probe_frames`` for the state to
-        be viable. Default 2 tolerates a 1-tick transient and still
-        requires genuine clock progress.
+        Number of no-op frames to probe. If ``done`` fires at any
+        point during the probe, the state is rejected. Default 120
+        based on empirical analysis of the v9 archive — see module
+        docstring for the data.
 
     Returns
     -------
@@ -102,32 +118,19 @@ def validate_state(
     load_state(state_bytes)
     for _ in range(settle_frames):
         step_noop()
-    start = read_counter()
-    if start == 0:
-        return ValidationResult(
-            viable=False,
-            reason="bonus_zero",
-            bonus_at_load=0,
-            bonus_at_end=0,
-            frames_probed=0,
-        )
-    for _ in range(probe_frames):
-        step_noop()
-    end = read_counter()
-    drop = start - end
-    if drop < min_drop:
-        return ValidationResult(
-            viable=False,
-            reason="bonus_frozen",
-            bonus_at_load=start,
-            bonus_at_end=end,
-            frames_probed=probe_frames,
-        )
+    for i in range(1, probe_frames + 1):
+        done = step_noop()
+        if done:
+            return ValidationResult(
+                viable=False,
+                reason="died_under_noop",
+                first_done_frame=i,
+                frames_probed=i,
+            )
     return ValidationResult(
         viable=True,
         reason="ok",
-        bonus_at_load=start,
-        bonus_at_end=end,
+        first_done_frame=None,
         frames_probed=probe_frames,
     )
 

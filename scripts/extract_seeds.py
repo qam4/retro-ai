@@ -92,18 +92,8 @@ def main() -> None:
         action="store_true",
         help="Skip viability validation (keep every state from the archive).",
     )
-    p.add_argument(
-        "--bonus-hi",
-        type=int,
-        default=11010,
-        help="RAM high byte for the countdown (Yeti default).",
-    )
-    p.add_argument(
-        "--bonus-lo",
-        type=int,
-        default=11011,
-        help="RAM low byte for the countdown (Yeti default).",
-    )
+    p.add_argument("--settle-frames", type=int, default=5)
+    p.add_argument("--probe-frames", type=int, default=120)
     args = p.parse_args()
 
     print(f"Reading {args.archive_path}", flush=True)
@@ -112,7 +102,6 @@ def main() -> None:
         print(f"  CP{cp}: {len(buckets[cp])} raw states")
 
     if not args.no_validate:
-        # Build a single env for validation.
         from retro_ai.training.env_builder import build_training_env
         from retro_ai.training.run_config import EnvConfig
         from retro_ai.training.state_validator import validate_state
@@ -131,14 +120,9 @@ def main() -> None:
         def _load(state_bytes):
             base._interface.load_state(state_bytes)
 
-        def _step_noop():
-            base.step([0, 0, 0])
-
-        def _read_bonus():
-            i = base._interface
-            return (i.read_ram_byte(args.bonus_hi) << 8) | i.read_ram_byte(
-                args.bonus_lo
-            )
+        def _step_noop() -> bool:
+            _, _, done, _, _ = base.step([0, 0, 0])
+            return bool(done)
 
         print("\nValidating states…")
         kept: Dict[int, List[bytes]] = {i: [] for i in range(5)}
@@ -148,7 +132,8 @@ def main() -> None:
                     state_bytes=st,
                     load_state=_load,
                     step_noop=_step_noop,
-                    read_counter=_read_bonus,
+                    settle_frames=args.settle_frames,
+                    probe_frames=args.probe_frames,
                 )
                 if result.viable:
                     kept[cp].append(st)

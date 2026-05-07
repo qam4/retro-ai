@@ -18,10 +18,6 @@ Usage
 
 Without ``--out`` the filtered archive is written alongside the input as
 ``<stem>_validated.pkl``.
-
-The validator is game-agnostic; this script wires it up with the Yeti
-bonus address. To adapt for another game, edit ``--bonus-hi``/``--bonus-lo``
-or factor out a profile-aware wiring helper.
 """
 
 from __future__ import annotations
@@ -49,21 +45,8 @@ def main() -> None:
         default=None,
         help="Output archive path. Defaults to <input>_validated.pkl alongside.",
     )
-    p.add_argument(
-        "--bonus-hi",
-        type=int,
-        default=11010,
-        help="RAM address of the high byte of the in-game countdown (Yeti default).",
-    )
-    p.add_argument(
-        "--bonus-lo",
-        type=int,
-        default=11011,
-        help="RAM address of the low byte of the in-game countdown (Yeti default).",
-    )
     p.add_argument("--settle-frames", type=int, default=5)
-    p.add_argument("--probe-frames", type=int, default=30)
-    p.add_argument("--min-drop", type=int, default=2)
+    p.add_argument("--probe-frames", type=int, default=120)
     args = p.parse_args()
 
     with open(args.archive_path, "rb") as f:
@@ -89,12 +72,9 @@ def main() -> None:
     def load_state(state_bytes: bytes) -> None:
         base._interface.load_state(state_bytes)
 
-    def step_noop() -> None:
-        base.step([0, 0, 0])
-
-    def read_bonus() -> int:
-        i = base._interface
-        return (i.read_ram_byte(args.bonus_hi) << 8) | i.read_ram_byte(args.bonus_lo)
+    def step_noop() -> bool:
+        _, _, done, _, _ = base.step([0, 0, 0])
+        return bool(done)
 
     filtered: dict = {}
     reasons: Counter = Counter()
@@ -104,10 +84,8 @@ def main() -> None:
             state_bytes=state_bytes,
             load_state=load_state,
             step_noop=step_noop,
-            read_counter=read_bonus,
             settle_frames=args.settle_frames,
             probe_frames=args.probe_frames,
-            min_drop=args.min_drop,
         )
         reasons[result.reason] += 1
         if result.viable:
@@ -128,7 +106,6 @@ def main() -> None:
     print("Reasons:")
     for reason in sorted(reasons):
         print(f"  {reason:15s} {reasons[reason]:5d}")
-    print(f"Wrote  {kept:5d} cells to   {out_path}")
 
 
 if __name__ == "__main__":
