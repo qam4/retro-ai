@@ -441,6 +441,32 @@ public:
         emulator_->get_gate_array().set_state(state.gate_array_state);
         emulator_->get_memory().set_state(state.memory_state);
         emulator_->get_pia().set_state(state.pia_state);
+
+        // Reset reward/death trackers to reflect the just-loaded memory.
+        // Without this, per-episode counters (bonus stall, lives delta,
+        // height delta, fruit delta) accumulate across load_state calls
+        // and misfire — e.g. if the previous episode ended in a bonus
+        // stall, the first few steps after load_state will spuriously
+        // report done=True. Mirrors what reset() does.
+        if (lives_addr_ >= 0) {
+            previous_lives_ = read_ram_byte(static_cast<uint16_t>(lives_addr_));
+        }
+        if (height_addr_ >= 0) {
+            previous_y_ = read_ram_byte(static_cast<uint16_t>(height_addr_));
+            best_y_ = previous_y_;
+            height_anchor_y_ = previous_y_;
+        }
+        if (bonus_addr_hi_ >= 0) {
+            previous_bonus_ = (read_ram_byte(static_cast<uint16_t>(bonus_addr_hi_)) << 8)
+                            |  read_ram_byte(static_cast<uint16_t>(bonus_addr_lo_));
+            bonus_stall_count_ = 0;
+        }
+        if (fruits_remaining_addr_ >= 0) {
+            previous_fruits_remaining_ = read_ram_byte(static_cast<uint16_t>(fruits_remaining_addr_));
+        }
+        if (reward_system_) {
+            reward_system_->reset();
+        }
     }
 
     void set_reward_mode(const std::string& mode) {
