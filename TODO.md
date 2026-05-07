@@ -33,3 +33,14 @@
   Root cause unknown — likely a transient CPU/emulator state not being
   serialized. Workaround: validate checkpoints by running 20 frames after
   load and checking if bonus changes. See train_checkpoint_curriculum.py.
+- HUD stale after load_state (MO5 Yeti). After loading a save state, the
+  score/bonus HUD region renders whatever text was on screen at save time
+  and does not update when RAM values change. Reproduced with
+  ``scripts/play_state.py``: load a state with bonus=828, step forward; at
+  frame 18 RAM shows bonus=1000 (new-life reset) but the HUD still shows
+  828 (or goes blank entirely for some saves). Training isn't affected —
+  policy input is an 84×84 grayscale resize and reward reads RAM — but
+  debug videos and human-readable playback misrepresent game state.
+  Suspected cause: load_state doesn't invalidate the text-layer cache, or
+  the HUD redraw depends on a periodic interrupt that doesn't fire on
+  loaded states. Not urgent while we solve CP2→CP3; fix after.
