@@ -1,0 +1,55 @@
+# segment_2to3 v3 — fresh policy, re-validated CP2 seeds from v9.
+#
+# Rerun of segment_2to3_v1 after two bug fixes (commits 40a8d9e and
+# abdeea0):
+#
+# 1. MO5 load_state now resets the C++ reward-tracker fields
+#    (bonus_stall_count_, previous_bonus_, previous_lives_, ...).
+#    Before the fix, every episode started with stale counters from
+#    the previous episode, so done=True fired spuriously in the first
+#    ~10 frames post-load. Most episodes in segment_2to3_v1 looked
+#    like 18-frame failures because of this.
+#
+# 2. State validator now delegates to the env's done signal with
+#    probe=120, matching the C++ death rule exactly. Seeds file
+#    regenerated via extract_seeds.py:
+#      v9_checkpoints.pkl (old):    CP2 = 81 states
+#      v9_checkpoints_v2.pkl (new): CP2 = 48 states
+#    Video review of the 148 kept cells confirmed all are playable
+#    under noop; video review of the 284 rejected confirmed all are
+#    unplayable.
+#
+# Same hyperparameters and architecture as v1 so the comparison is
+# clean. Expected result: non-trivially above v2's 3.7% — if the
+# per-segment design is viable for CP2→CP3 at all.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_2to3_v3
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus
+  params:
+    scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints_v2.pkl
+  segment: 2
