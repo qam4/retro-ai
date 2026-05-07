@@ -610,3 +610,129 @@ the shared-policy frame. The main levers there:
 - `resize: null` in a game profile was ignored because the merge logic
   didn't track explicit keys. Fixed by adding `_explicit_keys` tracking
   on `GameProfile`.
+
+### 13. Validator rebuild + C++ load_state bug  *(verified)*
+
+Two bugs surfaced while investigating why per-segment CP2→CP3 training
+produces so many "short failure" episodes.
+
+#### 13.1. C++ bonus-stall detector leaked across load_state
+
+`MO5Interface::load_state` restored emulator memory but did not reset
+the reward-wrapper fields `previous_bonus_` / `bonus_stall_count_` /
+`previous_lives_` / `previous_y_` / `previous_fruits_remaining_`.
+Those counters accumulate across episodes, so loading a save-state
+between episodes in a training env inherited whatever state the
+wrapper had at the end of the previous episode.
+
+Concrete demonstration (scripts/diagnose_load_done.py before the fix,
+same save-state in three contexts):
+
+| Context                                    | first_done_frame |
+|--------------------------------------------|-----------------:|
+| `reset(seed=0)` → load → probe             |                6 |
+| `reset(seed=0)` → 1000 frames → load → probe|                1 |
+| load → probe; then load again → probe      |          6, then 1 |
+
+After fix (load_state now mirrors reset for the trackers): all three
+contexts give first_done at frame 5, deterministic.
+
+Why this mattered:
+- Training envs that load checkpoints (curriculum, segment, go-explore)
+  were getting `done=True` spuriously in the first ~10 frames of each
+  new episode whenever the previous episode ended in a bonus stall
+  (i.e. death) — which is most of them, at segments where the agent
+  dies often. Episodes ended immediately, counted as failures, agent
+  never had a chance to act.
+- Explains some of the "short episode" noise we'd been glossing
+  over — many of those episodes really were just dead-on-arrival
+  because of stale trackers, not because the state was bad.
+
+Commit: `40a8d9e` (`fix(mo5): reset per-episode death trackers on
+load_state`). Regression test pinned in
+`tests/python/test_mo5_load_state_resets_death_trackers.py`: loading
+the same state in two different contexts must give the same
+`first_done_frame`.
+
+#### 13.2. Python validator was a separate death rule
+
+The validator (from approach 10) was doing its own "is this state
+alive?" check: bonus must drop by `min_drop=2` over `probe_frames=30`.
+That rule is not the same as C++'s ("bonus unchanged for 10 consecutive
+frames → `done=True`"). Pathology: a state where bonus ticks twice
+right after load and then freezes meets the validator's drop=2 rule
+(pass) and C++'s consecutive-10-unchanged rule (fail within ~19 frames).
+
+Hard case we traced: a CP2 seed saved from segment_2to3_v2's
+episodes.csv (`debug/short_cp2_episodes/episode_0_state.pkl`). Player
+is mid-jump into a snowball; jump resolves post-load, snowball hits,
+bonus freezes. Validator said "viable" (+2 drop over 30 frames), C++
+fired done at frame 19. Training env saw the state pass validation,
+loaded it, killed it on frame 19, counted it as a short failed
+episode. 34% of segment_2to3_v2's episodes looked like this.
+
+**Rebuild:** the validator now delegates to the env's `done` signal.
+Load, 5 settle noops, then 120 probe noops; if env returns
+`done=True` during the probe, reject. Same death rule as training,
+by construction.
+
+#### 13.3. Calibrating probe_frames from v9
+
+To pick probe_frames, ran every cell in the v9 archive (432 cells)
+through a 500-frame noop probe and recorded when done fires:
+
+| first_done_frame bucket | cells | fraction |
+|:-----------------------:|:-----:|:--------:|
+| 1–10                    | 165   | 38%      |
+| 11–20                   | 34    | 8%       |
+| 21–30                   | 23    | 5%       |
+| 31–60                   | 19    | 4%       |
+| 61–120                  | 43    | 10%      |
+| 121–200                 | 59    | 14%      |
+| 201–300                 | 3     | 1%       |
+| 301–500                 | 5     | 1%       |
+| survived 500            | 81    | 19%      |
+
+Not bimodal — the distribution has a long tail. But eyeballing the
+first 8 cells in each bucket as videos (`dump_probe_videos.py`):
+
+- **0–120**: unplayable. Agent is already-dying, landing on a
+  snowball, or mid-fall with nowhere to land. One exception at
+  `cp1_i113` in 11–20 (could have gone down a ladder). One at
+  `cp2_i044` in 61–120 (done at frame 118, playable).
+- **121–200 and beyond**: playable. A snowball is arriving but from
+  a distance any trained policy would have time to respond to.
+
+Probe cutoff: **120 frames**. Rejects 284/432 (66%) of v9 cells — all
+confirmed unplayable under video review, with 1 known false-negative
+(`cp2_i044`). Zero false-positives confirmed.
+
+Tooling used to calibrate (kept in `scripts/`, indexed in
+`scripts/README.md`):
+- `probe_archive_done_frames.py` — the sweep that produced the
+  table above.
+- `dump_probe_frames.py` / `dump_probe_videos.py` — per-bucket PNG /
+  MP4 dumps for eyeballing.
+
+Commit: `abdeea0` (`refactor(state_validator): delegate to env done
+signal`). Four callers updated to match: `extract_seeds.py`,
+`filter_archive.py`, `train_checkpoint_curriculum.py`, `go_explore.py`.
+
+#### 13.4. What this unblocks
+
+Prior seeded-training runs (approach 12's `segment_1to2_v4`,
+approach 11's follow-ups) used the old validator's
+"viable" states. After 13.1+13.2 it's likely a meaningful fraction
+of those states were actually unplayable — training saw short failed
+episodes, aggregation numbers (CP1→CP2 = 41%) were diluted.
+
+Next empirical steps will tell us how much these bugs were costing
+us. The concrete experiments left open:
+
+1. **Re-validate v9 archive** with the new validator (probe=120).
+   Produces a smaller, higher-quality seed set.
+2. **Re-run `segment_1to2_v4`** on the re-validated seeds. Compare
+   CP1→CP2 against the previous 41%. Expect higher (both fewer
+   short-dies from stale trackers AND fewer bad seeds).
+3. **Run `segment_2to3` from scratch** with the re-validated seeds,
+   this time with neither bug obscuring the signal.
