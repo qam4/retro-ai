@@ -856,3 +856,65 @@ policy to climb. Options on the table, in increasing invasiveness:
    the exploration problem for the cost of building a teacher.
 
 Deciding which to try next.
+
+### 14.1. "The policy climbs to its target floor, not further"
+
+Follow-up question on approach 14: if CP1→CP2 works (41%), the
+policy must be climbing — so why can't CP2→CP3 learn climbing too?
+Hypothesis: the CP1→CP2 policy doesn't learn "climbing is good",
+it learns "climb from floor 1 to floor 2 because fruit 2 is there".
+Out of distribution, no climbing.
+
+Testing that with the same per-floor analysis we ran on v3, but
+against `segment_1to2_v4`'s episodes.csv (last 20%, 8762 CP1-start
+episodes):
+
+| start_floor (game) | % up   | % down | % same | CP2 rate |
+|:------------------:|:------:|:------:|:------:|:--------:|
+| 1 (spawn)          | 27.6%  |  0.0%  | 72.4%  | 76.70%   |
+| 2                  |  2.6%  |  9.9%  | 87.5%  |  5.89%   |
+| 3                  |  0.2%  | 66.0%  | 33.8%  |  4.20%   |
+| 4                  |  0.0%  | 37.2%  | 62.8%  |  0.00%   |
+
+Comparison against `segment_2to3_v3` (same table from approach 14):
+
+| start_floor (game) | v4 up  | v3 up  |
+|:------------------:|:------:|:------:|
+| 1 (spawn)          | 27.6%  |  9.6%  |
+| 2                  |  2.6%  |  3.1%  |
+| 3                  |  0.2%  |  0.5%  |
+| 4                  |  0.0%  |  0.7%  |
+
+Reading:
+- The CP1→CP2 policy can climb — but *only* from spawn (27.6%).
+  It was trained on CP1 seeds spread across all floors of the map
+  (25 on floor 1, 22 on floor 2, 17 on floor 3, 18 on floor 4), so
+  this is not an out-of-distribution effect. It's "from floor 1
+  the learned trajectory points up; from floor 2 onwards it
+  doesn't".
+- When started above floor 1, the CP1→CP2 policy behaves almost
+  identically to the CP2→CP3 policy. They converge on the same
+  "sit here or fall" pattern whenever started above floor 1.
+- "Afraid to climb higher" fits the pattern: climbing is risky
+  (fall + snowball), and the policy only adopts the risky action
+  where a reliable reward gradient points above it. On floor 1
+  that gradient exists (fruit 2 is right there). On floor 2 and
+  above, the gradient is "try to find a remaining fruit somewhere
+  on this floor" which mostly fails and never teaches climbing.
+
+**Implication for next steps.** The options from approach 14 map
+onto this more precisely now:
+
+1. **Train longer.** Gives PPO more chances to stumble onto higher
+   floors via random exploration. Evidence from curriculum_v5 says
+   it's possible (2 CP3 and 1 CP4 states found in 20M reset-chain
+   steps), but vanishingly rare.
+2. **Per-episode floor-novelty bonus.** Directly rewards "climb to
+   a floor you haven't been to yet this episode". Addresses the
+   specific deficiency: the agent doesn't know climbing-above-fruit
+   is valuable.
+3. **Distance-to-remaining-fruit.** Dense gradient toward the
+   specific remaining target. Solves the "which way should I
+   climb?" question. Risk: fruit 1/2 are on low floors; if any
+   seed has those remaining, the gradient points DOWN, not up.
+4. **BC init.** Demonstrations teach the climbing skill directly.
