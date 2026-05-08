@@ -27,7 +27,7 @@ from typing import Optional
 import gymnasium as gym
 from retro_ai.training.callbacks import EpisodeMetricsCallback
 from retro_ai.training.env_builder import build_training_env
-from retro_ai.training.rewards import RewardContext, RewardFn
+from retro_ai.training.rewards import RewardContext, RewardFn, reset_reward
 from retro_ai.training.rewards import create as create_reward
 from retro_ai.training.run_config import RunConfig
 from retro_ai.training.run_manifest import (
@@ -170,6 +170,10 @@ class SegmentEnv(gym.Env):
         for _ in range(5):
             obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
 
+        # Clear per-episode state on stateful rewards (e.g. floor-novelty).
+        # No-op for stateless rewards.
+        reset_reward(self._reward_fn)
+
         self._step_count = 0
         self._prev_fruits = self.iface.read_ram_byte(FRUITS_ADDR)
         self._start_fruits = self._prev_fruits
@@ -194,6 +198,7 @@ class SegmentEnv(gym.Env):
         lives = self.iface.read_ram_byte(LIVES_ADDR)
         bonus = self._read_bonus()
         score = self._read_score()
+        y = self.iface.read_ram_byte(Y_POS)
 
         # Named reward formula — exact behavior controlled by run config.
         ctx = RewardContext(
@@ -206,6 +211,7 @@ class SegmentEnv(gym.Env):
             prev_lives=self._prev_lives,
             curr_lives=lives,
             step_count=self._step_count,
+            curr_y=y,
         )
         reward = float(self._reward_fn(ctx))
 

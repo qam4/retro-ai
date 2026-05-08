@@ -61,6 +61,9 @@ class RewardContext:
     and expected future formulas. Adding fields is backward-compatible;
     removing fields would break existing formulas, so treat this as
     append-only.
+
+    ``curr_y`` defaults to 0 when the caller has no positional reading
+    to supply — rewards that don't read it are unaffected.
     """
 
     prev_fruits: int
@@ -72,10 +75,24 @@ class RewardContext:
     prev_lives: int
     curr_lives: int
     step_count: int
+    curr_y: int = 0
 
 
 RewardFn = Callable[[RewardContext], float]
 RewardFactory = Callable[[Mapping[str, Any]], RewardFn]
+
+
+def reset_reward(fn: RewardFn) -> None:
+    """Call ``fn.reset()`` if the reward function is stateful.
+
+    Stateful formulas (e.g. floor-novelty) need to clear per-episode
+    bookkeeping on reset. Stateless formulas don't define ``reset``
+    and this is a no-op for them. Callers should invoke this on every
+    episode boundary.
+    """
+    reset = getattr(fn, "reset", None)
+    if callable(reset):
+        reset()
 
 
 _REGISTRY: Dict[str, RewardFactory] = {}
@@ -249,6 +266,67 @@ def _score_delta_survival(params: Mapping[str, Any]) -> RewardFn:
     return fn
 
 
+@register("fruit_bonus_floor_novelty")
+def _fruit_bonus_floor_novelty(params: Mapping[str, Any]) -> RewardFn:
+    """Fruit reward plus a one-shot bonus per new floor visited per episode.
+
+    Yeti's map has four floors, each 32 px tall and anchored at the
+    bottom of the screen (y=182 is floor 1, y=150 floor 2, etc.). This
+    formula pays a small bonus the first time the agent enters a floor
+    it hasn't visited yet this episode.
+
+    Motivation: approach 14 showed the per-segment CP2->CP3 policy
+    almost never climbs past its starting floor (3-4% climb rate
+    regardless of starting floor). Plain ``fruit_bonus`` only pays when
+    the fruit is in reach; there's no gradient pointing toward
+    climbing. The floor-novelty term provides a one-shot exploration
+    incentive without rewarding in-place jumping (it fires on arrival
+    at a new floor, not per-frame while standing there).
+
+    One-shot per floor per episode keeps the signal from dominating
+    fruit reward: visiting all 4 floors pays ``4 * novelty_bonus``
+    (default = 4.0) vs a full-level fruit run of ~10-40 from
+    ``fruit_bonus``.
+
+    Uses internal per-episode state (``visited_floors``). Callers MUST
+    invoke :func:`reset_reward` at episode boundaries — otherwise the
+    visited set carries over between episodes.
+
+    Parameters
+    ----------
+    scale : float, default 0.01
+        Multiplier for the fruit term (same as ``fruit_bonus.scale``).
+    novelty_bonus : float, default 1.0
+        Reward paid on first visit to each new floor.
+    """
+    scale = float(params.get("scale", 0.01))
+    novelty_bonus = float(params.get("novelty_bonus", 1.0))
+
+    class _FloorNoveltyReward:
+        def __init__(self) -> None:
+            self.visited: set[int] = set()
+
+        def reset(self) -> None:
+            self.visited = set()
+
+        def __call__(self, ctx: RewardContext) -> float:
+            reward = 0.0
+            if ctx.curr_fruits < ctx.prev_fruits:
+                collected = ctx.prev_fruits - ctx.curr_fruits
+                reward += collected * ctx.curr_bonus * scale
+            # Floor bucket: 32px tall, anchored at bottom of 200px screen.
+            # bucket 0 ~ floor 1 (spawn), bucket 1 ~ floor 2, etc.
+            # Clamp bucket >= 4 (the death-animation region) so it
+            # doesn't count as a "new floor visit".
+            floor = (200 - int(ctx.curr_y)) // 32
+            if 0 <= floor <= 3 and floor not in self.visited:
+                self.visited.add(floor)
+                reward += novelty_bonus
+            return reward
+
+    return _FloorNoveltyReward()
+
+
 __all__ = [
     "RewardContext",
     "RewardFn",
@@ -256,4 +334,5 @@ __all__ = [
     "available",
     "create",
     "register",
+    "reset_reward",
 ]

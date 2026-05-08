@@ -1,0 +1,51 @@
+# segment_2to3 v5 — floor-novelty reward shaping.
+#
+# Addresses the approach 14.1 finding: the per-segment CP2->CP3
+# policy only climbs reliably from the spawn floor. It's the same
+# deficit the CP1->CP2 policy shows out of distribution (climbs 27%
+# from spawn, 2.6% from floor 2, 0.2% from floor 3). fruit_bonus
+# alone doesn't pay anything for climbing; the reward gradient only
+# shows up when the fruit is in reach.
+#
+# This run swaps in ``fruit_bonus_floor_novelty``: same fruit term
+# as v3, plus a one-shot +1.0 reward the first time the agent enters
+# each new floor this episode. Per-episode, not per-frame -> no
+# in-place bouncing payoff. All four floors pays 4.0 cumulatively,
+# vs fruit_bonus's per-level ~10-40, so the signal nudges toward
+# climbing without swamping the fruit reward.
+#
+# Same 5M steps as v3 for the first cut so we can compare directly.
+# If it helps on the same budget, we've validated the shaping; if
+# it needs more time we can queue a 20M version.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_2to3_v5
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_floor_novelty
+  params:
+    scale: 0.01
+    novelty_bonus: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints_v2.pkl
+  segment: 2

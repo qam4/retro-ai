@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from retro_ai.training import rewards
 from retro_ai.training.rewards import RewardContext, available, create, register
 
@@ -142,3 +141,78 @@ def test_score_delta_survival_custom_params():
     )
     ctx = _ctx(prev_score=0, curr_score=7)
     assert fn(ctx) == pytest.approx(7.0)
+
+
+# ---------------------------------------------------------------------------
+# fruit_bonus_floor_novelty
+# ---------------------------------------------------------------------------
+
+
+def test_floor_novelty_pays_on_first_visit():
+    """One-shot bonus the first time a new floor is entered."""
+    fn = create("fruit_bonus_floor_novelty", {"scale": 0.01, "novelty_bonus": 1.0})
+    # y=182 -> floor 0 (spawn). First visit pays.
+    r = fn(_ctx(curr_y=182))
+    assert r == pytest.approx(1.0)
+
+
+def test_floor_novelty_no_reward_on_same_floor():
+    fn = create("fruit_bonus_floor_novelty", {"scale": 0.01, "novelty_bonus": 1.0})
+    fn(_ctx(curr_y=182))  # visit floor 0
+    r = fn(_ctx(curr_y=180))  # still floor 0
+    assert r == 0.0
+
+
+def test_floor_novelty_pays_per_new_floor():
+    fn = create("fruit_bonus_floor_novelty", {"scale": 0.01, "novelty_bonus": 2.0})
+    # Visit four different floors; each pays once.
+    r0 = fn(_ctx(curr_y=182))  # floor 0
+    r1 = fn(_ctx(curr_y=150))  # floor 1
+    r2 = fn(_ctx(curr_y=118))  # floor 2
+    r3 = fn(_ctx(curr_y=86))  # floor 3
+    # Re-visit should pay nothing.
+    r_repeat = fn(_ctx(curr_y=150))
+    assert (r0, r1, r2, r3, r_repeat) == (2.0, 2.0, 2.0, 2.0, 0.0)
+
+
+def test_floor_novelty_ignores_death_animation_region():
+    """Floor bucket >= 4 (y < 72) is the death-animation region;
+    don't count that as a legitimate "new floor" visit."""
+    fn = create("fruit_bonus_floor_novelty", {"scale": 0.01, "novelty_bonus": 1.0})
+    r = fn(_ctx(curr_y=24))  # floor bucket 5 (clamped away)
+    assert r == 0.0
+    r = fn(_ctx(curr_y=16))  # death animation
+    assert r == 0.0
+
+
+def test_floor_novelty_stacks_with_fruit_bonus():
+    """When a fruit is collected AND a new floor is visited in the same
+    step, both terms apply."""
+    fn = create("fruit_bonus_floor_novelty", {"scale": 0.01, "novelty_bonus": 1.0})
+    r = fn(_ctx(curr_y=118, prev_fruits=3, curr_fruits=2, curr_bonus=800))
+    # fruit term = 1 fruit * 800 * 0.01 = 8.0, novelty = 1.0 -> 9.0
+    assert r == pytest.approx(9.0)
+
+
+def test_floor_novelty_reset_clears_visited_floors():
+    """reset_reward must clear per-episode state, else novelty fires
+    on only the first episode's floors."""
+    fn = create("fruit_bonus_floor_novelty", {"scale": 0.01, "novelty_bonus": 1.0})
+    r = fn(_ctx(curr_y=182))
+    assert r == 1.0  # first visit
+    r = fn(_ctx(curr_y=182))
+    assert r == 0.0  # already visited
+    rewards.reset_reward(fn)
+    r = fn(_ctx(curr_y=182))
+    assert r == 1.0  # reset -> fresh visit
+
+
+def test_reset_reward_is_noop_for_stateless_rewards():
+    """Existing reward formulas don't define reset() — reset_reward
+    must not crash on them."""
+    fn = create("fruit_bonus", {"scale": 0.01})
+    rewards.reset_reward(fn)  # should not raise
+
+
+def test_floor_novelty_registered():
+    assert "fruit_bonus_floor_novelty" in available()
