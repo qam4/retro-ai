@@ -1,0 +1,43 @@
+# segment_2to3 v4 — longer training with bug fixes in place.
+#
+# Same config as v3 (fresh policy, re-validated v9 CP2 seeds,
+# fruit_bonus, fixed C++ trackers) but 20M steps instead of 5M to
+# probe the "maybe PPO just needs more time to stumble onto climbing
+# past the first floor" hypothesis from approach 14.
+#
+# v5 of the shared-policy curriculum reached CP3 twice and CP4 once
+# over ~20M steps (approach 8.5), so the signal is there but very
+# sparse. If 20M of per-segment doesn't lift v3's 3.88% meaningfully,
+# we've empirically ruled out the "just run longer" option and the
+# next step is reward shaping (approach 14.1 candidate #2).
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/segment_2to3_v4
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus
+  params:
+    scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints_v2.pkl
+  segment: 2
