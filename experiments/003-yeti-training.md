@@ -736,3 +736,123 @@ us. The concrete experiments left open:
    short-dies from stale trackers AND fewer bad seeds).
 3. **Run `segment_2to3` from scratch** with the re-validated seeds,
    this time with neither bug obscuring the signal.
+
+### 14. segment_2to3_v3 results — the policy doesn't climb  *(verified)*
+
+First clean CP2→CP3 run with both the C++ `load_state` bug and the
+validator/C++ drift fixed (approach 13). Re-ran segment_2to3 from
+scratch with:
+
+- 48 re-validated CP2 seeds from v9 (down from 81 unfiltered), all
+  video-confirmed playable under noop.
+- 5M steps, 8 envs, `fruit_bonus` reward, `segment_1to2_v4`
+  hyperparameters.
+- Fresh PPO policy, no warm-start.
+
+Config: `experiments/003-yeti/configs/segment_2to3_v3.yaml`. Run
+directory: `output/mo5/yeti/training/segment_2to3_v3`. Commit
+`a1bc35e`.
+
+**Headline result: 3.88% CP2→CP3 over the whole run, 3.30% in the
+last 20%.** Effectively the same as prior attempts (v1 ≈ v2 ≈ 3.7%).
+The two fixes in approach 13 were real but did not move the needle
+on this segment. The wall is in the learning problem, not in our
+tooling.
+
+Per-collected-set breakdown (last 20%, pure seeds only):
+
+| fruits already collected | success rate  | n     |
+|:------------------------:|:-------------:|:-----:|
+| {1, 2}                   | 2.8%          | 3527  |
+| {1, 3}                   | 2.3%          | 1906  |
+| {2, 3}                   | 5.9%          | 1324  |
+| {2, 4}                   | 0.0%          | 180   |
+| {3, 4}                   | 4.0%          | 1721  |
+| {1, 2, 4}                | 100%          | 181   |
+| {2, 3, 4}                | 100%          | 192   |
+
+The two 100% rows are the 2 "drift seeds" that pick up a 3rd fruit
+in the 5-frame settle — they aren't real CP2 starts. Real CP2
+subsets all hover 0-6%; no "easy" subset and no obvious "hard"
+subset dominating the zero.
+
+**Where the policy actually goes.** For each pure-CP2 episode,
+compute the starting game-floor (from start_y) and the final
+game-floor (from final_y, with y ≥ 30 to exclude the y-up-off-screen
+death-animation frames), then look at `delta_floor`:
+
+| delta_floor | n     |
+|:-----------:|:-----:|
+| -2          | 166   |
+| -1          | 1611  |
+| 0           | 6526  |
+| +1          | 351   |
+| +2          | 4     |
+
+**75% of episodes die on the same floor they started.** 21% fall to
+a lower floor. Only **4.1% ever climb a floor during the episode.**
+Per start floor:
+
+| start_floor (game) | % up  | % down | % same | CP3 rate |
+|:------------------:|:-----:|:------:|:------:|:--------:|
+| 1 (spawn)          | 9.6%  |  0.0%  | 90.4%  |  1.43%   |
+| 2                  | 3.1%  | 40.7%  | 56.3%  |  2.60%   |
+| 3                  | 0.5%  | 14.9%  | 84.6%  |  0.00%   |
+| 4 (top)            | 0.7%  | 25.1%  | 74.2%  | 12.83%   |
+
+Reading across:
+- From spawn the agent rarely climbs (9.6%). When it does, it sometimes
+  hits CP3, but 1.4% is barely above chance.
+- From floor 2, it mostly falls off (40.7%) or dies in place (56%).
+  Climbing to floor 3 almost never happens.
+- From floor 3 it never climbs to floor 4. It either stays (85%) or
+  falls (15%).
+- **From floor 4 — the top — it hits CP3 12.8% of the time**, and that
+  success is mostly "fall onto a remaining fruit", since only 0.7%
+  move up (there's nowhere to go up to).
+
+Anecdotal confirmation from 12 sample rollouts
+(`scripts/rollout_policy_from_seeds.py` against v3's final_model):
+policy mostly jumps left/right in place, eventually falls to a lower
+floor or walks onto a snowball. It doesn't seek ladders. Same pattern
+from diverse seed positions.
+
+**What this rules in/out.**
+
+- The per-segment pipeline itself is fine. Seeds load correctly, the
+  agent gets meaningful reward for the 3 fruits it does collect, and
+  the old flakiness (stale stall counter → spurious short episodes)
+  is gone.
+- The task is what's hard: from any CP2 state, the next fruit is
+  usually a floor away and behind a ladder. PPO with `fruit_bonus`
+  doesn't have an exploration signal that biases toward climbing —
+  from the agent's view "go up a ladder" looks like "walk to a
+  specific spot, press up, wait 30 frames, repeat". No reward
+  gradient points there until the fruit is in reach.
+- "Snowball jumping" that we previously worried about isn't even on
+  the table yet — the policy isn't jumping over snowballs because
+  it's not trying to cross them. It's standing around on its
+  starting floor until a snowball finds it.
+
+**Next lever.** Either much longer training (the v5 shared-policy
+chain reached CP3 twice and CP4 once in ~20M combined steps, so the
+signal is there but sparse), or a new mechanism that pushes the
+policy to climb. Options on the table, in increasing invasiveness:
+
+1. **Train longer.** Rerun segment_2to3_v3 for 20-40M steps. Cheap
+   to set up; expensive in wall time. If CP3 rate creeps up
+   monotonically, shaping isn't needed.
+2. **Per-episode floor-novelty bonus.** Give +1 the first time the
+   agent reaches a y-bucket it hasn't been to this episode. Less
+   noisy than the old per-frame `delta(y)` reward (which caused
+   jumping oscillation). Encourages "touch a new floor", doesn't
+   reward repeated bouncing in place.
+3. **Directional distance-to-remaining-fruit reward.** Read which
+   fruits remain, compute (dx, dy) to the nearest one, reward
+   reductions. Denser signal. Risk: could over-specialise or get
+   stuck at a wall.
+4. **Demonstrations / BC init.** Record expert play (or a scripted
+   climbing policy), behaviour-clone into the PPO init. Bypasses
+   the exploration problem for the cost of building a teacher.
+
+Deciding which to try next.

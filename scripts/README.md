@@ -73,6 +73,9 @@ Post-training inspection of a model or run.
 - `smoke_test_eval.py` — load model, 20 steps, verify rewards flow.
 - `analyze_agent.py` — trajectory plot, heatmap, action pie,
   reward timeline for a trained Yeti model.
+- `rollout_policy_from_seeds.py` — roll out a trained SB3 model from
+  a list of specific CP seeds, write one real-time MP4 per episode.
+  Useful for eyeballing what a per-segment policy actually does.
 - `reward_monitor.py` — frame-by-frame reward-event log for a run
   (random/agent/scripted).
 - `print_episode_matrix.py` — start_level × reached_level transition
