@@ -918,3 +918,72 @@ onto this more precisely now:
    climb?" question. Risk: fruit 1/2 are on low floors; if any
    seed has those remaining, the gradient points DOWN, not up.
 4. **BC init.** Demonstrations teach the climbing skill directly.
+
+### 15. Floor-novelty reward — segment_2to3_v5  *(verified)*
+
+First test of the approach-14 candidate #2: one-shot +1.0 reward the
+first time the agent enters each new floor per episode. Same
+everything else as v3 (5M steps, 48 re-validated CP2 seeds). Reward:
+``fruit_bonus_floor_novelty`` (registered in
+``python/retro_ai/training/rewards.py``, commit `640fa4b`).
+
+**Result: CP2→CP3 rate = 8.95% last-20%, vs v3's 3.30%.** Roughly 2.7×.
+
+Per start_floor (last 20%, pure CP2 seeds):
+
+| start_floor | v3 CP3 rate | v5 CP3 rate | v5 up % | v5 down % |
+|:-----------:|:----------:|:----------:|:------:|:-------:|
+| 0 (spawn)   |  1.43%     |  1.91%     |  8.2%  |  0.0%   |
+| 1 (floor 2) |  2.60%     | **14.09%** |  3.7%  | 22.4%   |
+| 2 (floor 3) |  0.00%     |  0.00%     |  1.0%  | 19.8%   |
+| 3 (floor 4) | 12.83%     | **24.46%** |  1.4%  | 36.3%   |
+
+Where v5 pulls ahead:
+- **From game-floor-2** (start_floor=1): 14.1%, up from 2.6%. The
+  biggest shift.
+- **From game-floor-4** (start_floor=3): 24.5%, up from 12.8%.
+
+Where v5 doesn't help:
+- Spawn is unchanged (1.9% vs 1.4%). The bottleneck isn't "encourage
+  the agent to leave spawn".
+- game-floor-3 remains 0%. The hardest starting position.
+
+**But climb rate didn't change.** v3 and v5 both show 4.1%
+overall-climb. Novelty didn't make the agent learn to climb more
+often. What it appears to have done instead: make *descents* more
+efficient. Compare v3 vs v5 down-rates from start_floor=1 (40.7% →
+22.4%) and same-floor-stays (56.3% → 73.9%): v5 falls off floor 2
+less often. From start_floor=3, v5 descends *more* (25.1% → 36.3%)
+— plausibly controlled descent to reach a remaining fruit on a
+lower floor.
+
+The reward doesn't distinguish up from down ("any new floor this
+episode pays once"), so the agent uses it for whichever direction
+the remaining fruit is.
+
+**So the novelty reward is doing some work, but not the work we
+predicted.** It's not making the agent better at climbing; it's
+making the agent better at going wherever the fruit happens to be.
+That's useful, especially since v2-of-CP2 seeds have fruit 1 or 2
+remaining and need descent.
+
+Config: ``experiments/003-yeti/configs/segment_2to3_v5.yaml``.
+Output: ``output/mo5/yeti/training/segment_2to3_v5``.
+
+### 15.1. Open question and next probe
+
+The lever that moves the needle on spawn (start_floor=0) or
+floor-3 (start_floor=2) is still missing. Those are the two
+start floors where an agent must actually climb past the first
+few floors to reach a remaining fruit. v5 doesn't solve them.
+
+Approach 14.1's option 3 (distance-to-remaining-fruit) would
+target those cases specifically. Risk that we already named:
+if the remaining fruit is on a lower floor, the gradient points
+down, which we don't want. But we could gate it: reward only
+reductions in *upward* vertical distance when the remaining fruit
+is above the agent, else pay nothing. Worth sketching.
+
+v4 (20M, no shaping) is still running at ~49% complete. If that
+finishes near v3's 3-4% too, the "just train longer" option is
+empirically dead and reward shaping is our only remaining lever.
