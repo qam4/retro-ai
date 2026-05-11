@@ -63,7 +63,9 @@ class RewardContext:
     append-only.
 
     ``curr_y`` defaults to 0 when the caller has no positional reading
-    to supply — rewards that don't read it are unaffected.
+    to supply — rewards that don't read it are unaffected. Same for
+    ``fruits_present`` (default empty tuple = "unknown, behave as if
+    no per-fruit signal is available").
     """
 
     prev_fruits: int
@@ -76,6 +78,10 @@ class RewardContext:
     curr_lives: int
     step_count: int
     curr_y: int = 0
+    # Per-fruit presence at this step, tuple of bools for fruits 1..4.
+    # Empty tuple means "not provided". When provided, ``True`` means
+    # the fruit is still on the map, ``False`` means collected.
+    fruits_present: tuple = ()
 
 
 RewardFn = Callable[[RewardContext], float]
@@ -325,6 +331,111 @@ def _fruit_bonus_floor_novelty(params: Mapping[str, Any]) -> RewardFn:
             return reward
 
     return _FloorNoveltyReward()
+
+
+# Fruit (x, y) pixel-centre positions, measured from a CP0 state.
+# Sprite is 16x16; these are the centres so distance math is
+# consistent with the agent centre (ram_x*4 + 8, ram_y + 8).
+# See debug/cp0_fruits_annotated.png for the verification overlay.
+FRUIT_CENTRES_PX: dict[int, tuple[int, int]] = {
+    1: (184, 184),
+    2: (80, 150),
+    3: (144, 120),
+    4: (272, 88),
+}
+
+
+@register("fruit_bonus_climb_novelty")
+def _fruit_bonus_climb_novelty(params: Mapping[str, Any]) -> RewardFn:
+    """Fruit reward plus a one-shot bonus per floor climbed toward
+    a remaining fruit that sits above the agent.
+
+    Motivation: approach 15 showed ``fruit_bonus_floor_novelty`` helped
+    descent but not climbing — agents starting at the spawn floor or
+    game-floor-3 still failed to climb to a remaining fruit above.
+    This variant gates the novelty bonus three ways:
+
+    1. Direction: only awarded on a floor HIGHER than any floor
+       previously visited this episode. Descending into a new-to-the-
+       episode lower floor does not pay.
+    2. Target: only awarded if at least one *remaining* fruit sits
+       strictly above the agent's current pixel y. If every remaining
+       fruit is on or below the agent's floor, climbing is away from
+       all targets and shouldn't be pushed.
+    3. One-shot: once credited, re-visits to the same or lower floor
+       don't repay; only crossing to an even higher new floor pays
+       again.
+
+    This avoids past failures:
+    - Plain delta(y): rewards jumping-in-place, wins by oscillation.
+    - Milestone height thresholds: rewards repeat crossings at the
+      same boundary.
+    - Undirected novelty (approach 15): pays equally for up and down
+      travel, helps descent but not climbing.
+
+    Needs per-fruit presence via ``ctx.fruits_present``. If that's
+    empty (unknown), falls back to the coarse "any remaining fruit
+    means fruit could be above" signal — less safe but better than
+    nothing.
+
+    Parameters
+    ----------
+    scale : float, default 0.01
+        Per-fruit multiplier (matches ``fruit_bonus.scale``).
+    climb_bonus : float, default 2.0
+        Reward on first arrival at each new HIGHER floor, when a
+        remaining fruit is above. Spawn->top climb pays 3 * 2.0 = 6.0.
+    """
+    scale = float(params.get("scale", 0.01))
+    climb_bonus = float(params.get("climb_bonus", 2.0))
+
+    class _ClimbNoveltyReward:
+        def __init__(self) -> None:
+            # Highest floor-bucket visited this episode. Bucket 0 =
+            # bottom of screen (spawn), 3 = top. "Climbing" means
+            # moving to a higher bucket.
+            self.best_floor: int | None = None
+
+        def reset(self) -> None:
+            self.best_floor = None
+
+        @staticmethod
+        def _fruit_above(ctx: RewardContext) -> bool:
+            """True if at least one remaining fruit is strictly above
+            the agent's current pixel y."""
+            agent_pix_y = int(ctx.curr_y) + 8  # sprite is 16x16, use centre
+            if ctx.fruits_present:
+                for i, present in enumerate(ctx.fruits_present, start=1):
+                    if not present:
+                        continue
+                    fy = FRUIT_CENTRES_PX.get(i, (0, 0))[1]
+                    if fy < agent_pix_y:
+                        return True
+                return False
+            # Fallback: no per-fruit info — if any fruit remains, pay.
+            return ctx.curr_fruits > 0
+
+        def __call__(self, ctx: RewardContext) -> float:
+            reward = 0.0
+            if ctx.curr_fruits < ctx.prev_fruits:
+                collected = ctx.prev_fruits - ctx.curr_fruits
+                reward += collected * ctx.curr_bonus * scale
+
+            floor = (200 - int(ctx.curr_y)) // 32
+            if not (0 <= floor <= 3):
+                return reward
+            if self.best_floor is None:
+                self.best_floor = floor
+                return reward
+            # Higher bucket number = higher on screen = climbing.
+            if floor <= self.best_floor:
+                return reward
+            self.best_floor = floor
+            if self._fruit_above(ctx):
+                reward += climb_bonus
+            return reward
+
+    return _ClimbNoveltyReward()
 
 
 __all__ = [

@@ -42,6 +42,9 @@ from stable_baselines3.common.monitor import Monitor
 
 # Yeti-specific RAM addresses.
 FRUITS_ADDR = 11055
+# Per-fruit presence bytes. Non-zero = fruit still on the map; zero =
+# collected. Fruit numbering matches the in-game floor order.
+FRUIT_PRESENCE_ADDRS = {1: 0x2FAD, 2: 0x2F00, 3: 0x2E68, 4: 0x2DD8}
 LIVES_ADDR = 11095
 BONUS_HI = 11010
 BONUS_LO = 11011
@@ -199,6 +202,9 @@ class SegmentEnv(gym.Env):
         bonus = self._read_bonus()
         score = self._read_score()
         y = self.iface.read_ram_byte(Y_POS)
+        fruits_present = tuple(
+            self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0 for i in (1, 2, 3, 4)
+        )
 
         # Named reward formula — exact behavior controlled by run config.
         ctx = RewardContext(
@@ -212,6 +218,7 @@ class SegmentEnv(gym.Env):
             curr_lives=lives,
             step_count=self._step_count,
             curr_y=y,
+            fruits_present=fruits_present,
         )
         reward = float(self._reward_fn(ctx))
 

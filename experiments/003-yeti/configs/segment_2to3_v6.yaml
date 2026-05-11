@@ -1,0 +1,52 @@
+# segment_2to3 v6 — climb-novelty reward shaping.
+#
+# Approach 15 showed plain floor-novelty (v5) helped descent but not
+# climbing — CP3 rate from start_floor=0 (spawn) stayed at ~2%, and
+# start_floor=2 (game floor 3) at 0%. This version uses
+# ``fruit_bonus_climb_novelty``: same fruit term, plus a one-shot
+# +climb_bonus when the agent reaches a HIGHER floor than any
+# previously visited this episode, but only if a remaining fruit is
+# above the agent in pixel y.
+#
+# Key differences from v5 (novelty):
+#   - Direction-gated: only higher floors than seen this episode.
+#     Descents pay nothing.
+#   - Target-gated: only if a remaining fruit is actually above.
+#     Prevents pushing the agent away from a lower target.
+#
+# Fruit pixel-centre positions measured from a CP0 screenshot with
+# grid overlay (debug/cp0_fruits_annotated.png).
+#
+# Same 5M steps as v3/v5 so the three-way comparison is clean.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_2to3_v6
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_climb_novelty
+  params:
+    scale: 0.01
+    climb_bonus: 2.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints_v2.pkl
+  segment: 2

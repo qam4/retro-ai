@@ -216,3 +216,133 @@ def test_reset_reward_is_noop_for_stateless_rewards():
 
 def test_floor_novelty_registered():
     assert "fruit_bonus_floor_novelty" in available()
+
+
+# ---------------------------------------------------------------------------
+# fruit_bonus_climb_novelty
+# ---------------------------------------------------------------------------
+
+
+def _ctx_cy(y, fruits_rem=2, fp=None, collected_this_step=False, curr_bonus=800):
+    """Shortcut: RewardContext with curr_y and fruits_present set."""
+    prev_fruits = fruits_rem + (1 if collected_this_step else 0)
+    return _ctx(
+        prev_fruits=prev_fruits,
+        curr_fruits=fruits_rem,
+        curr_bonus=curr_bonus,
+        prev_bonus=curr_bonus,
+        curr_y=y,
+        fruits_present=(
+            fp if fp is not None else (True,) * fruits_rem + (False,) * (4 - fruits_rem)
+        ),
+    )
+
+
+def test_climb_novelty_pays_on_first_climb():
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    # Start at spawn (floor 0, y=182), fruit 3 still present (above).
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=(False, False, True, True)))
+    # Climb to floor 1 (y=150) — first climb, fruit 3 above us.
+    r = fn(_ctx_cy(y=150, fruits_rem=2, fp=(False, False, True, True)))
+    assert r == pytest.approx(2.0)
+
+
+def test_climb_novelty_one_shot_per_floor():
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=(False, False, True, True)))
+    r1 = fn(_ctx_cy(y=150, fruits_rem=2, fp=(False, False, True, True)))
+    # Re-visit floor 1 after going back up doesn't pay again.
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=(False, False, True, True)))
+    r2 = fn(_ctx_cy(y=150, fruits_rem=2, fp=(False, False, True, True)))
+    assert r1 == pytest.approx(2.0)
+    assert r2 == 0.0
+
+
+def test_climb_novelty_pays_per_floor_climbed():
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    fp = (False, False, True, True)  # fruits 3 and 4 remain (above spawn)
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=fp))  # init at floor 0
+    r1 = fn(_ctx_cy(y=150, fruits_rem=2, fp=fp))  # floor 1
+    r2 = fn(_ctx_cy(y=118, fruits_rem=2, fp=fp))  # floor 2
+    r3 = fn(_ctx_cy(y=86, fruits_rem=2, fp=fp))  # floor 3
+    assert (r1, r2, r3) == (2.0, 2.0, 2.0)
+
+
+def test_climb_novelty_descent_pays_zero():
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    fp = (True, True, False, False)
+    fn(_ctx_cy(y=86, fruits_rem=2, fp=fp))  # init at top
+    r = fn(_ctx_cy(y=150, fruits_rem=2, fp=fp))  # descend to floor 1
+    assert r == 0.0
+
+
+def test_climb_novelty_no_fruit_above_no_reward():
+    """Remaining fruit is below the agent — don't reward climbing."""
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    # Agent on floor 2 (y=118), only fruit 1 remains (y=184, below).
+    fp = (True, False, False, False)
+    fn(_ctx_cy(y=118, fruits_rem=1, fp=fp))
+    r = fn(_ctx_cy(y=86, fruits_rem=1, fp=fp))  # climb to top, but target is BELOW
+    assert r == 0.0
+
+
+def test_climb_novelty_jumping_in_place_no_reward():
+    """Brief upward bounce without crossing a floor boundary pays zero."""
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    fp = (False, False, True, True)
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=fp))
+    # Jump +10px (to y=172) then fall back.
+    r1 = fn(_ctx_cy(y=172, fruits_rem=2, fp=fp))
+    r2 = fn(_ctx_cy(y=182, fruits_rem=2, fp=fp))
+    # Both still floor 0 (bucket = (200-172)//32 = 0), no crossing.
+    assert r1 == 0.0
+    assert r2 == 0.0
+
+
+def test_climb_novelty_stacks_with_fruit_term():
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    fp = (False, False, True, True)
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=fp))  # init
+    # Climb to floor 2 AND collect a fruit (curr_fruits < prev_fruits).
+    ctx = _ctx(
+        prev_fruits=2,
+        curr_fruits=1,
+        curr_bonus=800,
+        prev_bonus=800,
+        curr_y=118,
+        fruits_present=(False, False, True, True),
+    )
+    # Skips the intermediate floor, but one floor transition still pays.
+    r = fn(ctx)
+    # fruit term: 1 * 800 * 0.01 = 8.0; climb: 2.0 -> 10.0
+    assert r == pytest.approx(10.0)
+
+
+def test_climb_novelty_reset_clears_best_floor():
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    fp = (False, False, True, True)
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=fp))  # init on floor 0
+    r = fn(_ctx_cy(y=150, fruits_rem=2, fp=fp))  # climb -> 2.0
+    assert r == 2.0
+    # Without reset: returning to floor 0 and climbing again pays nothing.
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=fp))
+    r = fn(_ctx_cy(y=150, fruits_rem=2, fp=fp))
+    assert r == 0.0
+    # After reset: best_floor is cleared, climbing pays again.
+    rewards.reset_reward(fn)
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=fp))  # re-initialise
+    r = fn(_ctx_cy(y=150, fruits_rem=2, fp=fp))
+    assert r == 2.0
+
+
+def test_climb_novelty_without_fruits_present_falls_back_to_count():
+    """When fruits_present is unknown, fall back to 'any fruit => reward climbs'."""
+    fn = create("fruit_bonus_climb_novelty", {"scale": 0.01, "climb_bonus": 2.0})
+    # No fruits_present provided (empty tuple default).
+    fn(_ctx_cy(y=182, fruits_rem=2, fp=()))
+    r = fn(_ctx_cy(y=150, fruits_rem=2, fp=()))
+    assert r == 2.0
+
+
+def test_climb_novelty_registered():
+    assert "fruit_bonus_climb_novelty" in available()
