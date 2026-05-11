@@ -987,3 +987,34 @@ is above the agent, else pay nothing. Worth sketching.
 v4 (20M, no shaping) is still running at ~49% complete. If that
 finishes near v3's 3-4% too, the "just train longer" option is
 empirically dead and reward shaping is our only remaining lever.
+
+### 15.2. 20M without shaping — segment_2to3_v4  *(verified)*
+
+Approach 14's option 1 ("just train longer") tested.
+
+segment_2to3_v4: same as v3 (fresh policy, re-validated v9 CP2 seeds,
+bug fixes in place) but 20M steps instead of 5M. Same config, same
+seed, same everything else.
+
+**Result: CP2→CP3 = 4.21% last-20%, up from v3's 3.30% but still
+below v5's 8.95%.** And the per-floor breakdown is worse than v3 on
+climbing:
+
+| start_floor | v3 (5M)   | v4 (20M)  | v5 (5M, novelty) |
+|:-----------:|:--------:|:--------:|:---------------:|
+| 0 (spawn)   |  1.43%   |  1.07%   |   1.91%         |
+| 1 (floor 2) |  2.60%   |  6.98%   |  14.09%         |
+| 2 (floor 3) |  0.00%   |  0.00%   |   0.00%         |
+| 3 (floor 4) | 12.83%   | 10.82%   |  24.46%         |
+
+Overall climb rate: v3 = 4.1%, **v4 = 1.2%**. Training longer actually
+made the agent climb *less*, not more. 4× the training reinforced the
+local optimum harder.
+
+**So training longer without shaping is empirically dead.** The
+policy converges toward "stay-in-place or fall-and-die" as it has
+more time to sharpen the reward basin it already occupies.
+
+segment_2to3_v6 (climb-directional shaping, approach 15 candidate)
+is running. If it does materially better than v5 on spawn and
+game-floor-3 starts, we have the mechanism that breaks the wall.
