@@ -1018,3 +1018,51 @@ more time to sharpen the reward basin it already occupies.
 segment_2to3_v6 (climb-directional shaping, approach 15 candidate)
 is running. If it does materially better than v5 on spawn and
 game-floor-3 starts, we have the mechanism that breaks the wall.
+
+### 16. Climb-directional novelty — segment_2to3_v6  *(verified)*
+
+Approach 15's floor-novelty helped descent but not climbing.
+v6 (`fruit_bonus_climb_novelty`) is the directional variant: same
+fruit term, plus a one-shot +2.0 when the agent reaches a floor
+HIGHER than any seen this episode, and only if a remaining fruit's
+pixel-y sits strictly above the agent's pixel-y. Direction-gated +
+target-gated.
+
+Measured fruit pixel centres (from a CP0 screenshot with grid +
+user verification, commits `e85ba92` / debug/cp0_fruits_annotated.png):
+
+  fruit 1: ( 184, 184 )  floor 1 (spawn)
+  fruit 2: (  80, 150 )  floor 2
+  fruit 3: ( 144, 120 )  floor 3
+  fruit 4: ( 272,  88 )  floor 4 (top)
+
+**Result: CP2→CP3 = 14.85% (last 20% on pure seeds).**
+
+Four-way comparison (same 5M budget, same seeds; v4 is the 20M
+outlier):
+
+| Run  | Reward               | CP3 rate | Climb % | sf=0   | sf=1   | sf=2   | sf=3    |
+|:----:|:--------------------:|:--------:|:-------:|:------:|:------:|:------:|:-------:|
+| v3   | fruit_bonus          |  3.30%   |  4.1%   |  1.43% |  2.60% | 0.00%  | 12.83%  |
+| v4   | fruit_bonus (20M)    |  4.21%   |  1.2%   |  1.07% |  6.98% | 0.00%  | 10.82%  |
+| v5   | floor_novelty        |  8.95%   |  4.1%   |  1.91% | 14.09% | 0.00%  | 24.46%  |
+| v6   | climb_novelty        | **14.85%**| **6.4%**| **4.26%**| **26.46%** | 0.05% | **31.01%** |
+
+Reading:
+- v6 beats v5 on every starting floor, and almost triples v3.
+- Climb rate finally moved: 6.4% vs 4.1% across v3/v5. The directional
+  gate + target check does what we predicted.
+- **Spawn starts (game floor 1) saw a real uplift**: 1.43% → 4.26%.
+  The agent is finally climbing from spawn when a fruit is above.
+- **Floor 2 starts jumped to 26%** — about 10× v3.
+- **Floor 3 starts remain ~0%.** From game-floor-3, the agent still
+  cannot reach whatever fruit remains. Likely because: (a) fruit 4 is
+  at x=272 on the right side of the top floor, but the ladder from
+  floor 3 to floor 4 is elsewhere; (b) the CP2 seeds on floor 3
+  usually have fruit 3 already collected, leaving fruit-from-other-
+  floor as the target, which needs both descent AND navigation.
+
+No sign of jump-farming despite the shaping. Training success curves
+are smooth and not dominated by the climb term.
+
+Config: `experiments/003-yeti/configs/segment_2to3_v6.yaml`.
