@@ -538,7 +538,8 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     os.makedirs(cfg.training.output, exist_ok=True)
 
-    reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
+    # Validate the reward name is registered (raises early if not).
+    create_reward(cfg.reward.name, cfg.reward.params)
 
     # Persist full, resolved config.
     manifest_extras = cfg.to_dict()
@@ -555,9 +556,15 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     def make_env(rank: int):
         def _init():
+            # Each env gets its own reward_fn instance to avoid the
+            # shared-state bug (approach 19/20): SB3 calls reset() on
+            # one env while another is mid-episode, and a shared
+            # stateful reward (e.g. floor_novelty / climb_novelty /
+            # path_progress) would leak resets.
+            env_reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
             env = CheckpointCurriculumEnv(
                 cfg=cfg,
-                reward_fn=reward_fn,
+                reward_fn=env_reward_fn,
                 env_id=rank,
                 episode_logger=episode_logger,
             )

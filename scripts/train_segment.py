@@ -106,6 +106,23 @@ class SegmentEnv(gym.Env):
         self.max_steps = cfg.env.max_steps
         self.stall_threshold = cfg.env.stall_threshold
         self._reward_fn = reward_fn
+        self._reward_name = cfg.reward.name
+        self._reward_params = dict(cfg.reward.params or {})
+
+        # Forensic reward tracer: dumps any episode whose total reward
+        # exceeds the analytical bound to a pickle, for offline
+        # inspection. Currently only meaningful for path_progress;
+        # other reward formulas have a no-op tracer.
+        self._tracer = None
+        if self._reward_name == "fruit_bonus_path_progress":
+            from retro_ai.training.reward_trace import EpisodeTracer
+            from retro_ai.training.yeti_map import build_navigation_map
+
+            self._nav = build_navigation_map()
+            self._tracer = EpisodeTracer(
+                env_id=env_id,
+                output_dir=os.path.join(cfg.training.output, "reward_traces"),
+            )
 
         # Per-episode state
         self._step_count = 0
@@ -191,6 +208,48 @@ class SegmentEnv(gym.Env):
         self._episode_reward = 0.0
         self._fruits_collected_this_ep = 0
         self._episode_id = _next_episode_id()
+
+        # Initialise reward tracer for this episode.
+        if self._tracer is not None:
+            from retro_ai.training.reward_trace import (
+                compute_path_progress_bound,
+            )
+
+            fp_init = tuple(
+                self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0
+                for i in (1, 2, 3, 4)
+            )
+            agent_pix_x = int(self._start_xy[0]) * 4 + 8
+            from retro_ai.training.yeti_map import agent_floor_from_pixel_y
+
+            agent_floor = agent_floor_from_pixel_y(int(self._start_xy[1]))
+            if agent_floor is None:
+                agent_floor = 1  # spawn fallback; bound will be loose
+            scale = float(self._reward_params.get("scale", 0.01))
+            fruit_scale = float(self._reward_params.get("fruit_scale", scale))
+            self._episode_bound = compute_path_progress_bound(
+                self._nav,
+                agent_pix_x,
+                agent_floor,
+                fp_init,
+                progress_scale=scale,
+                fruit_scale=fruit_scale,
+                initial_bonus=self._start_bonus,
+            )
+            self._tracer.reset(
+                meta={
+                    "env_id": self.env_id,
+                    "episode_id": self._episode_id,
+                    "start_state_hash": self._start_state_hash,
+                    "start_x": int(self._start_xy[0]),
+                    "start_y": int(self._start_xy[1]),
+                    "start_fruits": int(self._start_fruits),
+                    "start_bonus": int(self._start_bonus),
+                    "fruits_present_at_start": fp_init,
+                    "scale": scale,
+                    "fruit_scale": fruit_scale,
+                }
+            )
         return obs, {}
 
     def step(self, action):
@@ -256,6 +315,43 @@ class SegmentEnv(gym.Env):
             truncated = True
             if end_reason is None:
                 end_reason = "max_steps"
+
+        # Reward tracer: per-step record + bound check on episode end.
+        if self._tracer is not None:
+            from retro_ai.training.yeti_map import agent_floor_from_pixel_y
+
+            agent_floor = agent_floor_from_pixel_y(int(y))
+            # Snapshot reward state (e.g. best_d for path_progress).
+            reward_state = {}
+            if hasattr(self._reward_fn, "best_d"):
+                reward_state["best_d"] = dict(self._reward_fn.best_d)
+            if hasattr(self._reward_fn, "last_floor"):
+                reward_state["last_floor"] = self._reward_fn.last_floor
+            self._tracer.record_step(
+                step=self._step_count,
+                agent_x=x,
+                agent_y=y,
+                agent_floor=agent_floor,
+                fruits_present=fruits_present,
+                action=action,
+                reward=reward,
+                done=done,
+                truncated=truncated,
+                reward_state=reward_state,
+            )
+            if done or truncated:
+                dumped = self._tracer.finalize_and_maybe_dump(
+                    total_reward=self._episode_reward,
+                    bound=self._episode_bound,
+                )
+                if dumped:
+                    print(
+                        f"  [reward_trace] env={self.env_id} "
+                        f"ep={self._episode_id} "
+                        f"total={self._episode_reward:.2f} "
+                        f"bound={self._episode_bound:.2f} -> {dumped}",
+                        flush=True,
+                    )
 
         if done or truncated:
             self.episodes += 1
@@ -359,7 +455,8 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     os.makedirs(cfg.training.output, exist_ok=True)
 
-    reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
+    # Validate the reward name is registered (raises early if not).
+    create_reward(cfg.reward.name, cfg.reward.params)
 
     # Persist full, resolved config via the run manifest.
     manifest_extras = cfg.to_dict()
@@ -377,10 +474,16 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     def make_env(rank: int):
         def _init():
+            # Each env gets its OWN reward_fn instance. Sharing one
+            # across envs causes per-episode state (e.g. best_d in
+            # path_progress) to leak between envs, since SB3 calls
+            # reset() on one env while another env is mid-episode and
+            # the shared state gets cleared. See approach 19.
+            env_reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
             env = SegmentEnv(
                 cfg=cfg,
                 checkpoint_states=states,
-                reward_fn=reward_fn,
+                reward_fn=env_reward_fn,
                 env_id=rank,
                 episode_logger=episode_logger,
             )
