@@ -62,10 +62,10 @@ class RewardContext:
     removing fields would break existing formulas, so treat this as
     append-only.
 
-    ``curr_y`` defaults to 0 when the caller has no positional reading
-    to supply — rewards that don't read it are unaffected. Same for
-    ``fruits_present`` (default empty tuple = "unknown, behave as if
-    no per-fruit signal is available").
+    ``curr_y`` / ``curr_x`` default to 0 when the caller has no
+    positional reading to supply — rewards that don't read them are
+    unaffected. Same for ``fruits_present`` (default empty tuple =
+    "unknown, behave as if no per-fruit signal is available").
     """
 
     prev_fruits: int
@@ -78,6 +78,7 @@ class RewardContext:
     curr_lives: int
     step_count: int
     curr_y: int = 0
+    curr_x: int = 0
     # Per-fruit presence at this step, tuple of bools for fruits 1..4.
     # Empty tuple means "not provided". When provided, ``True`` means
     # the fruit is still on the map, ``False`` means collected.
@@ -436,6 +437,124 @@ def _fruit_bonus_climb_novelty(params: Mapping[str, Any]) -> RewardFn:
             return reward
 
     return _ClimbNoveltyReward()
+
+
+@register("fruit_bonus_path_progress")
+def _fruit_bonus_path_progress(params: Mapping[str, Any]) -> RewardFn:
+    """Fruit reward plus shortest-path progress toward any remaining fruit.
+
+    Uses the hand-coded Yeti navigation graph
+    (:mod:`retro_ai.training.yeti_map`) to compute path distance in
+    pixels along walkable floor segments and ladder climbs.
+
+    Per step, the reward:
+      1. Resolves the agent's current floor from pixel y (with
+         tolerance). Falls back to the last-known floor if the agent
+         is mid-jump; if unknown, skips the progress term.
+      2. For **every remaining fruit**, computes the shortest-path
+         distance from the agent through the graph.
+      3. If that distance is strictly smaller than the per-fruit best
+         seen this episode so far, pays ``(best - new) * scale`` and
+         updates best. A pickup clears that fruit's entry (it's
+         collected, no longer a target).
+      4. A fruit pickup also fires the usual fruit-bonus reward.
+
+    Tracking progress per-fruit rather than per-closest-only means
+    the agent gets shaping no matter which remaining fruit it decides
+    to head toward. The "best_d per fruit" bookkeeping still prevents
+    ratcheting / oscillation: once the agent has been within distance
+    D of fruit F, it can't re-earn reward for reaching distance D
+    again — only for getting strictly closer.
+
+    Parameters
+    ----------
+    scale : float, default 0.01
+        Per-pixel multiplier on path-distance progress. A full spawn
+        -> F4 route is 496 px; at scale=0.01 that pays 4.96 over the
+        entire climb, less than a single fruit pickup (~6-10) but
+        enough to hint direction.
+    fruit_scale : float, default 0.01
+        Multiplier for the fruit pickup term (matches fruit_bonus).
+
+    Notes
+    -----
+    - When there are no remaining fruits, the progress term is 0
+      (this reward doesn't shape for the princess yet).
+    - Jumping briefly changes the agent's y but pixel x is unchanged,
+      so path distance doesn't drop — zero reward for jumps.
+    - A ladder climb changes the floor, which drops path distance to
+      fruits on the new floor and beyond — so ladder travel pays.
+    """
+    fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
+    progress_scale = float(params.get("scale", 0.01))
+
+    from retro_ai.training.yeti_map import (
+        agent_floor_from_pixel_y,
+        build_navigation_map,
+    )
+
+    nav = build_navigation_map()
+
+    class _PathProgressReward:
+        def __init__(self) -> None:
+            # Per-fruit best distance seen this episode. None = not
+            # initialised yet. The first time we see a fruit's
+            # distance we store it as the baseline and pay nothing;
+            # subsequent strictly smaller distances pay
+            # ``(prev_best - new) * scale``.
+            self.best_d: dict[int, int | None] = {1: None, 2: None, 3: None, 4: None}
+            self.last_floor: int | None = None
+
+        def reset(self) -> None:
+            self.best_d = {1: None, 2: None, 3: None, 4: None}
+            self.last_floor = None
+
+        def __call__(self, ctx: RewardContext) -> float:
+            reward = 0.0
+            if ctx.curr_fruits < ctx.prev_fruits:
+                collected = ctx.prev_fruits - ctx.curr_fruits
+                reward += collected * ctx.curr_bonus * fruit_scale
+
+            # Agent floor: prefer precise (standing), else reuse last known.
+            pixel_y = int(ctx.curr_y)
+            floor = agent_floor_from_pixel_y(pixel_y)
+            if floor is None:
+                floor = self.last_floor
+            else:
+                self.last_floor = floor
+            if floor is None:
+                return reward
+
+            if not ctx.fruits_present:
+                return reward
+
+            # Clear tracking for fruits that have been collected, so a
+            # later princess-touch (which re-populates fruits for the
+            # next level) doesn't get charged stale best_d values.
+            for fid, is_present in enumerate(ctx.fruits_present, start=1):
+                if not is_present:
+                    self.best_d[fid] = None
+
+            agent_pix_x = int(ctx.curr_x) * 4 + 8
+
+            # Accumulate progress across every remaining fruit.
+            # Each fruit has its own best-seen lock, so oscillation
+            # between two targets ratchets each fruit's best_d down
+            # and then pays nothing further.
+            for fid, is_present in enumerate(ctx.fruits_present, start=1):
+                if not is_present:
+                    continue
+                d = nav.path_distance_from_agent(floor, agent_pix_x, f"F{fid}")
+                prev_best = self.best_d[fid]
+                if prev_best is None:
+                    self.best_d[fid] = d
+                    continue
+                if d < prev_best:
+                    reward += (prev_best - d) * progress_scale
+                    self.best_d[fid] = d
+            return reward
+
+    return _PathProgressReward()
 
 
 __all__ = [

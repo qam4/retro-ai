@@ -202,6 +202,7 @@ class SegmentEnv(gym.Env):
         bonus = self._read_bonus()
         score = self._read_score()
         y = self.iface.read_ram_byte(Y_POS)
+        x = self.iface.read_ram_byte(X_POS)
         fruits_present = tuple(
             self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0 for i in (1, 2, 3, 4)
         )
@@ -218,6 +219,7 @@ class SegmentEnv(gym.Env):
             curr_lives=lives,
             step_count=self._step_count,
             curr_y=y,
+            curr_x=x,
             fruits_present=fruits_present,
         )
         reward = float(self._reward_fn(ctx))

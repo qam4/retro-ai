@@ -346,3 +346,122 @@ def test_climb_novelty_without_fruits_present_falls_back_to_count():
 
 def test_climb_novelty_registered():
     assert "fruit_bonus_climb_novelty" in available()
+
+
+# ---------------------------------------------------------------------------
+# fruit_bonus_path_progress
+# ---------------------------------------------------------------------------
+
+
+def _pc(
+    x=0,
+    y=184,
+    fp=(True, True, True, True),
+    fruits_rem=4,
+    prev_fruits=None,
+    curr_bonus=800,
+):
+    """Shortcut for path-progress context with agent at (x, y)."""
+    if prev_fruits is None:
+        prev_fruits = fruits_rem
+    return _ctx(
+        prev_fruits=prev_fruits,
+        curr_fruits=fruits_rem,
+        curr_bonus=curr_bonus,
+        prev_bonus=curr_bonus,
+        curr_x=x,
+        curr_y=y,
+        fruits_present=fp,
+    )
+
+
+def test_path_progress_registered():
+    assert "fruit_bonus_path_progress" in available()
+
+
+def test_path_progress_first_step_no_reward():
+    """First step initialises per-fruit best_d but doesn't pay."""
+    fn = create("fruit_bonus_path_progress", {"scale": 0.01})
+    r = fn(_pc(x=0, y=184))
+    assert r == 0.0
+
+
+def test_path_progress_rewards_approach_to_nearest_fruit():
+    """Walking toward F1 pays progress to F1 AND to any other fruit
+    whose path distance also dropped (since horizontal walk can
+    reduce distance to multiple fruits via the same ladder route)."""
+    fn = create("fruit_bonus_path_progress", {"scale": 0.01})
+    fn(_pc(x=0, y=184))
+    # Moving right 20 ram (80 pixels) closer along floor 1.
+    r = fn(_pc(x=20, y=184))
+    # Floor-1 approach reduces distance to F1 by exactly 80 px, and
+    # since every path to F2 via L12a/L12b also traverses floor 1,
+    # F2's distance drops too. Progress to F1 alone = 0.80.
+    assert r >= 0.80 - 1e-6
+
+
+def test_path_progress_oscillation_ratchets_then_zeros_out():
+    """Walking back and forth ratchets each fruit's best_d once, then
+    pays zero on round-trips."""
+    fn = create("fruit_bonus_path_progress", {"scale": 0.01})
+    # Seed init at floor 1, ram_x=0.
+    fn(_pc(x=0, y=184))
+    # Walk right ram_x=0 -> 20 (first approach pays).
+    r1 = fn(_pc(x=20, y=184))
+    # Back to ram_x=0 (retreat, pays zero).
+    r_back = fn(_pc(x=0, y=184))
+    # Return to ram_x=20 (same-as-best, pays zero).
+    r_return = fn(_pc(x=20, y=184))
+    assert r1 > 0
+    assert r_back == 0.0
+    assert r_return == 0.0
+
+
+def test_path_progress_jumping_pays_zero():
+    """Jumping doesn't change pixel x, so path distance doesn't drop."""
+    fn = create("fruit_bonus_path_progress", {"scale": 0.01})
+    fn(_pc(x=20, y=184))
+    r_mid_jump = fn(_pc(x=20, y=168))  # mid-air
+    r_back = fn(_pc(x=20, y=184))  # landed
+    assert r_mid_jump == 0.0
+    assert r_back == 0.0
+
+
+def test_path_progress_mid_air_uses_last_known_floor():
+    """When agent is mid-jump (y between floors), the reward reuses
+    the last-known floor instead of skipping shaping entirely."""
+    fn = create("fruit_bonus_path_progress", {"scale": 0.01})
+    fn(_pc(x=0, y=184))
+    r = fn(_pc(x=20, y=170))  # mid-air during horizontal move
+    assert r > 0
+
+
+def test_path_progress_clears_picked_fruit_tracking():
+    """After a fruit is picked, its best_d is cleared."""
+    fn = create("fruit_bonus_path_progress", {"scale": 0.01})
+    fn(_pc(x=0, y=184, fp=(True, True, True, True), fruits_rem=4))
+    fn(_pc(x=46, y=184, fp=(True, True, True, True), fruits_rem=4))
+    r_pick = fn(
+        _pc(
+            x=46,
+            y=184,
+            fp=(False, True, True, True),
+            fruits_rem=3,
+            prev_fruits=4,
+        )
+    )
+    # Pickup term = 1 * 800 * 0.01 = 8.0 plus any residual progress.
+    assert r_pick >= 8.0
+
+
+def test_path_progress_reset_clears_state():
+    """reset_reward must clear best_d dict and last_floor."""
+    fn = create("fruit_bonus_path_progress", {"scale": 0.01})
+    fn(_pc(x=0, y=184))
+    r1 = fn(_pc(x=20, y=184))
+    assert r1 > 0
+    rewards.reset_reward(fn)
+    # After reset, next approach should once again pay.
+    fn(_pc(x=0, y=184))
+    r_after_reset = fn(_pc(x=20, y=184))
+    assert r_after_reset > 0

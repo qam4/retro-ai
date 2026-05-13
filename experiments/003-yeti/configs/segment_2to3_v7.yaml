@@ -1,0 +1,50 @@
+# segment_2to3 v7 — path-progress reward on a hand-coded map.
+#
+# Approach 18: reward shortest-path progress toward every remaining
+# fruit using the pre-computed Yeti navigation graph (4 fruits, 5
+# ladders, princess; see python/retro_ai/training/yeti_map.py).
+# Per-fruit best-seen-distance locks prevent oscillation and jumping
+# farming. Multi-fruit: agent gets shaping no matter which remaining
+# fruit it heads toward.
+#
+# Why this and not v6's climb_novelty:
+#   - v6 helped climbing but not descent; 12-rollout review showed
+#     agents stuck on floor 4 with fruits 1+2 below, unable to find
+#     a signal to go back down.
+#   - v5/v6 were undirected/discrete. v7 uses the actual graph so
+#     "moving sideways without a ladder" yields zero progress, and
+#     "climbing the wrong ladder" may even increase path distance.
+#
+# Same 5M step / v9 seed setup as v3/v5/v6 for direct comparison.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_2to3_v7
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_checkpoints_v2.pkl
+  segment: 2

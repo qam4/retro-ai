@@ -1066,3 +1066,122 @@ No sign of jump-farming despite the shaping. Training success curves
 are smooth and not dominated by the climb term.
 
 Config: `experiments/003-yeti/configs/segment_2to3_v6.yaml`.
+
+### 17. Shaping design iteration — why v6 isn't enough  *(verified by analysis)*
+
+Before building a next reward, reviewed v6's (`climb_novelty`) aggregate
+and rollout signals for side effects:
+
+- Episode length mean 117 (v3=114, v5=127); median 72 (v3=69, v5=83).
+  No ballooning.
+- Long failures (>=500 steps, stuck at CP2): 0.6% (v3=0.3%, v5=0.6%).
+  No snowball-farming runaway.
+- Final score mean 182 (v3=178, v5=179). Stable.
+- Total reward median 0 (v3=0, v5=3); v5 pays more because its novelty
+  fires on every new floor unconditionally, v6 only when fruit above.
+
+12 rollouts from v6's final model (user review):
+- "agent jumps to fruit and gets it" — working.
+- "on floor 4, has collected fruits 3+4; jumping 2 snowballs, dies on
+  third" — **stuck on top with fruits below**. v6's reward doesn't
+  pay for descent, so once the climb bonuses run out the agent has
+  no gradient toward the remaining low-floor fruits.
+- "wandering on floor 1, jumping around" — at spawn without fruits
+  above the agent, climb reward doesn't fire; plain fruit_bonus
+  alone still fails.
+
+Conclusion: v6's directional gate is too restrictive. We need a
+reward that pays for movement toward whichever remaining fruit is
+closest regardless of direction.
+
+### 18. Path-distance reward with hand-coded map  *(verified)*
+
+User pushed back on several simpler options:
+
+- **Manhattan distance to nearest fruit**: two problems. (1) In
+  Y-phase (different floor from fruit), jumping reduces dy enough to
+  look like progress. (2) Moving sideways reduces dx easily, but
+  real progress requires finding a ladder — agent can get stuck
+  beneath a fruit on the floor below.
+- **Staged Y-then-X** (reward dy progress first, then dx): same
+  problem — "reduce dy" on the wrong floor doesn't route through
+  ladders.
+- **Fixed lowest-numbered-fruit priority**: restricts the agent's
+  freedom to choose which fruit to pick first.
+- **Per-fruit floor-novelty combined with fruit-above gate** (v6):
+  helps from spawn/floor 2 but not from floor 3 or floor 4 starts.
+
+Resolution: **build the real navigation graph and reward
+shortest-path progress.**
+
+Map verification done by loading a CP0 state and overlaying ladder
+boxes / fruit boxes on the rendered screenshot. User corrected
+offsets iteratively until every element landed:
+
+Floor top-Y (where an agent sprite's UL sits when standing):
+  floor 1 (spawn): y=184, floor 2: 152, floor 3: 120, floor 4: 88,
+  floor 5 (princess): 56. Floors 32 px apart.
+
+Fruit pixel CENTRES (sprite 16x16):
+  F1 (184, 184)  F2 (80, 150)  F3 (144, 120)  F4 (272, 88)
+
+Ladders (UL pixel x, 16 px wide, 32 px tall):
+  L12a x=112, L12b x=272  (floor 1 has two up-ladders)
+  L23  x=232
+  L34  x=168
+  L45  x=200
+Princess UL (304, 48), sprite 16x24 (at x=312 centre, y=60).
+
+Verified artefacts: `debug/cp0_fruits_annotated.png`,
+`debug/cp0_ladders_annotated.png`, `debug/cp0_nav_graph.png`.
+
+#### 18.1. Graph model
+
+Module: `python/retro_ai/training/yeti_map.py` (pure Python, no
+dependencies beyond typing/dataclasses).
+
+15 fixed nodes: 4 fruits, 5 ladders x 2 endpoints each (top+bottom),
+1 princess. Edges: horizontal same-floor edges (cost = |dx|) and
+ladder bot<->top edges (cost = FLOOR_HEIGHT=32). All-pairs shortest
+paths via Floyd-Warshall on construction; lookup is O(number of
+floor-N nodes) per query since the agent is a transient point.
+
+Sanity distances (verified by tests):
+- F1 <-> F2: 136 px
+- F1 <-> F4: 392 px
+- F1 <-> princess: 464 px
+- Agent (floor=1, x=0) -> F1: 184 px
+- Agent (floor=1, x=280) -> F2 via L12b: 232 px (shorter than via L12a)
+
+#### 18.2. fruit_bonus_path_progress reward
+
+Module: `python/retro_ai/training/rewards.py`.
+
+Per-step logic:
+1. Fruit-pickup term (same as fruit_bonus).
+2. Resolve current floor (agent_floor_from_pixel_y with 8 px
+   tolerance); fall back to last-known floor if mid-jump.
+3. Clear best_d for any fruit now absent (post-pickup housekeeping).
+4. For EACH remaining fruit, compute path distance from the agent
+   through the graph. If distance < best_d[fruit], pay
+   (best_d - new) * scale and update best_d.
+5. Return.
+
+Key design choices:
+- **Multi-fruit tracking (per-fruit best_d), not closest-only**: the
+  agent gets shaping toward whichever fruit it moves nearest to,
+  not just one pre-chosen target. Matches user's "do not restrict
+  to predefined order" requirement.
+- **Strict-less-than ratchet + per-fruit lock**: jumping and
+  oscillation pay zero. Once the agent has been distance D from
+  fruit F, only distances < D pay further.
+- **Falls back on last-known floor during jumps**: shaping stays
+  active mid-jump instead of flickering.
+- **Princess not yet a target**: when all fruits are collected, the
+  progress term falls silent. Will add princess routing once we
+  confirm the pipeline works for 4-fruit pickup.
+
+Cost per step: ~60 integer ops (one Floyd table read per via-node,
+4 fruits x ~15 floor-candidates). Negligible vs emulator step.
+
+Next: config + smoke + 5M run as segment_2to3_v7.
