@@ -1185,3 +1185,80 @@ Cost per step: ~60 integer ops (one Floyd table read per via-node,
 4 fruits x ~15 floor-candidates). Negligible vs emulator step.
 
 Next: config + smoke + 5M run as segment_2to3_v7.
+
+### 19. Path-progress reward — segment_2to3_v7 surprise  *(verified, suspicious)*
+
+5M run with `fruit_bonus_path_progress` (commit `82353d7`). Same
+seeds, same hyperparameters as v3/v5/v6.
+
+**Summary numbers (last 20%, pure CP2 seeds):**
+
+| Run | Reward                        | CP3 rate | Climb % | Descent % |
+|:---:|:-----------------------------:|:--------:|:-------:|:---------:|
+| v3  | fruit_bonus                   |  3.30%   |  4.1%   |   20.5%   |
+| v5  | floor_novelty                 |  8.95%   |  4.1%   |   17.3%   |
+| v6  | climb_novelty                 | 14.85%   |  6.4%   |   18.1%   |
+| v7  | path_progress                 |  7.26%   | **14.7%** | **10.9%** |
+
+Per start_floor:
+
+| start_floor | v3 cp3 | v5 cp3 | v6 cp3 | v7 cp3 |
+|:-----------:|:------:|:------:|:------:|:------:|
+| 0 (spawn)   | 1.43%  | 1.91%  | 4.26%  | **5.11%** |
+| 1 (floor 2) | 2.60%  | 14.09% |26.46%  | 11.32% |
+| 2 (floor 3) | 0.00%  | 0.00%  | 0.05%  | 0.07%  |
+| 3 (floor 4) | 12.83% | 24.46% |31.01%  | 13.41% |
+
+Mixed picture:
+- **Climb rate is the highest yet** (14.7% vs v6's 6.4%). The
+  shaping does push climbing.
+- **Spawn-floor cp3 rate is the highest yet** (5.11%).
+- But **floor 2 and floor 4 cp3 rates regressed from v6**, and
+  overall cp3 rate is below v6.
+
+**Suspicious side effect: high-reward farming on a few specific seeds.**
+
+v7 episodes have very different reward distributions than v3/v5/v6:
+
+| Run | reward_med | reward_max | long_runs (>=500) |
+|:---:|:----------:|:----------:|:-----------------:|
+| v3  | 0.00       | 8.1        | 0.3%              |
+| v5  | 3.00       | 35.0       | 0.6%              |
+| v6  | 0.00       | 20.1       | 0.6%              |
+| v7  | 12.13      | **926.7**  | **2.7%**          |
+
+v7's max-reward is ~50x v6's, and 2.7% of episodes survive past 500
+steps without reaching CP3 (vs 0.6% for the others). 300 of 315
+high-reward (>700) failed episodes start on the same seed (idx 47:
+fruits 1+2 collected, agent on floor 4 at ram_x=31). Each ends back
+at the same x=31, y=86 it started at, with no score gain.
+
+Theoretical max reward bound for this seed: `(d_F3 + d_F4) * scale =
+(108 + 140) * 0.01 = 2.48`. But trained-policy episodes accumulated
+926. **300x the bound** under the per-fruit best-d ratchet.
+
+Confirmed by isolated property test: `fruit_bonus_path_progress`
+called with random walk 1000 steps respects the bound (1.64 < 2.48).
+So the reward formula in isolation is correct.
+
+Interaction with the training loop somehow breaks the lock. Two
+candidate causes I haven't pinpointed:
+- An invisible mid-episode `reset()` clearing best_d (perhaps the
+  ThreadedVecEnv or SB3 calls reset under some condition).
+- A subtle recompute that re-paths through new floors and racks up
+  large progress on each pseudo-episode.
+
+I tried to reproduce with the saved final_model.zip on the same seed
+(`scripts/repro_v7_farming.py`) and the trained policy stays
+completely stationary at start position — total reward 0 over 1000
+steps. So the trained policy and the reward-collection during
+training disagree.
+
+**Conclusion**: don't trust v7's headline 7.26% as the merit of
+path-progress shaping. There's a bug in how reward accumulates over
+a training episode.
+
+Next step: instrument the env to track per-episode reward inside
+SegmentEnv, log to TB, and add a sanity check that reward never
+exceeds `sum_of_initial_distances * scale + n_fruits_collected *
+fruit_bonus_term` per episode.
