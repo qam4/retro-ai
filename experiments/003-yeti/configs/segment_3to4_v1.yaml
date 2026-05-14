@@ -1,0 +1,43 @@
+# segment_3to4 v1 — fresh policy, CP3 seeds from v9 + v7 collected, path-progress reward.
+#
+# Seeds enriched: 19 v9 CP3 + 800 v7 collected_states, validated and
+# deduplicated, total 187 CP3 seeds (vs 19 from v9 alone).
+# See scripts/build_cp3_seeds.py.
+#
+# Reward is fruit_bonus_path_progress (same as v7 for CP2->CP3) so
+# we can compare directly. Approach 20 fix is in place — each env
+# gets its own reward_fn instance.
+#
+# Same hyperparameters as v7 for direct comparison.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_3to4_v1
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_v3_cp3enriched.pkl
+  segment: 3

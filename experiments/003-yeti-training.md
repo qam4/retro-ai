@@ -1379,3 +1379,60 @@ Path-progress is clearly the right shaping. The other shaping
 formulas can be retired.
 
 Commit: `d540831`.
+
+### 20.5. Floor-3 starts: why they're stuck at 0%  *(observed)*
+
+10 floor-3 CP2 seeds in the v9_v2 archive, all with F3 already
+collected. After v7 fixed (50% overall CP3), floor-3 starts only
+hit 0.51%. Rolled out the trained policy from each, with a live
+reward HUD overlay (`scripts/rollout_with_reward_overlay.py`).
+
+What we saw on a sample:
+
+- **seed 24** (y=118, F2+F4 remaining): agent jumps left and
+  **falls** off the floor 3 platform straight down to floor 1. As
+  it falls, pixel y crosses through the floor-2 bucket; our
+  reward's `last_floor` fallback updates the agent's "current
+  floor" to 2, and the path-distance to F2 (on floor 2) drops
+  massively. Agent gets reward for falling-toward-F2. Then dies
+  on floor 1 from a snowball.
+
+- **seed 17** (y=118, F1+F4 remaining): agent dies in 15 steps
+  jumping into a snowball.
+
+- **seed 36** (y=118, F1+F2 remaining): agent jumps left and
+  falls to floor 2 via the gap. Cumulative reward 4.96 (highest
+  of the three) because it crossed two floor boundaries on the way
+  down.
+
+The picture: from floor 3 with F3 already collected, the
+**path-progress reward sometimes pays for falling**. Agent's pixel
+y crosses lower-floor buckets on the way down; our `last_floor`
+fallback updates accordingly; path distance to fruits on those
+lower floors drops; reward fires.
+
+Why the per-fruit lock doesn't fully save us: each lock only
+prevents re-collecting reward for the SAME minimum distance to a
+fruit. A fall yields a one-shot credit (the "best ever distance
+to F2" tightens once during the fall). Then the agent dies. Net:
+small reward + episode termination. Better than infinite farming,
+but it still teaches "fall = quick reward".
+
+**Possible fixes (not implementing now)**:
+
+1. Don't fall back to `last_floor` — only credit progress when the
+   agent's pixel-y resolves cleanly to a floor (i.e., agent is
+   standing). Mid-air pays nothing; ladder-climb pays only when
+   the agent lands on the new floor.
+
+2. Detect "agent is on a ladder" via x being within 16 px of a
+   known ladder column AND y crossing the floor boundary. Pay
+   only for ladder-driven floor changes.
+
+3. Penalty term for descents not at a ladder column. Punishes
+   falling specifically.
+
+Going with option 1 is the simplest cut, but we're not blocked on
+solving floor-3 right now. The v7-fixed policy gets 50% on the
+other three start floors and that's a real improvement worth
+chaining on. Documented and moving on to segment 3to4.
