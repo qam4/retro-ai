@@ -1262,3 +1262,120 @@ Next step: instrument the env to track per-episode reward inside
 SegmentEnv, log to TB, and add a sanity check that reward never
 exceeds `sum_of_initial_distances * scale + n_fruits_collected *
 fruit_bonus_term` per episode.
+
+### 20. Shared-reward bug + clean v7 result  *(verified)*
+
+#### 20.1. The bug
+
+While instrumenting the reward path to root-cause v7's apparent
+farming, I added a per-step trace recorder that dumps any episode
+whose total exceeds the analytical bound. First smoke run produced
+this dump for episode 408 of env 0:
+
+  step | x  | y  | floor | best_d
+   1   | 57 | 82 | 4     | {1: 356, 2: None, 3: None, 4: 36}
+   2   | 57 | 82 | 4     | {1: 356, 2: None, 3: None, 4: 36}
+   3   | 58 | 78 | None  | {1: 356, 2: None, 3: None, 4: 32}
+   4   | 59 | 76 | None  | {1: 364, 2: None, 3: None, 4: 28}  <-- bd[1] up
+   ...
+  13   | 62 | 82 | 4     | {1: 376, 2: None, 3: None, 4: 12}
+  14   | 61 | 78 | None  | {1: 68,  2: None, 3: None, 4: 12}  <-- jumps
+  15   | 61 | 78 | None  | {1: None, 2: None, 3: None, 4: None}  <-- WIPED
+
+`best_d[1]` is supposed to monotonically decrease (per-fruit lock).
+Steps 3-10 show it INCREASING (356 → 380), and step 15 shows the
+whole dict wiped to None mid-episode. The ratchet is broken.
+
+Root cause (commits `d540831` and earlier):
+
+All three multi-env training scripts (`train_segment.py`,
+`train_checkpoint_curriculum.py`, `go_explore_phase2.py`) share a
+SINGLE `reward_fn` instance across all parallel envs:
+
+```python
+reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
+
+def make_env(rank):
+    def _init():
+        return SegmentEnv(..., reward_fn=reward_fn, ...)  # shared!
+    return _init
+```
+
+When SB3 ends env A's episode, it calls `env.reset()`, which calls
+`reset_reward(self._reward_fn)`. That clears the shared per-episode
+state. **Every other env still mid-episode now sees a fresh
+reward_fn on the next step**, re-baselines, and earns full
+"progress" reward all over again on the same path.
+
+Affects every stateful reward we shipped:
+- `fruit_bonus_floor_novelty` (v5)
+- `fruit_bonus_climb_novelty` (v6)
+- `fruit_bonus_path_progress` (v7)
+
+Stateless rewards (`fruit_bonus`, etc., used by v3/v4) are unaffected.
+
+#### 20.2. The fix
+
+Each env now constructs its own reward_fn instance inside the
+`_init` closure:
+
+```python
+def make_env(rank):
+    def _init():
+        env_reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
+        return SegmentEnv(..., reward_fn=env_reward_fn, ...)
+    return _init
+```
+
+Regression test in `tests/python/test_no_shared_reward_fn.py`
+asserts two SegmentEnvs created via `make_env` hold distinct
+`reward_fn` and distinct `best_d` dicts. Pinned so this can't
+silently regress.
+
+Forensic instrumentation kept as a permanent safety net in
+`python/retro_ai/training/reward_trace.py`. Any future episode that
+exceeds the analytical bound will be pickled to disk with full
+per-step state. SegmentEnv enables it when the configured reward is
+`fruit_bonus_path_progress`; other rewards skip tracing.
+
+#### 20.3. v7 with the fix
+
+5M run, same config as before:
+
+**CP2→CP3 = 50.24% in last 20% (pure CP2 seeds), up from 7.26%.**
+
+Per start_floor:
+
+| start_floor | v7 BUGGY | v7 FIXED |
+|:-----------:|:--------:|:--------:|
+| 0 (spawn)   |  5.11%   | **61.11%** |
+| 1 (floor 2) | 11.32%   | **71.40%** |
+| 2 (floor 3) |  0.07%   |  0.51%   |
+| 3 (floor 4) | 13.41%   | **54.73%** |
+
+- Climb rate jumped 14.7% → 30.1%.
+- Descent rate 10.9% → 18.4% (agent uses both directions, as the
+  reward intends).
+- 17 episodes reached CP4 (0.16% of pure CP2 episodes). First time
+  per-segment training has produced any CP4 reach.
+- Median reward 3.84, max reward 22.96. Well within bounds.
+
+Floor-3 starts still ~0% — the lone weak spot. Hypothesis: those
+seeds usually have F3 already collected (so target is a fruit on a
+different floor that requires both descent through L34 AND
+horizontal navigation, longer path).
+
+#### 20.4. Implications for v5 and v6 numbers
+
+v5's reported 8.95% and v6's 14.85% are both contaminated by the
+same bug. Without rerunning we don't know how much of those
+gains were real vs reward-leak.
+
+Two options:
+- Rerun v5 and v6 with the fix, just to have clean comparison data.
+- Skip them: v7 already dominates and is now the headline result.
+
+Path-progress is clearly the right shaping. The other shaping
+formulas can be retired.
+
+Commit: `d540831`.
