@@ -1541,3 +1541,97 @@ for climb.
    is reachable.
 
 Configs / commits: see `experiments/003-yeti/configs/segment_3to4_v1.yaml`.
+
+### 22. Fall vs ladder descent: why descent is hard  *(verified)*
+
+Investigated why per-segment training (both v7 and v8) shows agents
+that climb but fail to descend. Key findings from manual probing of
+the env:
+
+#### 22.1. Ladder mechanics
+
+Pressing DOWN on floor 4 only descends through L34 if the agent's
+RAM x is exactly **42** (1-pixel-wide window). At ram_x=41 or 43,
+DOWN is a no-op. The visible ladder sprite is 16 px wide (UL=168 to
+184), but only the leftmost RAM column (x=42 = pix 168) registers
+as "on the ladder for descent".
+
+We did not exhaustively check L23 / L12 descent windows but the L34
+result is enough: stopping at exactly the right pixel column is
+hard for an RL agent without a strong gradient pointing there.
+
+#### 22.2. Falls vs ladder descents in our reward
+
+`agent_floor_from_pixel_y` returns a floor number only when y is
+within ±8 of a floor's standing y; otherwise None. Floor anchors:
+y=184 (1) / 152 (2) / 120 (3) / 88 (4) / 56 (5).  16-px tolerance
+bands around each anchor leave 16-px gaps between floors.
+
+The path-progress reward uses `last_floor` as a fallback when y is
+in a gap. So a fall from floor 4 (y=86) all the way to floor 2
+(y=150) traverses roughly:
+
+  y= 86  floor=4   (start)
+  y= 90  floor=4
+  y= 98  None  -> last_floor=4
+  y=110  None  -> last_floor=4
+  y=114  floor=3   <-- floor transition; reward fires for path-progress to lower fruits
+  y=118  floor=3
+  y=122  floor=3
+  y=130  None  -> last_floor=3
+  y=146  floor=2   <-- another floor transition; reward fires again
+  y=150  floor=2   (landed)
+
+So a single off-ledge fall pays roughly 2 × (32 px * scale) = 0.64
+reward at scale=0.01, all in ~10 frames. A ladder descent from
+floor 4 to floor 3 is also ~32 px y-change but takes ~30 frames and
+pays only 0.32 reward (one floor transition). **Falling pays more
+per attempt than ladder descent.**
+
+#### 22.3. Why the obvious fix isn't actually a fix
+
+The obvious fix ("don't fall back to `last_floor`, only credit on
+confirmed floors") doesn't actually solve this. After the fix a fall
+still pays whatever the path-distance reduction was when y stabilises
+on the landed floor — which equals the ladder-descent's payment for
+that specific floor transition. So:
+
+- Fall from floor 4 to floor 2 (skipping floor 3 entirely): pays
+  the path-distance reduction from floor-4-x to floor-2-x in one
+  shot, AT landing. Same total as two ladder descents.
+- Ladder descent floor 4 → 3, then 3 → 2: pays each transition once
+  on landing.
+
+Falls and ladder paths land in the same place and pay the same
+total. The fall is FASTER, ending the episode sooner; ladders take
+~60 frames, falls take ~10. Per second of wall-clock, falls give
+more reward. Falls remain locally attractive even with the fix.
+
+**To genuinely disfavor falls** we'd need either:
+- A penalty for non-ladder y-changes (detected by checking agent_x
+  vs ladder columns during the y change).
+- Knowledge that "fall = die soon" baked into long-horizon credit
+  assignment, which only works if the agent has actually learned
+  to survive on the lower floor and continue collecting reward —
+  i.e., it's a training-budget issue, not a shaping issue.
+
+#### 22.4. The bigger picture
+
+Even setting reward aside: in v8, 12.4% of floor-4-start episodes
+do successfully descend to a lower floor, but only 0.04% reach CP4.
+So **the policy gets to lower floors, then dies before reaching the
+fruit**. The bottleneck is not "make the agent descend"; it's "make
+the descended agent survive on the lower floors of a level it
+hasn't fully learned to play".
+
+That's a training data / curriculum problem, not a reward shaping
+problem. Falls are a symptom, not the cause.
+
+#### 22.5. Decision
+
+Skip reward fiddling. Move to chaining the existing per-segment
+policies (v7 CP2→CP3 and v8 CP3→CP4) and measure end-to-end
+behavior. If the chain reaches the princess from spawn even at low
+rates, we have a working pipeline and can iterate on weak spots.
+If it doesn't, the asymmetry observed here will reveal itself
+at scale.
