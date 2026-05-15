@@ -1,0 +1,53 @@
+# segment_4toP v1 — fresh policy, CP4 seeds, path-progress universal reward.
+#
+# First-ever attempt at training a per-segment CP4->princess policy.
+# Seed pool is small (7 validated CP4 seeds) because:
+#   - v9 alone had 2 CP4 cells.
+#   - segment_3to4_v1 produced 800 CP4 reach states, but the validator
+#     (probe=120 noop frames) rejected 99% — most CP4 reaches happen
+#     right after picking up the last fruit, with snowballs nearby.
+#   - Final pool: 7 seeds across 4 distinct positions.
+#
+# This is a "try with what we have" run. If 7 seeds is too narrow,
+# the policy won't learn; we'll see in the metrics and revisit by
+# running a longer segment_3to4 or go-explore from CP4 to widen the
+# pool.
+#
+# Reward: fruit_bonus_path_progress_universal — same path-progress
+# semantics as v7/v8, plus targets the princess node when no fruits
+# remain, plus the one-shot princess-touch bonus.
+#
+# Same hyperparameters as v7/v8 for direct comparison.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_4toP_v1
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_v4_cp4enriched.pkl
+  segment: 4

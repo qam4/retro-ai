@@ -465,3 +465,191 @@ def test_path_progress_reset_clears_state():
     fn(_pc(x=0, y=184))
     r_after_reset = fn(_pc(x=20, y=184))
     assert r_after_reset > 0
+
+
+# ---------------------------------------------------------------------------
+# fruit_bonus_path_progress_universal
+# ---------------------------------------------------------------------------
+
+
+def _puc(
+    x=0,
+    y=184,
+    fp=(True, True, True, True),
+    fruits_rem=4,
+    prev_fruits=None,
+    curr_bonus=800,
+    prev_bonus=None,
+    curr_lives=5,
+    prev_lives=5,
+):
+    """Shortcut for universal-path-progress context."""
+    if prev_fruits is None:
+        prev_fruits = fruits_rem
+    if prev_bonus is None:
+        prev_bonus = curr_bonus
+    return _ctx(
+        prev_fruits=prev_fruits,
+        curr_fruits=fruits_rem,
+        curr_bonus=curr_bonus,
+        prev_bonus=prev_bonus,
+        prev_lives=prev_lives,
+        curr_lives=curr_lives,
+        curr_x=x,
+        curr_y=y,
+        fruits_present=fp,
+    )
+
+
+def test_universal_registered():
+    assert "fruit_bonus_path_progress_universal" in available()
+
+
+def test_universal_first_step_no_reward():
+    fn = create("fruit_bonus_path_progress_universal", {"scale": 0.01})
+    r = fn(_puc(x=0, y=184))
+    assert r == 0.0
+
+
+def test_universal_fruit_progress_when_fruits_remain():
+    """Same fruit-progress behaviour as path_progress."""
+    fn = create("fruit_bonus_path_progress_universal", {"scale": 0.01})
+    fn(_puc(x=0, y=184))
+    r = fn(_puc(x=20, y=184))
+    assert r > 0
+
+
+def test_universal_princess_progress_when_no_fruits_remain():
+    """When all fruits are collected, target = princess."""
+    fn = create(
+        "fruit_bonus_path_progress_universal",
+        {"scale": 0.01, "princess_scale": 0.05},
+    )
+    # Init: agent at (ram_x=20, y=88) on floor 4, all fruits collected.
+    fp_done = (False, False, False, False)
+    fn(_puc(x=20, y=88, fp=fp_done, fruits_rem=0))
+    # Walk right toward L45 (closer to princess in path-distance).
+    r = fn(_puc(x=40, y=88, fp=fp_done, fruits_rem=0))
+    assert r > 0
+
+
+def test_universal_no_princess_progress_while_fruits_remain():
+    """Fruit-progress fires, princess is ignored."""
+    fn = create(
+        "fruit_bonus_path_progress_universal",
+        {"scale": 0.01, "princess_scale": 0.05},
+    )
+    fp = (False, False, False, True)  # only F4 remains
+    fn(_puc(x=0, y=184, fp=fp, fruits_rem=1))
+    # Princess best_d should remain None (not initialised) because we
+    # never targeted it.
+    assert fn.best_d_princess is None
+
+
+def test_universal_princess_touch_pays_one_shot():
+    """A princess touch event (fruits up + lives preserved + bonus
+    up) pays prev_bonus * princess_scale."""
+    fn = create(
+        "fruit_bonus_path_progress_universal",
+        {"scale": 0.01, "princess_scale": 0.05},
+    )
+    # Init at CP4 (no fruits remaining).
+    fp_done = (False, False, False, False)
+    fn(_puc(x=70, y=56, fp=fp_done, fruits_rem=0))
+    # Princess touch: fruits 0 -> 4, lives unchanged, bonus jumps up.
+    fp_post = (True, True, True, True)
+    r = fn(
+        _puc(
+            x=70,
+            y=56,
+            fp=fp_post,
+            fruits_rem=4,
+            prev_fruits=0,
+            curr_bonus=1000,
+            prev_bonus=400,
+        )
+    )
+    # princess term = 400 * 0.05 = 20.0
+    # fruit term: curr_fruits > prev_fruits triggers neither pickup
+    # branch in this reward (pickup requires curr < prev).
+    assert r >= 20.0 - 1e-6
+
+
+def test_universal_death_respawn_does_not_count_as_princess():
+    """fruits goes 0 -> 4 with lives DECREMENTING is a death respawn,
+    not a princess touch — must not pay the princess term."""
+    fn = create(
+        "fruit_bonus_path_progress_universal",
+        {"scale": 0.01, "princess_scale": 0.05},
+    )
+    fp_done = (False, False, False, False)
+    fn(_puc(x=70, y=56, fp=fp_done, fruits_rem=0))
+    fp_post = (True, True, True, True)
+    r = fn(
+        _puc(
+            x=0,
+            y=182,
+            fp=fp_post,
+            fruits_rem=4,
+            prev_fruits=0,
+            curr_bonus=1000,
+            prev_bonus=400,
+            curr_lives=4,
+            prev_lives=5,
+        )
+    )
+    # Lives went down -> death respawn, not princess. No reward
+    # except possibly fruit progress (which on initial-step is 0).
+    assert r == 0.0
+
+
+def test_universal_princess_touch_clears_best_d():
+    """After a princess touch, best_d should reset for both fruits
+    and princess (game just respawned the level)."""
+    fn = create(
+        "fruit_bonus_path_progress_universal",
+        {"scale": 0.01, "princess_scale": 0.05},
+    )
+    # Build up some best_d state on fruits.
+    fn(_puc(x=0, y=184))
+    fn(_puc(x=20, y=184))
+    # Trigger a princess touch (forced via the right ctx shape).
+    fp_post = (True, True, True, True)
+    fn(
+        _puc(
+            x=0,
+            y=184,
+            fp=fp_post,
+            fruits_rem=4,
+            prev_fruits=0,
+            curr_bonus=1000,
+            prev_bonus=400,
+        )
+    )
+    # All best_d entries should be None or freshly set this step.
+    # We test it by checking values directly: anything that wasn't
+    # touched this step should be None.
+    bd = fn.best_d
+    # Fruit 1 is at floor 1 same as agent — got initialised this step.
+    assert bd[1] is not None
+    # Other fruits: also initialised this step (they're remaining and
+    # we computed distances).
+    # The point is: the previous (smaller best_d[1] from before the
+    # touch) was cleared. Verify by checking it's at the freshly-
+    # computed distance for x=0, not the smaller one we'd seen at x=20.
+    # At x=0 floor=1, agent centre pix = 0*4+8 = 8. F1 centre = 184.
+    # |8-184| = 176.
+    assert bd[1] == 176
+
+
+def test_universal_reset_clears_state():
+    fn = create(
+        "fruit_bonus_path_progress_universal",
+        {"scale": 0.01, "princess_scale": 0.05},
+    )
+    fn(_puc(x=0, y=184))
+    fn(_puc(x=20, y=184))
+    rewards.reset_reward(fn)
+    assert fn.best_d_princess is None
+    assert fn.last_floor is None
+    assert all(v is None for v in fn.best_d.values())

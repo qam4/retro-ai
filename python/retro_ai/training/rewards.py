@@ -557,6 +557,127 @@ def _fruit_bonus_path_progress(params: Mapping[str, Any]) -> RewardFn:
     return _PathProgressReward()
 
 
+@register("fruit_bonus_path_progress_universal")
+def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
+    """Path-progress reward that handles both fruit-collection AND
+    princess-touch segments uniformly.
+
+    When some fruits remain, behaves identically to
+    ``fruit_bonus_path_progress`` (per-fruit best_d ratchet, pickup
+    term, fall-back-on-last_floor while mid-jump).
+
+    When ALL fruits are collected (CP4), targets the princess node
+    in the navigation graph instead. Pays best_d ratchet toward
+    princess. On princess touch (detected via the same rule as
+    ``fruit_princess_bonus``: ``curr_fruits > prev_fruits AND
+    curr_lives >= prev_lives AND curr_bonus > prev_bonus``), pays
+    ``prev_bonus * princess_scale`` and resets all best_d entries
+    (game just re-populated fruits and reset bonus for the next
+    level).
+
+    Parameters
+    ----------
+    scale : float, default 0.01
+        Per-pixel multiplier on path-distance progress (both fruits
+        and princess use the same scale).
+    fruit_scale : float, default 0.01
+        Per-fruit multiplier on the pickup term.
+    princess_scale : float, default 0.05
+        Per-princess multiplier on the touch term. Default 0.05
+        makes a fast princess-touch worth ≈ 25 reward
+        (prev_bonus=500 × 0.05), comparable to the cumulative
+        fruits in one level.
+    """
+    progress_scale = float(params.get("scale", 0.01))
+    fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
+    princess_scale = float(params.get("princess_scale", 0.05))
+
+    from retro_ai.training.yeti_map import (
+        agent_floor_from_pixel_y,
+        build_navigation_map,
+    )
+
+    nav = build_navigation_map()
+
+    class _UniversalPathProgressReward:
+        def __init__(self) -> None:
+            self.best_d: dict[int, int | None] = {1: None, 2: None, 3: None, 4: None}
+            self.best_d_princess: int | None = None
+            self.last_floor: int | None = None
+
+        def reset(self) -> None:
+            self.best_d = {1: None, 2: None, 3: None, 4: None}
+            self.best_d_princess = None
+            self.last_floor = None
+
+        def __call__(self, ctx: RewardContext) -> float:
+            reward = 0.0
+
+            # Fruit pickup term.
+            if ctx.curr_fruits < ctx.prev_fruits:
+                collected = ctx.prev_fruits - ctx.curr_fruits
+                reward += collected * ctx.curr_bonus * fruit_scale
+
+            # Princess touch detection: fruits repopulated, lives
+            # preserved, bonus jumped up. Pays a one-shot reward.
+            princess_touched = (
+                ctx.curr_fruits > ctx.prev_fruits
+                and ctx.curr_lives >= ctx.prev_lives
+                and ctx.curr_bonus > ctx.prev_bonus
+            )
+            if princess_touched:
+                reward += ctx.prev_bonus * princess_scale
+                # Game reset: clear all best_d so the next level
+                # starts fresh.
+                self.best_d = {1: None, 2: None, 3: None, 4: None}
+                self.best_d_princess = None
+
+            # Resolve agent floor.
+            pixel_y = int(ctx.curr_y)
+            floor = agent_floor_from_pixel_y(pixel_y)
+            if floor is None:
+                floor = self.last_floor
+            else:
+                self.last_floor = floor
+            if floor is None:
+                return reward
+
+            agent_pix_x = int(ctx.curr_x) * 4 + 8
+
+            # Decide target: any remaining fruit, OR princess if none.
+            any_fruit = bool(ctx.fruits_present) and any(ctx.fruits_present)
+            if any_fruit:
+                # Clear best_d for fruits no longer present (post-pickup).
+                for fid, is_present in enumerate(ctx.fruits_present, start=1):
+                    if not is_present:
+                        self.best_d[fid] = None
+                # Per-fruit ratchet.
+                for fid, is_present in enumerate(ctx.fruits_present, start=1):
+                    if not is_present:
+                        continue
+                    d = nav.path_distance_from_agent(floor, agent_pix_x, f"F{fid}")
+                    prev_best = self.best_d[fid]
+                    if prev_best is None:
+                        self.best_d[fid] = d
+                        continue
+                    if d < prev_best:
+                        reward += (prev_best - d) * progress_scale
+                        self.best_d[fid] = d
+            else:
+                # No fruits: target princess.
+                d = nav.path_distance_from_agent(floor, agent_pix_x, "princess")
+                prev_best = self.best_d_princess
+                if prev_best is None:
+                    self.best_d_princess = d
+                elif d < prev_best:
+                    reward += (prev_best - d) * progress_scale
+                    self.best_d_princess = d
+
+            return reward
+
+    return _UniversalPathProgressReward()
+
+
 __all__ = [
     "RewardContext",
     "RewardFn",

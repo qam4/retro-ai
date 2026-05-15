@@ -290,6 +290,20 @@ class SegmentEnv(gym.Env):
             self._fruits_collected_this_ep += collected
             self.collected_states.append(self.iface.save_state())
 
+        # Princess touch detection (mirrors the reward's logic).
+        # When detected, count it as a "success" so the live metric
+        # reflects princess reaches, and the state is captured for
+        # use as a "post-princess" seed by the next segment if any.
+        princess_touched = (
+            fruits > self._prev_fruits
+            and lives >= self._prev_lives
+            and bonus > self._prev_bonus
+        )
+        if princess_touched:
+            self.successes += 1
+            self._fruits_collected_this_ep += 1
+            self.collected_states.append(self.iface.save_state())
+
         self._prev_fruits = fruits
         self._prev_score = score
         self._episode_reward += reward
@@ -315,6 +329,13 @@ class SegmentEnv(gym.Env):
             truncated = True
             if end_reason is None:
                 end_reason = "max_steps"
+
+        # Princess touch ends the segment for segment_4toP. The
+        # detection has already incremented self.successes above.
+        if princess_touched:
+            done = True
+            if end_reason is None:
+                end_reason = "princess_touched"
 
         # Reward tracer: per-step record + bound check on episode end.
         if self._tracer is not None:

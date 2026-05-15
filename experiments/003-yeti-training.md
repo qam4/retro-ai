@@ -1635,3 +1635,86 @@ behavior. If the chain reaches the princess from spawn even at low
 rates, we have a working pipeline and can iterate on weak spots.
 If it doesn't, the asymmetry observed here will reveal itself
 at scale.
+
+### 23. Chaining v7 + v8 = 0.4% CP2→CP4  *(verified)*
+
+Wired up chained-policy eval (`scripts/eval_chained_policies.py`).
+Loads both trained models, plays v7 from CP2 seeds, hands off to v8
+when CP3 is reached, plays until CP4 or episode ends. Records max
+CP reached per episode.
+
+Run:
+- 48 CP2 seeds × 5 episodes per seed = 240 episodes
+- v7 (CP2→CP3 specialist) → v8 (CP3→CP4 specialist)
+- 5 settle frames between policy switches (mimics training-env reset)
+
+**Result**:
+
+  max CP reached = 2:  103 / 240  (42.9%) — v7 didn't reach CP3
+  max CP reached = 3:  136 / 240  (56.7%) — v7 OK, v8 stuck
+  max CP reached = 4:    1 / 240   (0.4%) — full chain success
+
+Naive expected rate from product of standalone rates:
+  v7 CP2→CP3 = 50.24%  ×  v8 CP3→CP4 = 30.41%  =  15.3%
+
+Observed: 0.4%. **40× worse** than the product-of-rates prediction.
+
+#### Why the gap: distribution mismatch at handoff
+
+Compared the CP3 states v7 reaches in training vs the CP3 pool v8
+was trained on:
+
+| signal           | v7 collected_states (300 sample) | v8 training pool (128) |
+|------------------|:--------------------------------:|:----------------------:|
+| floor 0 (spawn)  |   4%                             | 28%                    |
+| floor 1          |  15%                             |  3%                    |
+| floor 2          | **66%**                          | 39%                    |
+| floor 3          |  16%                             | 29%                    |
+| floor 4          |   0%                             |  1%                    |
+| remaining=(1,)   |  10%                             |  3%                    |
+| remaining=(2,)   |   4%                             | 30%                    |
+| remaining=(3,)   |   8%                             | 28%                    |
+| remaining=(4,)   | **77%**                          | 39%                    |
+
+v7 reaches CP3 most often on floor 2 with F4 remaining. v8 was
+trained on an artificially-balanced pool (we capped per-group at
+top-50 to ensure all 4 remaining-fruit configs were represented).
+
+v8's per-start-floor success rate from its training (last-20%):
+
+  sf=0 (spawn):  86.85%
+  sf=1 (floor 2): 1.19%   <-- the dominant handoff bucket
+  sf=2 (floor 3): 14.16%
+  sf=3 (floor 4): 0.04%
+
+77% of v7's handoffs fall into the "floor 2 start with remaining=F4"
+bucket where v8 gets 1.19%. The chain is bounded by v8's worst
+start, not its best.
+
+#### Implications
+
+The naive "train per segment, then chain" approach assumes the
+upstream segment's outputs match the downstream segment's training
+distribution. They don't. Quality-filtering the seed pool for v8
+(approach 21.1) produced a balanced distribution good for SEGMENT
+training metrics but bad for chain handoff.
+
+Two ways out:
+
+1. **Train v8 on the empirical v7-handoff distribution.** Drop the
+   per-group balancing; use raw (or reservoir-sampled) v7
+   `collected_states` as v8's seed pool. v8 then specialises on the
+   actual handoff distribution.
+2. **Train end-to-end** instead of chaining: a single policy from
+   CP2 to CP4 (or further). No handoff. The reward stays the same
+   (path_progress); the difference is the policy keeps playing
+   after collecting fruit 3.
+
+Option 1 is cheaper: just re-run segment_3to4 with a different seed
+pool. Option 2 requires re-architecting the per-segment scaffolding
+to support multi-segment-per-episode.
+
+#### Decision
+
+Try option 1 first (cheaper). Re-run segment_3to4 with v7-handoff
+distribution, then re-evaluate the chain.
