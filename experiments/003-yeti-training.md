@@ -1436,3 +1436,108 @@ Going with option 1 is the simplest cut, but we're not blocked on
 solving floor-3 right now. The v7-fixed policy gets 50% on the
 other three start floors and that's a real improvement worth
 chaining on. Documented and moving on to segment 3to4.
+
+### 21. Segment 3→4: 30% CP4 with the same reward  *(verified)*
+
+First per-segment CP3→CP4 training. Same reward as v7
+(`fruit_bonus_path_progress`), same hyperparameters, same approach
+20 fix in place.
+
+#### 21.1. Seed pool: enrichment from collected_states
+
+CP3 seeds were sparse in v9 alone (19 validated). The trained v7
+agent reached CP3 thousands of times during its 5M run; its
+`collected_states.pkl` contains 800 CP3 states. After running them
+through the same validator (probe=120) and merging with v9's 19:
+
+  raw merged:                       819
+  validated (CP3 viable for ≥120 noops): 187
+  rejected:                          632 (most "agent landed on F3
+                                          and a snowball is one
+                                          frame away" type states)
+
+Then quality-filtered down to the top-50 per remaining-fruit group
+(by post-settle bonus), keeping all 4 remaining-fruit
+configurations represented:
+
+  remaining=(1,):  4 (kept all)
+  remaining=(2,): 38 (kept all)
+  remaining=(3,): 36 (kept all)
+  remaining=(4,): 50 of 109 (top-50 by bonus 862-863)
+  total:         128 CP3 seeds.
+
+Stored at `output/mo5/yeti/seeds/v9_v3_cp3enriched.pkl`.
+
+(The collected_states distribution is heavily skewed: 109 of 187
+have F4 remaining, because v7's agent reached CP3 most often by
+collecting F1+F2+F3 in that order, leaving F4 last. We capped that
+group to avoid sample-bias.)
+
+Tooling: `scripts/build_cp3_seeds.py`.
+
+#### 21.2. Headline result
+
+5M run, 128 seeds, all 8 envs.
+
+**CP3→CP4 = 30.41% in last-20% pure CP3 episodes.**
+
+Per start_floor:
+
+| start_floor | n     | up    | down  | same  | cp4 rate  |
+|:-----------:|:-----:|:-----:|:-----:|:-----:|:---------:|
+| 0 (spawn)   |  4982 | 83.3% |  0.0% | 16.7% | **86.85%** |
+| 1 (floor 2) |   506 |  1.0% | 12.6% | 86.4% |  1.19%    |
+| 2 (floor 3) |  6794 | 11.9% |  2.5% | 85.6% | 14.16%    |
+| 3 (floor 4) |  5002 |  1.9% | 12.4% | 85.7% |  0.04%    |
+| 4 (artifact)|   135 |     - |     - |     - |  0.00%    |
+
+Reward stats: median 0.88, max 9.77 — well-behaved. Reward tracer
+was on (forensic safety net for path_progress); no episodes
+exceeded their bound.
+
+#### 21.3. The asymmetry: agent climbs but doesn't descend
+
+The per-floor split shows a sharp pattern that mirrors what we saw
+on CP2→CP3:
+
+- Spawn (no descent needed, just walk to F1 if it's the remaining
+  one) → 87% success.
+- Floor 3 (needs to climb up to floor 4 for F4 OR descend to lower
+  floors for F1/F2) → 14%, mostly via climbing (12% climb rate).
+- Floor 4 (target is below: F1/F2/F3) → **0.04%**. Agent has to
+  descend.
+
+Despite ~5000 floor-4 episodes worth of training data, the policy
+**doesn't learn to descend efficiently**. Climb rate at sf=3 is
+1.9% (no available ladder up — princess unreachable), descent
+rate is 12.4% (agent does fall sometimes), but only 0.04% reach
+the fruit. So it falls but in the wrong way.
+
+This is consistent with the floor-3 issue from approach 20.5:
+falling is mostly fatal, controlled descent via a ladder is rare,
+the path-progress reward credits both mid-fall progress and
+ladder-arrival progress, and the dying-in-fall episodes are still
+the dominant pattern.
+
+Hypothesis to investigate: **the reward is symmetric in
+direction-of-distance-reduction, but the game isn't symmetric in
+risk**. Climbing up a ladder is safe (snowballs roll past on
+horizontal). Falling without a ladder is fatal. Descending a
+ladder requires lining up x precisely, and the policy likely
+hasn't learned the ladder-x signature for descent the way it has
+for climb.
+
+#### 21.4. Open questions for next experiments
+
+1. **Why descent is harder than climb (approach 22 candidate):**
+   - Are agents on floor 4 NOT trying to use ladders, or trying and
+     misaligning?
+   - Could a "must be on a ladder x" gate (option 1 from approach
+     20.5) help, by removing the fall-progress reward and forcing
+     the policy to learn ladder use for descent?
+2. **Chaining toward princess (approach 22b):** stitch v7's CP2→CP3
+   policy and v8's CP3→CP4 policy together (possibly behavioral
+   cloning or curriculum) and see whether end-to-end CP0→princess
+   is reachable.
+
+Configs / commits: see `experiments/003-yeti/configs/segment_3to4_v1.yaml`.
