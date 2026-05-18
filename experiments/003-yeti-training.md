@@ -1718,3 +1718,132 @@ to support multi-segment-per-episode.
 
 Try option 1 first (cheaper). Re-run segment_3to4 with v7-handoff
 distribution, then re-evaluate the chain.
+
+### 24. CP4 → princess: detection bug masked real progress  *(verified)*
+
+The 5M `segment_4toP_v1` run reported 0% princess touches across
+58,664 episodes. Looking closer revealed the detection rule was
+broken, and the agent had in fact reached the princess 11 times.
+
+#### What the rule was
+
+```python
+princess_touched = (
+    curr_fruits > prev_fruits          # game repopulates fruits 0 -> 4
+    and curr_lives >= prev_lives       # not a death respawn
+    and curr_bonus > prev_bonus        # bonus countdown resets up
+)
+```
+
+The intuition: when the agent touches the princess, the game
+"completes" the level by re-populating fruits, resetting the bonus
+countdown back to ~1000, all in a single frame. Detect that
+transition.
+
+The intuition was wrong.
+
+#### What actually happens at the touch frame
+
+Loaded a near-princess save state (32 px from the princess centre,
+no obstacles between, lives=3). Walked right and observed:
+
+| Frame | x  | y  | fruits | lives | bonus | score |
+|-------|----|----|--------|-------|-------|-------|
+| 0     | 68 | 54 | 0      | 3     | 693   | 370   |
+| 1     | 68 | 54 | 0      | 3     | 692   | 370   |
+| 2     | 69 | 54 | 0      | 3     | 691   | 370   |
+| 3     | 70 | 54 | 0      | 3     | 690   | 370   |
+| 4     | 71 | 54 | 0      | 3     | 690   | 370   |
+| 5     | 71 | 54 | 0      | 3     | 689   | 370   |
+| **6** | **72** | **54** | **0** | **3** | **689** | **1059** |
+
+Score jumped by 689 — exactly the remaining bonus consumed. But
+`fruits_remaining` stayed at 0, `bonus` stayed at 689, `lives`
+stayed at 3. The agent then enters a frozen "celebration" screen
+for ~370 frames before the next level starts and *only then* do
+fruits/bonus repopulate.
+
+So `(curr_fruits > prev_fruits AND curr_bonus > prev_bonus)` is
+strictly false at the touch frame. The rule never fires. By the
+time the celebration screen ends, the bonus-stall-frames timer
+(default 10) has already terminated the episode with end_reason
+`stall`.
+
+#### Finding a reliable signal
+
+Diff'd RAM bytes 10900..11200 between pre-touch and touch frames
+and watched all changes over 1500 frames. Most diffs were
+counters (animation, snowball positions, etc) that change during
+normal play. One byte stood out:
+
+- **RAM byte 11050** flips 0 → 1 only on the touch frame and stays
+  1 throughout the ~370-frame celebration. It auto-clears 1 → 0
+  when the next level starts.
+
+Confidence-checked across 26,336 frames of varied non-touch
+gameplay (random rollouts from CP4 seeds, random play from CP0
+including 2 fruit pickups and 1 death/respawn): zero 0 → 1
+transitions. The flag is a clean level-cleared signal.
+
+The implementation is in `scripts/probe_princess_flag_long_baseline.py`
+(re-runnable confidence check) and the new detection lives in
+`scripts/train_segment.py` as the rising-edge check
+`prev=0, curr=1` of `ram[11050]`.
+
+#### Re-analysing v1 with the new rule
+
+Episodes from v1 with `n_fruits_collected == 0` AND
+`final_score - start_score >= max(100, start_bonus / 2)` are very
+likely princess touches that the broken rule missed (delta
+matches consumed bonus, no other source of large score jumps in
+this segment). Eleven such episodes in the run:
+
+| step      | env | length | delta | start_bonus | final_xy   |
+|-----------|-----|--------|-------|-------------|------------|
+| 3,672,600 | 4   | 90     | 775   | 809         | (72, 46)   |
+| 4,047,864 | 3   | 118    | 755   | 809         | (72, 46)   |
+| 4,168,160 | 7   | 186    | 115   | 229         | (72, 44)   |
+| 4,323,664 | 3   | 147    | 507   | 574         | (72, 54)   |
+| 4,324,824 | 7   | 126    | 750   | 809         | (72, 44)   |
+| 4,557,480 | 0   | 92     | 764   | 809         | (72, 44)   |
+| 4,603,568 | 5   | 89     | 766   | 809         | (72, 46)   |
+| 4,605,416 | 1   | 98     | 760   | 809         | (72, 46)   |
+| 4,625,896 | 0   | 120    | 516   | 575         | (72, 44)   |
+| 4,822,168 | 5   | 88     | 777   | 809         | (72, 44)   |
+| 4,846,832 | 6   | 129    | 758   | 809         | (72, 44)   |
+
+Reading:
+
+- All eleven end at `final_x ≈ 72` (pixel ≈ 288) on floor 5 —
+  exactly where the princess sprite is.
+- Eight started from `(68, 78)` (a near-floor-5 seed); three
+  started from lower floors `(19, 150)`, `(27, 114)`, `(26, 110)`
+  and *climbed* to the princess. So the policy can chain ladders
+  end-to-end, occasionally.
+- All eleven are in the last ~30% of training (steps 3.7M-4.8M of
+  5M). The agent was learning; the broken rule denied it credit.
+- Nominal touch rate is 11 / 58,664 = 0.019%. Small but non-zero,
+  and almost certainly an undercount because the broken reward
+  also denied the policy the princess shaping signal.
+
+#### Implications
+
+1. The "0%" headline was an artifact. The v1 model occasionally
+   solves the segment.
+2. With the corrected detection, the universal-path-progress
+   reward will pay `prev_bonus * princess_scale` (≈ 25-40 reward)
+   on each touch, and the env terminates the episode with
+   `end_reason="princess_touched"` instead of waiting for a stall.
+   Both signal and credit assignment improve.
+3. The trained `segment_4toP_v1/final_model.zip` is a viable
+   warm-start for v2 — it already encodes a functioning navigate-
+   plus-touch policy at low rate.
+
+#### Next steps
+
+- Add the user's manually-saved near-princess state to the CP4
+  seed pool (32 px from princess, lives=3, bonus=696, no obstacles
+  in the way — strictly easier than the existing pool).
+- Launch `segment_4toP_v2` with the corrected detection. Same
+  config as v1 (5M, 8 envs, universal path-progress reward), but
+  this time success will actually be reinforced.
