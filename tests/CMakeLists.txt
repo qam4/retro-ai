@@ -28,3 +28,16 @@ target_link_libraries(retro_ai_tests
 
 include(GoogleTest)
 gtest_discover_tests(retro_ai_tests)
+
+# v2 -> v3 save-state backward-compat regression test (Crayon submodule).
+# Linked separately because it only depends on crayon_core.
+if(HAVE_MO5)
+    add_executable(retro_ai_savestate_compat_tests
+        test_savestate_v2_compat.cpp
+    )
+    target_link_libraries(retro_ai_savestate_compat_tests
+        crayon_core
+        gtest_main
+    )
+    gtest_discover_tests(retro_ai_savestate_compat_tests)
+endif()

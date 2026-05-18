@@ -105,7 +105,13 @@ endif()
 
 # MO5 emulator
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/emulators/mo5/CMakeLists.txt)
+    # Crayon (the upstream MO5 emulator submodule) sets BUILD_TESTS OFF in
+    # emulators/mo5/CMakeLists.txt with FORCE, which overwrites our
+    # cached value if we leave it as is. Save and restore around the
+    # add_subdirectory so retro-ai's BUILD_TESTS choice survives.
+    set(RETRO_AI_SAVED_BUILD_TESTS ${BUILD_TESTS})
     add_subdirectory(emulators/mo5)
+    set(BUILD_TESTS ${RETRO_AI_SAVED_BUILD_TESTS} CACHE BOOL "" FORCE)
     set(HAVE_MO5 ON)
 else()
     message(WARNING "MO5 emulator not found. Run: git submodule update --init")
