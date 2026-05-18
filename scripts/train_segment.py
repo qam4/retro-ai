@@ -52,6 +52,14 @@ SCORE_HI = 11093
 SCORE_LO = 11094
 X_POS = 11090
 Y_POS = 11089
+# Level-cleared flag. Verified empirically (see
+# scripts/probe_princess_flag_long_baseline.py): byte 11050 is 0
+# during all normal gameplay (walking, jumping, climbing, fruit
+# pickups, deaths, respawns) and only flips to 1 on the frame the
+# agent touches the princess. It auto-clears when the next level
+# starts (~370 frames later). Detect princess touch as a 0->1
+# rising edge.
+PRINCESS_FLAG_ADDR = 11050
 
 
 # Shared global-step & episode-id counters across threaded envs.
@@ -207,6 +215,7 @@ class SegmentEnv(gym.Env):
         self._stall = 0
         self._episode_reward = 0.0
         self._fruits_collected_this_ep = 0
+        self._prev_princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         self._episode_id = _next_episode_id()
 
         # Initialise reward tracer for this episode.
@@ -265,6 +274,12 @@ class SegmentEnv(gym.Env):
         fruits_present = tuple(
             self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0 for i in (1, 2, 3, 4)
         )
+        princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
+        # Rising-edge detection: 0 -> 1 means agent just touched the
+        # princess this frame. The flag stays 1 through the
+        # celebration (~370 frames) and clears when the next level
+        # starts; we only count the first frame.
+        princess_touched = princess_flag == 1 and self._prev_princess_flag == 0
 
         # Named reward formula — exact behavior controlled by run config.
         ctx = RewardContext(
@@ -280,6 +295,7 @@ class SegmentEnv(gym.Env):
             curr_y=y,
             curr_x=x,
             fruits_present=fruits_present,
+            princess_touched=princess_touched,
         )
         reward = float(self._reward_fn(ctx))
 
@@ -290,15 +306,9 @@ class SegmentEnv(gym.Env):
             self._fruits_collected_this_ep += collected
             self.collected_states.append(self.iface.save_state())
 
-        # Princess touch detection (mirrors the reward's logic).
-        # When detected, count it as a "success" so the live metric
-        # reflects princess reaches, and the state is captured for
-        # use as a "post-princess" seed by the next segment if any.
-        princess_touched = (
-            fruits > self._prev_fruits
-            and lives >= self._prev_lives
-            and bonus > self._prev_bonus
-        )
+        # Princess touch counts as a "success" for the live metric
+        # and the post-touch state is captured for use as a seed by
+        # the next segment if any.
         if princess_touched:
             self.successes += 1
             self._fruits_collected_this_ep += 1
@@ -306,6 +316,7 @@ class SegmentEnv(gym.Env):
 
         self._prev_fruits = fruits
         self._prev_score = score
+        self._prev_princess_flag = princess_flag
         self._episode_reward += reward
 
         # Episode termination

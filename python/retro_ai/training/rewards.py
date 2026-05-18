@@ -21,10 +21,9 @@ Registered formulas
                             Matches the post-Apr-2026 reward and segment training.
 - ``fruit_princess_bonus`` — same as ``fruit_bonus`` plus a one-shot reward
                              when the princess is reached (level complete).
-                             Detected by fruits_remaining repopulating from
-                             0 to 4 while lives is preserved and bonus resets
-                             upward — uses prev_bonus so a fast finish pays
-                             more than a slow one.
+                             Fires when the caller flags
+                             ``ctx.princess_touched`` — uses prev_bonus
+                             so a fast finish pays more than a slow one.
 - ``score_delta_survival`` — clipped score delta + constant per-step bonus.
                             Matches go_explore_phase2.py.
 
@@ -83,6 +82,11 @@ class RewardContext:
     # Empty tuple means "not provided". When provided, ``True`` means
     # the fruit is still on the map, ``False`` means collected.
     fruits_present: tuple = ()
+    # True on the single step where the agent just touched the
+    # princess (rising edge of the level-cleared flag in RAM). The
+    # caller is responsible for the rising-edge check; reward
+    # functions can treat this as authoritative.
+    princess_touched: bool = False
 
 
 RewardFn = Callable[[RewardContext], float]
@@ -201,19 +205,15 @@ def _fruit_bonus(params: Mapping[str, Any]) -> RewardFn:
 def _fruit_princess_bonus(params: Mapping[str, Any]) -> RewardFn:
     """Fruit reward plus a one-shot princess reward on level complete.
 
-    Same fruit term as ``fruit_bonus``. On a level-complete transition
-    (princess reached), the game in the same frame:
+    Same fruit term as ``fruit_bonus``. The princess term fires when
+    the caller flags ``ctx.princess_touched=True`` — typically the
+    rising edge of the Yeti level-cleared RAM flag (byte 11050). See
+    ``scripts/train_segment.py`` for the canonical detection.
 
-    - Repopulates ``fruits_remaining`` from 0 back to 4
-    - Resets the bonus countdown to ~1000
-    - Preserves ``lives`` (the transition costs no life)
-
-    Those three conditions together are taken to mean the princess was
-    reached (a death-respawn also repopulates fruits but decrements
-    lives). The princess term uses ``prev_bonus`` — the bonus value the
-    agent earned *as* they touched the princess, before the game reset
-    it — so a fast finish pays more than a slow one, same as the
-    per-fruit term.
+    The princess term uses ``prev_bonus`` — the bonus value the agent
+    earned *as* they touched the princess, before the game zeroes it
+    on level transition — so a fast finish pays more than a slow one,
+    same as the per-fruit term.
 
     Parameters
     ----------
@@ -232,13 +232,8 @@ def _fruit_princess_bonus(params: Mapping[str, Any]) -> RewardFn:
         if ctx.curr_fruits < ctx.prev_fruits:
             collected = ctx.prev_fruits - ctx.curr_fruits
             return collected * ctx.curr_bonus * fruit_scale
-        # Princess / level complete: fruits repopulated, no life lost,
-        # bonus jumped back up.
-        if (
-            ctx.curr_fruits > ctx.prev_fruits
-            and ctx.curr_lives >= ctx.prev_lives
-            and ctx.curr_bonus > ctx.prev_bonus
-        ):
+        # Princess / level complete: caller flagged the rising edge.
+        if ctx.princess_touched:
             return ctx.prev_bonus * princess_scale
         return 0.0
 
@@ -568,12 +563,11 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
 
     When ALL fruits are collected (CP4), targets the princess node
     in the navigation graph instead. Pays best_d ratchet toward
-    princess. On princess touch (detected via the same rule as
-    ``fruit_princess_bonus``: ``curr_fruits > prev_fruits AND
-    curr_lives >= prev_lives AND curr_bonus > prev_bonus``), pays
-    ``prev_bonus * princess_scale`` and resets all best_d entries
-    (game just re-populated fruits and reset bonus for the next
-    level).
+    princess. The princess term fires when the caller flags
+    ``ctx.princess_touched=True`` — typically the rising edge of the
+    Yeti level-cleared RAM flag (byte 11050). When that fires, this
+    pays ``prev_bonus * princess_scale`` and resets all best_d
+    entries (the game just reloaded the level).
 
     Parameters
     ----------
@@ -618,17 +612,12 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
                 collected = ctx.prev_fruits - ctx.curr_fruits
                 reward += collected * ctx.curr_bonus * fruit_scale
 
-            # Princess touch detection: fruits repopulated, lives
-            # preserved, bonus jumped up. Pays a one-shot reward.
-            princess_touched = (
-                ctx.curr_fruits > ctx.prev_fruits
-                and ctx.curr_lives >= ctx.prev_lives
-                and ctx.curr_bonus > ctx.prev_bonus
-            )
-            if princess_touched:
+            # Princess touch: caller flagged the rising edge of the
+            # level-cleared flag. Pay one-shot reward and reset all
+            # best_d trackers (game is about to reload the level with
+            # fruits=4 and bonus=1000).
+            if ctx.princess_touched:
                 reward += ctx.prev_bonus * princess_scale
-                # Game reset: clear all best_d so the next level
-                # starts fresh.
                 self.best_d = {1: None, 2: None, 3: None, 4: None}
                 self.best_d_princess = None
 

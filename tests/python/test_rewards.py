@@ -482,6 +482,7 @@ def _puc(
     prev_bonus=None,
     curr_lives=5,
     prev_lives=5,
+    princess_touched=False,
 ):
     """Shortcut for universal-path-progress context."""
     if prev_fruits is None:
@@ -498,6 +499,7 @@ def _puc(
         curr_x=x,
         curr_y=y,
         fruits_present=fp,
+        princess_touched=princess_touched,
     )
 
 
@@ -547,8 +549,8 @@ def test_universal_no_princess_progress_while_fruits_remain():
 
 
 def test_universal_princess_touch_pays_one_shot():
-    """A princess touch event (fruits up + lives preserved + bonus
-    up) pays prev_bonus * princess_scale."""
+    """A princess touch event (caller flagged the rising edge of the
+    level-cleared flag) pays prev_bonus * princess_scale."""
     fn = create(
         "fruit_bonus_path_progress_universal",
         {"scale": 0.01, "princess_scale": 0.05},
@@ -556,28 +558,29 @@ def test_universal_princess_touch_pays_one_shot():
     # Init at CP4 (no fruits remaining).
     fp_done = (False, False, False, False)
     fn(_puc(x=70, y=56, fp=fp_done, fruits_rem=0))
-    # Princess touch: fruits 0 -> 4, lives unchanged, bonus jumps up.
-    fp_post = (True, True, True, True)
+    # Princess touch: caller sets princess_touched=True. Note that on
+    # this exact frame the fruits/bonus haven't changed yet — the
+    # game keeps fruits=0 and bonus near its current value at the
+    # touch frame, then resets ~370 frames later.
     r = fn(
         _puc(
             x=70,
             y=56,
-            fp=fp_post,
-            fruits_rem=4,
+            fp=fp_done,
+            fruits_rem=0,
             prev_fruits=0,
-            curr_bonus=1000,
+            curr_bonus=400,
             prev_bonus=400,
+            princess_touched=True,
         )
     )
     # princess term = 400 * 0.05 = 20.0
-    # fruit term: curr_fruits > prev_fruits triggers neither pickup
-    # branch in this reward (pickup requires curr < prev).
     assert r >= 20.0 - 1e-6
 
 
 def test_universal_death_respawn_does_not_count_as_princess():
-    """fruits goes 0 -> 4 with lives DECREMENTING is a death respawn,
-    not a princess touch — must not pay the princess term."""
+    """Without ``princess_touched=True`` the reward must not pay the
+    princess term, even if fruits go from 0 -> 4 (death respawn)."""
     fn = create(
         "fruit_bonus_path_progress_universal",
         {"scale": 0.01, "princess_scale": 0.05},
@@ -596,10 +599,10 @@ def test_universal_death_respawn_does_not_count_as_princess():
             prev_bonus=400,
             curr_lives=4,
             prev_lives=5,
+            princess_touched=False,
         )
     )
-    # Lives went down -> death respawn, not princess. No reward
-    # except possibly fruit progress (which on initial-step is 0).
+    # No princess flag -> no princess reward.
     assert r == 0.0
 
 
@@ -613,17 +616,17 @@ def test_universal_princess_touch_clears_best_d():
     # Build up some best_d state on fruits.
     fn(_puc(x=0, y=184))
     fn(_puc(x=20, y=184))
-    # Trigger a princess touch (forced via the right ctx shape).
-    fp_post = (True, True, True, True)
+    # Trigger a princess touch.
     fn(
         _puc(
             x=0,
             y=184,
-            fp=fp_post,
+            fp=(True, True, True, True),
             fruits_rem=4,
             prev_fruits=0,
-            curr_bonus=1000,
+            curr_bonus=400,
             prev_bonus=400,
+            princess_touched=True,
         )
     )
     # All best_d entries should be None or freshly set this step.
@@ -632,11 +635,9 @@ def test_universal_princess_touch_clears_best_d():
     bd = fn.best_d
     # Fruit 1 is at floor 1 same as agent — got initialised this step.
     assert bd[1] is not None
-    # Other fruits: also initialised this step (they're remaining and
-    # we computed distances).
-    # The point is: the previous (smaller best_d[1] from before the
-    # touch) was cleared. Verify by checking it's at the freshly-
-    # computed distance for x=0, not the smaller one we'd seen at x=20.
+    # The previous (smaller best_d[1] from before the touch) was
+    # cleared. Verify by checking it's at the freshly-computed
+    # distance for x=0, not the smaller one we'd seen at x=20.
     # At x=0 floor=1, agent centre pix = 0*4+8 = 8. F1 centre = 184.
     # |8-184| = 176.
     assert bd[1] == 176
