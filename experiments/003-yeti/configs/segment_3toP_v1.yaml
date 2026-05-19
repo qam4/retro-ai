@@ -1,0 +1,56 @@
+# segment_3toP v1 — backward curriculum extension from CP4->princess.
+#
+# Approach 25 ended with one policy that solves CP4 -> princess at
+# 68.8% (deterministic eval). This run continues from that policy
+# but starts episodes from the CP3 seed pool (fruits=1, F4 remaining).
+# The path-progress universal reward still pays toward F4 first, then
+# toward the princess, in a single episode — no manual transition,
+# no chaining infrastructure.
+#
+# Hypothesis: the warm-started policy preserves its CP4->princess
+# skill while learning to pick F4 and continue. If it instead
+# regresses on the CP4->princess part (catastrophic forgetting),
+# we'll see overall touch rate drop and will need to mix CP3+CP4
+# seeds in the pool.
+#
+# Seeds: v9_v3_cp3enriched.pkl has 128 CP3 seeds (built from
+# v9 + v7 collected_states, deduplicated, validated probe=120).
+# Same pool used for segment_3to4_v1.
+#
+# Reward, ppo, env match segment_4toP_v2 so any difference in
+# results is attributable to the seed-pool change + warm-start
+# regime.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_3toP_v1
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/training/segment_4toP_v2/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_v3_cp3enriched.pkl
+  segment: 3

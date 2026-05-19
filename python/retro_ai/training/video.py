@@ -109,7 +109,11 @@ class VideoRecorder:
         if self._overlay and (reward != 0.0 or step != 0):
             text = f"R:{reward:.0f}  Step:{step}"
             if abs(step_reward) > 0.001:
-                text += f"  +{step_reward:.1f}" if step_reward > 0 else f"  {step_reward:.1f}"
+                text += (
+                    f"  +{step_reward:.1f}"
+                    if step_reward > 0
+                    else f"  {step_reward:.1f}"
+                )
             font_scale = max(0.4, 0.4 * self._scale)
             thickness = max(1, self._scale)
             self._cv2.putText(

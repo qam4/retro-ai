@@ -25,7 +25,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        submodules: recursive
+        submodules: true
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -89,7 +89,10 @@ jobs:
         python-version: '3.12'
 
     - name: Install dependencies
-      run: pip install black ruff
+      # Pinned to match the local dev version; bump in lockstep with
+      # whatever .kiro/steering/pre-commit.md targets to avoid noisy
+      # CI failures when upstream black ships breaking style updates.
+      run: pip install 'black==25.11.0' 'ruff==0.15.13'
 
     - name: Check formatting with black
       run: black --check python/

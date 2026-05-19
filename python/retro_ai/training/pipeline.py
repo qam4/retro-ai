@@ -247,9 +247,7 @@ class TrainingPipeline:
                         TimeLimitWrapper,
                     )
 
-                    env = TimeLimitWrapper(
-                        env, self.config.max_episode_steps
-                    )
+                    env = TimeLimitWrapper(env, self.config.max_episode_steps)
                 # Add sticky actions if configured
                 if self.config.sticky_actions > 0:
                     from retro_ai.wrappers.sticky_actions import (

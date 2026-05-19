@@ -429,7 +429,9 @@ class DreamEnv(gym.Env):
         starts = self._buffer.sample_starts(1)
         obs_chw = starts[0]
         # Convert to (H,W,C) for Gymnasium
-        self._current_obs = np.transpose(obs_chw, (1, 2, 0)) if obs_chw.ndim == 3 else obs_chw
+        self._current_obs = (
+            np.transpose(obs_chw, (1, 2, 0)) if obs_chw.ndim == 3 else obs_chw
+        )
         self._step_count = 0
         return self._current_obs.copy(), {}
 
@@ -437,8 +439,13 @@ class DreamEnv(gym.Env):
         self._world_model.eval()
 
         # Flatten MultiDiscrete action to single int for world model
-        if hasattr(action, '__len__') and len(action) > 1:
-            nvec = self._real_action_space.nvec if self._real_action_space is not None and hasattr(self._real_action_space, 'nvec') else None
+        if hasattr(action, "__len__") and len(action) > 1:
+            nvec = (
+                self._real_action_space.nvec
+                if self._real_action_space is not None
+                and hasattr(self._real_action_space, "nvec")
+                else None
+            )
             if nvec is not None:
                 action_int = 0
                 multiplier = 1
@@ -463,8 +470,14 @@ class DreamEnv(gym.Env):
             pred_obs, pred_reward = self._world_model(obs_t, act_t)
 
         # World model outputs (C,H,W), convert back to (H,W,C) for Gymnasium
-        next_obs_chw = (pred_obs.squeeze(0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
-        next_obs = np.transpose(next_obs_chw, (1, 2, 0)) if next_obs_chw.ndim == 3 else next_obs_chw
+        next_obs_chw = (
+            (pred_obs.squeeze(0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+        )
+        next_obs = (
+            np.transpose(next_obs_chw, (1, 2, 0))
+            if next_obs_chw.ndim == 3
+            else next_obs_chw
+        )
         reward = pred_reward.item()
 
         self._step_count += 1
@@ -611,7 +624,11 @@ class SimplePipeline:
                 dream_vec = DummyVecEnv([lambda: Monitor(dream_env)])
                 policy.set_env(dream_vec)
                 logger.info("simple_dream_train: %d synthetic steps", synthetic_steps)
-                policy.learn(total_timesteps=synthetic_steps, reset_num_timesteps=False, log_interval=1)
+                policy.learn(
+                    total_timesteps=synthetic_steps,
+                    reset_num_timesteps=False,
+                    log_interval=1,
+                )
                 # Switch back to real env for next round's data collection
                 policy.set_env(
                     DummyVecEnv([lambda: real_env])
@@ -673,8 +690,10 @@ class SimplePipeline:
             done = terminated or truncated
 
             # Flatten MultiDiscrete action to single int for world model
-            if hasattr(action_val, '__len__') and len(action_val) > 1:
-                nvec = env.action_space.nvec if hasattr(env.action_space, 'nvec') else None
+            if hasattr(action_val, "__len__") and len(action_val) > 1:
+                nvec = (
+                    env.action_space.nvec if hasattr(env.action_space, "nvec") else None
+                )
                 if nvec is not None:
                     action_int = 0
                     multiplier = 1
@@ -688,7 +707,9 @@ class SimplePipeline:
 
             # Transpose (H,W,C) → (C,H,W) for world model buffer
             obs_chw = np.transpose(obs, (2, 0, 1)) if obs.ndim == 3 else obs
-            next_obs_chw = np.transpose(next_obs, (2, 0, 1)) if next_obs.ndim == 3 else next_obs
+            next_obs_chw = (
+                np.transpose(next_obs, (2, 0, 1)) if next_obs.ndim == 3 else next_obs
+            )
             buffer.add(obs_chw, action_int, float(reward), next_obs_chw, done)
             collected += 1
 
