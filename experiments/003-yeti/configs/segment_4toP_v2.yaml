@@ -1,0 +1,55 @@
+# segment_4toP v2 — corrected princess detection + enriched seed pool.
+#
+# What changed from v1:
+#   1. Princess-touch detection now uses the rising edge of the
+#      level-cleared RAM flag at byte 11050. The previous heuristic
+#      (curr_fruits>prev AND lives>=prev AND bonus>prev) never fired
+#      at the actual touch frame and v1 reported 0% touches across
+#      58k episodes despite achieving 11 touches in the last 30% of
+#      training (verified empirically). See approach 24.
+#   2. Seed pool extended with the user's manually-saved near-
+#      princess state: 32 px from princess, no obstacles, lives=3.
+#      Pool grew from 7 -> 8 seeds. The user's seed is at index 0
+#      of the CP4 bucket so it gets used in initial rollouts.
+#   3. Warm-start from v1's final_model.zip: the v1 policy already
+#      learned a workable navigate-and-touch strategy at low rate,
+#      and with proper success credit the v2 run should converge
+#      faster than from scratch.
+#
+# Reward, ppo, env, num_envs match v1 exactly so any behaviour
+# change is attributable to the detection fix + warm-start + extra
+# seed.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/segment_4toP_v2
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/training/segment_4toP_v1/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+segment:
+  checkpoints: output/mo5/yeti/seeds/v9_v5_cp4_user_seed.pkl
+  segment: 4

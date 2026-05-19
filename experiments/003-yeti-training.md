@@ -1847,3 +1847,98 @@ Reading:
 - Launch `segment_4toP_v2` with the corrected detection. Same
   config as v1 (5M, 8 envs, universal path-progress reward), but
   this time success will actually be reinforced.
+
+### 25. CP4 → princess: 68.8% with corrected detection + warm-start  *(verified)*
+
+`segment_4toP_v2` ran for 5M steps with (a) the corrected princess
+detection rule (RAM byte 11050 rising edge), (b) the seed pool
+extended with the user's manually-saved near-princess state
+(`v9_v5_cp4_user_seed.pkl`, 8 seeds total), and (c) warm-start from
+v1's `final_model.zip`.
+
+#### Training-time metric
+
+End-reason distribution across all 53,674 training episodes:
+
+```
+princess_touched: 9907 (18.5%)
+env_done:        43767 (81.5%)
+```
+
+vs v1's effective 0.019% (eleven episodes out of 58k that the
+broken rule missed). The credit-assignment fix pays out.
+
+The success rate climbs visibly across training — last 5% of the
+log shows windows of 38-67%, mostly driven by the easy seed.
+
+#### Per-seed deterministic eval
+
+The training-time number averages over 5M steps of policy
+evolution. To assess the *final* policy quality, ran 10 stochastic
+rollouts per seed (`max_steps=2000`):
+
+| Seed | Start (ram_x, ram_y) | Pixel centre | Floor | Touches | Avg length |
+|------|----------------------|--------------|-------|---------|------------|
+| 0 | (68, 54)  | (280, 54)  | 5  | 10/10 | 6      |
+| 1 | (18, 140) | (80, 140)  | 2  | 9/10  | 192    |
+| 2 | (18, 140) | (80, 140)  | 2  | 7/10  | 191    |
+| 3 | (19, 150) | (84, 150)  | 2  | 10/10 | 185    |
+| 4 | (19, 150) | (84, 150)  | 2  | 9/10  | 181    |
+| 5 | (26, 110) | (112, 110) | 3  | 5/10  | 112    |
+| 6 | (27, 114) | (116, 114) | 3  | 5/10  | 109    |
+| 7 | (68, 78)  | (280, 78)  | 4  | **0/10** | -    |
+
+Overall: **55/80 = 68.8%**.
+
+The headline is the floor-2 starts: 35/40 (87.5%). Three full
+ladder climbs (L23 + L34 + L45) plus a snowball-dodge run, in
+~185 frames. The end-to-end task is clearly within reach.
+
+#### The remaining failure mode
+
+Seed 7 — start `(68, 78)` on floor 4 — fails 100% of the time.
+
+Geometry: agent at pixel x=280, princess at pixel x=312, but the
+only way up to floor 5 is ladder L45 at pixel x=200. So from
+seed 7 the policy must walk LEFT to L45 (away from the princess
+in pixel-x terms), climb, then walk right past snowballs to the
+princess.
+
+Every other seed in the pool is consistent with "head broadly
+right and up" — even the floor-2 starts have ladders to their
+right (L23 at x=232). Seed 7 alone requires going against that
+gradient.
+
+The path-progress reward should still pay for moving toward L45
+because the navigation graph routes through it. But the warm-
+started v1 policy didn't have any L45-direction signal during v1
+training (the broken rule blocked credit assignment), so it
+likely calcified an "easier" rightward-bias. v2's training added
+princess credit but the floor-4 pattern is contradicted by every
+other seed's policy.
+
+#### Implications
+
+1. **The principal claim is empirically met**: per-segment
+   CP4→princess training works at 68.8% across the seed pool.
+2. **The last 30% gap is concentrated on one start position**.
+   Whether to fix it depends on what the per-segment numbers
+   feed into next: if we chain with segment_3to4, only the
+   handoff distribution matters; if we build a unified model,
+   we need every CP4 cell solvable.
+
+#### Next steps
+
+Two viable directions, distinct in cost:
+
+- **Cheap probe**: rollout from seed 7 with an exploration noise
+  override (eg ent_coef=0.1) for ~50k steps to see if the policy
+  can be nudged into discovering L45. This tests "the policy is
+  stuck in a local min" hypothesis cheaply.
+- **Deeper fix**: add a curated near-L45 floor-4 save (analogous
+  to the user's near-princess save) to the seed pool, then re-
+  train. Mirrors what unblocked v1 → v2.
+
+If the user's segment_3to4 distribution naturally lands on the
+"head right" floor-4 positions (not the (68, 78) one), then
+chaining might not need the seed 7 fix at all.
