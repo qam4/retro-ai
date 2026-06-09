@@ -113,6 +113,13 @@ class CurriculumConfig:
     max_states_per_checkpoint: int = 100
     min_states_to_advance: int = 20
     seed_archive: Optional[str] = None
+    # Minimum number of frames the agent must survive *after* a
+    # checkpoint snapshot, under its own policy, for that state to be
+    # admitted to the seed pool. Replaces the old passive-noop probe
+    # (state_validator) which rejected ~99% of real mid-action
+    # pickups. A snapshot that led to the next checkpoint in the same
+    # episode is always admitted regardless of this threshold.
+    min_survival_frames: int = 30
 
 
 @dataclass(frozen=True)

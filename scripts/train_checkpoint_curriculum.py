@@ -25,7 +25,6 @@ import os
 import random
 import threading
 import time
-from collections import deque
 from typing import Optional
 
 import gymnasium as gym
@@ -104,6 +103,7 @@ class CheckpointManager:
         reset_fraction: float,
         frontier_fraction: float,
         earlier_fraction: float,
+        min_survival_frames: int = 30,
     ):
         total = reset_fraction + frontier_fraction + earlier_fraction
         if abs(total - 1.0) > 1e-6:
@@ -116,15 +116,22 @@ class CheckpointManager:
         self.min_states_to_advance = min_states_to_advance
         self.reset_fraction = reset_fraction
         self.frontier_fraction = frontier_fraction
+        self.min_survival_frames = min_survival_frames
 
-        self.checkpoints = [
-            deque(maxlen=max_states_per_checkpoint)
-            for _ in range(self.FRUITS_TOTAL + 1)
-        ]
+        # Each pool is a plain list of (bonus, state_bytes) entries.
+        # ``bonus`` is the in-game bonus countdown at the snapshot
+        # moment — higher = the fruit was reached faster, leaving more
+        # game-time to continue, which makes a better start state. When
+        # a pool is full we evict the lowest-bonus entry, so the pool
+        # retains the best states rather than just the most recent.
+        self.checkpoints = [[] for _ in range(self.FRUITS_TOTAL + 1)]
         self.frontier = 0
         self.stats = {
             "saves": [0] * (self.FRUITS_TOTAL + 1),
             "starts": [0] * (self.FRUITS_TOTAL + 1),
+            # How many snapshots we rejected for being too precarious
+            # (died too soon under the policy, didn't reach next CP).
+            "rejected_precarious": [0] * (self.FRUITS_TOTAL + 1),
         }
         self.segment_attempts = [0] * (self.FRUITS_TOTAL + 1)
         self.segment_successes = [0] * (self.FRUITS_TOTAL + 1)
@@ -135,23 +142,74 @@ class CheckpointManager:
             if reached_level > start_level:
                 self.segment_successes[start_level] += 1
 
-    def save_checkpoint(self, fruits_collected, state_bytes):
+    def _insert(self, level, bonus, state_bytes):
+        """Insert a (bonus, state) entry into a pool, keeping the best.
+
+        If the pool has room, append. If it's full, replace the
+        lowest-bonus entry only when the newcomer has a higher bonus;
+        otherwise drop the newcomer. This keeps each pool at the top
+        ``max_states_per_checkpoint`` states by bonus.
+        """
+        pool = self.checkpoints[level]
+        entry = (int(bonus), bytes(state_bytes))
+        if len(pool) < self.max_states_per_checkpoint:
+            pool.append(entry)
+            self.stats["saves"][level] += 1
+            self._maybe_advance_frontier()
+            return
+        # Pool full: find the current minimum-bonus entry.
+        min_idx = min(range(len(pool)), key=lambda i: pool[i][0])
+        if entry[0] > pool[min_idx][0]:
+            pool[min_idx] = entry
+            self.stats["saves"][level] += 1
+        # else: newcomer is worse than everything we have; drop it.
+
+    def save_checkpoint(self, fruits_collected, state_bytes, bonus=0):
+        # Used for offline seed_archive seeding (no play-based score).
         if 0 <= fruits_collected <= self.FRUITS_TOTAL:
-            self.checkpoints[fruits_collected].append(bytes(state_bytes))
-            self.stats["saves"][fruits_collected] += 1
-            while (
-                self.frontier < self.FRUITS_TOTAL
-                and len(self.checkpoints[self.frontier]) >= self.min_states_to_advance
-            ):
-                self.frontier = max(
-                    self.frontier,
-                    max(
-                        i
-                        for i in range(self.FRUITS_TOTAL + 1)
-                        if len(self.checkpoints[i]) >= self.min_states_to_advance
-                    ),
-                )
-                break
+            self._insert(fruits_collected, bonus, state_bytes)
+
+    def save_scored(
+        self, fruits_collected, state_bytes, survived_frames, reached_next, bonus
+    ):
+        """Admit a checkpoint snapshot judged by *real play*, not a probe.
+
+        ``survived_frames`` is how long the agent stayed alive after
+        the snapshot, under its own policy, in the episode that
+        produced it. ``reached_next`` is whether that same episode
+        went on to collect the next fruit (or the princess). ``bonus``
+        is the in-game bonus countdown at the snapshot moment, used as
+        the retention priority.
+
+        A snapshot is admitted if it either led to the next checkpoint
+        (strong signal it's a good handoff state) or the agent survived
+        at least ``min_survival_frames`` from it (it wasn't a
+        grabbed-while-dying fluke). This replaces the old passive-noop
+        probe, which rejected ~99% of normal mid-action pickups. Among
+        admitted states, the pool keeps the highest-bonus ones.
+        """
+        if not (0 <= fruits_collected <= self.FRUITS_TOTAL):
+            return
+        admit = reached_next or survived_frames >= self.min_survival_frames
+        if not admit:
+            self.stats["rejected_precarious"][fruits_collected] += 1
+            return
+        self._insert(fruits_collected, bonus, state_bytes)
+
+    def _maybe_advance_frontier(self):
+        while (
+            self.frontier < self.FRUITS_TOTAL
+            and len(self.checkpoints[self.frontier]) >= self.min_states_to_advance
+        ):
+            self.frontier = max(
+                self.frontier,
+                max(
+                    i
+                    for i in range(self.FRUITS_TOTAL + 1)
+                    if len(self.checkpoints[i]) >= self.min_states_to_advance
+                ),
+            )
+            break
 
     def pick_start(self):
         """Pick a starting checkpoint level.
@@ -185,7 +243,8 @@ class CheckpointManager:
 
         if level == 0:
             return 0, None
-        state = random.choice(self.checkpoints[level])
+        # Pool entries are (bonus, state_bytes); return the state.
+        _bonus, state = random.choice(self.checkpoints[level])
         return level, state
 
     def summary(self):
@@ -197,7 +256,11 @@ class CheckpointManager:
                 rates.append(f"{i}->{i+1}:{pct:.0f}%")
             else:
                 rates.append(f"{i}->{i+1}:N/A")
-        return f"cp={sizes} saves={self.stats['saves']} success=[{', '.join(rates)}]"
+        rej = self.stats.get("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
+        return (
+            f"cp={sizes} saves={self.stats['saves']} "
+            f"rejected={rej} success=[{', '.join(rates)}]"
+        )
 
     def save_to_disk(self, path):
         import pickle
@@ -220,8 +283,19 @@ class CheckpointManager:
             data = pickle.load(f)
         for i, states in enumerate(data["checkpoints"]):
             for s in states:
-                self.checkpoints[i].append(s)
-        self.stats = data.get("stats", self.stats)
+                # Normalize: new format is (bonus, state_bytes); old
+                # format was raw state_bytes (assign neutral bonus 0).
+                if isinstance(s, tuple) and len(s) == 2:
+                    entry = (int(s[0]), bytes(s[1]))
+                else:
+                    entry = (0, bytes(s))
+                if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
+                    self.checkpoints[i].append(entry)
+        loaded_stats = data.get("stats", self.stats)
+        # Tolerate older checkpoint files that predate the
+        # rejected_precarious counter.
+        loaded_stats.setdefault("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
+        self.stats = loaded_stats
         print(f"  Loaded checkpoints from {path}: {self.summary()}", flush=True)
 
 
@@ -329,6 +403,15 @@ class CheckpointCurriculumEnv(gym.Env):
         self._episode_reward = 0.0
         self._fruits_collected_this_ep = 0
         self._prev_princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
+        # Deferred checkpoint scoring: snapshots taken this episode,
+        # each (fruits_collected_level, state_bytes, save_step). They
+        # are scored and admitted to the pool at episode end based on
+        # how the rest of the episode played out (real survival /
+        # reached-next), not a passive probe.
+        self._pending_saves = []
+        # Highest checkpoint level reached this episode (fruits
+        # collected; princess touch counts as level 5).
+        self._max_cp_this_ep = self._start_fruits
         self._episode_id = _next_episode_id()
 
         return obs, {}
@@ -367,21 +450,29 @@ class CheckpointCurriculumEnv(gym.Env):
         )
         reward = float(self._reward_fn(ctx))
 
-        # Save checkpoint on fruit collection (validated via _validate_checkpoint)
+        # Snapshot on fruit collection. Scoring is deferred to episode
+        # end (see _pending_saves): we judge the state by how the rest
+        # of the real episode unfolds, not a passive probe.
         if fruits < self._prev_fruits:
             self._fruits_collected_this_ep += self._prev_fruits - fruits
             collected_total = 4 - fruits
-            state_bytes = self.base._interface.save_state()
-            # WORKAROUND: ~10% of save states produce a frozen game state
-            # after load. Validate by running a few frames & checking bonus
-            # changes. Invalid states are discarded.
-            # TODO: fix the root cause in crayon's state serialization.
-            if self._validate_checkpoint(state_bytes):
-                _manager.save_checkpoint(collected_total, state_bytes)
+            self._max_cp_this_ep = max(self._max_cp_this_ep, collected_total)
+            self._pending_saves.append(
+                (
+                    collected_total,
+                    self.base._interface.save_state(),
+                    self._step_count,
+                    bonus,
+                )
+            )
 
         # Princess touch ends the episode and counts as a success.
         if princess_touched:
             self._fruits_collected_this_ep += 1
+            # Princess is the terminal "checkpoint" (level 5); any
+            # pending fruit snapshot in this episode therefore reached
+            # the next checkpoint.
+            self._max_cp_this_ep = max(self._max_cp_this_ep, 5)
 
         self._prev_fruits = fruits
         self._prev_score = score
@@ -420,6 +511,15 @@ class CheckpointCurriculumEnv(gym.Env):
             start_level = 4 - self._start_fruits
             reached_level = 4 - fruits
             _manager.record_episode(start_level, reached_level)
+            # Flush deferred checkpoint snapshots, scored by how the
+            # rest of this episode actually played out.
+            for level, state_bytes, save_step, save_bonus in self._pending_saves:
+                survived = self._step_count - save_step
+                reached_next = self._max_cp_this_ep > level
+                _manager.save_scored(
+                    level, state_bytes, survived, reached_next, save_bonus
+                )
+            self._pending_saves = []
             if end_reason is None:
                 end_reason = "env_done" if done else "env_truncated"
             self._log_episode(end_reason, fruits, bonus, score)
@@ -454,30 +554,6 @@ class CheckpointCurriculumEnv(gym.Env):
             final_bonus=bonus,
             start_state_hash=self._start_state_hash,
         )
-
-    def _validate_checkpoint(self, state_bytes) -> bool:
-        """Check if a save state produces a playable game.
-
-        Delegates to :func:`retro_ai.training.state_validator.validate_state`.
-        Wraps it with a save/restore of the env's current state so training
-        isn't disturbed by the probe.
-        """
-        from retro_ai.training.state_validator import validate_state
-
-        def _step_noop() -> bool:
-            _, _, done, _, _ = self.base.step([0, 0, 0])
-            return bool(done)
-
-        original = self.base._interface.save_state()
-        try:
-            result = validate_state(
-                state_bytes=state_bytes,
-                load_state=self.base._interface.load_state,
-                step_noop=_step_noop,
-            )
-        finally:
-            self.base._interface.load_state(original)
-        return result.viable
 
 
 class CurriculumCallback(BaseCallback):
@@ -535,6 +611,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         reset_fraction=cfg.curriculum.reset_fraction,
         frontier_fraction=cfg.curriculum.frontier_fraction,
         earlier_fraction=cfg.curriculum.earlier_fraction,
+        min_survival_frames=cfg.curriculum.min_survival_frames,
     )
 
     print("Checkpoint Curriculum Training", flush=True)
