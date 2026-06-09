@@ -1,0 +1,45 @@
+# Smoke test for yeti_universal_v1: 50k steps from CP0 with the
+# universal reward. No warm-start; we want to confirm:
+#   1. The wiring of princess flag detection in
+#      train_checkpoint_curriculum.py works (princess_touched
+#      end_reason fires when expected).
+#   2. The universal reward fires path-progress shaping toward
+#      F1 on the very first episodes.
+#   3. No regressions vs train_segment.py (which uses the same
+#      reward wiring).
+
+training:
+  timesteps: 50_000
+  output: output/mo5/yeti/training/yeti_universal_v1_smoke
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

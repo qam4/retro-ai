@@ -1,0 +1,63 @@
+# yeti_curriculum v1 — backward-curriculum extension of v3.
+#
+# v3 plateaued at CP2: 72.5% F1+F2 pickup, 0 F3. The bottleneck
+# is the long-horizon credit assignment for F2 -> F3 (288 px
+# committed traversal through L23). PPO from reset doesn't
+# reliably discover the F2->L23->F3 trajectory in 5M steps.
+#
+# Approach: warm-start from yeti_universal_v3 + use checkpoint
+# curriculum so 40% of episodes start from CP2 (the highest
+# checkpoint v3 reached). The agent gets direct practice on
+# the F2->F3 transition without paying the cost of every
+# episode starting from spawn.
+#
+# Key wiring:
+#   - resume from v3's final_model.zip; v3's checkpoints.pkl is
+#     auto-loaded (CP1: 100 saves, CP2: 100 saves) so the
+#     curriculum's frontier starts at CP2 immediately.
+#   - reset_fraction=0.6 keeps majority of training on CP0
+#     starts so we don't lose the F1+F2 skill.
+#   - frontier_fraction=0.4 gives the F2->F3 practice.
+#   - earlier_fraction=0 keeps the design clean; if the agent
+#     pushes the frontier to CP3/CP4 we'll add later-fraction
+#     practice in a v2.
+#
+# Reward: same fruit_bonus_path_progress_universal with
+# scale=0.01 (v3's bumped scale=0.05 didn't help, so revert).
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v1
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/training/yeti_universal_v3/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.6
+  frontier_fraction: 0.4
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

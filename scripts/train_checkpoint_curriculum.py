@@ -46,6 +46,8 @@ from stable_baselines3.common.monitor import Monitor
 
 # Yeti RAM addresses
 FRUITS_ADDR = 11055
+# Per-fruit presence bytes (non-zero = on map, zero = collected).
+FRUIT_PRESENCE_ADDRS = {1: 0x2FAD, 2: 0x2F00, 3: 0x2E68, 4: 0x2DD8}
 LIVES_ADDR = 11095
 BONUS_HI = 11010
 BONUS_LO = 11011
@@ -53,6 +55,11 @@ SCORE_HI = 11093
 SCORE_LO = 11094
 X_POS = 11090
 Y_POS = 11089
+# Level-cleared flag. See scripts/train_segment.py for the empirical
+# justification (probe_princess_flag_long_baseline.py PASSes with zero
+# false positives across 26k frames). Detect princess touch via 0->1
+# rising edge.
+PRINCESS_FLAG_ADDR = 11050
 
 
 # Shared global-step & episode-id counters across threaded envs.
@@ -321,6 +328,7 @@ class CheckpointCurriculumEnv(gym.Env):
         self._stall = 0
         self._episode_reward = 0.0
         self._fruits_collected_this_ep = 0
+        self._prev_princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         self._episode_id = _next_episode_id()
 
         return obs, {}
@@ -334,6 +342,13 @@ class CheckpointCurriculumEnv(gym.Env):
         lives = self.iface.read_ram_byte(LIVES_ADDR)
         bonus = self._read_bonus()
         score = self._read_score()
+        x = self.iface.read_ram_byte(X_POS)
+        y = self.iface.read_ram_byte(Y_POS)
+        fruits_present = tuple(
+            self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0 for i in (1, 2, 3, 4)
+        )
+        princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
+        princess_touched = princess_flag == 1 and self._prev_princess_flag == 0
 
         ctx = RewardContext(
             prev_fruits=self._prev_fruits,
@@ -345,6 +360,10 @@ class CheckpointCurriculumEnv(gym.Env):
             prev_lives=self._prev_lives,
             curr_lives=lives,
             step_count=self._step_count,
+            curr_y=y,
+            curr_x=x,
+            fruits_present=fruits_present,
+            princess_touched=princess_touched,
         )
         reward = float(self._reward_fn(ctx))
 
@@ -360,8 +379,13 @@ class CheckpointCurriculumEnv(gym.Env):
             if self._validate_checkpoint(state_bytes):
                 _manager.save_checkpoint(collected_total, state_bytes)
 
+        # Princess touch ends the episode and counts as a success.
+        if princess_touched:
+            self._fruits_collected_this_ep += 1
+
         self._prev_fruits = fruits
         self._prev_score = score
+        self._prev_princess_flag = princess_flag
         self._episode_reward += reward
 
         # Termination
@@ -385,6 +409,12 @@ class CheckpointCurriculumEnv(gym.Env):
             truncated = True
             if end_reason is None:
                 end_reason = "max_steps"
+
+        # Princess touch ends the segment.
+        if princess_touched:
+            done = True
+            if end_reason is None:
+                end_reason = "princess_touched"
 
         if done or truncated:
             start_level = 4 - self._start_fruits

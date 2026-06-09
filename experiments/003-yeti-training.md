@@ -28,7 +28,37 @@ about those runs come from old logs / prior conversations and are marked
 
 ---
 
+## TL;DR / Current status (after approach 29)
+
+**What works:** the path-progress universal reward + RAM-flag princess
+detection. Segments learn well in isolation (CP0->F1 98%, CP2->CP3 50%,
+CP3->CP4 30%, CP4->princess 69%, CP0->F1->F2 74%).
+
+**What does not work yet:** composing those into a single CP0->princess
+run. Chaining separate policies gives 0.4% (handoff distribution
+mismatch). One policy from reset plateaus at 2 fruits. Mixed-start
+curriculum degrades all segments. Warm-starting across distributions
+poisons the policy.
+
+**Root cause:** model-free PPO learns only the start distribution it's
+trained on; it doesn't compose or transfer.
+
+**Next idea (not yet tried):** sequential distribution-matched chaining —
+train each segment on the *actual output states* of the previous segment,
+so the handoff matches by construction. See the "Summary" section at the
+end for the full plan and the open question (one fine-tuned policy vs N
+orchestrated policies).
+
+**Reading guide:** approaches 1-17 are early reward-shaping dead-ends.
+18-23 develop the path-progress reward and per-segment results. 24-25
+are the princess-detection fix and CP4->princess. 26-29 are the pivot to
+PPO-from-reset and curriculum, and why they plateau/degrade. The
+end-of-doc "Summary" consolidates everything.
+
+---
+
 ## Approaches Tried
+
 
 ### 1. PPO + Score Reward + Survival Bonus  *(narrative)*
 - **Runs**: `ppo_500k`, `ppo_2M`, `ppo_5M`, `ppo_10M` (config.yaml era)
@@ -1942,3 +1972,236 @@ Two viable directions, distinct in cost:
 If the user's segment_3to4 distribution naturally lands on the
 "head right" floor-4 positions (not the (68, 78) one), then
 chaining might not need the seed 7 fix at all.
+
+### 26. Pivot to plain PPO from reset (yeti_universal_v1)  *(verified)*
+
+After approaches 14-25, per-segment training had hit three
+structural issues:
+
+- **Validation problem**: probe=120 rejects exactly the
+  transitional CP4 states we want to train on (post-F4-pickup
+  near-edge positions). Lower the probe and we accept dying
+  states; raise it and we only get already-safe equilibria.
+- **Distribution-handoff problem**: approach 23 already showed
+  v7+v8 chaining produces 0.4% even with 50% × 30% per-segment
+  numbers. Each segment's output distribution doesn't match the
+  next's training distribution.
+- **Forgetting problem**: approach 25's v3 lost CP4→princess
+  after warm-starting from v2 because v3 only trained on CP3
+  starts.
+
+So we pivoted to plain PPO from reset with the universal
+path-progress reward. Same reward shaping we already had, just
+without segment scaffolding. Single distribution, single policy,
+no handoff.
+
+#### v1 result: a regression
+
+5M steps from reset, **warm-started from segment_4toP_v2**.
+
+Result: agent picks F1 reliably (98% rate), then walks to far
+right corner (px=312, ram_x=76) and stalls until episode ends.
+Only 9 F2-pickups in 30,520 episodes, all within the first 420k
+training steps; zero across the next 9.5M.
+
+#### Why the warm-start poisoned the run
+
+segment_4toP_v2 was trained exclusively on CP4 starts (fruits=0,
+agent on floors 2-5). That model's prior is "no fruits remain,
+target princess." When applied to CP0 (fruits=4, agent at spawn
+on floor 1), it has no useful initial behavior — and PPO, faced
+with a confusing initial value estimate, settled on the cheapest
+reward stream: F1 + retreat.
+
+The retreat dynamic: F1 is at (px=184, floor 1). Walking right
+after pickup takes the agent away from L12a (floor 2 ladder at
+px=120), so the per-pixel path-progress shaping pays nothing.
+But the rightward walk is *safe* — no obstacles to the corner.
+Walking left toward L12a *might* die during exploration. So PPO
+correctly preferred the safe-but-stagnant strategy over the
+risky-but-progressing one, because the warm-start prior weighted
+the value head against any climbing intuition.
+
+#### Lesson
+
+Don't warm-start across distributions. The training distribution
+of the prior must overlap with the new training distribution. A
+v2 → CP4 prior into a CP0 → reset run is a category error.
+
+### 27. Plain PPO from reset, no warm-start (yeti_universal_v2)  *(verified)*
+
+Same as v1 but **no warm-start**. 5M steps.
+
+Result: dramatic recovery. By the last 20% of training:
+
+- 0.6% picked 0 fruits
+- 24.1% picked F1 only
+- **74.8% picked both F1 and F2**
+- 2 episodes (out of 16,502 total) picked F3
+- 0 reached F4 or princess
+
+By bin 8 of 10 (steps ~4M-4.4M): 97.4% pickup rate of F1+F2.
+Reward shaping is doing exactly what we designed.
+
+#### The CP2 plateau
+
+v2 maxed out at "F1 + F2 + plateau on floor 2." Going from F2
+(at px=80, floor 2) to F3 requires a 288-pixel commit:
+
+- Walk right 160 px to L23 (px=240)
+- Climb L23 to floor 3
+- Walk left 96 px to F3 (px=144)
+
+The shaping reward pays 0.01/pixel during that 160-pixel walk
+to L23, with no fruit reward at the end of it (just more
+shaping toward F3). PPO finds it hard to commit to such a long
+horizontal traversal when the per-step gradient is small and the
+exploration risk is high.
+
+### 28. Stronger path-progress shaping (yeti_universal_v3)  *(verified)*
+
+Hypothesis: bumping ``scale`` from 0.01 to 0.05 (5x) increases
+the directional gradient strength enough to push the policy
+through the F2 → F3 transition.
+
+Same setup as v2, just with ``scale: 0.05`` in the reward params.
+
+Result: **basically identical to v2.** Last-20% pickup rates:
+F1+F2 = 72.5% (vs 74.8% v2). F3 pickups: 0 (vs 2 in v2). F4 and
+princess: 0.
+
+So path-progress strength wasn't the bottleneck. The reward
+gradient is correct in direction; PPO simply isn't discovering
+the F2→F3 trajectory through random exploration within 5M steps.
+This is a long-horizon credit-assignment problem, the kind that
+shaping rewards alone can't solve.
+
+#### Lesson
+
+Universal path-progress + reset training reliably gets 2 fruits.
+F3 onward needs either (a) much more compute (20M+ to let random
+exploration eventually find F2→L23→F3 trajectories), or (b)
+curriculum starts that bypass the long-horizon discovery
+problem. Curriculum is what train_checkpoint_curriculum.py was
+designed for, and we now have:
+
+- A working CP0→CP2 policy (v3's final_model.zip)
+- A CP3 seed pool (v9_v3_cp3enriched.pkl, 128 seeds — built in
+  approach 21 from v9 + v7 collected_states)
+
+The v3 policy provides a good initial value/policy estimate for
+the curriculum, and the CP3 seeds let some training episodes
+skip the F1+F2 commit and practice F3 directly. This time the
+warm-start is across overlapping distributions (CP0 → CP3 both
+include floor-2-and-up navigation) so it should be safe.
+
+#### Plan: yeti_curriculum_v1
+
+- Warm-start from yeti_universal_v3/final_model.zip
+- 5M steps
+- ``reset_fraction=0.6, frontier_fraction=0.4, earlier_fraction=0``
+  — 60% of episodes from CP0, 40% from the highest-checkpoint
+  pool (initially CP2 from v3's saves; the curriculum manager
+  promotes to CP3, CP4 as the policy unlocks them)
+- Same path-progress universal reward, ``scale=0.01``
+- Princess flag detection wired in
+
+### 29. Checkpoint curriculum on top of universal (yeti_curriculum_v1/v2)  *(verified)*
+
+After v3 plateaued at F2, we tried the checkpoint curriculum
+(``train_checkpoint_curriculum.py``) to give the policy direct
+practice on the F2→F3 transition.
+
+#### v1: warm-start from v3 + 40% CP2 starts
+
+``reset_fraction=0.6, frontier_fraction=0.4``, warm-started from
+yeti_universal_v3 (which had CP1+CP2 checkpoints saved).
+
+Result: failure, and a familiar one. Of the 40% CP2-start
+episodes, **median total_reward = 0.00** — the v3 policy produced
+essentially no reward from CP2 states. CP2 was out-of-distribution
+for v3 (F2 already collected, agent on floor 2 — a scene v3 never
+trained on). The agent stalled or fell to floor 1; 9,321 CP2
+episodes yielded 0 F3-pickups.
+
+Same warm-start poisoning as approach 26 (v1 from reset). Loading
+a policy into states it never trained on gives near-zero reward
+and no recovery within budget.
+
+#### v2: from scratch + curriculum
+
+Same curriculum (``reset=0.6, frontier=0.4``), no warm-start.
+Stopped at 2.87M / 5M steps (no signal of escape).
+
+Result: curriculum *hurt* relative to plain reset:
+
+- CP0 starts: 90% reach F1, only ~9% reach F2 (vs plain v2's 74%).
+- CP2 starts: 1/4151 reached F3.
+- CP3 starts (a few late ones): 2/353 reached F4.
+
+Splitting the policy's attention across CP0 and CP2 start
+distributions degraded performance at *both*. One set of network
+weights can't serve two different start distributions when the
+required behaviors look different.
+
+#### Lesson
+
+The checkpoint curriculum, as implemented (mixed start
+distribution into one policy), does not help here. It either
+poisons via OOD warm-start (v1) or degrades via attention-split
+(v2).
+
+## Summary: what we know after approaches 1-29
+
+Two robust empirical facts:
+
+1. **Segments learn well in isolation.**
+   - CP0→F1 (reset): 98%
+   - CP2→CP3: 50% (v7)
+   - CP3→CP4: 30% (v8)
+   - CP4→princess: 69% (segment_4toP_v2)
+   - CP0→F1→F2 (reset): 74%
+
+2. **Composition fails, both ways.**
+   - Chaining separate policies: 0.4% CP2→CP4 (approach 23) —
+     each segment's output distribution doesn't match the next
+     segment's training distribution.
+   - One policy from reset: plateaus at 2 fruits (v2/v3); stronger
+     shaping doesn't break it (long-horizon discovery problem).
+   - One policy + mixed-start curriculum: degrades all segments
+     (v1 OOD warm-start, v2 attention-split).
+   - One policy warm-started forward: catastrophic forgetting of
+     the prior segment (segment_3toP_v1) or OOD collapse (v1).
+
+### The underlying cause
+
+Model-free PPO learns exactly the start distribution it trains
+on, and only that. It does not compose, transfer, or explore far
+beyond its current competence. Every composition failure above is
+a variant of this.
+
+### The one composition approach NOT yet tried
+
+Naive chaining (approach 23) failed because v8 was trained on a
+*balanced* CP3 pool while v7 *outputs* a skewed CP3 distribution.
+We concluded "distribution mismatch" and pivoted — but never
+tried the obvious fix: **train each segment on the actual output
+distribution of the previous segment.**
+
+Plan (sequential distribution-matched chaining):
+
+1. Train CP0→F1 from reset (known: 98%).
+2. Collect the actual states where the policy picks F1 → CP1 pool.
+3. Train CP1→F2 from *that* pool. Collect its F2-pickup states.
+4. Repeat F2→F3, F3→F4, F4→princess.
+
+Each segment trains on exactly what the previous produces, so the
+handoff matches by construction. This uses what works (segments)
+and fixes the one thing that breaks (handoff distribution). It's
+distinct from the curriculum (which mixes distributions into one
+policy and degrades) and from naive chaining (mismatched pools).
+
+Open question to resolve before committing: one policy fine-tuned
+forward through the segments (risks forgetting) vs N policies
+orchestrated by a controller that switches on fruit-count
+transitions (more robust, more engineering).

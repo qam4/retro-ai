@@ -1,0 +1,63 @@
+# yeti_curriculum v2 — same curriculum design as v1, but trained
+# from scratch (no warm-start).
+#
+# v1 warm-started from yeti_universal_v3, which was trained
+# exclusively on CP0 starts. When v3's policy was loaded into CP2
+# states (40% of episodes via frontier_fraction=0.4), it produced
+# ~zero reward (median total_reward = 0.00) because CP2 was OOD
+# for the v3 policy: F2 already collected, agent on floor 2, no
+# learned behavior for that scene. CP2 episodes ended in stall or
+# fall-to-floor-1 without picking F3.
+#
+# This is the same warm-start poisoning seen in approach 26 (v1).
+# Lesson: warm-start across distributions is wrong. Either train
+# from scratch on the mixed distribution, or warm-start from a
+# model that already saw all relevant states.
+#
+# v2 trains from scratch with the curriculum manager filling its
+# checkpoint pools as the policy learns:
+#   - Initially the manager has no CP1+ states, so reset_fraction
+#     is effectively 100% until the policy picks F1 a few times.
+#   - As CP1 fills (reaches min_states_to_advance=20), frontier
+#     advances to CP1 and the agent practices CP1 starts too.
+#   - Same for CP2 as the policy unlocks it.
+#
+# So curriculum naturally chases the frontier: the agent practices
+# starts it can already reach, plus a fraction of fresh resets
+# to keep CP0 representation in the distribution.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v2
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.6
+  frontier_fraction: 0.4
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

@@ -1,0 +1,56 @@
+# yeti_universal v3 — same setup as v2, with 5x stronger
+# path-progress shaping.
+#
+# v2 (scale=0.01) plateaued at F2: 74.8% F1+F2 pickup rate in the
+# last 20% of training, but only 2 F3-pickups in 16,502 episodes.
+# Hypothesis: the per-pixel shaping reward (0.01) is too weak for
+# PPO to discover the floor-2 -> floor-3 ladder climb. The total
+# path-progress reward for the F1->F2 walk is ~1.4 vs the ~6 fruit
+# reward for picking F2 itself. After picking F2, the gradient
+# toward F3 is also small (~1.4 across the climb), so the policy
+# can settle on F2 as a local maximum.
+#
+# Bumping ``scale`` from 0.01 to 0.05 makes the directional shaping
+# comparable in magnitude to fruit pickups. ``fruit_scale`` and
+# ``princess_scale`` are unchanged — the pickup/touch rewards are
+# already strong enough; we only need stronger directional signal.
+#
+# Per-fruit best-distance ratchet still prevents farming, so the
+# total budget is bounded: max ~30 reward per episode (vs ~17 in
+# v2).
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_universal_v3
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.05
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

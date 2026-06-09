@@ -1,0 +1,48 @@
+# yeti_universal v2 — plain PPO from reset, fresh policy.
+#
+# v1 was warm-started from segment_4toP_v2/final_model.zip; the
+# resulting policy collapsed to "pick F1 then walk to far right
+# corner and stall." The warm-start was a mistake — segment_4toP_v2
+# was trained on CP4 starts (fruits=0, agent high on map), and that
+# prior is actively wrong for CP0 (fruits=4, agent at spawn).
+#
+# This run is the clean version: same reward, same hyperparameters,
+# just no warm-start. 5M steps to match the segment_4toP_v2 budget
+# so any improvement is attributable to the reset distribution + fresh
+# init.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_universal_v2
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

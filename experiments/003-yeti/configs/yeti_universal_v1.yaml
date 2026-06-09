@@ -1,0 +1,68 @@
+# yeti_universal v1 — plain PPO from reset, with the universal
+# path-progress reward and warm-start from the best segment-trained
+# model we have (segment_4toP_v2/final_model.zip).
+#
+# Why this run
+# ------------
+# Per-segment training across approaches 14-25 ran into three
+# structural issues:
+#   1. Validation problem — the probe rejects exactly the
+#      transitional states we want (e.g. post-F4 mid-fall).
+#   2. Distribution-handoff problem — segments don't compose
+#      because each one's input distribution is what it learned to
+#      output, not what the next segment was trained on.
+#   3. Forgetting problem — segment_3toP_v1 lost CP4->princess
+#      after warm-starting from v2 because v3's training distribution
+#      didn't include CP4 starts.
+#
+# Plain PPO from reset side-steps all three: one distribution, one
+# reward gradient, one policy. The path-progress reward already
+# targets either the closest remaining fruit OR the princess
+# uniformly, so the same shaping applies through the whole episode.
+#
+# Implementation
+# --------------
+# train_checkpoint_curriculum.py already handles plain reset when
+# reset_fraction=1.0; setting frontier_fraction=earlier_fraction=0.0
+# disables the curriculum machinery. Princess detection (RAM byte
+# 11050 rising edge) is wired in.
+#
+# Hyperparameters match segment_4toP_v2 exactly so the only
+# difference is the start distribution (always CP0).
+
+training:
+  timesteps: 10_000_000
+  output: output/mo5/yeti/training/yeti_universal_v1
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/training/segment_4toP_v2/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
