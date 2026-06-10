@@ -1,0 +1,61 @@
+# yeti_curriculum v3 — curriculum from scratch with the new
+# play-based seed scoring + bonus-priority pools.
+#
+# What changed vs v2 (which degraded):
+#   1. Seed admission now uses deferred play-based scoring
+#      (reached_next OR survived >= min_survival_frames) instead of
+#      the passive-noop probe that rejected ~99% of real pickups.
+#      Pools now contain realistic mid-action states, retained by
+#      bonus priority (fastest reaches kept).
+#   2. Start distribution leans on the frontier: 50% from the
+#      furthest checkpoint reached, 30% reset, 20% intermediate.
+#      Because episodes run to completion, a frontier-start episode
+#      plays frontier -> ... -> princess in one go, so every
+#      downstream skill is rehearsed each episode (this is the
+#      anti-forgetting property that forward warm-starts lacked).
+#
+# No warm-start: starting from a model trained on a different
+# distribution poisoned every prior attempt (approaches 26, 29).
+# The curriculum builds its own pools from scratch; early on it's
+# effectively all-reset until F1 is unlocked, then the frontier
+# climbs as the agent reaches deeper checkpoints.
+#
+# Reward: universal path-progress, scale=0.01 (v3's 0.05 bump didn't
+# help).
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v3
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.3
+  frontier_fraction: 0.5
+  earlier_fraction: 0.2
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30

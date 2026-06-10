@@ -113,6 +113,12 @@ class CurriculumConfig:
     max_states_per_checkpoint: int = 100
     min_states_to_advance: int = 20
     seed_archive: Optional[str] = None
+    # Optional path to a checkpoints-format pool (.pkl with
+    # {"checkpoints": [list per CP]}) used to pre-seed the curriculum
+    # pools with diverse, segment-derived start states. Levels 1..3
+    # are loaded; CP4 is intentionally skipped so the frontier sits at
+    # CP3 (the current wall) rather than jumping past it.
+    preseed_pool: Optional[str] = None
     # Minimum number of frames the agent must survive *after* a
     # checkpoint snapshot, under its own policy, for that state to be
     # admitted to the seed pool. Replaces the old passive-noop probe

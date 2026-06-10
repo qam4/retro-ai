@@ -1,0 +1,70 @@
+# yeti_curriculum v5 — priority-based seeding (approach 30).
+#
+# Implements the redesign from the approach-30 design doc:
+#   1. Reset-origin retention: pools evict the highest source-CP
+#      entry first (bonus tiebreak), so each pool drifts toward
+#      states the agent actually reaches from reset (serves R2,
+#      composition).
+#   2. Success-weighted across-CP start selection: non-reset episodes
+#      start at level L with probability proportional to
+#      (1 - success_rate[L]) — practice concentrates on the failing
+#      frontier (serves R1, competence) and shifts forward as walls
+#      crack.
+#   3. CP0 floor (= reset_fraction below): a fixed share of episodes
+#      always start from reset — the engine that manufactures fresh,
+#      on-distribution, diverse deep-CP seeds and forces end-to-end
+#      composition.
+#   4. Lenient admission (survived >= min_survival_frames OR
+#      reached_next): protects rare reaches at hard, sparse CPs.
+#
+# No warm-start (warm-starting across distributions poisons, approach
+# 26/29). No pre-seeding — the loop self-generates reset-origin seeds.
+#
+# frontier_fraction / earlier_fraction are ignored by the new
+# pick_start; left here only for config back-compat. reset_fraction
+# is reinterpreted as the CP0 floor (0.30).
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v5
+  num_envs: 8
+  seed: 42
+  # Warm-start the MODEL from yeti_universal_v2 (pure-reset, ~74%
+  # CP0->F1->F2) — a same-distribution warm-start (v5 keeps a 0.30
+  # CP0 floor), so it saves re-learning the early game without the
+  # cross-distribution poisoning seen in v1/curriculum_v1. The model
+  # lives in a clean dir with NO sibling checkpoints.pkl, so v5's
+  # seed pools start EMPTY and fill fresh with source-CP-scored
+  # reset-origin states.
+  resume: output/mo5/yeti/warmstart/v2_clean/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.30      # reinterpreted as the CP0 floor
+  frontier_fraction: 0.0    # unused (back-compat)
+  earlier_fraction: 0.0     # unused (back-compat)
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30

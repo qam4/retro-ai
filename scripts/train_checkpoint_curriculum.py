@@ -105,25 +105,39 @@ class CheckpointManager:
         earlier_fraction: float,
         min_survival_frames: int = 30,
     ):
-        total = reset_fraction + frontier_fraction + earlier_fraction
-        if abs(total - 1.0) > 1e-6:
+        # frontier_fraction / earlier_fraction are retained for config
+        # back-compat but no longer used by pick_start (approach 30).
+        # reset_fraction is reinterpreted as the CP0 floor and only
+        # needs to be a valid probability.
+        if not (0.0 <= reset_fraction <= 1.0):
             raise ValueError(
-                f"Curriculum fractions must sum to 1.0, got {total}: "
-                f"reset={reset_fraction}, frontier={frontier_fraction}, "
-                f"earlier={earlier_fraction}"
+                f"reset_fraction (CP0 floor) must be in [0, 1], "
+                f"got {reset_fraction}"
             )
         self.max_states_per_checkpoint = max_states_per_checkpoint
         self.min_states_to_advance = min_states_to_advance
         self.reset_fraction = reset_fraction
         self.frontier_fraction = frontier_fraction
         self.min_survival_frames = min_survival_frames
+        # Approach 30: pick_start now weights non-reset levels by
+        # (1 - success_rate) and reserves a fixed CP0 floor. We reuse
+        # ``reset_fraction`` as that floor (frontier_fraction /
+        # earlier_fraction are no longer used by pick_start, kept only
+        # for config back-compat).
+        self.cp0_floor = reset_fraction
 
-        # Each pool is a plain list of (bonus, state_bytes) entries.
-        # ``bonus`` is the in-game bonus countdown at the snapshot
-        # moment — higher = the fruit was reached faster, leaving more
-        # game-time to continue, which makes a better start state. When
-        # a pool is full we evict the lowest-bonus entry, so the pool
-        # retains the best states rather than just the most recent.
+        # Each pool is a plain list of (source_cp, bonus, state_bytes)
+        # entries.
+        #   source_cp: the CP level the *episode that produced this
+        #     snapshot* started from. Lower = closer to a reset
+        #     trajectory = more on-distribution for P(princess|CP0).
+        #     This is the primary retention key (approach 30, R2).
+        #   bonus: in-game bonus countdown at the snapshot moment;
+        #     tiebreaker only (higher = faster reach).
+        # When a pool is full we evict the entry with the HIGHEST
+        # source_cp first (most artificial), tiebreaking on lowest
+        # bonus — so the pool drifts toward reset-origin states the
+        # agent actually reaches from reset.
         self.checkpoints = [[] for _ in range(self.FRUITS_TOTAL + 1)]
         self.frontier = 0
         self.stats = {
@@ -142,51 +156,72 @@ class CheckpointManager:
             if reached_level > start_level:
                 self.segment_successes[start_level] += 1
 
-    def _insert(self, level, bonus, state_bytes):
-        """Insert a (bonus, state) entry into a pool, keeping the best.
+    def _insert(self, level, source_cp, bonus, state_bytes):
+        """Insert a (source_cp, bonus, state) entry, keeping the most
+        reset-origin states.
 
-        If the pool has room, append. If it's full, replace the
-        lowest-bonus entry only when the newcomer has a higher bonus;
-        otherwise drop the newcomer. This keeps each pool at the top
-        ``max_states_per_checkpoint`` states by bonus.
+        If the pool has room, append. If it's full, evict the entry
+        with the *highest* source_cp (most artificial / furthest from a
+        reset trajectory), tiebreaking on lowest bonus — but only if
+        the newcomer is at least as reset-origin as the worst current
+        entry. This keeps each pool biased toward states the agent
+        actually reaches from reset (approach 30, R2).
         """
         pool = self.checkpoints[level]
-        entry = (int(bonus), bytes(state_bytes))
+        entry = (int(source_cp), int(bonus), bytes(state_bytes))
         if len(pool) < self.max_states_per_checkpoint:
             pool.append(entry)
             self.stats["saves"][level] += 1
             self._maybe_advance_frontier()
             return
-        # Pool full: find the current minimum-bonus entry.
-        min_idx = min(range(len(pool)), key=lambda i: pool[i][0])
-        if entry[0] > pool[min_idx][0]:
-            pool[min_idx] = entry
+        # Pool full: find the "worst" entry = highest source_cp, then
+        # lowest bonus. We compare on the key (source_cp, -bonus): the
+        # max of that key is the worst entry.
+        worst_idx = max(
+            range(len(pool)),
+            key=lambda i: (pool[i][0], -pool[i][1]),
+        )
+        worst = pool[worst_idx]
+        # Newcomer replaces the worst only if it is strictly better on
+        # the same (source_cp, -bonus) ordering (lower source_cp, or
+        # equal source_cp and higher bonus).
+        new_key = (entry[0], -entry[1])
+        worst_key = (worst[0], -worst[1])
+        if new_key < worst_key:
+            pool[worst_idx] = entry
             self.stats["saves"][level] += 1
-        # else: newcomer is worse than everything we have; drop it.
+        # else: newcomer is no better than everything we have; drop it.
 
-    def save_checkpoint(self, fruits_collected, state_bytes, bonus=0):
-        # Used for offline seed_archive seeding (no play-based score).
+    def save_checkpoint(self, fruits_collected, state_bytes, source_cp=0, bonus=0):
+        # Used for offline seed_archive / preseed (no play-based score).
         if 0 <= fruits_collected <= self.FRUITS_TOTAL:
-            self._insert(fruits_collected, bonus, state_bytes)
+            self._insert(fruits_collected, source_cp, bonus, state_bytes)
 
     def save_scored(
-        self, fruits_collected, state_bytes, survived_frames, reached_next, bonus
+        self,
+        fruits_collected,
+        state_bytes,
+        survived_frames,
+        reached_next,
+        bonus,
+        source_cp,
     ):
         """Admit a checkpoint snapshot judged by *real play*, not a probe.
 
         ``survived_frames`` is how long the agent stayed alive after
         the snapshot, under its own policy, in the episode that
-        produced it. ``reached_next`` is whether that same episode
-        went on to collect the next fruit (or the princess). ``bonus``
-        is the in-game bonus countdown at the snapshot moment, used as
-        the retention priority.
+        produced it. ``reached_next`` is whether that same episode went
+        on to collect the next fruit (or the princess). ``bonus`` is
+        the in-game bonus countdown at the snapshot moment (retention
+        tiebreaker). ``source_cp`` is the CP level the producing
+        episode started from (primary retention key — lower is more
+        reset-origin / on-distribution).
 
-        A snapshot is admitted if it either led to the next checkpoint
-        (strong signal it's a good handoff state) or the agent survived
-        at least ``min_survival_frames`` from it (it wasn't a
-        grabbed-while-dying fluke). This replaces the old passive-noop
-        probe, which rejected ~99% of normal mid-action pickups. Among
-        admitted states, the pool keeps the highest-bonus ones.
+        Admission is lenient (approach 30): keep the snapshot if it
+        either led to the next checkpoint OR the agent survived at
+        least ``min_survival_frames`` from it. Leniency protects the
+        rare reaches at hard, sparse CPs; retention priority
+        (source_cp) does the quality work on full, easy CPs.
         """
         if not (0 <= fruits_collected <= self.FRUITS_TOTAL):
             return
@@ -194,7 +229,7 @@ class CheckpointManager:
         if not admit:
             self.stats["rejected_precarious"][fruits_collected] += 1
             return
-        self._insert(fruits_collected, bonus, state_bytes)
+        self._insert(fruits_collected, source_cp, bonus, state_bytes)
 
     def _maybe_advance_frontier(self):
         while (
@@ -212,39 +247,39 @@ class CheckpointManager:
             break
 
     def pick_start(self):
-        """Pick a starting checkpoint level.
+        """Pick a starting checkpoint level (approach 30).
 
-        Distribution (configurable via run config):
-        - reset_fraction: game start
-        - frontier_fraction: highest available checkpoint
-        - earlier_fraction: random intermediate (including game start)
+        - Reserve a fixed ``cp0_floor`` share for reset (CP0) starts:
+          the engine that feeds fresh, on-distribution deep-CP seeds
+          and forces end-to-end composition.
+        - Otherwise, weight each *available* (non-empty) CP level by
+          (1 - success_rate[level]) — practice where the agent is
+          currently failing. Unpracticed levels get max weight; solved
+          levels keep a small floor so the skill isn't abandoned.
         """
-        highest = 0
-        for i in range(self.FRUITS_TOTAL, 0, -1):
-            if len(self.checkpoints[i]) > 0:
-                highest = i
-                break
-
-        roll = random.random()
-        reset_thresh = self.reset_fraction
-        frontier_thresh = self.reset_fraction + self.frontier_fraction
-        if roll < reset_thresh or highest == 0:
-            level = 0
-        elif roll < frontier_thresh:
-            level = highest
-        else:
-            available = [0]
-            for i in range(1, highest):
-                if len(self.checkpoints[i]) > 0:
-                    available.append(i)
-            level = random.choice(available)
-
-        self.stats["starts"][level] += 1
-
-        if level == 0:
+        # CP0 floor (always-available reset starts).
+        if random.random() < self.cp0_floor:
+            self.stats["starts"][0] += 1
             return 0, None
-        # Pool entries are (bonus, state_bytes); return the state.
-        _bonus, state = random.choice(self.checkpoints[level])
+
+        available = [i for i in range(1, self.FRUITS_TOTAL + 1) if self.checkpoints[i]]
+        if not available:
+            self.stats["starts"][0] += 1
+            return 0, None
+
+        weights = []
+        for lvl in available:
+            att = self.segment_attempts[lvl]
+            succ = self.segment_successes[lvl]
+            rate = (succ / att) if att > 0 else 0.0
+            # Floor at 1e-3 so a fully-solved segment still gets rare
+            # refresher practice (retention) rather than zero.
+            weights.append(max(1.0 - rate, 1e-3))
+
+        level = random.choices(available, weights=weights, k=1)[0]
+        self.stats["starts"][level] += 1
+        # Pool entries are (source_cp, bonus, state_bytes).
+        _src, _bonus, state = random.choice(self.checkpoints[level])
         return level, state
 
     def summary(self):
@@ -283,12 +318,17 @@ class CheckpointManager:
             data = pickle.load(f)
         for i, states in enumerate(data["checkpoints"]):
             for s in states:
-                # Normalize: new format is (bonus, state_bytes); old
-                # format was raw state_bytes (assign neutral bonus 0).
-                if isinstance(s, tuple) and len(s) == 2:
-                    entry = (int(s[0]), bytes(s[1]))
+                # Normalize to the (source_cp, bonus, state) format.
+                # Loaded/offline states have unknown origin; mark them
+                # source_cp = i (the level itself = maximally
+                # artificial for that level) so fresh reset-origin
+                # states evict them first.
+                if isinstance(s, tuple) and len(s) == 3:
+                    entry = (int(s[0]), int(s[1]), bytes(s[2]))
+                elif isinstance(s, tuple) and len(s) == 2:
+                    entry = (i, int(s[0]), bytes(s[1]))
                 else:
-                    entry = (0, bytes(s))
+                    entry = (i, 0, bytes(s))
                 if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
                     self.checkpoints[i].append(entry)
         loaded_stats = data.get("stats", self.stats)
@@ -512,12 +552,19 @@ class CheckpointCurriculumEnv(gym.Env):
             reached_level = 4 - fruits
             _manager.record_episode(start_level, reached_level)
             # Flush deferred checkpoint snapshots, scored by how the
-            # rest of this episode actually played out.
+            # rest of this episode actually played out. ``source_cp``
+            # is the CP this episode started from — the retention key
+            # that biases pools toward reset-origin states (approach 30).
             for level, state_bytes, save_step, save_bonus in self._pending_saves:
                 survived = self._step_count - save_step
                 reached_next = self._max_cp_this_ep > level
                 _manager.save_scored(
-                    level, state_bytes, survived, reached_next, save_bonus
+                    level,
+                    state_bytes,
+                    survived,
+                    reached_next,
+                    save_bonus,
+                    source_cp=start_level,
                 )
             self._pending_saves = []
             if end_reason is None:
@@ -640,7 +687,14 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
             else:
                 continue
             if fruits_collected > 0:
-                _manager.save_checkpoint(fruits_collected, info["state"])
+                # Archive seeds are artificial (not reset-origin):
+                # mark source_cp = level so fresh reset-origin states
+                # evict them first.
+                _manager.save_checkpoint(
+                    fruits_collected,
+                    info["state"],
+                    source_cp=fruits_collected,
+                )
         print(f"  Seeded: {_manager.summary()}", flush=True)
 
     os.makedirs(cfg.training.output, exist_ok=True)

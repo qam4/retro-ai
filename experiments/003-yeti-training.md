@@ -2205,3 +2205,162 @@ Open question to resolve before committing: one policy fine-tuned
 forward through the segments (risks forgetting) vs N policies
 orchestrated by a controller that switches on fruit-count
 transitions (more robust, more engineering).
+
+### 30. Curriculum redesign: priority-based seeding (design + rationale)  *(design)*
+
+This entry captures the full design discussion behind the curriculum
+redesign — not just the change, but the reasoning, the lessons that
+forced it, and the principles we're now building to. It is
+deliberately verbose so future-us doesn't re-derive it.
+
+#### North Star
+
+A **single policy** that, started from game reset (CP0), reaches the
+princess. Formally: maximize **P(princess | start = CP0)**.
+
+Not "a relay of per-segment policies + a switch." One agent, from
+reset, end to end.
+
+#### Why the obvious things failed (lessons so far)
+
+- **Plain PPO from reset** (approaches 26-28): learns CP0→F1→F2 (74%)
+  then plateaus. No reward signal reaches the late game, so the late
+  transitions never get a gradient. Degenerates (F1 + corner-camp) if
+  pushed.
+- **Stronger shaping** (v3, scale 0.05): no help. The bottleneck is
+  long-horizon *discovery*, not gradient magnitude.
+- **Higher entropy** (v4, ent_coef 0.05): actively worse — global
+  noise breaks the precise sequencing the early segments need.
+  Exploration must be targeted, not blunt.
+- **Curriculum, forward** (curriculum_v3): broke the CP2 wall (reached
+  CP3!) but stalled at CP3→CP4 = 0%. Diagnosis via rollout: from the
+  CP3 spot the agent walks the wrong way and dies — it had **never
+  sampled** the rightward F3→F4 route enough to reinforce it.
+- **Warm-start across distributions** (v1, curriculum_v1): poisons the
+  policy — loading a policy into states it never trained on yields
+  ~zero reward and no recovery.
+- **The probe validator**: rejected ~99% of real mid-action pickups
+  because it tested *passive* survival (noop for 120 frames). It kept
+  only safe-equilibrium states, starving and biasing the seed pools.
+  Replaced by play-based scoring (approach: deferred survival /
+  reached-next).
+
+The recurring failure under all of it: **segments learn in isolation
+(CP2→CP3 50%, CP3→CP4 30%, CP4→princess 69%) but don't compose** —
+CP2→CP3 is 0% from CP2 *starts* inside the unified policy despite 50%
+in isolation.
+
+#### The reframe that unlocked the design
+
+"Distribution mismatch" is not a bug to remove — it's the **mechanism**.
+Starting an episode from "fruit 1 already collected" is precisely what
+teaches "go left for fruit 2," which a reset start can't teach because
+the agent rarely gets there. Mismatch from reset is *why* frontier
+starts are useful.
+
+The real objective decomposes into two requirements that every design
+choice must serve:
+
+- **R1 — competence:** each segment's success rate must be high.
+- **R2 — composition:** each segment must be trained on the *states the
+  agent actually reaches from reset*, or the per-segment skills don't
+  chain into P(princess | CP0).
+
+These are in **tension**: R1 wants heavy practice on the hard frontier
+(few, possibly artificial states); R2 wants the practice states to match
+the agent's own reset-trajectory distribution. The clean extremes show
+the trade-off:
+
+- Reset-only training: zero mismatch (every state is self-produced) but
+  no late-game signal → plateau.
+- Seed/segment training: late-game signal but mismatch → segments don't
+  transfer.
+
+We can't zero both. The job is to **shrink the mismatch enough that
+focused frontier practice still transfers**, while keeping the late-game
+signal.
+
+#### The machine (how the pillars interlock)
+
+The design is a self-reinforcing loop, and the CP0 reserve is its engine:
+
+    CP0 (reset) starts
+      → agent occasionally reaches CP_n on its own
+        → those reset-origin CP_n states enter the pool (on-distribution)
+          → frontier practice on CP_n→CP_{n+1} uses real arrival states
+            → success rises → frontier weight shifts forward
+              → deeper reset chains become possible → repeat
+
+Reset starts manufacture fresh, diverse, on-distribution deep-CP seeds.
+Frontier weighting concentrates the gradient on the current wall.
+Success-adaptive weighting advances the wall as it cracks. This is why
+the CP0 reserve matters for *both* R1 (it seeds the frontier) and R2
+(it forces end-to-end composition).
+
+#### Key insight: pool fullness is inverse to CP difficulty
+
+"Pools fill fast" is only true for easy CPs. Hard CPs (the whole point)
+stay sparse. This flips which mechanism matters where:
+
+- **Easy CPs (CP1/CP2):** pool full, eviction runs constantly →
+  eviction policy is what shapes the pool. Bonus-eviction collapses
+  diversity (v3's CP3 pool collapsed to one position). Want:
+  reset-origin, diverse retention.
+- **Hard CPs (CP3/CP4):** pool sparse (5-20 states), eviction almost
+  never fires, the size cap is irrelevant. What matters is **lenient
+  admission** (don't reject rare reaches) and **retention** (never lose
+  a rare good state).
+
+A single bonus-eviction rule is wrong at both ends. Hence: lenient
+admission everywhere + reset-origin eviction (only bites when full,
+i.e. on easy CPs, where it preserves on-distribution diversity).
+
+#### The three pillars (target design)
+
+**Pillar 1 — Pool composition (what's in each CP pool)**
+- Self-generated from the agent's own play. [have]
+- Lenient admission: `survived ≥ N OR reached_next`. [have]
+- Reset-origin retention: when full, evict the entry whose *source
+  episode started from the highest CP* first (tiebreak: lower bonus).
+  Replaces bonus-only eviction. [NEW]
+- Size cap 100 (binds only on easy CPs; harmless). [have]
+
+**Pillar 2 — Start-state selection (where episodes begin)**
+- Within-pool: uniform random. [have]
+- Across-CP: P(start at level ℓ) ∝ (1 − success_rate[ℓ]),
+  availability-gated (skip empty pools), with a CP0 floor. Replaces
+  fixed reset/frontier/earlier fractions. [NEW]
+- CP0 floor = 0.30 (keeps the engine running; chosen value, not tuned).
+
+**Pillar 3 — Adaptivity (how knobs respond to progress)**
+- Per-segment success rate already tracked. [have]
+- (1 − success_rate) weighting *reads* it to steer practice — this is
+  first-order adaptivity, and it de-hardcodes the training partition. [NEW]
+- Pool size and CP0 floor stay as config knobs for now. [deferred]
+- Second-order meta-adaptivity (plateau-detect → auto-tune pool
+  size / CP0 fraction) is **deliberately deferred**: it's a control
+  system with its own failure modes, and we have no evidence the fixed
+  knobs are the bottleneck. If the first-order rules plateau, the
+  measured plateau tells us exactly which knob to make adaptive —
+  better-informed than guessing now.
+
+#### What changes in code (CheckpointManager)
+
+1. Thread each snapshot's **source start-level** through to
+   `save_scored`; entries become `(source_cp, bonus, state)`.
+2. Eviction (`_insert`, only when full): drop the highest `source_cp`
+   first, tiebreak lowest bonus. (Reset-origin = source_cp 0 = most
+   protected.)
+3. `pick_start`: weight reached/available levels by (1 − success_rate),
+   gated by non-empty pools, with a 0.30 CP0 floor.
+4. Keep lenient admission unchanged.
+
+#### Success criteria for the next run
+
+- CP3→CP4 from CP3 starts climbs off 0% (the v3 wall).
+- Reset→CP3 rate rises over training (the loop is feeding deep pools).
+- Ultimately: a non-zero princess-touch rate from reset.
+- Watch for: deep-pool overfit (heavy frontier weight + sparse pool) —
+  mitigated by the CP0 reserve continuously refreshing the pool. If
+  reset→CP_n stalls while CP_n→CP_{n+1} from-starts is high, that's the
+  overfit signature and the signal to revisit the CP0 floor.

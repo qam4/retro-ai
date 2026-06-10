@@ -1,0 +1,58 @@
+# yeti_curriculum v4 — same as v3 but with higher exploration
+# (ent_coef 0.01 -> 0.05).
+#
+# v3 broke the CP2->CP3 wall (frontier advanced to CP3) but stalled
+# at CP3->CP4 (0%, even from CP3 starts). Rollout diagnosis
+# (scripts/rollout_cp3_diagnose.py) showed the agent, from the CP3
+# spot (px~156, floor 3), walks LEFT (away from F4) and falls to its
+# death every time. The path-progress reward correctly points right
+# (toward L34 at px=176 then F4 at px=272) but the policy never
+# samples the rightward route, so PPO never reinforces it.
+#
+# This is local under-exploration of one state, not a directional
+# bias: the agent goes right fine elsewhere (spawn->F1, F2->L23).
+# It just never discovered right-from-CP3.
+#
+# Fix under test: raise ent_coef so the frontier CP3 starts sample
+# more varied actions, increasing the chance the agent walks right
+# to L34, reaches F4, and gets the reward that teaches the route.
+#
+# Everything else identical to v3 (frontier-leaning curriculum,
+# play-based seed scoring, universal path-progress reward).
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v4
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.05
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.3
+  frontier_fraction: 0.5
+  earlier_fraction: 0.2
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
