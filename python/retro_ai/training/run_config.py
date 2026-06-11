@@ -127,6 +127,15 @@ class CurriculumConfig:
     # training the deepest reset-reachable segment on on-distribution
     # seeds.
     reach_threshold: float = 0.15
+    # MultiInputPolicy: when true, the observation is a Dict of the
+    # image plus a 4-d fruit-presence vector, and the PPO policy is
+    # "MultiInputPolicy" instead of "CnnPolicy". This de-aliases
+    # checkpoint start states (a reset state vs "F1 collected" look
+    # near-identical at 84x84) so a single policy can attach different
+    # actions to them — the fix for the v6 composition wall. Note: a
+    # run with this enabled cannot warm-start from a CnnPolicy model
+    # (different observation space / network).
+    multi_input_obs: bool = False
     # Minimum number of frames the agent must survive *after* a
     # checkpoint snapshot, under its own policy, for that state to be
     # admitted to the seed pool. Replaces the old passive-noop probe

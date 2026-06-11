@@ -202,15 +202,22 @@ class CheckpointManager:
                 self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
 
     def _insert(self, level, source_cp, bonus, state_bytes):
-        """Insert a (source_cp, bonus, state) entry, keeping the most
-        reset-origin states.
+        """Insert a (source_cp, bonus, state) entry, keeping the pool
+        reset-origin AND diverse.
 
-        If the pool has room, append. If it's full, evict the entry
-        with the *highest* source_cp (most artificial / furthest from a
-        reset trajectory), tiebreaking on lowest bonus — but only if
-        the newcomer is at least as reset-origin as the worst current
-        entry. This keeps each pool biased toward states the agent
-        actually reaches from reset (approach 30, R2).
+        Retention priority is source_cp (lower = closer to a reset
+        trajectory = more on-distribution, serves R2). When the pool is
+        full we evict a *uniformly random* entry from the worst
+        (highest source_cp) tier. The randomness is deliberate: it keeps
+        the pool refreshing with recent, on-distribution states instead
+        of freezing on a few snapshots.
+
+        This replaces the old bonus-tiebreak eviction, which caused the
+        v6 collapse: keeping only the highest-bonus (fastest-reach)
+        states froze the CP1 pool to 2 distinct entries, and the
+        curriculum then over-trained on those 2 stale states. ``bonus``
+        is retained on the entry for logging but no longer drives
+        eviction.
         """
         pool = self.checkpoints[level]
         entry = (int(source_cp), int(bonus), bytes(state_bytes))
@@ -219,23 +226,17 @@ class CheckpointManager:
             self.stats["saves"][level] += 1
             self._maybe_advance_frontier()
             return
-        # Pool full: find the "worst" entry = highest source_cp, then
-        # lowest bonus. We compare on the key (source_cp, -bonus): the
-        # max of that key is the worst entry.
-        worst_idx = max(
-            range(len(pool)),
-            key=lambda i: (pool[i][0], -pool[i][1]),
-        )
-        worst = pool[worst_idx]
-        # Newcomer replaces the worst only if it is strictly better on
-        # the same (source_cp, -bonus) ordering (lower source_cp, or
-        # equal source_cp and higher bonus).
-        new_key = (entry[0], -entry[1])
-        worst_key = (worst[0], -worst[1])
-        if new_key < worst_key:
-            pool[worst_idx] = entry
-            self.stats["saves"][level] += 1
-        # else: newcomer is no better than everything we have; drop it.
+        # Pool full. Keep the most reset-origin states: only admit a
+        # newcomer that is at least as reset-origin as the worst tier
+        # we currently hold, and when we do, evict a random member of
+        # that worst tier (diversity-preserving, recency-biased).
+        worst_cp = max(e[0] for e in pool)
+        if entry[0] > worst_cp:
+            # Newcomer is more artificial than everything we have; drop.
+            return
+        worst_idxs = [i for i, e in enumerate(pool) if e[0] == worst_cp]
+        pool[random.choice(worst_idxs)] = entry
+        self.stats["saves"][level] += 1
 
     def save_checkpoint(self, fruits_collected, state_bytes, source_cp=0, bonus=0):
         # Used for offline seed_archive / preseed (no play-based score).
@@ -409,9 +410,32 @@ class CheckpointCurriculumEnv(gym.Env):
         stack = build_training_env(cfg.env.profile, cfg.env)
         self.base = stack.base
         self.gym_env = stack.gym
-        self.observation_space = stack.gym.observation_space
         self.action_space = stack.gym.action_space
         self.iface = stack.base._interface
+
+        # MultiInputPolicy support: when enabled, the observation becomes
+        # a Dict of the image plus a 4-d fruit-presence vector (1.0 =
+        # fruit still on map, 0.0 = collected). This de-aliases the
+        # checkpoint states: a reset state and a "F1 already collected"
+        # state look near-identical at 84x84, so a pixels-only policy
+        # can't attach different actions to them (the v6 wall). The
+        # explicit fruit vector makes the checkpoint observable.
+        self._multi_input = bool(
+            cfg.curriculum is not None
+            and getattr(cfg.curriculum, "multi_input_obs", False)
+        )
+        image_space = stack.gym.observation_space
+        if self._multi_input:
+            self.observation_space = gym.spaces.Dict(
+                {
+                    "image": image_space,
+                    "fruits": gym.spaces.Box(
+                        low=0.0, high=1.0, shape=(4,), dtype=np.float32
+                    ),
+                }
+            )
+        else:
+            self.observation_space = image_space
 
         self.max_steps = cfg.env.max_steps
         self.stall_threshold = cfg.env.stall_threshold
@@ -456,6 +480,22 @@ class CheckpointCurriculumEnv(gym.Env):
             self.iface.read_ram_byte(X_POS),
             self.iface.read_ram_byte(Y_POS),
         )
+
+    def _fruit_vector(self) -> np.ndarray:
+        """4-d fruit-presence vector (1.0 = on map, 0.0 = collected)."""
+        return np.array(
+            [
+                1.0 if self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0 else 0.0
+                for i in (1, 2, 3, 4)
+            ],
+            dtype=np.float32,
+        )
+
+    def _wrap_obs(self, image_obs):
+        """Wrap the raw image obs into the policy's observation format."""
+        if self._multi_input:
+            return {"image": image_obs, "fruits": self._fruit_vector()}
+        return image_obs
 
     # -- gym API -------------------------------------------------------
 
@@ -504,7 +544,7 @@ class CheckpointCurriculumEnv(gym.Env):
         self._max_cp_this_ep = self._start_fruits
         self._episode_id = _next_episode_id()
 
-        return obs, {}
+        return self._wrap_obs(obs), {}
 
     def step(self, action):
         assert _manager is not None
@@ -621,7 +661,7 @@ class CheckpointCurriculumEnv(gym.Env):
                 end_reason = "env_done" if done else "env_truncated"
             self._log_episode(end_reason, fruits, bonus, score)
 
-        return obs, reward, done, truncated, info
+        return self._wrap_obs(obs), reward, done, truncated, info
 
     def _log_episode(
         self, end_reason: str, fruits: int, bonus: int, final_score: int
@@ -792,8 +832,11 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     if n_steps is None:
         n_steps = max(1, 128 // num_envs)
 
+    policy = "MultiInputPolicy" if cfg.curriculum.multi_input_obs else "CnnPolicy"
+    print(f"  Policy: {policy}", flush=True)
+
     model = PPO(
-        "CnnPolicy",
+        policy,
         vec_env,
         learning_rate=cfg.ppo.learning_rate,
         batch_size=cfg.ppo.batch_size,

@@ -14,6 +14,7 @@ import concurrent.futures
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from gymnasium import spaces
 from stable_baselines3.common.vec_env.base_vec_env import (
     VecEnv,
     VecEnvObs,
@@ -39,14 +40,38 @@ class ThreadedVecEnv(VecEnv):
             action_space=env.action_space,
         )
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(env_fns))
-        # Buffers
-        self._obs = np.zeros(
-            (self.num_envs,) + self.observation_space.shape,
-            dtype=self.observation_space.dtype,
-        )
+        # Buffers. Support both plain Box observations and Dict
+        # observations (the latter is required for MultiInputPolicy,
+        # e.g. image + fruit-presence vector).
+        self._is_dict_obs = isinstance(self.observation_space, spaces.Dict)
+        if self._is_dict_obs:
+            self._obs = {
+                k: np.zeros((self.num_envs,) + sp.shape, dtype=sp.dtype)
+                for k, sp in self.observation_space.spaces.items()
+            }
+        else:
+            self._obs = np.zeros(
+                (self.num_envs,) + self.observation_space.shape,
+                dtype=self.observation_space.dtype,
+            )
         self._rewards = np.zeros(self.num_envs, dtype=np.float64)
         self._dones = np.zeros(self.num_envs, dtype=bool)
         self._infos: List[Dict[str, Any]] = [{} for _ in range(self.num_envs)]
+
+    def _store_obs(self, i: int, obs) -> None:
+        """Write env ``i``'s observation into the shared buffer, handling
+        both array and Dict observation spaces."""
+        if self._is_dict_obs:
+            for k, v in obs.items():
+                self._obs[k][i] = v
+        else:
+            self._obs[i] = obs
+
+    def _copy_obs(self) -> VecEnvObs:
+        """Return a copy of the shared observation buffer."""
+        if self._is_dict_obs:
+            return {k: v.copy() for k, v in self._obs.items()}
+        return self._obs.copy()
 
     def reset(self) -> VecEnvObs:
         """Reset all environments in parallel."""
@@ -58,10 +83,10 @@ class ThreadedVecEnv(VecEnv):
         futures = [self._pool.submit(_reset, i) for i in range(self.num_envs)]
         for f in concurrent.futures.as_completed(futures):
             i, obs, info = f.result()
-            self._obs[i] = obs
+            self._store_obs(i, obs)
             self._infos[i] = info
 
-        return self._obs.copy()
+        return self._copy_obs()
 
     def step_async(self, actions: np.ndarray) -> None:
         """Submit step calls to the thread pool."""
@@ -89,14 +114,14 @@ class ThreadedVecEnv(VecEnv):
                 for k, v in reset_info.items():
                     if k not in info:
                         info[k] = v
-            self._obs[i] = obs
+            self._store_obs(i, obs)
             self._rewards[i] = reward
             self._dones[i] = done or truncated
             self._infos[i] = info
 
         self._pending = []
         return (
-            self._obs.copy(),
+            self._copy_obs(),
             self._rewards.copy(),
             self._dones.copy(),
             self._infos.copy(),

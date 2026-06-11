@@ -93,21 +93,32 @@ def test_eviction_prefers_reset_origin_states():
     mgr.save_scored(3, b"reset1", 100, True, bonus=10, source_cp=0)
     assert _pool_source_cps(mgr, 3) == [0, 0, 3]
 
-    # An artificial newcomer (source_cp=3) is now no better than the
-    # worst (also 3) -> dropped.
-    mgr.save_scored(3, b"art_late", 100, True, bonus=999, source_cp=3)
+    # A *more artificial* newcomer (source_cp=4 > worst tier 3) is
+    # dropped — we never pollute with something less reset-origin.
+    mgr.save_scored(3, b"art_worse", 100, True, bonus=999, source_cp=4)
     assert _pool_source_cps(mgr, 3) == [0, 0, 3]
 
 
-def test_eviction_bonus_tiebreak_within_same_source_cp():
-    mgr = _mgr(max_states_per_checkpoint=2)
-    # Two same-origin states, bonuses 10 and 20.
-    mgr.save_scored(2, b"a", 100, True, bonus=10, source_cp=2)
-    mgr.save_scored(2, b"b", 100, True, bonus=20, source_cp=2)
-    # Higher-bonus same-origin newcomer evicts the lowest-bonus (10).
-    mgr.save_scored(2, b"c", 100, True, bonus=30, source_cp=2)
-    bonuses = sorted(b for _src, b, _s in mgr.checkpoints[2])
-    assert bonuses == [20, 30]
+def test_full_pool_refreshes_instead_of_freezing():
+    # Regression test for the v6 freeze: with bonus-tiebreak eviction the
+    # pool locked onto the few highest-bonus states and stopped accepting
+    # newcomers. Diversity-preserving eviction must keep admitting recent
+    # same-tier states (the most-recently inserted one is always present).
+    import random
+
+    random.seed(0)
+    mgr = _mgr(max_states_per_checkpoint=3)
+    for i in range(20):
+        # All reset-origin (source_cp=0); deliberately *decreasing* bonus
+        # so the old bonus-rule would have rejected every one after the
+        # first three.
+        mgr.save_scored(1, f"s{i}".encode(), 100, True, bonus=100 - i, source_cp=0)
+    pool_states = {s for _src, _b, s in mgr.checkpoints[1]}
+    assert len(mgr.checkpoints[1]) == 3
+    # The last inserted state must be in the pool (proves no freeze).
+    assert b"s19" in pool_states
+    # And the pool is not stuck on the earliest few.
+    assert pool_states != {b"s0", b"s1", b"s2"}
 
 
 # ---------------------------------------------------------------------------

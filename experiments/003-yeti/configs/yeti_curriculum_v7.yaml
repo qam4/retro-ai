@@ -1,0 +1,70 @@
+# yeti_curriculum v7 — MultiInputPolicy + diversity-preserving curriculum.
+#
+# Three changes vs v6, motivated directly by the v6 post-mortem
+# (experiments/003-yeti-training.md, approach 31):
+#
+#   1. MultiInputPolicy (multi_input_obs: true). The observation becomes
+#      Dict{image, fruits[4]}, where fruits is a 4-d presence vector
+#      (1=on map, 0=collected). v6 proved the real wall is observation
+#      ALIASING: a reset state and a "F1 collected" state look
+#      near-identical at 84x84, so a pixels-only CNN can't attach
+#      opposite actions ("go right for F1" vs "go left for F2") to them.
+#      The explicit fruit vector makes the checkpoint observable, so one
+#      policy CAN represent the conditional behavior.
+#
+#   2. Reach gate OFF (reach_threshold: 0.0). The v6 gate collapsed
+#      start-state diversity to {CP0, CP1} (CP3/CP4 never sampled) and
+#      drove a feedback collapse. With threshold 0.0 every non-empty
+#      pool is eligible (v5-style diverse sampling), still weighted by
+#      (1 - success_ema) toward the failing frontier.
+#
+#   3. Diversity-preserving eviction (code change, not config). Pools no
+#      longer freeze on the few highest-bonus states; when full they
+#      evict a random entry from the worst source-CP tier, so the pool
+#      keeps refreshing with recent on-distribution states. v6's CP1
+#      pool had collapsed to 2 distinct states.
+#
+# Trained FROM SCRATCH: a MultiInputPolicy network has a different
+# observation space than the CnnPolicy warmstart models, so we cannot
+# resume from v2. This also gives a clean read on whether MIP alone
+# unlocks composition.
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v7
+  num_envs: 8
+  seed: 42
+  # No resume — MIP obs space is incompatible with CnnPolicy models.
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.30      # CP0 floor
+  frontier_fraction: 0.0    # unused (back-compat)
+  earlier_fraction: 0.0     # unused (back-compat)
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0      # gate OFF — v5-style diverse sampling
+  multi_input_obs: true     # Dict{image, fruits[4]} + MultiInputPolicy
