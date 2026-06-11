@@ -104,6 +104,7 @@ class CheckpointManager:
         frontier_fraction: float,
         earlier_fraction: float,
         min_survival_frames: int = 30,
+        reach_threshold: float = 0.15,
     ):
         # frontier_fraction / earlier_fraction are retained for config
         # back-compat but no longer used by pick_start (approach 30).
@@ -150,11 +151,55 @@ class CheckpointManager:
         self.segment_attempts = [0] * (self.FRUITS_TOTAL + 1)
         self.segment_successes = [0] * (self.FRUITS_TOTAL + 1)
 
+        # Approach 31: reach-gated frontier curriculum.
+        #
+        # Two responsive EMAs replace the all-time cumulative rates as
+        # the *decision* signal (the cumulative counters above are kept
+        # only for human-readable display):
+        #
+        #   reset_reach_ema[n]  = P(an episode that STARTED FROM RESET
+        #     reaches at least CP_n). This is the only honest evidence
+        #     that the agent can get to CP_n on its own. A CP level is
+        #     eligible as a start state only once this clears
+        #     ``reach_threshold`` — below it, the level's pool is built
+        #     from rare lucky reaches (off-distribution), so training
+        #     there wastes budget and breaks composition (R2). Index 0
+        #     is pinned at 1.0 (reset always "reaches" CP0).
+        #
+        #   seg_success_ema[n]  = P(advance | start at CP_n), EMA.
+        #     Among eligible levels we weight by (1 - this) to
+        #     concentrate budget on the deepest unsolved reset-reachable
+        #     segment, and to shift the frontier forward as walls crack.
+        #
+        # EMAs (not cumulative rates) so the gate/weights track the
+        # *current* policy: a segment that was hard at 2M steps and is
+        # now solved should stop pulling budget, and a newly-reachable
+        # deep CP should become eligible promptly.
+        self.reach_threshold = reach_threshold
+        self.reach_alpha = 0.02
+        self.reset_reach_ema = [1.0, 0.0, 0.0, 0.0, 0.0]
+        self.seg_success_ema = [0.0] * (self.FRUITS_TOTAL + 1)
+
     def record_episode(self, start_level, reached_level):
-        if 0 <= start_level <= self.FRUITS_TOTAL:
-            self.segment_attempts[start_level] += 1
-            if reached_level > start_level:
-                self.segment_successes[start_level] += 1
+        if not (0 <= start_level <= self.FRUITS_TOTAL):
+            return
+        # Cumulative counters (display only).
+        self.segment_attempts[start_level] += 1
+        advanced = reached_level > start_level
+        if advanced:
+            self.segment_successes[start_level] += 1
+        # Responsive per-segment success EMA (drives frontier weight).
+        a = self.reach_alpha
+        self.seg_success_ema[start_level] = (1 - a) * self.seg_success_ema[
+            start_level
+        ] + a * (1.0 if advanced else 0.0)
+        # Reach-from-reset EMA: only reset (CP0) episodes are evidence
+        # for "can the agent get to CP_n unaided". For each n in 1..4
+        # the episode reached n iff reached_level >= n.
+        if start_level == 0:
+            for n in range(1, self.FRUITS_TOTAL + 1):
+                hit = 1.0 if reached_level >= n else 0.0
+                self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
 
     def _insert(self, level, source_cp, bonus, state_bytes):
         """Insert a (source_cp, bonus, state) entry, keeping the most
@@ -247,36 +292,39 @@ class CheckpointManager:
             break
 
     def pick_start(self):
-        """Pick a starting checkpoint level (approach 30).
+        """Pick a starting checkpoint level (approach 31, reach-gated).
 
         - Reserve a fixed ``cp0_floor`` share for reset (CP0) starts:
           the engine that feeds fresh, on-distribution deep-CP seeds
           and forces end-to-end composition.
-        - Otherwise, weight each *available* (non-empty) CP level by
-          (1 - success_rate[level]) — practice where the agent is
-          currently failing. Unpracticed levels get max weight; solved
-          levels keep a small floor so the skill isn't abandoned.
+        - Otherwise pick among *eligible* levels only. A level is
+          eligible iff its pool is non-empty AND the agent reaches it
+          from reset often enough (``reset_reach_ema >= reach_threshold``).
+          The reach gate keeps budget off levels whose pools are built
+          from rare lucky reaches (off-distribution) — those don't
+          transfer to P(princess | CP0).
+        - Among eligible levels, weight by (1 - seg_success_ema) so
+          practice concentrates on the deepest unsolved reset-reachable
+          segment, and the frontier shifts forward as walls crack.
+          Solved levels keep a small floor so the skill isn't abandoned.
         """
         # CP0 floor (always-available reset starts).
         if random.random() < self.cp0_floor:
             self.stats["starts"][0] += 1
             return 0, None
 
-        available = [i for i in range(1, self.FRUITS_TOTAL + 1) if self.checkpoints[i]]
-        if not available:
+        eligible = [
+            n
+            for n in range(1, self.FRUITS_TOTAL + 1)
+            if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold
+        ]
+        if not eligible:
+            # Nothing reset-reachable yet: keep building reach via reset.
             self.stats["starts"][0] += 1
             return 0, None
 
-        weights = []
-        for lvl in available:
-            att = self.segment_attempts[lvl]
-            succ = self.segment_successes[lvl]
-            rate = (succ / att) if att > 0 else 0.0
-            # Floor at 1e-3 so a fully-solved segment still gets rare
-            # refresher practice (retention) rather than zero.
-            weights.append(max(1.0 - rate, 1e-3))
-
-        level = random.choices(available, weights=weights, k=1)[0]
+        weights = [max(1.0 - self.seg_success_ema[n], 1e-3) for n in eligible]
+        level = random.choices(eligible, weights=weights, k=1)[0]
         self.stats["starts"][level] += 1
         # Pool entries are (source_cp, bonus, state_bytes).
         _src, _bonus, state = random.choice(self.checkpoints[level])
@@ -292,9 +340,11 @@ class CheckpointManager:
             else:
                 rates.append(f"{i}->{i+1}:N/A")
         rej = self.stats.get("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
+        reach = "[" + ", ".join(f"{r:.2f}" for r in self.reset_reach_ema) + "]"
         return (
             f"cp={sizes} saves={self.stats['saves']} "
-            f"rejected={rej} success=[{', '.join(rates)}]"
+            f"rejected={rej} success=[{', '.join(rates)}] "
+            f"reset_reach={reach}"
         )
 
     def save_to_disk(self, path):
@@ -659,6 +709,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         frontier_fraction=cfg.curriculum.frontier_fraction,
         earlier_fraction=cfg.curriculum.earlier_fraction,
         min_survival_frames=cfg.curriculum.min_survival_frames,
+        reach_threshold=cfg.curriculum.reach_threshold,
     )
 
     print("Checkpoint Curriculum Training", flush=True)

@@ -119,6 +119,14 @@ class CurriculumConfig:
     # are loaded; CP4 is intentionally skipped so the frontier sits at
     # CP3 (the current wall) rather than jumping past it.
     preseed_pool: Optional[str] = None
+    # Reach gate (approach 31): a CP level is only eligible as a start
+    # state once the agent reaches it *from reset* at least this
+    # often (EMA). Below it, the level's pool is off-distribution
+    # garbage (rare lucky reaches), so we don't waste budget there.
+    # This makes the curriculum advance one wall at a time, always
+    # training the deepest reset-reachable segment on on-distribution
+    # seeds.
+    reach_threshold: float = 0.15
     # Minimum number of frames the agent must survive *after* a
     # checkpoint snapshot, under its own policy, for that state to be
     # admitted to the seed pool. Replaces the old passive-noop probe

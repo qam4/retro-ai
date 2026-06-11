@@ -1,0 +1,77 @@
+# yeti_curriculum v6 — reach-gated frontier curriculum (approach 31).
+#
+# v5 (approach 30) added reset-origin retention + success-weighted
+# start selection + a CP0 floor, but still let episodes start at ANY
+# non-empty CP pool. Result: deep pools (CP4) filled from rare lucky
+# reaches, the single policy spread its budget across all-failing
+# segments, and reset->CP3 stayed ~0.07% with 0 princess touches.
+#
+# v6 changes exactly one thing on top of v5: a REACH GATE. A CP level
+# is eligible as a start state only once the agent reaches it FROM
+# RESET often enough (reset_reach_ema >= reach_threshold). Among
+# eligible levels we still weight by (1 - success), now via a
+# responsive EMA instead of all-time cumulative rates.
+#
+# Why: budget is finite. If one segment plausibly needs millions of
+# steps, spreading a single policy thinly across every segment — most
+# of which it can't even reach on-distribution — under-trains the one
+# wall that actually matters. The reach gate concentrates the whole
+# non-reset budget on the DEEPEST reset-reachable unsolved segment, on
+# states the agent genuinely produces from reset (serves R2,
+# composition), and advances the frontier one wall at a time as the
+# CP0 reserve makes the next level reachable.
+#
+# Budget reasoning: per-segment isolation showed CP3->CP4 ~30% needed
+# a multi-M-step segment run. A 5M total split across 4 segments was
+# structurally under-budgeted. v6 runs at 20M and is instrumented
+# (reset_reach EMA in the live summary) so we can read the
+# steps-to-reach-each-CP transfer curve and decide whether 20M is
+# enough or a segment genuinely needs its own budget.
+#
+# Same-distribution warm-start from yeti_universal_v2 (pure-reset,
+# ~74% CP0->F1->F2); the v6 CP0 floor (0.30) keeps that distribution
+# in the mix so the warm-start isn't poisoned. Clean model dir => seed
+# pools start EMPTY and fill fresh with source-CP-scored reset-origin
+# states.
+#
+# frontier_fraction / earlier_fraction are ignored; left for
+# back-compat. reset_fraction is the CP0 floor.
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v6
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/warmstart/v2_clean/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.30      # reinterpreted as the CP0 floor
+  frontier_fraction: 0.0    # unused (back-compat)
+  earlier_fraction: 0.0     # unused (back-compat)
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.15     # CP_n eligible only when reset-reachable

@@ -1,11 +1,13 @@
 """Tests for the CheckpointManager seed-pool logic in
 scripts/train_checkpoint_curriculum.py.
 
-Covers (approach 30):
+Covers (approach 30 + 31):
 - the deferred play-based admission filter (survival / reached-next),
 - reset-origin retention (evict highest source_cp first, bonus
   tiebreak),
-- success-weighted across-CP start selection with a CP0 floor.
+- reach-gated, success-weighted across-CP start selection with a CP0
+  floor (approach 31: a level is eligible only once it is reachable
+  from reset, weighted by the responsive per-segment success EMA).
 """
 
 from __future__ import annotations
@@ -109,6 +111,43 @@ def test_eviction_bonus_tiebreak_within_same_source_cp():
 
 
 # ---------------------------------------------------------------------------
+# Reach gate / EMA bookkeeping (approach 31)
+# ---------------------------------------------------------------------------
+
+
+def test_reset_reach_ema_rises_only_for_reached_levels():
+    mgr = _mgr()
+    # Many reset episodes that reach CP2 (collected 2 fruits).
+    for _ in range(500):
+        mgr.record_episode(start_level=0, reached_level=2)
+    # CP1 and CP2 should be considered reached; CP3/CP4 should not.
+    assert mgr.reset_reach_ema[1] > 0.9
+    assert mgr.reset_reach_ema[2] > 0.9
+    assert mgr.reset_reach_ema[3] < 0.1
+    assert mgr.reset_reach_ema[4] < 0.1
+
+
+def test_non_reset_episodes_do_not_move_reach_ema():
+    mgr = _mgr()
+    # Episodes starting from CP2 are not evidence of reset-reachability.
+    for _ in range(500):
+        mgr.record_episode(start_level=2, reached_level=3)
+    assert mgr.reset_reach_ema[3] == 0.0
+    # But they do update the CP2 success EMA.
+    assert mgr.seg_success_ema[2] > 0.9
+
+
+def test_seg_success_ema_tracks_recent_outcomes():
+    mgr = _mgr()
+    for _ in range(500):
+        mgr.record_episode(start_level=1, reached_level=2)  # success
+    assert mgr.seg_success_ema[1] > 0.9
+    for _ in range(500):
+        mgr.record_episode(start_level=1, reached_level=1)  # failure
+    assert mgr.seg_success_ema[1] < 0.1
+
+
+# ---------------------------------------------------------------------------
 # Start selection
 # ---------------------------------------------------------------------------
 
@@ -125,10 +164,24 @@ def test_pick_start_reset_returns_none_at_full_floor():
 def test_pick_start_picks_only_nonempty_level():
     mgr = _mgr(reset_fraction=0.0)  # never forced reset
     mgr.save_scored(2, b"cp2_state", 100, True, bonus=10, source_cp=0)
+    # Reach gate: CP2 is only eligible once it's reset-reachable.
+    mgr.reset_reach_ema[2] = 1.0
     for _ in range(20):
         level, state = mgr.pick_start()
         assert level == 2
         assert state == b"cp2_state"
+
+
+def test_pick_start_gated_out_returns_reset():
+    # A populated pool whose reach EMA is below threshold must NOT be
+    # selected — the agent can't get there from reset yet.
+    mgr = _mgr(reset_fraction=0.0, reach_threshold=0.15)
+    mgr.save_scored(3, b"cp3_state", 100, True, bonus=10, source_cp=0)
+    mgr.reset_reach_ema[3] = 0.05  # below the gate
+    for _ in range(20):
+        level, state = mgr.pick_start()
+        assert level == 0
+        assert state is None
 
 
 def test_pick_start_weights_toward_failing_segment():
@@ -136,11 +189,12 @@ def test_pick_start_weights_toward_failing_segment():
     # Two levels available, each with a state.
     mgr.save_scored(1, b"cp1", 100, True, bonus=10, source_cp=0)
     mgr.save_scored(2, b"cp2", 100, True, bonus=10, source_cp=0)
-    # CP1 is "solved" (high success), CP2 is "failing" (low success).
-    mgr.segment_attempts[1] = 100
-    mgr.segment_successes[1] = 95  # 95% -> weight 0.05
-    mgr.segment_attempts[2] = 100
-    mgr.segment_successes[2] = 5  # 5% -> weight 0.95
+    # Both reset-reachable (eligible).
+    mgr.reset_reach_ema[1] = 1.0
+    mgr.reset_reach_ema[2] = 1.0
+    # CP1 is "solved" (high success EMA), CP2 is "failing" (low).
+    mgr.seg_success_ema[1] = 0.95  # -> weight 0.05
+    mgr.seg_success_ema[2] = 0.05  # -> weight 0.95
     counts = {1: 0, 2: 0}
     import random
 

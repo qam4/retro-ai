@@ -2364,3 +2364,243 @@ i.e. on easy CPs, where it preserves on-distribution diversity).
   mitigated by the CP0 reserve continuously refreshing the pool. If
   reset→CP_n stalls while CP_n→CP_{n+1} from-starts is high, that's the
   overfit signature and the signal to revisit the CP0 floor.
+
+#### v5 run result (approach 30 as built) *(verified)*
+
+Ran 5M steps, warm-started from `yeti_universal_v2` (clean dir, empty
+pools), CP0 floor 0.30.
+
+- The CP4 pool populated for the first time ever (6 states) — the
+  reset reserve + lenient admission did manufacture deep seeds.
+- But every deep segment stayed at 0%: CP2→CP3 = 0%, CP3→CP4 = 0%,
+  CP4→princess = 0%, **0 princess touches**.
+- From reset: CP0→CP2 ≈ 52%, CP0→CP3 ≈ 0.07%.
+
+**What v5 proved (and didn't).** It proved the seeding machine works:
+deep pools fill from reset-origin play. It did **not** crack
+composition. Two non-exclusive causes:
+
+1. **Budget spread too thin.** A single policy split its non-reset
+   budget across *all four* segments, every one of them failing. With
+   5M total and (1 − success) ≈ 1 everywhere, no segment got the
+   concentrated practice that the isolated runs needed (CP3→CP4 took a
+   multi-M-step segment run to reach 30%).
+2. **Off-distribution deep pools.** The 6 CP4 states came from
+   ~0.07%-rare reaches. Starting episodes there trains the policy on
+   states it essentially never produces from reset — practice that
+   can't transfer back to P(princess | CP0).
+
+Both point the same way: **don't spend budget on a CP until the agent
+can actually reach it from reset**, and when you do spend, concentrate
+it rather than smear it.
+
+### 31. Reach-gated frontier curriculum (yeti_curriculum_v6)  *(in progress)*
+
+#### North Star (unchanged)
+
+A **single policy** that, from game reset (CP0), reaches the princess.
+Maximize **P(princess | start = CP0)**. No relay, no per-segment switch.
+
+#### Requirements (unchanged)
+
+- **R1 — competence:** each segment's success rate must be high.
+- **R2 — composition:** segments must be trained on the states the
+  agent actually reaches *from reset*, or the skills don't chain.
+
+#### The decision v6 makes for us
+
+The user's framing: "we are just trying to optimize training
+resources." If one segment plausibly needs ~5M steps in isolation, then
+the real end-to-end budget is somewhere between max(segment) and
+sum(segments) — it depends on how much earlier segments transfer. A
+fixed 5M total split four ways is below that floor by construction.
+
+So the system should **decide where to spend** rather than smear the
+budget uniformly. v6 makes that decision automatically with a single
+new mechanism on top of v5: a **reach gate**.
+
+#### Pillar status going into v6
+
+**Pillar 1 — Pool composition**
+- Self-generated, lenient admission, reset-origin retention, size cap
+  100. [have, unchanged from v5]
+
+**Pillar 2 — Start-state selection**
+- CP0 floor 0.30. [have]
+- Across-CP weighting by (1 − success). [have, but now driven by a
+  responsive **EMA** instead of all-time cumulative rate — NEW]
+- **Reach gate:** a level ℓ ∈ 1..4 is eligible as a start *only* once
+  `reset_reach_ema[ℓ] ≥ reach_threshold` (0.15). [NEW]
+
+**Pillar 3 — Adaptivity**
+- The reach gate + EMA weighting together make the curriculum advance
+  **one wall at a time, on-distribution**, with no hand-set schedule:
+  the deepest reset-reachable unsolved segment gets the budget; as the
+  CP0 reserve makes the next CP reachable, the gate opens and the
+  frontier moves forward. This is the first-order, metric-driven
+  adaptivity the user asked for ("a way for the system to adapt based
+  on metrics collected, like plateauing score"), without the risk of a
+  second-order auto-tuner. [NEW]
+- Second-order meta-adaptivity (auto-tuning pool size / CP0 floor) is
+  still deferred for the same reason as in approach 30.
+
+#### Why the gate, in one line
+
+v5 trained CP4 from 6 lucky-reach states the policy never produces from
+reset. That's effort spent off-distribution. The gate forbids spending
+budget on a CP the agent can't yet reach unaided, which is exactly the
+budget-allocation decision we were making by hand before.
+
+#### Why EMAs, not cumulative rates
+
+The gate and the weights must track the **current** policy. All-time
+cumulative rates are dragged down forever by early failures: a segment
+solved at 8M steps would still read as "failing" and keep pulling
+budget, and a CP that only became reachable recently would take far too
+long to clear the gate. EMAs (α = 0.02, half-life ≈ 35 episodes) make
+both signals responsive on the scale of a 20M-step run.
+
+#### Budget & measurement plan
+
+- Run at **20M** (≈4× v5) — enough that, if transfer is decent, the
+  frontier should clear CP3 and reach CP4 from reset.
+- The live summary now prints `reset_reach=[1.00, …]`, so we get the
+  **steps-to-reach-each-CP transfer curve** directly. That curve is the
+  evidence for the user's open question: if reaching CP_{n+1} after
+  CP_n becomes cheap (steep curve), one policy transfers and 20M may
+  suffice; if each wall costs ~the full isolated-segment budget (flat
+  steps between walls), the honest conclusion is that a single 20M run
+  is under-budgeted and a segment needs its own allocation.
+
+#### Success criteria
+
+- `reset_reach_ema[3]` clears 0.15 (CP3 becomes a legitimate frontier),
+  then CP3→CP4 climbs off 0% — the v3/v5 wall.
+- `reset_reach_ema` rises monotonically across CPs over training (the
+  loop is feeding deeper pools on-distribution).
+- Ultimately: a non-zero princess-touch rate from reset.
+- Watch for: the gate never opening for CP3 (reset reach stuck < 0.15)
+  → the bottleneck is earlier than we think (CP2→CP3 from reset), and
+  budget/priority should sit there, not deeper.
+
+#### What changes in code (CheckpointManager)
+
+1. Two responsive EMAs added: `reset_reach_ema[0..4]` (index 0 pinned
+   at 1.0) and `seg_success_ema[0..4]`, both updated in
+   `record_episode` (α = 0.02). Cumulative counters kept for display.
+2. `pick_start`: after the CP0 floor, eligible levels are non-empty
+   pools with `reset_reach_ema ≥ reach_threshold`; weighted by
+   (1 − `seg_success_ema`). If none eligible, fall back to reset.
+3. `reach_threshold` config field (default 0.15) wired through
+   `CurriculumConfig` → `CheckpointManager`.
+4. `summary()` prints `reset_reach=[…]` for live monitoring.
+5. Retention / admission unchanged from approach 30.
+
+
+#### v6 run result (approach 31, 20M steps) *(verified)*
+
+Ran the full 20M, warm-started from `yeti_universal_v2`, CP0 floor 0.30,
+reach gate 0.15. Completed cleanly in 9h13m. **The reach gate worked
+mechanically and the result is a clear, important negative.**
+
+Final: `cp=[0,100,100,2,0]`,
+`success=[0->1:95%, 1->2:3%, 2->3:0%]`,
+`reset_reach=[1.00, 1.00, 0.00, 0.00, 0.00]`.
+
+The endpoint is a collapse. To diagnose it honestly we re-measured both
+v5 and v6 the **same way** — recent time-windows computed from
+`episodes.csv`, not v5's lifetime-cumulative log number (which is
+heavily inertial and hides recent decay). All numbers below are
+windowed (recent) success.
+
+**A logging caveat that bit us first.** The live `reset_reach` array is
+indexed `[CP0, CP1, CP2, CP3, CP4]`. An earlier reading of the log
+mislabeled index 1 (reach **CP1** from reset, which stays ~1.0 because
+the agent always grabs F1) as "reach CP2." The real
+reach-**CP2**-from-reset is index 2; corrected windowed values below.
+
+CP1→CP2 (success from CP1 *saved-state* starts), windowed:
+
+| run | early | mid | late |
+|-----|-------|-----|------|
+| v5 (approach 30, no gate, 5M)   | 69% | oscillates 6–92% | **71%** |
+| v6 (approach 31, gate+EMA, 20M) | 24% | → 0% | **0% (flat 12M)** |
+
+reach-CP2-**from reset** (index 2), windowed: v5 oscillates and ends
+~73%; v6 goes 76% → 54% → 2.7% → **0** by ~5M and stays dead.
+
+So v5 was *stuck and noisy* but alive; v6 was *actively destroyed* — a
+hard, permanent flatline. Same metric, opposite outcome. This refutes
+the first-draft conclusion ("interference, not scheduling"): the
+scheduling change **is** most of what broke v6.
+
+#### Root-cause diagnosis: our approach-31 changes collapsed diversity
+
+Two of the three pillars (start-state diversity, pool diversity)
+regressed at once, and that — not a fundamental interference wall — is
+what turned v5's plateau into v6's collapse.
+
+**1. The reach gate collapsed start-state diversity.** Start levels ever
+sampled:
+- v5: `{CP0:9587, CP1:3731, CP2:8407, CP3:6754, CP4:3421}` — all five,
+  throughout.
+- v6: `{CP0:21523, CP1:42070, CP2:7225}` — only three ever; CP3/CP4
+  **never once** (their gate never opened); CP1 alone is 60% of episodes.
+
+In v5 the broad CP0–CP4 sampling acted as a regularizer — the policy was
+pulled toward many start states and never collapsed into one attractor.
+v6's gate removed that.
+
+**2. Bonus-tiebreak eviction froze the pools.** The approach-30 eviction
+keeps the highest-bonus (fastest-reach) state and drops the rest. The
+fastest-F1 states are found early, so the CP1 pool locked onto them and
+stopped accepting new ones. Measured: the CP1 starts went from **11
+distinct states early to 2 distinct states late**. 42,070 CP1-start
+episodes — the bulk of the run — practiced from essentially **2 frozen,
+stale snapshots**.
+
+**3. The EMA weighting closed the feedback loop.** Seeing CP1→CP2 fail,
+the (1−success) EMA poured *more* episodes onto CP1 — i.e. onto those 2
+stale states. Failing repeatedly from 2 off-distribution snapshots
+reinforces bad behavior in post-F1 states that look just like the ones a
+reset trajectory passes through, so it bled backward and destroyed the
+reset run's own F2 skill (reach-CP2-from-reset 100% → 0). Gate + EMA both
+read the same degrading signal and fed each other — exactly the
+second-order control-loop instability approach 30 said it was deferring
+*because* of this risk. Approach 31 added it anyway.
+
+#### Two distinct findings, kept separate
+
+- **Self-inflicted (v6-specific):** the catastrophic collapse to 0 is
+  caused by the reach gate + bonus-eviction + EMA destroying diversity.
+  Removing the gate and fixing eviction should recover v5-level behavior.
+- **Genuine wall (pre-existing, also in v5):** *advancing* past CP2 was
+  never learned. Across 7,225 CP2-start episodes the agent reached CP3
+  **exactly once**; reach-CP3-from-reset was 0% in every window of both
+  runs. Reaching a checkpoint is a different skill from advancing from
+  it — a high reach-CP2 does not bootstrap CP2→CP3, which needs its own
+  repeatable success to climb, and never got one. CP0→CP3 (F1→F2→F3 in
+  one episode) therefore stayed 0 even when reach-CP2 peaked.
+
+#### Why this still motivates MIP — but with the gate off
+
+The deep wall (CP2→CP3 never bootstrapping) is plausibly the
+observation-aliasing problem: a CP1 state and a CP2 state look nearly
+identical at 84×84 (only a fruit sprite differs), so a single CNN policy
+struggles to attach different actions to them. Making the
+fruit-collection state **observable** (the four `FRUIT_PRESENCE_ADDRS`
+bytes as a small vector via `MultiInputPolicy`, Dict obs = image +
+vector) de-aliases the states and gives one network a fair chance to
+represent the conditional behavior.
+
+But MIP must be built on the **v5-style diverse-sampling baseline, not
+v6**:
+- **Drop the reach gate** — it collapsed start diversity.
+- **Fix eviction** so pools don't freeze to their fastest few states
+  (e.g. retain for diversity, not just highest bonus; or cap how often a
+  single state can be re-sampled).
+- **Add the fruit-presence observation** to attack the real aliasing
+  wall.
+
+Diversity (both across-CP and within-pool) is load-bearing, not a
+nice-to-have. v6 is the proof.
