@@ -1,0 +1,54 @@
+# yeti_universal v4 — v2 + reward leak fix (single-variable experiment).
+#
+# EXACTLY v2's config (plain PPO from reset, 5M, seed 42, same reward
+# name and params). The ONLY change is in the reward CODE:
+# fruit_bonus_path_progress_universal now re-baselines best_d for the
+# remaining fruits on every fruit pickup. This fixes the F2->F3 leak
+# found in the reward audit (approach 33): previously best_d[F3] was
+# the closest the agent ever drifted to F3 across the whole episode
+# (e.g. passing the L23 ladder en route to F2), so the actual F2->F3
+# leg paid ~0 progress until it beat that leaked-low value. With the
+# fix the full F2->F3 distance budget is available after collecting F2.
+#
+# Baseline to beat (v2, clean reset-only eval, 200 stochastic episodes):
+#   reach 2 fruits = 99.5%, reach 3 fruits = 0%.
+# Question this run answers: does giving the F2->F3 leg a real progress
+# gradient let a from-reset policy reach F3 at all (within 5M)?
+#
+# Single change only. Do NOT also change steps/curriculum/policy here.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_universal_v4_leakfix
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_universal
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

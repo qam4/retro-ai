@@ -32,7 +32,19 @@ about those runs come from old logs / prior conversations and are marked
 
 **What works:** the path-progress universal reward + RAM-flag princess
 detection. Segments learn well in isolation (CP0->F1 98%, CP2->CP3 50%,
-CP3->CP4 30%, CP4->princess 69%, CP0->F1->F2 74%).
+CP3->CP4 30%, CP4->princess 69%). Plain from-reset PPO (v2) is the best
+single policy we have: a **clean reset-only eval (200 stochastic
+episodes, June 2026) measured 99.5% reach 2 fruits and 0% reach 3** —
+the old "74%" figure was stale/mismeasured. v2 is rock-solid to 2
+fruits and hard-walled there.
+
+**The whole remaining problem is one transition: F2->F3.** Across 200
+stochastic rollouts (and the greedy trajectory) a from-reset policy
+never once reaches a 3rd fruit. After F2 (left, x=80) the agent must
+reverse, go right, and climb ladder L23 (x=240) to F3 (144,120); it
+stays in the comfortable 2-fruit local optimum instead. This is a
+single localized exploration/credit-assignment wall, not a 4-way
+composition problem.
 
 **What does not work yet:** composing those into a single CP0->princess
 run. Chaining separate policies gives 0.4% (handoff distribution
@@ -54,6 +66,53 @@ orchestrated policies).
 are the princess-detection fix and CP4->princess. 26-29 are the pivot to
 PPO-from-reset and curriculum, and why they plateau/degrade. The
 end-of-doc "Summary" consolidates everything.
+
+---
+
+## Experimental method (adopted after v7)
+
+We kept changing several variables at once (v5->v6->v7 each moved
+warm-start, gate, eviction, policy), so outcomes couldn't be attributed
+and "lessons" kept getting refuted by the next run. New discipline:
+
+1. **One stable baseline.** Current baseline = **v2** (plain PPO from
+   reset, 5M, CnnPolicy). Clean eval (200 stochastic episodes from
+   reset, `scripts/eval_from_reset.py`): **99.5% reach 2 fruits, 0%
+   reach 3, 0 princess.**
+2. **One change per experiment.** Each run changes exactly one variable
+   vs the current baseline. Keep seed/steps/everything else identical.
+3. **Eval the same way every time:** `eval_from_reset.py`, 200
+   stochastic episodes from reset, report the deepest-CP distribution +
+   princess rate. (Deterministic = single trajectory, use only as a
+   sanity check.)
+4. **Confirm/refute the hypothesis, then decide.** If the change is a
+   clear improvement (or neutral + principled), it becomes the new
+   baseline. If not, revert and record why.
+5. **Backlog, not bundling.** New ideas from each discussion go into the
+   backlog below and are tested one at a time, in priority order.
+
+### Hypothesis backlog (test one at a time)
+
+- [ ] **H-A — reward leak fix** (RUNNING, v4 = `yeti_universal_v4_leakfix`).
+  *Change:* path-progress re-baselines best_d on each pickup, giving the
+  F2->F3 leg a real gradient. *vs:* v2. *Predicts:* some non-zero reach-3
+  rate, or at least higher reach-3 attempts. *Decision rule:* adopt as
+  baseline if reach-2 stays >=99% and reach-3 > v2's 0%.
+- [ ] **H-B — does curriculum help an EASY target?** From the current
+  baseline, add *only* a CP0+CP1 start mix (capped at CP1; nothing
+  deeper) and compare CP0->CP2 learning speed/level vs reset-only. Needs
+  a `max_start_level` knob (its own one-line change). Cleanly tests "do
+  CP1 starts help or hurt" on a target we know is reachable, without the
+  unsolved-segment confound that wrecked v6/v7.
+- [ ] **H-C — compute.** Plain reset, 20M steps (4x v2), no other change.
+  Approach 28 predicted F3 might need 20M+ of exploration; this has
+  never actually been run (v6/v7 spent 20M but with curriculum).
+- [ ] **H-D — targeted exploration for F2->F3.** Something local to the
+  post-F2 state (not global entropy/RND, both already failed globally).
+  Design TBD.
+- [ ] **H-E — MIP tested honestly.** MultiInputPolicy in the reset-only
+  setting (baseline to beat = whatever reset-only reaches), to isolate
+  the obs-augmentation effect from the curriculum confound of v7.
 
 ---
 
@@ -2604,3 +2663,99 @@ v6**:
 
 Diversity (both across-CP and within-pool) is load-bearing, not a
 nice-to-have. v6 is the proof.
+
+
+### 32. MultiInputPolicy + diversity-preserving curriculum (yeti_curriculum_v7)  *(verified, negative)*
+
+Built on the v6 post-mortem: reach gate OFF (reach_threshold 0.0, so
+v5-style diverse sampling), diversity-preserving eviction (random within
+the worst source-CP tier, no more bonus-freeze), and a MultiInputPolicy
+observation Dict{image, fruits[4]} (per-fruit presence vector) to
+de-alias checkpoint states. Trained from scratch (MIP obs space is
+incompatible with the CnnPolicy warmstarts). 20M steps.
+
+**Result: negative, and clarifying.**
+- Start diversity *was* preserved this time: all five levels sampled
+  (`{0:33k, 1:24k, 2:25k, 3:19k, 4:8k}`). Dropping the gate worked.
+- But CP1->CP2 still collapsed (windowed: peaked ~14% early, decayed to
+  0%). CP2->CP3 = 0% (4/25,563). reach-CP3-from-reset = 0% always. 0
+  princess.
+- Crucially, CP1->CP2 **never got above ~14%** — from scratch it never
+  learned the skill at all, vs plain from-reset PPO (v2) which reaches 2
+  fruits 99.5% of the time.
+
+**What this tells us:**
+1. **The single-policy checkpoint curriculum does not build
+   composition.** From scratch it is *worse* than plain from-reset PPO.
+   Across v5/v6/v7 it never once produced a reset->CP3. v5's
+   healthy-looking 71% CP1->CP2 was inherited from its v2 warm-start,
+   not built by the curriculum.
+2. **MIP's effect is inconclusive here** — confounded by from-scratch +
+   curriculum, and the 4-d fruit vector may be underweighted next to the
+   ~256-d CNN features. MIP was not given a fair test (it needs a
+   reset-only setting with a baseline to beat).
+3. Diverse start sampling is necessary (v6 proved removing it is fatal)
+   but **not sufficient** (v7 had it and still collapsed). The loaded
+   saved-states are off the policy's own trajectory manifold; dropping
+   the agent cold into them does not teach the skill the way a
+   continuous reset trajectory does.
+
+### Clean from-reset baseline eval (v2)  *(verified)*
+
+`scripts/eval_from_reset.py`, 200 stochastic episodes from a clean reset
+under training-equivalent termination:
+
+| reached | rate |
+|---------|------|
+| >= 1 fruit | 100% |
+| >= 2 fruits | 99.5% |
+| >= 3 fruits | **0%** |
+| princess | 0% |
+
+Deterministic (greedy) trajectory: exactly 2 fruits, every time.
+
+**Conclusions for strategy:**
+- The early game (CP0->CP2) is solved. The high-water mark for the North
+  Star has been v2 the whole time, and it's stronger than we thought
+  (99.5% to 2 fruits, not 74%).
+- Everything after v2 — per-segment policies aside — was a regression or
+  a wash on the single-from-reset metric.
+- The entire remaining problem is the **F2->F3 transition**: a single,
+  localized exploration wall a from-reset policy never crosses. Next
+  work should target that transition directly (reward/exploration for
+  the post-F2 right-and-up route), with v2's 99.5%/0% as the baseline to
+  beat — not more curriculum-scheduling variants.
+
+
+### 33. F2->F3 reward audit + leak fix (yeti_universal_v4)  *(in progress)*
+
+After the v2 clean eval pinned the wall at the F2->F3 transition (99.5%
+reach 2, 0% reach 3), we audited the path-progress reward on that leg
+(`scripts`-level numeric trace of `nav.path_distance_from_agent`).
+
+**Findings:**
+- The gradient *direction* is correct: walking F2 -> right -> up L23 ->
+  left to F3 monotonically decreases path distance (288 -> 0 px,
+  ~20px/step). No sign or geometry bug.
+- The magnitude is faint: ~2.9 reward max over the whole leg at
+  scale 0.01 (approach 28 already showed 5x scale doesn't help).
+- **The per-fruit best_d ratchet leaks the F3 budget.** best_d[F3] is
+  the closest the agent ever drifted to F3 across the *whole* episode.
+  En route to F2 the agent typically passes near the L23 ladder
+  (x~240), banking best_d[F3] as low as ~128. So after collecting F2
+  (distance 288) the first ~160px of the leg it must commit to pays
+  **zero** — a dead zone exactly where it must reverse direction and
+  traverse, with no value signal at the end (it has never reached F3).
+
+**Fix (H-A):** on every fruit pickup, re-baseline best_d for all
+remaining fruits (and princess) at the new position, so each inter-fruit
+leg gets a fresh full-distance progress budget. Applied to both
+`fruit_bonus_path_progress` and `..._universal`. Regression test
+`test_path_progress_universal_rebaselines_best_d_on_pickup` fails under
+the old behavior.
+
+**v4 run:** exactly v2's config (reset-only, 5M, seed 42), only the
+reward code changed. Compares against the v2 baseline (99.5%/0%). Honest
+caveat: the leak fix makes the gradient *correct*, but it's still faint
+and the core difficulty is long-horizon exploration — so this may not be
+sufficient on its own. Result + decision to follow.

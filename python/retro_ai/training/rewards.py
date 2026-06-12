@@ -509,8 +509,16 @@ def _fruit_bonus_path_progress(params: Mapping[str, Any]) -> RewardFn:
             if ctx.curr_fruits < ctx.prev_fruits:
                 collected = ctx.prev_fruits - ctx.curr_fruits
                 reward += collected * ctx.curr_bonus * fruit_scale
-
-            # Agent floor: prefer precise (standing), else reuse last known.
+                # Re-baseline every remaining fruit's best_d at the new
+                # post-pickup position. Without this, a fruit's best_d
+                # is the closest the agent ever drifted to it across the
+                # WHOLE episode (e.g. passing the L23 ladder en route to
+                # F2), so the next leg toward it starts already "spent"
+                # and pays nothing for the first stretch — a dead zone
+                # exactly where the agent must commit to a long
+                # traversal. Resetting on pickup gives each inter-fruit
+                # leg a fresh full-distance budget.
+                self.best_d = {1: None, 2: None, 3: None, 4: None}
             pixel_y = int(ctx.curr_y)
             floor = agent_floor_from_pixel_y(pixel_y)
             if floor is None:
@@ -611,6 +619,14 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
             if ctx.curr_fruits < ctx.prev_fruits:
                 collected = ctx.prev_fruits - ctx.curr_fruits
                 reward += collected * ctx.curr_bonus * fruit_scale
+                # Re-baseline all remaining targets (fruits + princess)
+                # at the new post-pickup position, so the next leg gets a
+                # fresh full-distance progress budget rather than
+                # inheriting a leaked-low best_d from earlier travel
+                # (e.g. passing the L23 ladder while heading to F2). See
+                # the F2->F3 reward audit (approach 33).
+                self.best_d = {1: None, 2: None, 3: None, 4: None}
+                self.best_d_princess = None
 
             # Princess touch: caller flagged the rising edge of the
             # level-cleared flag. Pay one-shot reward and reset all

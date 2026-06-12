@@ -467,6 +467,36 @@ def test_path_progress_reset_clears_state():
     assert r_after_reset > 0
 
 
+def test_path_progress_universal_rebaselines_best_d_on_pickup():
+    """Regression for the F2->F3 reward leak (approach 33).
+
+    A fruit pickup must re-baseline best_d for the remaining fruits at
+    the new position, so the next leg gets a fresh full-distance
+    progress budget. Without the fix, best_d[F3] holds the closest the
+    agent ever drifted to F3 during earlier travel (e.g. passing the
+    L23 ladder on the way to F2), so the actual F2->F3 leg pays nothing
+    until it beats that leaked-low value.
+    """
+    fn = create("fruit_bonus_path_progress_universal", {"scale": 0.01})
+    # Floor 2 (y=152). F2 (ram x~20) and F3 present.
+    f2f3 = (False, True, True, False)
+    # Step 0: at F2 (ram x=20) -> baseline best_d[F3] at d3~280.
+    fn(_pc(x=20, y=152, fp=f2f3, fruits_rem=2))
+    # Step 1: walk right to/past L23 (ram x=60 = 248px) -> ratchets
+    # best_d[F3] down to ~136 (the leak source).
+    r1 = fn(_pc(x=60, y=152, fp=f2f3, fruits_rem=2))
+    assert r1 > 0
+    # Step 2: back to F2 (ram x=20) and COLLECT F2 -> only F3 remains.
+    only_f3 = (False, False, True, False)
+    fn(_pc(x=20, y=152, fp=only_f3, fruits_rem=1, prev_fruits=2))
+    # Step 3: approach F3 (ram x=40 = 168px, d3~200). With the fix,
+    # best_d[F3] was re-baselined at x=20 on pickup (d3~280), so this
+    # closer step pays. Without the fix best_d[F3] would still be ~136
+    # and this would pay zero.
+    r3 = fn(_pc(x=40, y=152, fp=only_f3, fruits_rem=1))
+    assert r3 > 0
+
+
 # ---------------------------------------------------------------------------
 # fruit_bonus_path_progress_universal
 # ---------------------------------------------------------------------------
