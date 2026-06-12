@@ -498,6 +498,81 @@ def test_path_progress_universal_rebaselines_best_d_on_pickup():
 
 
 # ---------------------------------------------------------------------------
+# fruit_bonus_path_progress_pbrs (Markovian PBRS shaping)
+# ---------------------------------------------------------------------------
+
+
+def test_pbrs_registered():
+    assert "fruit_bonus_path_progress_pbrs" in available()
+
+
+def test_pbrs_first_step_no_shaping():
+    """First step has no previous potential, so it pays no shaping."""
+    fn = create("fruit_bonus_path_progress_pbrs", {"scale": 0.01, "gamma": 1.0})
+    assert fn(_pc(x=0, y=184)) == 0.0
+
+
+def test_pbrs_rewards_approach_and_penalizes_retreat():
+    """Unlike the ratchet, PBRS is symmetric: moving toward pays +,
+    moving away pays - (so round trips cancel)."""
+    fn = create("fruit_bonus_path_progress_pbrs", {"scale": 0.01, "gamma": 1.0})
+    fn(_pc(x=0, y=184))  # baseline
+    r_toward = fn(_pc(x=20, y=184))  # closer to F1
+    r_away = fn(_pc(x=0, y=184))  # back to start
+    assert r_toward > 0
+    assert r_away < 0
+    # With gamma=1 a round trip telescopes to ~0 net.
+    assert abs(r_toward + r_away) < 1e-6
+
+
+def test_pbrs_is_markovian_no_history_dependence():
+    """Same transition (s->s') yields the same shaping regardless of the
+    path taken to reach s. This is the property the best_d ratchet
+    violated."""
+    a = create("fruit_bonus_path_progress_pbrs", {"scale": 0.01, "gamma": 1.0})
+    b = create("fruit_bonus_path_progress_pbrs", {"scale": 0.01, "gamma": 1.0})
+
+    # Instance A reaches (x=20) directly from x=0.
+    a(_pc(x=0, y=184))
+    a(_pc(x=20, y=184))
+    r_a = a(_pc(x=40, y=184))
+
+    # Instance B reaches (x=20) after first wandering out to x=40 and
+    # back (which would have ratcheted best_d in the legacy reward).
+    b(_pc(x=0, y=184))
+    b(_pc(x=40, y=184))
+    b(_pc(x=20, y=184))
+    r_b = b(_pc(x=40, y=184))
+
+    # The 20->40 step pays the same for both despite different history.
+    assert abs(r_a - r_b) < 1e-6
+
+
+def test_pbrs_pickup_rebaselines_no_shaping_spike():
+    """On a pickup the remaining-target set changes; that step pays the
+    sparse fruit term and re-baselines the potential (no shaping spike
+    from a vanishing distance term)."""
+    fn = create("fruit_bonus_path_progress_pbrs", {"scale": 0.01, "gamma": 1.0})
+    fn(_pc(x=0, y=184, fp=(True, True, True, True), fruits_rem=4))
+    fn(_pc(x=44, y=184, fp=(True, True, True, True), fruits_rem=4))
+    r_pick = fn(
+        _pc(x=46, y=184, fp=(False, True, True, True), fruits_rem=3, prev_fruits=4)
+    )
+    # Sparse pickup term = 1 * 800 * 0.01 = 8.0, and the shaping is
+    # skipped on the pickup step, so reward is exactly the pickup term.
+    assert abs(r_pick - 8.0) < 1e-6
+
+
+def test_pbrs_reset_clears_state():
+    fn = create("fruit_bonus_path_progress_pbrs", {"scale": 0.01, "gamma": 1.0})
+    fn(_pc(x=0, y=184))
+    assert fn(_pc(x=20, y=184)) > 0
+    rewards.reset_reward(fn)
+    # After reset the next step is again a no-shaping baseline.
+    assert fn(_pc(x=20, y=184)) == 0.0
+
+
+# ---------------------------------------------------------------------------
 # fruit_bonus_path_progress_universal
 # ---------------------------------------------------------------------------
 

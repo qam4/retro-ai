@@ -683,6 +683,129 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
     return _UniversalPathProgressReward()
 
 
+@register("fruit_bonus_path_progress_pbrs")
+def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
+    """Potential-based reward shaping (PBRS) variant of the path-progress
+    reward — the Markovian replacement for the ``best_d`` ratchet.
+
+    Motivation (approach 34). The ``..._universal`` reward shapes via a
+    per-fruit ``best_d`` ratchet: it pays only when the agent beats its
+    *closest distance ever* to a fruit this episode. That makes the
+    reward **non-Markovian** — the reward at a given state depends on
+    episode history (the best distance seen so far), which the policy
+    can't observe. PBRS gives the *same* anti-oscillation property
+    without the history dependence.
+
+    Shaping term per step::
+
+        F(s, s') = gamma * Phi(s') - Phi(s),   Phi(s) = -scale * sum_f D_f(s)
+
+    where ``D_f`` is the nav-graph path distance to remaining fruit ``f``
+    (princess when none remain). Moving closer pays ``+``; moving away
+    pays a symmetric ``-`` so round-trips cancel (no farming) with no
+    ratchet. With ``gamma`` equal to the agent's discount, the optimal
+    policy is provably unchanged (Ng, Harada & Russell 1999).
+
+    The sparse fruit-pickup and princess terms are identical to
+    ``..._universal``.
+
+    Known, deliberately-retained approximations (see backlog):
+    - ``last_floor`` fallback while mid-jump/ladder. This is a *small,
+      bounded* non-Markovian residue (current-floor inferred with one
+      step of memory because pixel-y alone is ambiguous). It is what
+      keeps jumps from being rewarded (floor pinned + x-based distance
+      => a jump is a no-op in the graph), so it is kept on purpose. A
+      future change may derive current-floor from RAM (ladder/velocity
+      flag) to remove it cleanly.
+    - Phi uses the SUM over all remaining fruits (matching the legacy
+      target), not nearest/next-fruit. Target selection is a separate
+      future change.
+
+    Parameters
+    ----------
+    scale : float, default 0.01
+        Potential scale (per-pixel). Phi = -scale * sum of distances.
+    fruit_scale : float, default = scale
+        Sparse per-fruit pickup multiplier.
+    princess_scale : float, default 0.05
+        Sparse princess-touch multiplier.
+    gamma : float, default 0.99
+        Shaping discount. Should equal the agent's PPO gamma for the
+        policy-invariance guarantee; the training script injects
+        ``cfg.ppo.gamma`` here by default so they can't drift.
+    """
+    progress_scale = float(params.get("scale", 0.01))
+    fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
+    princess_scale = float(params.get("princess_scale", 0.05))
+    gamma = float(params.get("gamma", 0.99))
+
+    from retro_ai.training.yeti_map import (
+        agent_floor_from_pixel_y,
+        build_navigation_map,
+    )
+
+    nav = build_navigation_map()
+
+    class _PBRSPathProgressReward:
+        def __init__(self) -> None:
+            self.last_floor: int | None = None
+            self.prev_phi: float | None = None
+
+        def reset(self) -> None:
+            self.last_floor = None
+            self.prev_phi = None
+
+        def _potential(self, ctx: RewardContext) -> float | None:
+            """Phi(s) = -scale * sum of path distances to remaining
+            targets, or None if the floor can't be resolved."""
+            floor = agent_floor_from_pixel_y(int(ctx.curr_y))
+            if floor is None:
+                floor = self.last_floor
+            else:
+                self.last_floor = floor
+            if floor is None:
+                return None
+            agent_pix_x = int(ctx.curr_x) * 4 + 8
+            any_fruit = bool(ctx.fruits_present) and any(ctx.fruits_present)
+            if any_fruit:
+                total = 0
+                for fid, present in enumerate(ctx.fruits_present, start=1):
+                    if present:
+                        total += nav.path_distance_from_agent(
+                            floor, agent_pix_x, f"F{fid}"
+                        )
+            else:
+                total = nav.path_distance_from_agent(floor, agent_pix_x, "princess")
+            return -progress_scale * total
+
+        def __call__(self, ctx: RewardContext) -> float:
+            reward = 0.0
+
+            picked = ctx.curr_fruits < ctx.prev_fruits
+            if picked:
+                collected = ctx.prev_fruits - ctx.curr_fruits
+                reward += collected * ctx.curr_bonus * fruit_scale
+            if ctx.princess_touched:
+                reward += ctx.prev_bonus * princess_scale
+
+            phi = self._potential(ctx)
+
+            # Re-baseline (no shaping this step) across any discontinuity:
+            # episode start (prev None), unresolved floor (phi None), a
+            # fruit pickup or a princess touch (the set of remaining
+            # targets — and on princess, the whole level — changes). The
+            # sparse terms cover those events; shaping resumes next step.
+            if picked or ctx.princess_touched or self.prev_phi is None or phi is None:
+                self.prev_phi = phi
+                return reward
+
+            reward += gamma * phi - self.prev_phi
+            self.prev_phi = phi
+            return reward
+
+    return _PBRSPathProgressReward()
+
+
 __all__ = [
     "RewardContext",
     "RewardFn",

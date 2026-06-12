@@ -1,0 +1,58 @@
+# yeti_universal v6 — H-F: PBRS reward (Markovian shaping).
+#
+# Single change vs the v2 baseline: the shaping term. The path-progress
+# reward's non-Markovian `best_d` ratchet (reward depends on closest
+# distance ever reached this episode — history the policy can't see) is
+# replaced by potential-based reward shaping:
+#
+#     F(s,s') = gamma * Phi(s') - Phi(s),   Phi(s) = -scale * sum_f D_f(s)
+#
+# Same anti-oscillation property (round trips cancel) but Markovian, and
+# policy-invariant when the shaping gamma equals the agent's gamma. The
+# training script injects ppo.gamma into the reward, so they stay tied.
+#
+# Sparse fruit/princess terms unchanged. `last_floor` mid-jump fallback
+# is kept on purpose (it prevents jump-farming; it's a small bounded
+# residual non-Markovian-ness, backlogged for a later RAM-based fix).
+#
+# Everything else identical to v2 (reset-only, 5M, seed 42). Baseline to
+# beat: v2 = 99.5% reach-2 / 0% reach-3 (clean reset eval). Expectation:
+# cleaner/less-noisy learning and a sounder foundation; not expected to
+# crack F2->F3 alone (that's exploration).
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_universal_v6_pbrs
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    # gamma omitted on purpose — the training script injects ppo.gamma.
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

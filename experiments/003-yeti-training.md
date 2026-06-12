@@ -93,26 +93,47 @@ and "lessons" kept getting refuted by the next run. New discipline:
 
 ### Hypothesis backlog (test one at a time)
 
-- [ ] **H-A — reward leak fix** (RUNNING, v4 = `yeti_universal_v4_leakfix`).
-  *Change:* path-progress re-baselines best_d on each pickup, giving the
-  F2->F3 leg a real gradient. *vs:* v2. *Predicts:* some non-zero reach-3
-  rate, or at least higher reach-3 attempts. *Decision rule:* adopt as
-  baseline if reach-2 stays >=99% and reach-3 > v2's 0%.
-- [ ] **H-B — does curriculum help an EASY target?** From the current
-  baseline, add *only* a CP0+CP1 start mix (capped at CP1; nothing
-  deeper) and compare CP0->CP2 learning speed/level vs reset-only. Needs
-  a `max_start_level` knob (its own one-line change). Cleanly tests "do
-  CP1 starts help or hurt" on a target we know is reachable, without the
-  unsolved-segment confound that wrecked v6/v7.
-- [ ] **H-C — compute.** Plain reset, 20M steps (4x v2), no other change.
-  Approach 28 predicted F3 might need 20M+ of exploration; this has
-  never actually been run (v6/v7 spent 20M but with curriculum).
-- [ ] **H-D — targeted exploration for F2->F3.** Something local to the
-  post-F2 state (not global entropy/RND, both already failed globally).
-  Design TBD.
+- [x] **H-A — reward leak fix** (DONE, v4 = `yeti_universal_v4_leakfix`).
+  *Result:* refuted as a capability fix. Clean eval (300 stochastic):
+  reach-2 **90.3%**, reach-3 **0/300** (vs v2 99.5% / 0). Training
+  reach-3 rose to ~0.07% (17/25340) from v2's ~0.012%, and reach-2
+  reliability dropped — the fix unmasked a competing pull toward the
+  distant F3/F4 after F1 (re-baselining made all remaining fruits'
+  progress freshly available, so "go right toward F3/F4" sometimes
+  out-paid "grab nearby F2"). Net: more F3 *attempts*, no F3
+  *conversions*, slightly worse reliability. **Did NOT replace v2 as
+  baseline** (failed the reach-2 >= 99% rule). Confirms the wall is
+  long-horizon exploration, not shaping direction. Leak fix kept in
+  code (correct), but it is not a win on its own.
+- [ ] **H-F — PBRS (Markovian shaping)** (NEXT, v6 = `yeti_universal_v6_pbrs`).
+  *Change:* replace the `best_d` ratchet with potential-based shaping
+  `gamma*Phi(s') - Phi(s)`, `Phi = -scale*sum_f D_f`, gamma tied to PPO
+  gamma. Removes the non-Markovian history-dependence (reward at a state
+  depended on closest-distance-ever, unobservable to the policy) while
+  keeping the anti-oscillation property. *vs:* v2. *Predicts:* cleaner /
+  less-noisy learning, sounder foundation; not expected to crack F2->F3
+  alone. *Decision rule:* adopt as baseline if reach-2 >= v2 and learning
+  is no worse; treat as the foundation for later experiments.
+- [ ] **H-B — does curriculum help an EASY target?** From the baseline,
+  add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
+  vs reset-only. Needs a `max_start_level` knob.
+- [ ] **H-C — compute.** Plain reset, 20M steps, no other change.
+  (`yeti_universal_v5_20m.yaml` already drafted.)
+- [ ] **H-D — targeted exploration for F2->F3.** Local to the post-F2
+  state (not global entropy/RND). Design TBD.
 - [ ] **H-E — MIP tested honestly.** MultiInputPolicy in the reset-only
-  setting (baseline to beat = whatever reset-only reaches), to isolate
-  the obs-augmentation effect from the curriculum confound of v7.
+  setting, isolated from the curriculum confound of v7.
+- [ ] **H-G — Markovian current-floor from state.** Remove the
+  `last_floor` mid-jump fallback (a small, bounded non-Markovian residue
+  kept for now because it prevents jump-farming). Derive current floor
+  from RAM (ladder/climb flag or vertical-velocity byte) so floor is a
+  pure function of the present state. Cheap-to-medium; only pursue if
+  evidence says the residue matters.
+- [ ] **H-H — shaping target selection.** Phi currently sums distance
+  over *all* remaining fruits, which creates competing pulls when the
+  next fruit is in the opposite direction from later ones (the F1->F2
+  vs F3/F4 conflict seen in H-A). Try nearest / next-in-order target
+  instead. Only after PBRS (H-F) lands so it's a single change.
 
 ---
 
@@ -2759,3 +2780,61 @@ reward code changed. Compares against the v2 baseline (99.5%/0%). Honest
 caveat: the leak fix makes the gradient *correct*, but it's still faint
 and the core difficulty is long-horizon exploration — so this may not be
 sufficient on its own. Result + decision to follow.
+
+**v4 result (clean eval, 300 stochastic from reset):** reach-2 **90.3%**,
+reach-3 **0/300**, princess 0. Training reach-3 ~0.07% (17/25340) vs v2
+~0.012%. **Refuted as a capability fix and did not replace v2 as
+baseline** (reach-2 fell below the >=99% rule). Mechanism: re-baselining
+best_d on pickup made *all* remaining fruits' progress freshly available
+after F1, so the competing pull toward distant F3/F4 (up-right) sometimes
+out-paid grabbing the nearby F2 (left) — more F3 attempts, no
+conversions, lower reach-2 reliability. Net lesson: shaping *direction*
+isn't the bottleneck; long-horizon **exploration** is. The leak fix is
+kept in code (it is the correct behavior) but is not a standalone win.
+The reach-2 dip also exposed two reward-design issues pursued next:
+non-Markovian shaping (approach 34) and all-fruits-vs-next-fruit target
+selection (backlog H-H).
+
+### 34. Markovian reward via PBRS (yeti_universal_v6)  *(in progress)*
+
+A discussion-driven reward audit (not a training failure) found the
+path-progress shaping is **non-Markovian**: the `best_d` ratchet pays
+only when the agent beats its *closest distance ever* to a fruit this
+episode, so the reward at a given state depends on episode history the
+policy cannot observe. Two costs: (1) the critic cannot fit a consistent
+V(s) when identical observations have different returns -> higher
+advantage variance / noisier learning; (2) the asymmetry (no penalty for
+backing away) doesn't actually discourage dithering, only stops paying.
+
+`best_d` existed as an **anti-oscillation** hack: a naive clipped
+"reward for getting closer" can be farmed by pacing toward/away; the
+ratchet stops that by only paying for new closest. **PBRS achieves the
+same farm-resistance while staying Markovian:**
+
+    F(s,s') = gamma*Phi(s') - Phi(s),   Phi(s) = -scale * sum_f D_f(s)
+
+Moving toward pays `+`, moving away pays a symmetric `-`, so round trips
+telescope to ~0 — no ratchet needed. With the shaping gamma equal to the
+agent's discount, the optimal policy is provably unchanged (Ng, Harada &
+Russell 1999). The training script injects `cfg.ppo.gamma` into the
+reward so the two gammas can't drift apart. Signed-delta (gamma=1) is the
+same idea minus the formal guarantee; we default to the tied value.
+
+**Audit also enumerated the other stateful pieces** in the reward:
+- `best_d_princess` — same ratchet for the princess target; also removed.
+- `last_floor` — a *smaller, bounded* non-Markovian residue: pixel-y
+  alone can't tell a jump from a ladder climb, so the floor is inferred
+  with one step of memory. It is **kept on purpose** — pinning the floor
+  during a jump (plus x-based distance) is exactly what stops jumps from
+  being rewarded. Removing it cleanly needs a current-floor signal from
+  RAM (backlog H-G).
+
+The clean distinction the discussion settled on: a reward may depend on
+the *current state* (`current floor`, x, fruits) and stay Markovian; the
+bug is depending on the *trajectory* (`best_d` = best-so-far). "Current
+floor" is derivable from state; "last floor" is history by definition.
+
+**v6 run:** v2's config, only the reward swapped to
+`fruit_bonus_path_progress_pbrs`. Expectation: cleaner/less-noisy
+learning and a Markovian foundation for later experiments; not expected
+to crack F2->F3 on its own. Compare to v2 (99.5%/0%) the usual way.

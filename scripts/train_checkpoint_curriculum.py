@@ -813,7 +813,13 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
             # one env while another is mid-episode, and a shared
             # stateful reward (e.g. floor_novelty / climb_novelty /
             # path_progress) would leak resets.
-            env_reward_fn = create_reward(cfg.reward.name, cfg.reward.params)
+            #
+            # Tie any shaping gamma to the agent's PPO gamma by default
+            # (PBRS policy-invariance requires them equal). Harmless for
+            # rewards that ignore the param.
+            reward_params = dict(cfg.reward.params)
+            reward_params.setdefault("gamma", cfg.ppo.gamma)
+            env_reward_fn = create_reward(cfg.reward.name, reward_params)
             env = CheckpointCurriculumEnv(
                 cfg=cfg,
                 reward_fn=env_reward_fn,
