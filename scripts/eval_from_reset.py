@@ -127,6 +127,13 @@ def main() -> None:
         rows.append(
             {"ep": ep, "max_cp": max_cp, "steps": steps, "end_reason": end_reason}
         )
+        if (ep + 1) % 25 == 0:
+            print(
+                f"  {ep + 1}/{args.episodes} episodes "
+                f"(reach2={sum(v for k, v in max_cp_counts.items() if k >= 2)}, "
+                f"reach3={sum(v for k, v in max_cp_counts.items() if k >= 3)})",
+                flush=True,
+            )
 
     n = args.episodes
     print(f"\n=== from-reset eval: {args.model} ===")
@@ -138,7 +145,11 @@ def main() -> None:
         label = "princess" if cp == 5 else f"{cp} fruits"
         print(
             f"  reached >= {label:>10}: {cum:>4}/{n}  ({100*cum/n:5.1f}%)"
-            + (f"   [exactly {cp}: {max_cp_counts.get(cp,0)}]" if max_cp_counts.get(cp, 0) else "")
+            + (
+                f"   [exactly {cp}: {max_cp_counts.get(cp,0)}]"
+                if max_cp_counts.get(cp, 0)
+                else ""
+            )
         )
     print(f"\nprincess touches: {princess_touches}/{n} ({100*princess_touches/n:.1f}%)")
 

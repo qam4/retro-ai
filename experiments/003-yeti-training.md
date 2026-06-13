@@ -91,6 +91,48 @@ and "lessons" kept getting refuted by the next run. New discipline:
 5. **Backlog, not bundling.** New ideas from each discussion go into the
    backlog below and are tested one at a time, in priority order.
 
+### Reward-shaping pitfalls (read before touching the reward)
+
+Hard-won gotchas. Each cost a full 5M run + eval to learn. Don't repeat.
+
+1. **PBRS with `gamma<1` on a large potential creates a per-step "living
+   reward."** With `Phi = -scale*sum_f D_f`, even standing still pays
+   `(1-gamma)*|Phi|` every step. The `(1-gamma)` looks tiny (0.01) but it
+   multiplies `|Phi|`, which is large when you sum distances over several
+   targets — here ~0.08/step, ~80 over an episode, vs ~10-16 for actually
+   collecting 2 fruits. Result: the agent learns to **survive/dawdle far
+   from the goal** instead of progressing (v6: reach-2 99.5%->54.7%,
+   episodes 198->344 steps). Fixes: `gamma=1` (signed delta — standing
+   still pays 0), and/or keep `|Phi|` small (nearest-target, smaller
+   scale). Tying shaping-gamma to the agent's gamma is theoretically
+   "correct" (invariance) but caused this — don't assume the principled
+   choice is the safe one when the potential is large.
+
+2. **Non-Markovian shaping (history-dependent reward) hurts the critic.**
+   The old `best_d` ratchet paid only for beating the closest-distance-
+   ever, so identical observations gave different rewards depending on
+   hidden history. The critic can't fit a consistent V(s) -> noisy
+   advantages. Shaping should be a function of `(s, s')` only (PBRS /
+   signed delta), not of the trajectory.
+
+3. **"Reward progress to ALL remaining targets" fights an ordered task.**
+   When the next target is in the opposite direction from later ones
+   (F2 is left; F3/F4 are right/up), summing progress over all remaining
+   fruits creates competing pulls and can make the agent skip the near
+   target for the far ones (v4: re-baselining unmasked this, reach-2
+   99.5%->90.3%). Consider shaping toward the *next/nearest* target only.
+
+4. **Changing the reward invalidates warm-starts.** The critic is fit to
+   the old reward's scale; a policy/value trained under a different
+   reward can't be reused. Reward-change experiments train from scratch.
+
+5. **Distinguish "current-state" memory from "trajectory" memory.**
+   Reward may depend on the *current* state (current floor, x, fruits)
+   and stay Markovian. `last_floor` (inferring floor with one step of
+   memory because pixel-y is ambiguous mid-jump) is a small bounded
+   residue kept on purpose — it stops jump-farming. `best_d`
+   (best-so-far) is trajectory memory and is the real problem.
+
 ### Hypothesis backlog (test one at a time)
 
 - [x] **H-A — reward leak fix** (DONE, v4 = `yeti_universal_v4_leakfix`).
@@ -105,15 +147,18 @@ and "lessons" kept getting refuted by the next run. New discipline:
   baseline** (failed the reach-2 >= 99% rule). Confirms the wall is
   long-horizon exploration, not shaping direction. Leak fix kept in
   code (correct), but it is not a win on its own.
-- [ ] **H-F — PBRS (Markovian shaping)** (NEXT, v6 = `yeti_universal_v6_pbrs`).
-  *Change:* replace the `best_d` ratchet with potential-based shaping
-  `gamma*Phi(s') - Phi(s)`, `Phi = -scale*sum_f D_f`, gamma tied to PPO
-  gamma. Removes the non-Markovian history-dependence (reward at a state
-  depended on closest-distance-ever, unobservable to the policy) while
-  keeping the anti-oscillation property. *vs:* v2. *Predicts:* cleaner /
-  less-noisy learning, sounder foundation; not expected to crack F2->F3
-  alone. *Decision rule:* adopt as baseline if reach-2 >= v2 and learning
-  is no worse; treat as the foundation for later experiments.
+- [ ] **H-F — PBRS (Markovian shaping)** (DONE, v6 = `yeti_universal_v6_pbrs`).
+  *Result:* rejected. Removed the `best_d` ratchet (good — Markovian) but
+  `Phi=-scale*sum_f D_f` with gamma=0.99 introduced a per-step living
+  reward `(1-gamma)*scale*ΣD ≈ 0.08/step` that dwarfed fruit reward →
+  survival bias. Eval: reach-2 **54.7%** (vs v2 99.5%), episodes mean 344
+  steps vs v2 198 (dawdling). v2 stays baseline.
+- [ ] **H-F2 — PBRS with gamma=1** (NEXT, v6b = `yeti_universal_v6b_pbrs_g1`).
+  *Change:* shaping gamma 0.99 -> 1.0 (signed delta). Kills the
+  living-reward term (standing still pays 0) while staying Markovian +
+  farm-proof. *vs:* v2; also isolates whether the v6 regression was the
+  gamma<1 term. From scratch (reward-scale change). *Decision rule:*
+  adopt as baseline if reach-2 >= v2.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
@@ -2838,3 +2883,27 @@ floor" is derivable from state; "last floor" is history by definition.
 `fruit_bonus_path_progress_pbrs`. Expectation: cleaner/less-noisy
 learning and a Markovian foundation for later experiments; not expected
 to crack F2->F3 on its own. Compare to v2 (99.5%/0%) the usual way.
+
+**v6 result (clean eval, 300 stochastic): regression.** reach-1 93.7%,
+reach-2 **54.7%** (vs v2 99.5%), reach-3 0, princess 0. **Rejected;
+v2 stays baseline.**
+
+Diagnosis (quantified + confirmed): PBRS with `Phi = -scale*sum_f D_f`
+and `gamma=0.99` emits a per-step "living reward" `(1-gamma)*scale*ΣD ≈
+0.08/step` (~80 over a 1000-step episode) just for *staying alive far
+from the goal* — because the gap `(1-gamma)=0.01` multiplies a large
+potential `|Phi|≈8` (sum over 4 fruit distances). That dwarfed the
+~10-16 reward for collecting 2 fruits, creating a **survival bias**. The
+eval confirmed the signature: v6 episodes ran far longer (mean 344 steps
+vs v2's 198), 19/300 hit the 1000-step cap without dying, and episodes
+reaching only 1 fruit still averaged 355 steps (dawdling, not productive
+exploration). So the regression is the gamma<1 living-reward term, not
+Markovian shaping per se.
+
+Important nuance (the "0.99 ≈ 1" trap): the gamma values are close, but
+the *reward* effect is `(1-gamma)*|Phi|`, which is not small when Phi is
+large. The fix is `gamma=1` (signed-delta shaping): standing still pays
+exactly 0, the living-reward term vanishes, while keeping Markovian +
+farm-proof. Forfeits only the formal invariance-under-discounting proof.
+Pursued as H-F2 (v6b). Trained from scratch — a reward-scale change means
+the previous policy/critic can't be reused.

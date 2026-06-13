@@ -1,0 +1,62 @@
+# yeti_universal v6b — H-F2: PBRS with gamma=1 (signed-delta shaping).
+#
+# Single change vs v6: shaping gamma 0.99 -> 1.0.
+#
+# Why: v6 (gamma=0.99) collapsed fruit collection (reach-2 99.5%->54.7%)
+# via a survival bias. PBRS with Phi=-scale*sum_f D_f and gamma<1 emits a
+# per-step "living reward" (1-gamma)*scale*sum_f D_f ~= 0.08/step (~80
+# over a 1000-step episode) just for staying alive far from the goal,
+# which dwarfed the ~10-16 reward for actually collecting 2 fruits. The
+# v6 eval confirmed the signature: episodes ran far longer (mean 344 vs
+# v2's 198 steps) while collecting fewer fruits; episodes that reached
+# only 1 fruit still averaged 355 steps (dawdling).
+#
+# gamma=1 makes the shaping pure signed distance-delta Phi(s')-Phi(s):
+# standing still pays exactly 0, so the living-reward term vanishes
+# entirely. Still Markovian, still farm-proof (round trips cancel), no
+# best_d. The only thing forfeited is the formal invariance-under-
+# discounting proof, which bought nothing but trouble here.
+#
+# Trained FROM SCRATCH (no resume): the reward scale changed, so a
+# policy/critic trained under v6's reward can't be reused.
+#
+# Baseline to beat: v2 = 99.5% reach-2 / 0% reach-3.
+# This run also isolates whether the v6 regression was the gamma<1
+# living-reward term: if reach-2 recovers toward v2, it was.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_universal_v6b_pbrs_g1
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0   # explicit -> overrides the ppo.gamma injection (signed delta)
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
