@@ -28,23 +28,31 @@ about those runs come from old logs / prior conversations and are marked
 
 ---
 
-## TL;DR / Current status (after approach 29)
+## TL;DR / Current status (after approach 35)
 
-**What works:** the path-progress universal reward + RAM-flag princess
-detection. Segments learn well in isolation (CP0->F1 98%, CP2->CP3 50%,
-CP3->CP4 30%, CP4->princess 69%). Plain from-reset PPO (v2) is the best
-single policy we have: a **clean reset-only eval (200 stochastic
-episodes, June 2026) measured 99.5% reach 2 fruits and 0% reach 3** —
-the old "74%" figure was stale/mismeasured. v2 is rock-solid to 2
-fruits and hard-walled there.
+**Current baseline: v6b** (`yeti_universal_v6b_pbrs_g1`) — plain PPO from
+reset with the **PBRS / signed-delta (gamma=1)** path-progress reward.
+Clean reset-only eval (300 stochastic): **reach-2 98.3%, reach-3 95.7%,
+reach-4 13.0%, princess 0%.** This broke the long-standing 2-fruit wall.
 
-**The whole remaining problem is one transition: F2->F3.** Across 200
-stochastic rollouts (and the greedy trajectory) a from-reset policy
-never once reaches a 3rd fruit. After F2 (left, x=80) the agent must
-reverse, go right, and climb ladder L23 (x=240) to F3 (144,120); it
-stays in the comfortable 2-fruit local optimum instead. This is a
-single localized exploration/credit-assignment wall, not a 4-way
-composition problem.
+**What broke the wall:** making the shaping Markovian *and*
+living-reward-free. The old reward used a non-Markovian `best_d` ratchet;
+the PBRS attempt with gamma=0.99 added a survival "living reward" that
+caused dawdling (v6: reach-2 collapsed to 54.7%). Setting **gamma=1**
+(signed distance-delta: pay only for actually getting closer, symmetric,
+no best-so-far, no survival subsidy) jumped reach-3 from 0% to ~96%. So
+the multi-month "2-fruit plateau" was substantially a **reward-shaping
+artifact**, not a pure exploration limit. See "Reward-shaping pitfalls".
+
+**The remaining problem is now CP4->princess** (0 touches) and pushing
+**reach-4** up from 13%. After collecting all 4 fruits the agent must go
+to the princess (312,60); that final leg isn't being made yet.
+
+**Historical note (pre-v6b):** for most of this project the single-policy
+wall was F2->F3 — v2/v4/v6 all hit ~99% reach-2 / 0% reach-3 from reset.
+Segments learned in isolation (CP2->CP3 50%, CP3->CP4 30%,
+CP4->princess 69%) but never composed into one policy via curriculum.
+v6b shows a clean reward composes from reset without any curriculum.
 
 **What does not work yet:** composing those into a single CP0->princess
 run. Chaining separate policies gives 0.4% (handoff distribution
@@ -75,10 +83,11 @@ We kept changing several variables at once (v5->v6->v7 each moved
 warm-start, gate, eviction, policy), so outcomes couldn't be attributed
 and "lessons" kept getting refuted by the next run. New discipline:
 
-1. **One stable baseline.** Current baseline = **v2** (plain PPO from
-   reset, 5M, CnnPolicy). Clean eval (200 stochastic episodes from
-   reset, `scripts/eval_from_reset.py`): **99.5% reach 2 fruits, 0%
-   reach 3, 0 princess.**
+1. **One stable baseline.** Current baseline = **v6b**
+   (`yeti_universal_v6b_pbrs_g1`): plain PPO from reset, PBRS/signed-delta
+   (gamma=1) reward. Clean eval (300 stochastic from reset): **reach-2
+   98.3%, reach-3 95.7%, reach-4 13.0%, princess 0%.** (Previous baseline
+   was v2 at 99.5% reach-2 / 0% reach-3; v6b dominates it.)
 2. **One change per experiment.** Each run changes exactly one variable
    vs the current baseline. Keep seed/steps/everything else identical.
 3. **Eval the same way every time:** `eval_from_reset.py`, 200
@@ -153,12 +162,21 @@ Hard-won gotchas. Each cost a full 5M run + eval to learn. Don't repeat.
   reward `(1-gamma)*scale*ΣD ≈ 0.08/step` that dwarfed fruit reward →
   survival bias. Eval: reach-2 **54.7%** (vs v2 99.5%), episodes mean 344
   steps vs v2 198 (dawdling). v2 stays baseline.
-- [ ] **H-F2 — PBRS with gamma=1** (NEXT, v6b = `yeti_universal_v6b_pbrs_g1`).
-  *Change:* shaping gamma 0.99 -> 1.0 (signed delta). Kills the
-  living-reward term (standing still pays 0) while staying Markovian +
-  farm-proof. *vs:* v2; also isolates whether the v6 regression was the
-  gamma<1 term. From scratch (reward-scale change). *Decision rule:*
-  adopt as baseline if reach-2 >= v2.
+- [ ] **H-F2 — PBRS with gamma=1** (DONE, v6b = `yeti_universal_v6b_pbrs_g1`).
+  *Result:* **BREAKTHROUGH — adopted as new baseline.** Signed-delta
+  shaping (gamma=1) kills the living-reward term. Clean eval: reach-2
+  98.3%, **reach-3 95.7%** (from 0%), reach-4 13.0%, princess 0. Broke
+  the multi-month 2-fruit wall with no curriculum. Confirms the v6
+  regression was the gamma<1 living reward, and that the old non-Markovian
+  `best_d` reward was a real cause of the plateau.
+- [ ] **H-I — CP4->princess (the new wall).** From the v6b baseline, the
+  agent reaches 4 fruits (13%) but never touches the princess. Figure out
+  why the final F4->princess leg isn't made (princess shaping reachable?
+  exploration? the princess node/distance in the nav graph?) and address
+  it. Likely the next highest-value experiment.
+- [ ] **H-J — push reach-4 up.** reach-3 is 95.7% but reach-4 only 13%.
+  The F3->F4 leg is the current soft spot; more compute (H-C at the v6b
+  baseline) and/or shaping/target tweaks (H-H) may lift it.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
@@ -2907,3 +2925,48 @@ exactly 0, the living-reward term vanishes, while keeping Markovian +
 farm-proof. Forfeits only the formal invariance-under-discounting proof.
 Pursued as H-F2 (v6b). Trained from scratch — a reward-scale change means
 the previous policy/critic can't be reused.
+
+
+### 35. PBRS with gamma=1 breaks the 2-fruit wall (yeti_universal_v6b)  *(verified, BREAKTHROUGH)*
+
+Single change vs v6: shaping gamma 0.99 -> 1.0 (signed distance-delta).
+Everything else identical (reset-only, 5M, seed 42, from scratch).
+
+**Result (clean eval, 300 stochastic from reset):**
+
+| reached | v2 | v6 (gamma .99) | **v6b (gamma 1)** |
+|---------|-----|----------------|-------------------|
+| 2 fruits | 99.5% | 54.7% | **98.3%** |
+| 3 fruits | 0% | 0% | **95.7%** |
+| 4 fruits | 0% | 0% | **13.0%** |
+| princess | 0 | 0 | 0 |
+
+Training: reached 3 fruits in ~32% of reset episodes (7706/23743), 4
+fruits 739 times; end-of-training `reset_reach=[1,1,1,0.93,0.11]`.
+
+**Why this is the headline result.** Every prior single policy was
+hard-walled at 2 fruits / 0% reach-3 from reset, and we had spent many
+approaches (curriculum v3/v5/v6/v7, MIP, stronger shaping, RND, entropy)
+trying to get past it — all failing. A *clean reward* did it with no
+curriculum, no warm-start, no observation changes. The 2-fruit plateau
+was substantially a **reward-shaping artifact**, not an intrinsic
+exploration limit:
+
+- The old `best_d` ratchet was **non-Markovian** (reward depended on
+  best-distance-ever, unobservable) -> noisy critic, and it *leaked* the
+  F3 budget (approach 33).
+- The gamma=0.99 PBRS fix traded that for a **survival living reward**
+  (approach 34) -> dawdling.
+- gamma=1 signed-delta has **neither**: the only way to earn reward is to
+  actually get closer to a fruit, symmetric (round trips cancel, no
+  farming), Markovian, no survival subsidy. That clean gradient was
+  enough to carry the policy F1->F2->F3 and often ->F4.
+
+**Caveat / honesty:** this is one seed. The reach-4 (13%) and princess
+(0%) numbers say the *new* frontier is F3->F4 and F4->princess; the win
+is real but the level isn't beaten. Lesson reinforced: get the reward
+*clean and Markovian* before reaching for fancier machinery (curriculum,
+MIP, intrinsic motivation) — several of those past failures may have
+been fighting the reward, not the task.
+
+**New baseline = v6b.** Next: H-I (CP4->princess) and H-J (lift reach-4).
