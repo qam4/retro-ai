@@ -2969,4 +2969,20 @@ is real but the level isn't beaten. Lesson reinforced: get the reward
 MIP, intrinsic motivation) — several of those past failures may have
 been fighting the reward, not the task.
 
+**v6 vs v6b is the controlled answer to "does 0.99 vs 1 matter?"** Same
+reward, seed, and everything else; only gamma differs. Outcome flipped
+(reach-2 54.7%->98.3%, reach-3 0%->95.7%). So a 0.01 gamma change is NOT
+a small behavior change — the reward effect is `(1-gamma)*|Phi|`, small
+coefficient times a large potential.
+
+**Theory caveat we knowingly accepted:** gamma=1 signed-delta forfeits
+the PBRS policy-invariance guarantee (the proof needs shaping-gamma =
+agent-gamma = 0.99). So this shaping *can* bias the optimal policy
+relative to the true discounted objective. Here the bias ("rush toward
+fruits") is aligned with the goal, so it helps — but the theorem isn't on
+our side. If we ever need the guarantee back without the survival bias,
+keep gamma=0.99 but shrink |Phi| (shape toward the nearest target only so
+`(1-gamma)*|Phi|` stays small) — backlogged, not pursued now since v6b
+works and is simpler.
+
 **New baseline = v6b.** Next: H-I (CP4->princess) and H-J (lift reach-4).
