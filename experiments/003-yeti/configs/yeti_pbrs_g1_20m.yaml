@@ -1,0 +1,56 @@
+# yeti PBRS g=1, 20M — H-C/H-J/H-I at the v6b baseline.
+#
+# Single change vs v6b: 5M -> 20M steps. Same PBRS/signed-delta (gamma=1)
+# reward, reset-only, seed 42, from scratch.
+#
+# Motivation: v6b cracked F2->F3 (~96% reach-3) but reach-4 was STILL
+# CLIMBING when the 5M budget ran out (reset_reach[4] bursting to 0.7+ in
+# the last 10%). The princess shaping is sane (path distance to princess
+# decreases monotonically after CP4 + a sparse princess-touch reward), so
+# more compute should consolidate F3->F4 and start producing the first
+# F4->princess touches. Attacks reach-4 (H-J) and CP4->princess (H-I) at
+# once with no new mechanism.
+#
+# Periodic model snapshots are written to output/.../snapshots every ~2M
+# steps (training-script default) so a late degeneration can be recovered
+# from the best earlier checkpoint.
+#
+# Baseline to beat: v6b = reach-2 98.3% / reach-3 95.7% / reach-4 13% /
+# princess 0.
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_pbrs_g1_20m
+  num_envs: 8
+  seed: 42
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 1.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20

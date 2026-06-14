@@ -40,7 +40,7 @@ from retro_ai.training.run_manifest import (
     seed_everything,
 )
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 
 # Yeti RAM addresses
@@ -874,12 +874,22 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     print("\nTraining...", flush=True)
     status = "COMPLETED"
     exit_code: Optional[int] = 0
+    # Periodic model snapshots so a long run that degenerates late can be
+    # recovered from its best earlier checkpoint. Pure observability —
+    # does not affect training. Saves roughly every 2M timesteps.
+    snapshot_freq = max(1, 2_000_000 // max(1, num_envs))
+    snapshot_cb = CheckpointCallback(
+        save_freq=snapshot_freq,
+        save_path=os.path.join(cfg.training.output, "snapshots"),
+        name_prefix="model",
+    )
     try:
         model.learn(
             total_timesteps=cfg.training.timesteps,
             callback=[
                 CurriculumCallback(cfg.training.timesteps),
                 EpisodeMetricsCallback(episode_logger, log_interval=10_000),
+                snapshot_cb,
             ],
         )
         model.save(os.path.join(cfg.training.output, "final_model"))
