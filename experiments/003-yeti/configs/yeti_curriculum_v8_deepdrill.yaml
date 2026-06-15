@@ -1,0 +1,70 @@
+# yeti_curriculum v8 — deep-CP drill on the v6b/12M champion.
+#
+# Hypothesis (H-I/H-J): the deep legs fail as a reactive LADDER-ASCENT
+# survival skill, not a navigation problem. The 12M champion navigates
+# correctly to the ladders and then dies ON them:
+#   - fail CP3->CP4 ends at ~(180,114) = ladder L34 (x=176), floor 3
+#   - fail CP4->princess ends at ~(220,82) = ladder L45 (x=208), floor 4
+# These ascents are reached rarely from reset, so the timing skill is
+# under-practiced and unstable (reach-4 spiked to 30% then forgotten over
+# 20M). Seeding CP1-CP4 starts gives many reps at exactly those ascents,
+# which should stabilize reach-4 and produce princess touches.
+#
+# Setup:
+# - Reward UNCHANGED: PBRS/signed-delta gamma=1 (the breakthrough reward).
+#   Bonus-scaled pickup term already rewards speed; we are NOT changing
+#   the reward system.
+# - Warm-start from the 12M champion model + seed the curriculum pools
+#   with the 20M run's reset-origin CP1-CP4 buffer (100 states each,
+#   source_cp=0 = on-distribution). Reward is unchanged, so the
+#   warm-start/critic is valid. Both are loaded via `resume` (the script
+#   reads checkpoints.pkl next to the resumed model).
+# - Curriculum: NO reach gate (proven harmful), success-weighted across
+#   CPs (concentrates budget on the failing deep ascents), CP0 floor 0.4
+#   so end-to-end composition keeps being practiced. Diversity-preserving
+#   eviction (current default) keeps pools from freezing.
+# - 10M steps; snapshots every ~2M (degeneration insurance).
+#
+# Baseline to beat: 12M champion (reach-2 99.7 / reach-3 87.7 /
+# reach-4 28.3 / princess 0). Success = reach-4 stabilizes higher and/or
+# non-zero princess rate at eval.
+
+training:
+  timesteps: 10_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v8_deepdrill
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/champions/pbrs_g1_12M/final_model.zip
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.4       # CP0 floor — keep end-to-end composition
+  frontier_fraction: 0.0    # unused (back-compat)
+  earlier_fraction: 0.0     # unused (back-compat)
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0      # gate OFF

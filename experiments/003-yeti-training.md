@@ -177,6 +177,29 @@ Hard-won gotchas. Each cost a full 5M run + eval to learn. Don't repeat.
 - [ ] **H-J — push reach-4 up.** reach-3 is 95.7% but reach-4 only 13%.
   The F3->F4 leg is the current soft spot; more compute (H-C at the v6b
   baseline) and/or shaping/target tweaks (H-H) may lift it.
+- [x] **H-C — more compute (20M reset-only)** (DONE, `yeti_pbrs_g1_20m`).
+  *Result:* the **princess was touched 5 times** during training (steps
+  7.9-17M) — the full level is achievable from reset. BUT the policy is
+  **unstable on the deep legs**: a snapshot sweep showed reach-4 spiking
+  to 30% at 12M and ~0 elsewhere; the 20M final model is degraded
+  (reach-3 0%). Best = **12M snapshot** (reach-2 99.7 / reach-3 87.7 /
+  reach-4 28.3 / princess 0). Periodic snapshots (added this run) saved
+  us from shipping the degraded final.
+- [x] **Efficiency/failure profile of the 12M champion** (DONE,
+  `scripts/profile_run.py`). CP1 already near-optimal (F1 by step 47,
+  bonus 954); agent is fast (all 4 fruits by ~step 207, bonus 825), so
+  "dawdling -> snowballs" is NOT the issue. **Failures are at the
+  ladders:** CP3->CP4 dies at ~(180,114)=L34, CP4->princess dies at
+  ~(220,82)=L45. The agent navigates correctly to the ladder then dies on
+  the ascent -> the deep wall is a reactive **ladder-ascent timing**
+  skill, under-practiced because reached rarely.
+- [ ] **H-K — deep-CP drill** (RUNNING, `yeti_curriculum_v8_deepdrill`).
+  Warm-start the 12M champion + seed CP1-CP4 pools from the 20M
+  reset-origin buffer; curriculum (no gate, success-weighted, CP0 floor
+  0.4), gamma=1 reward unchanged. Hypothesis: many reps at the L34/L45
+  ascents stabilize reach-4 and produce princess touches. *Decision
+  rule:* adopt if reach-4 stabilizes above the champion's 28% and/or
+  princess > 0.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
@@ -2986,3 +3009,48 @@ keep gamma=0.99 but shrink |Phi| (shape toward the nearest target only so
 works and is simpler.
 
 **New baseline = v6b.** Next: H-I (CP4->princess) and H-J (lift reach-4).
+
+
+### 36. 20M compute, instability, and the ladder-ascent diagnosis  *(verified)*
+
+**H-C (20M reset-only, `yeti_pbrs_g1_20m`).** Same v6b reward, 5M->20M.
+- The **princess was touched 5 times** during training (steps 7.9M,
+  9.0M x2, 10.4M, 17.1M). First end-to-end completions from reset — the
+  full level is achievable by a single policy.
+- But the deep legs are **unstable**. Snapshot sweep (120 stochastic eps
+  each):
+
+  | snap | reach2 | reach3 | reach4 |
+  |------|--------|--------|--------|
+  | 8M   | 82%    | 6%     | 0%  |
+  | 10M  | 99%    | 97%    | 2%  |
+  | 12M  | 99%    | 89%    | **30%** |
+  | 14M  | 100%   | 100%   | 1%  |
+  | 16M  | 100%   | 99%    | 0%  |
+  | 20M  | 100%   | **0%** | 0%  |
+
+  reach-4 appears only transiently (30% at 12M), and the 20M final model
+  is degraded. Classic learned-and-forgotten on an under-sampled skill in
+  a shared network. **Best = 12M snapshot** (full 300-ep eval: reach-2
+  99.7 / reach-3 87.7 / reach-4 28.3 / princess 0). Lesson: for the rare
+  deep skills, reset-only PPO is non-monotonic; snapshots + best-pick are
+  essential, and a curriculum that makes the deep states frequent is the
+  principled fix.
+
+**Profile (`scripts/profile_run.py`, 12M champion, 150 eps).** Per-leg
+arrival: CP1 step47/bonus954, CP2 80/926, CP3 158/863, CP4 207/825 — the
+agent is FAST and CP1 is already optimal, so dawdling/snowball-by-slowness
+is not the problem. Failures localize at the ladders: CP3->CP4 ends at
+~(180,114)=L34, CP4->princess ends at ~(220,82)=L45. **The agent reaches
+the correct ladder and dies on the ascent** — the deep wall is reactive
+ladder-ascent timing (dodging the snowball on the climb), under-practiced
+because reached rarely from reset.
+
+**H-K (deep-CP drill, `yeti_curriculum_v8_deepdrill`, running).** Warm-
+start the 12M champion + seed CP1-CP4 pools from the 20M reset-origin
+buffer (100 states/CP, source_cp=0); curriculum with no reach-gate,
+success-weighting, CP0 floor 0.4; gamma=1 reward unchanged. The seeds put
+the agent at the L34/L45 ascents far more often than reset does, drilling
+exactly the failing skill. Bonus-scaled reward already rewards speed (we
+are NOT changing the reward). Watch: does reach-4 stabilize >28% and do
+princess touches appear at eval (vs the 12M champion baseline)?
