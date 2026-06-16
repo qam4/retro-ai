@@ -30,23 +30,25 @@ about those runs come from old logs / prior conversations and are marked
 
 ## TL;DR / Current status (after approach 35)
 
-**Current baseline: v6b** (`yeti_universal_v6b_pbrs_g1`) — plain PPO from
-reset with the **PBRS / signed-delta (gamma=1)** path-progress reward.
-Clean reset-only eval (300 stochastic): **reach-2 98.3%, reach-3 95.7%,
-reach-4 13.0%, princess 0%.** This broke the long-standing 2-fruit wall.
+**Current baseline: v9-150k** (`yeti_curriculum_v9_capture` snapshot at
+150k steps) — warm-started from the v6b/12M reset-only champion, then
+deep-CP curriculum (γ=1 PBRS reward). Clean reset eval (200 stochastic):
+**reach-2/3/4 all 100%, princess 0%.** It reaches all four fruits from
+reset essentially every time. The single remaining leg is
+**reset→CP4→princess** (the L45 ascent from a reset-arrived state) — the
+agent touches the princess thousands of times when *started* at CP4
+(curriculum) but not yet when arriving via a full reset run.
 
-**What broke the wall:** making the shaping Markovian *and*
-living-reward-free. The old reward used a non-Markovian `best_d` ratchet;
-the PBRS attempt with gamma=0.99 added a survival "living reward" that
-caused dawdling (v6: reach-2 collapsed to 54.7%). Setting **gamma=1**
-(signed distance-delta: pay only for actually getting closer, symmetric,
-no best-so-far, no survival subsidy) jumped reach-3 from 0% to ~96%. So
-the multi-month "2-fruit plateau" was substantially a **reward-shaping
-artifact**, not a pure exploration limit. See "Reward-shaping pitfalls".
+**How we got here (reward, then capture):** pure-reset γ=1 PBRS broke the
+2-fruit wall (reach-3 96%); deep-CP curriculum warm-started on that
+champion pushed reach-4 to ~100% but is unstable over long runs, so we
+snapshot frequently and keep the best (the deep curriculum's
+success-weighting over-concentrates on CP4 — partly a measurement bug,
+H-M — and oscillates). See "Reward-shaping pitfalls" and "Episode
+allocation."
 
-**The remaining problem is now CP4->princess** (0 touches) and pushing
-**reach-4** up from 13%. After collecting all 4 fruits the agent must go
-to the princess (312,60); that final leg isn't being made yet.
+**Prior baselines:** v6b (pure reset, reach-3 96% / reach-4 13%); 12M
+snapshot of the 20M run (reach-4 28%); both superseded by v9-150k.
 
 **Historical note (pre-v6b):** for most of this project the single-policy
 wall was F2->F3 — v2/v4/v6 all hit ~99% reach-2 / 0% reach-3 from reset.
@@ -142,6 +144,37 @@ Hard-won gotchas. Each cost a full 5M run + eval to learn. Don't repeat.
    residue kept on purpose — it stops jump-farming. `best_d`
    (best-so-far) is trajectory memory and is the real problem.
 
+### Episode allocation across checkpoints (`pick_start`)
+
+How `CheckpointManager.pick_start` decides where each episode starts
+(reference — previously only described piecemeal in approaches 30/31):
+
+1. **Reset floor.** With probability `cp0_floor` (= config `reset_fraction`,
+   e.g. 0.4) the episode starts from game reset (CP0). Guarantees
+   end-to-end composition keeps being practiced.
+2. **Otherwise**, pick a checkpoint level among CP1..CP4 whose pool is
+   non-empty (and, if the reach-gate is on, `reset_reach_ema >=
+   reach_threshold`; the gate is OFF when `reach_threshold = 0`). Level
+   `n` is weighted by `max(1 - seg_success_ema[n], 1e-3)` — lower segment
+   success → more practice. Sample a level by those weights, then a
+   uniform-random saved state from that level's pool.
+3. `seg_success_ema[n]` = responsive EMA of "started at CP_n → reached
+   CP_{n+1}." All CP segments init at 0 (so early allocation among CP1-4
+   is ~uniform at weight 1.0); the `1e-3` floor only matters at the
+   *solved* end (keeps a mastered segment getting rare refresher reps).
+
+**Known bug (found via the v9 diagnostics, fix = H-M):** the env calls
+`record_episode(start_level, reached_level)` with `reached_level =
+4 - fruits`, which can never exceed 4 even on a princess touch. So a
+**CP4→princess success is never recorded** — `seg_success_ema[4]` stays
+~0, pinning CP4's weight at the maximum 1.0 *permanently*, regardless of
+how often it actually beats the level. That over-samples CP4 and starves
+CP3→CP4 (the reach-4 oscillation). The episode already tracks the real
+outcome in `_max_cp_this_ep` (= 5 on a princess touch); the fix is to
+pass that as `reached_level`. An anti-starvation sampling floor is a
+*possible* secondary mitigation but should only be added if the bug fix
+alone doesn't resolve the over-concentration.
+
 ### Hypothesis backlog (test one at a time)
 
 - [x] **H-A — reward leak fix** (DONE, v4 = `yeti_universal_v4_leakfix`).
@@ -204,15 +237,23 @@ Hard-won gotchas. Each cost a full 5M run + eval to learn. Don't repeat.
   collapse (reach-2 stays 52-99%); "overtrain" was the wrong label. Two
   unresolved phenomena: decay from the early peak, and high-variance
   oscillation. The peak (<760k) was missed by the 2M snapshot interval.
-- [ ] **H-L — capture + instrument** (RUNNING, `yeti_curriculum_v9_capture`).
-  Same v8 recipe, but snapshot every 150k over a short 2.5M horizon to
-  CAPTURE the ~85% peak for a clean eval, AND write `curriculum_diag.csv`
-  (from-reset reach EMAs + per-segment success EMAs + windowed start-level
-  distribution) to chase the WHY. Test: does a reach-4 dip coincide with
-  a start-distribution shift (success-weighting feedback loop) or a PPO
-  instability spike (tensorboard kl/entropy)? *Decision rule:* a captured
-  snapshot evaluating reach-4 >> 28%, plus a diagnostics trace that
-  explains the oscillation.
+- [x] **H-L — capture + instrument** (DONE, `yeti_curriculum_v9_capture`).
+  *Result: BIG capture win.* Fine snapshots (every 150k) caught the peak:
+  the **150k snapshot reaches 2/3/4 fruits all at 100%** from reset
+  (300k/600k/750k also ~97-100% reach-4) — vs the 12M champion's 28%
+  reach-4. New champion = the 150k snapshot. *But princess = 0/200 from
+  reset on every snapshot* (despite 2542 training touches from CP4
+  starts) — so the isolated remaining leg is reset->CP4->**princess**.
+  Diagnostics: reach-2/3 stable, only reach-4 oscillates; the start
+  distribution is dominated by CP4 (`s4` 0.3-0.7) starving CP3->CP4
+  (`s3` ~0.05) — traced to the CP4-success bug (see H-M).
+- [ ] **H-M — fix CP4-success recording** (NEXT). Pass `_max_cp_this_ep`
+  (already 5 on a princess touch) as `reached_level` to `record_episode`,
+  so CP4->princess successes register and CP4's curriculum weight stops
+  being pinned at the max. Single change. *Predicts:* CP4's start share
+  drops as it succeeds, CP3->CP4 gets practiced, reach-4 stabilizes; may
+  also help the reset->princess chain. Re-run capture-style (fine
+  snapshots) and compare reach-4 stability + princess-from-reset.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
