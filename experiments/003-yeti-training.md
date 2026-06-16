@@ -247,13 +247,23 @@ alone doesn't resolve the over-concentration.
   Diagnostics: reach-2/3 stable, only reach-4 oscillates; the start
   distribution is dominated by CP4 (`s4` 0.3-0.7) starving CP3->CP4
   (`s3` ~0.05) — traced to the CP4-success bug (see H-M).
-- [ ] **H-M — fix CP4-success recording** (RUNNING, `yeti_curriculum_v10_cp4fix`).
-  Single code change: `record_episode` gets `reached_level=5` on a
-  princess touch (via a clean per-episode flag), so CP4->princess
-  registers as a success and CP4's curriculum weight stops being pinned
-  at the max. IDENTICAL to v9 otherwise (same 12M warm-start). *Metric:*
-  diag trace vs v9 — does `s4` drop / `s3` rise, does reach-4 oscillation
-  shrink? (NOT testing reset->princess here — separate hypothesis.)
+- [x] **H-M — fix CP4-success recording** (DONE, `yeti_curriculum_v10_cp4fix`).
+  *Result: correct fix, negligible effect — refuted as an oscillation
+  fix, but revealed the real wall.* The fix registered CP4 successes
+  (`succ_ema4` 0.00 -> 0.02) but allocation was unchanged (`s4` ~0.40,
+  `s3` ~0.11) and reach-4 std only 0.33 -> 0.29. Reason: CP4's weight went
+  1.00 -> 0.98 — immaterial. **CP4->princess genuinely succeeds only ~2%
+  (151/8022 CP4-start episodes)** even with heavy drilling, so the
+  weighting *correctly* treats CP4 as hardest; the over-allocation is not
+  a bug artifact. Kept the fix (it's correct). The L45 ascent from the
+  post-F4 position is the real ~2% wall (matches `segment_4toP`'s 0/10
+  from the floor-4 right start).
+- [ ] **H-N — diagnose the L45/princess ascent** (NEXT, no training).
+  Profile CP4-start episodes: of the ~98% that fail, where do they end?
+  On/at the L45 ladder (x~208, mid-climb y in 56-88) = timing death; at
+  floor 4 far right (x~272, never reversed left) = navigation. Determines
+  whether the fix is timing (more/finer practice, temporal info) or
+  navigation (shaping/exploration to the ladder).
 - [ ] **H-O — fix `_max_cp_this_ep` init unit bug** (BACKLOG, found while
   doing H-M). It's initialized to `self._start_fruits` (fruits
   *remaining*) instead of the start *level* `4 - start_fruits`, so for
