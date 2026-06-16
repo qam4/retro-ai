@@ -230,6 +230,32 @@ def test_pick_start_weights_toward_failing_segment():
     assert counts[2] > counts[1] * 3
 
 
+def test_pick_start_floor_prevents_starvation():
+    # With an anti-starvation floor, a near-solved segment (low weight)
+    # still gets a meaningful minimum share instead of being starved by a
+    # much-harder sibling.
+    mgr = _mgr(reset_fraction=0.0, segment_floor=0.5, max_states_per_checkpoint=10)
+    mgr.save_scored(1, b"cp1", 100, True, bonus=10, source_cp=0)
+    mgr.save_scored(2, b"cp2", 100, True, bonus=10, source_cp=0)
+    mgr.reset_reach_ema[1] = 1.0
+    mgr.reset_reach_ema[2] = 1.0
+    mgr.seg_success_ema[1] = 0.95  # "solved" -> raw weight 0.05
+    mgr.seg_success_ema[2] = 0.05  # "failing" -> raw weight 0.95
+    import random
+
+    random.seed(0)
+    counts = {1: 0, 2: 0}
+    for _ in range(4000):
+        level, _ = mgr.pick_start()
+        counts[level] += 1
+    frac1 = counts[1] / 4000
+    # Pure weighting would give CP1 ~5%; the 0.5 floor lifts it toward
+    # ~0.5/2 = 0.25, so it's not starved...
+    assert frac1 > 0.18
+    # ...while the failing segment is still favored.
+    assert counts[2] > counts[1]
+
+
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------

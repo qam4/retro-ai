@@ -267,7 +267,19 @@ alone doesn't resolve the over-concentration.
   uselessly, instead of reversing LEFT to L45 to climb. Same
   "greedy-toward-visible-goal, won't take the detour" pattern that gated
   F2 — now the last leg with the biggest detour (away from the goal).
-- [ ] **H-P — crack the F4->princess detour** (NEXT, design TBD).
+- [ ] **H-Q — anti-starvation floor** (RUNNING, `yeti_curriculum_v11_floor`).
+  Verified first that the princess reward is real and strong (median
+  bonus ~780 at touch -> reward ~39; in-game score +806) and the agent
+  experiences it (~2% of CP4 starts) — so the incentive is NOT the
+  problem. Hypothesis: the deep-leg instability (the (1-success)
+  weighting pours budget onto CP4 ~2% -> weight ~1.0, starving CP3->CP4)
+  stops the rare princess successes from compounding. Fix (one change):
+  `segment_floor=0.5` blends the weighting with a uniform floor so
+  CP3->CP4 keeps a minimum share. Run 5M + 250k snapshots. *Metrics:*
+  reach-4 oscillation (diag std) and whether the **princess rate climbs
+  over training**. If reach-4 stabilizes but princess stays ~2% -> the
+  wall is purely the navigation detour -> H-P.
+- [ ] **H-P — crack the F4->princess detour** (after H-Q, design TBD).
   Candidate single-experiment fixes:
   (a) reverse-curriculum: seed mid-L45 / floor-5 states so the agent
       first masters "climb->princess", then backward-chains the floor-4

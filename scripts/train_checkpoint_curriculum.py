@@ -105,6 +105,7 @@ class CheckpointManager:
         earlier_fraction: float,
         min_survival_frames: int = 30,
         reach_threshold: float = 0.15,
+        segment_floor: float = 0.0,
     ):
         # frontier_fraction / earlier_fraction are retained for config
         # back-compat but no longer used by pick_start (approach 30).
@@ -126,6 +127,14 @@ class CheckpointManager:
         # earlier_fraction are no longer used by pick_start, kept only
         # for config back-compat).
         self.cp0_floor = reset_fraction
+        # Anti-starvation floor (H-flooring): fraction of the non-reset
+        # allocation distributed UNIFORMLY across eligible segments,
+        # blended with the (1 - success) weighting. 0.0 = pure
+        # success-weighting (old behavior). >0 guarantees each eligible
+        # segment a minimum share so a very-hard segment (e.g. CP4, ~2%
+        # success -> weight ~1.0) can't starve its prerequisite
+        # (CP3->CP4), which destabilized reach-4.
+        self.segment_floor = float(segment_floor)
 
         # Each pool is a plain list of (source_cp, bonus, state_bytes)
         # entries.
@@ -325,6 +334,14 @@ class CheckpointManager:
             return 0, None
 
         weights = [max(1.0 - self.seg_success_ema[n], 1e-3) for n in eligible]
+        # Anti-starvation floor: blend the success-weighting with a
+        # uniform distribution so no eligible segment is starved by a
+        # much-harder sibling. floor=0 -> pure weighting (old behavior).
+        if self.segment_floor > 0.0 and len(eligible) > 1:
+            total = sum(weights)
+            k = len(eligible)
+            f = self.segment_floor
+            weights = [(1.0 - f) * (w / total) + f / k for w in weights]
         level = random.choices(eligible, weights=weights, k=1)[0]
         self.stats["starts"][level] += 1
         # Pool entries are (source_cp, bonus, state_bytes).
@@ -795,6 +812,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         earlier_fraction=cfg.curriculum.earlier_fraction,
         min_survival_frames=cfg.curriculum.min_survival_frames,
         reach_threshold=cfg.curriculum.reach_threshold,
+        segment_floor=cfg.curriculum.segment_floor,
     )
 
     print("Checkpoint Curriculum Training", flush=True)

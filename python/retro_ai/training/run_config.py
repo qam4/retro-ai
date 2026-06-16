@@ -130,6 +130,13 @@ class CurriculumConfig:
     # training the deepest reset-reachable segment on on-distribution
     # seeds.
     reach_threshold: float = 0.15
+    # Anti-starvation floor: fraction of the non-reset (curriculum)
+    # allocation spread UNIFORMLY across eligible segments, blended with
+    # the (1 - success) weighting in pick_start. 0.0 = pure weighting.
+    # >0 guarantees each eligible segment a minimum share so a very-hard
+    # segment (CP4->princess, ~2% success) can't starve its prerequisite
+    # (CP3->CP4) and destabilize reach-4.
+    segment_floor: float = 0.0
     # MultiInputPolicy: when true, the observation is a Dict of the
     # image plus a 4-d fruit-presence vector, and the PPO policy is
     # "MultiInputPolicy" instead of "CnnPolicy". This de-aliases
