@@ -148,6 +148,19 @@ def test_non_reset_episodes_do_not_move_reach_ema():
     assert mgr.seg_success_ema[2] > 0.9
 
 
+def test_cp4_princess_touch_counts_as_success():
+    # H-M regression: a CP4 start that reaches the princess is logged
+    # with reached_level=5, which must register as a CP4 segment success
+    # (reached_level > start_level). Previously the env passed
+    # reached_level=4-fruits which caps at 4, so CP4 success was never
+    # recorded and its curriculum weight stayed pinned at the max.
+    mgr = _mgr()
+    for _ in range(500):
+        mgr.record_episode(start_level=4, reached_level=5)
+    assert mgr.seg_success_ema[4] > 0.9
+    assert mgr.segment_successes[4] == 500
+
+
 def test_seg_success_ema_tracks_recent_outcomes():
     mgr = _mgr()
     for _ in range(500):

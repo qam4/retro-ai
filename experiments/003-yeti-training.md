@@ -247,13 +247,21 @@ alone doesn't resolve the over-concentration.
   Diagnostics: reach-2/3 stable, only reach-4 oscillates; the start
   distribution is dominated by CP4 (`s4` 0.3-0.7) starving CP3->CP4
   (`s3` ~0.05) — traced to the CP4-success bug (see H-M).
-- [ ] **H-M — fix CP4-success recording** (NEXT). Pass `_max_cp_this_ep`
-  (already 5 on a princess touch) as `reached_level` to `record_episode`,
-  so CP4->princess successes register and CP4's curriculum weight stops
-  being pinned at the max. Single change. *Predicts:* CP4's start share
-  drops as it succeeds, CP3->CP4 gets practiced, reach-4 stabilizes; may
-  also help the reset->princess chain. Re-run capture-style (fine
-  snapshots) and compare reach-4 stability + princess-from-reset.
+- [ ] **H-M — fix CP4-success recording** (RUNNING, `yeti_curriculum_v10_cp4fix`).
+  Single code change: `record_episode` gets `reached_level=5` on a
+  princess touch (via a clean per-episode flag), so CP4->princess
+  registers as a success and CP4's curriculum weight stops being pinned
+  at the max. IDENTICAL to v9 otherwise (same 12M warm-start). *Metric:*
+  diag trace vs v9 — does `s4` drop / `s3` rise, does reach-4 oscillation
+  shrink? (NOT testing reset->princess here — separate hypothesis.)
+- [ ] **H-O — fix `_max_cp_this_ep` init unit bug** (BACKLOG, found while
+  doing H-M). It's initialized to `self._start_fruits` (fruits
+  *remaining*) instead of the start *level* `4 - start_fruits`, so for
+  reset episodes it's pinned at 4 regardless of real progress. Only used
+  by `save_scored`'s `reached_next`, so it over-marks reset-origin
+  snapshots as "reached next" (weakens the survival admission filter).
+  Separate from H-M (H-M uses a clean flag, not `_max_cp_this_ep`). Fix
+  in its own cycle to keep attribution clean.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.

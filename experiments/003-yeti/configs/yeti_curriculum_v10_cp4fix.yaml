@@ -1,0 +1,59 @@
+# yeti_curriculum v10 — H-M: CP4-success recording fix.
+#
+# IDENTICAL to v9 (warm-start 12M champion + seed CP1-CP4 from the 20M
+# reset-origin buffer; gamma=1 PBRS; no gate; success-weighted; CP0 floor
+# 0.4; snapshot/150k; diagnostics on). The ONLY difference vs v9 is a
+# CODE fix: record_episode now receives reached_level=5 on a princess
+# touch, so a CP4->princess success is finally recorded.
+#
+# Hypothesis (single): without the fix, seg_success_ema[4] was stuck at
+# ~0, pinning CP4's curriculum weight at the maximum (1.0) and
+# over-sampling CP4 (s4 0.3-0.7) while starving CP3->CP4 (s3 ~0.05),
+# which destabilized reach-4. With the fix, CP4's weight should fall as
+# it succeeds, CP3->CP4 should get more practice, and reach-4 should be
+# less oscillatory.
+#
+# Metric: the curriculum_diag.csv trace vs v9 — does s4 drop / s3 rise,
+# and does the reach-4 oscillation amplitude shrink? (NOT testing the
+# reset->princess chain here; that's a separate hypothesis.)
+
+training:
+  timesteps: 2_500_000
+  output: output/mo5/yeti/training/yeti_curriculum_v10_cp4fix
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/champions/pbrs_g1_12M/final_model.zip
+  snapshot_freq_steps: 150_000
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.4
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0

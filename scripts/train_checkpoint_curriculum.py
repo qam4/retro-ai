@@ -542,6 +542,11 @@ class CheckpointCurriculumEnv(gym.Env):
         # Highest checkpoint level reached this episode (fruits
         # collected; princess touch counts as level 5).
         self._max_cp_this_ep = self._start_fruits
+        # Clean per-episode princess-touch flag (used to credit a
+        # CP4->princess success to record_episode; _max_cp_this_ep is
+        # not reliable for this — it's initialized in the wrong unit,
+        # see backlog).
+        self._princess_touched_this_ep = False
         self._episode_id = _next_episode_id()
 
         return self._wrap_obs(obs), {}
@@ -603,6 +608,7 @@ class CheckpointCurriculumEnv(gym.Env):
             # pending fruit snapshot in this episode therefore reached
             # the next checkpoint.
             self._max_cp_this_ep = max(self._max_cp_this_ep, 5)
+            self._princess_touched_this_ep = True
 
         self._prev_fruits = fruits
         self._prev_score = score
@@ -639,7 +645,12 @@ class CheckpointCurriculumEnv(gym.Env):
 
         if done or truncated:
             start_level = 4 - self._start_fruits
-            reached_level = 4 - fruits
+            # H-M fix: a princess touch is CP5, so CP4->princess
+            # registers as a segment success. Without this, reached_level
+            # = 4 - fruits caps at 4 and CP4's success is never recorded,
+            # pinning its curriculum weight at the max (over-sampling CP4,
+            # starving CP3->CP4).
+            reached_level = 5 if self._princess_touched_this_ep else 4 - fruits
             _manager.record_episode(start_level, reached_level)
             # Flush deferred checkpoint snapshots, scored by how the
             # rest of this episode actually played out. ``source_cp``
