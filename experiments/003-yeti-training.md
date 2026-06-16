@@ -193,13 +193,26 @@ Hard-won gotchas. Each cost a full 5M run + eval to learn. Don't repeat.
   ~(220,82)=L45. The agent navigates correctly to the ladder then dies on
   the ascent -> the deep wall is a reactive **ladder-ascent timing**
   skill, under-practiced because reached rarely.
-- [ ] **H-K — deep-CP drill** (RUNNING, `yeti_curriculum_v8_deepdrill`).
-  Warm-start the 12M champion + seed CP1-CP4 pools from the 20M
-  reset-origin buffer; curriculum (no gate, success-weighted, CP0 floor
-  0.4), gamma=1 reward unchanged. Hypothesis: many reps at the L34/L45
-  ascents stabilize reach-4 and produce princess touches. *Decision
-  rule:* adopt if reach-4 stabilizes above the champion's 28% and/or
-  princess > 0.
+- [x] **H-K — deep-CP drill** (DONE, `yeti_curriculum_v8_deepdrill`).
+  Warm-start 12M + seed CP1-CP4 from the 20M reset-origin buffer;
+  curriculum (no gate, success-weighted, CP0 floor 0.4), gamma=1.
+  *Result, mixed and very informative:* **2542 princess touches** (vs 5
+  in the 20M reset-only run) — the deep-drill is hugely effective at the
+  F4->princess ascent. And from reset it hit **reach-4 85% in the first
+  ~760k steps** (vs champion 28%). BUT it then **decays + oscillates**:
+  binned from-reset reach-4 settles ~40-60% with transient dips. NOT a
+  collapse (reach-2 stays 52-99%); "overtrain" was the wrong label. Two
+  unresolved phenomena: decay from the early peak, and high-variance
+  oscillation. The peak (<760k) was missed by the 2M snapshot interval.
+- [ ] **H-L — capture + instrument** (RUNNING, `yeti_curriculum_v9_capture`).
+  Same v8 recipe, but snapshot every 150k over a short 2.5M horizon to
+  CAPTURE the ~85% peak for a clean eval, AND write `curriculum_diag.csv`
+  (from-reset reach EMAs + per-segment success EMAs + windowed start-level
+  distribution) to chase the WHY. Test: does a reach-4 dip coincide with
+  a start-distribution shift (success-weighting feedback loop) or a PPO
+  instability spike (tensorboard kl/entropy)? *Decision rule:* a captured
+  snapshot evaluating reach-4 >> 28%, plus a diagnostics trace that
+  explains the oscillation.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.

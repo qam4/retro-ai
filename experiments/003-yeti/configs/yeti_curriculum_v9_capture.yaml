@@ -1,0 +1,65 @@
+# yeti_curriculum v9 — capture the early peak + instrument the why.
+#
+# Same recipe as v8 (warm-start 12M champion + seed CP1-CP4 from the 20M
+# reset-origin buffer; gamma=1 PBRS reward; no gate; success-weighted;
+# CP0 floor 0.4). Two changes, both about *observability*, none about
+# training dynamics:
+#
+#  1. CAPTURE: snapshot every 150k steps (vs 2M), and a short 2.5M
+#     horizon. v8 hit its best from-reset policy (reach-4 ~85% from reset)
+#     in the first ~760k steps, then decayed/oscillated — and our 2M
+#     snapshot interval missed it entirely. Fine snapshots over a short
+#     run should capture it for a clean eval.
+#
+#  2. INSTRUMENT: the run writes curriculum_diag.csv (every log interval)
+#     with from-reset reach EMAs, per-segment success EMAs, and the
+#     windowed start-level distribution. Combined with the tensorboard
+#     PPO metrics (approx_kl, entropy, explained_variance), this lets us
+#     test WHY it decays/oscillates: does a reach-4 dip coincide with a
+#     shift in the sampled start distribution (success-weighting feedback
+#     loop) or with a PPO-instability spike (kl/entropy)?
+#
+# Baseline to beat: 12M champion (reach-4 28% from reset, 0 princess).
+# Goal: capture a snapshot with reach-4 >> 28% (the ~85% peak) at clean
+# eval, and a diagnostics trace that explains the oscillation.
+
+training:
+  timesteps: 2_500_000
+  output: output/mo5/yeti/training/yeti_curriculum_v9_capture
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/champions/pbrs_g1_12M/final_model.zip
+  snapshot_freq_steps: 150_000
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.4
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0

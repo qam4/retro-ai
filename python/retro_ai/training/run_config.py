@@ -55,6 +55,9 @@ class TrainingConfig:
     num_envs: int = 8
     seed: Optional[int] = None
     resume: Optional[str] = None
+    # Save a model snapshot every N timesteps (None -> 2,000,000). Useful
+    # for capturing a transient peak in a run that later degrades.
+    snapshot_freq_steps: Optional[int] = None
 
 
 @dataclass(frozen=True)

@@ -696,8 +696,11 @@ class CheckpointCurriculumEnv(gym.Env):
 class CurriculumCallback(BaseCallback):
     """Log curriculum progress during training."""
 
-    def __init__(self, total_timesteps: int, log_interval: int = 5000):
+    def __init__(self, total_timesteps: int, log_interval: int = 5000, diag_path=None):
         super().__init__()
+        self._diag_path = diag_path
+        self._diag_file = None
+        self._last_starts = [0] * 5
         self._total = total_timesteps
         self._log_interval = log_interval
         self._last_log = 0
@@ -727,8 +730,39 @@ class CurriculumCallback(BaseCallback):
                 f"| {_manager.summary()}",
                 flush=True,
             )
+            self._write_diag()
             self._last_log = self.num_timesteps
         return True
+
+    def _write_diag(self) -> None:
+        """Append a diagnostics row to correlate from-reset reach with the
+        curriculum's start distribution and per-segment success (to chase
+        the decay/oscillation mechanism). PPO-side metrics (kl, entropy,
+        explained_variance) are in tensorboard."""
+        if self._diag_path is None or _manager is None:
+            return
+        if self._diag_file is None:
+            self._diag_file = open(self._diag_path, "w")
+            self._diag_file.write(
+                "step,"
+                "reach1,reach2,reach3,reach4,"
+                "succ_ema1,succ_ema2,succ_ema3,succ_ema4,"
+                "start_frac0,start_frac1,start_frac2,start_frac3,start_frac4\n"
+            )
+        starts = _manager.stats["starts"]
+        delta = [starts[i] - self._last_starts[i] for i in range(5)]
+        self._last_starts = list(starts)
+        tot = sum(delta) or 1
+        fr = [d / tot for d in delta]
+        rr = _manager.reset_reach_ema
+        se = _manager.seg_success_ema
+        self._diag_file.write(
+            f"{self.num_timesteps},"
+            f"{rr[1]:.3f},{rr[2]:.3f},{rr[3]:.3f},{rr[4]:.3f},"
+            f"{se[1]:.3f},{se[2]:.3f},{se[3]:.3f},{se[4]:.3f},"
+            f"{fr[0]:.3f},{fr[1]:.3f},{fr[2]:.3f},{fr[3]:.3f},{fr[4]:.3f}\n"
+        )
+        self._diag_file.flush()
 
 
 def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
@@ -877,7 +911,9 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     # Periodic model snapshots so a long run that degenerates late can be
     # recovered from its best earlier checkpoint. Pure observability —
     # does not affect training. Saves roughly every 2M timesteps.
-    snapshot_freq = max(1, 2_000_000 // max(1, num_envs))
+    snapshot_freq = max(
+        1, (cfg.training.snapshot_freq_steps or 2_000_000) // max(1, num_envs)
+    )
     snapshot_cb = CheckpointCallback(
         save_freq=snapshot_freq,
         save_path=os.path.join(cfg.training.output, "snapshots"),
@@ -887,7 +923,10 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         model.learn(
             total_timesteps=cfg.training.timesteps,
             callback=[
-                CurriculumCallback(cfg.training.timesteps),
+                CurriculumCallback(
+                    cfg.training.timesteps,
+                    diag_path=os.path.join(cfg.training.output, "curriculum_diag.csv"),
+                ),
                 EpisodeMetricsCallback(episode_logger, log_interval=10_000),
                 snapshot_cb,
             ],
