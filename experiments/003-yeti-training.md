@@ -258,12 +258,25 @@ alone doesn't resolve the over-concentration.
   a bug artifact. Kept the fix (it's correct). The L45 ascent from the
   post-F4 position is the real ~2% wall (matches `segment_4toP`'s 0/10
   from the floor-4 right start).
-- [ ] **H-N — diagnose the L45/princess ascent** (NEXT, no training).
-  Profile CP4-start episodes: of the ~98% that fail, where do they end?
-  On/at the L45 ladder (x~208, mid-climb y in 56-88) = timing death; at
-  floor 4 far right (x~272, never reversed left) = navigation. Determines
-  whether the fix is timing (more/finer practice, temporal info) or
-  navigation (shaping/exploration to the ladder).
+- [x] **H-N — diagnose the L45/princess ascent** (DONE). Profiled 300
+  CP4-start rollouts (v10 final): princess 0/300; **290/300 failures end
+  right of F4 at median (312,94)** — directly *under* the princess
+  (x=312) on floor 4; only **6/300 reached ladder L45** (x~208, left). So
+  the wall is **NAVIGATION, not timing**: the visible princess lures the
+  agent rightward to her x-column, where it's stuck below her jumping
+  uselessly, instead of reversing LEFT to L45 to climb. Same
+  "greedy-toward-visible-goal, won't take the detour" pattern that gated
+  F2 — now the last leg with the biggest detour (away from the goal).
+- [ ] **H-P — crack the F4->princess detour** (NEXT, design TBD).
+  Candidate single-experiment fixes:
+  (a) reverse-curriculum: seed mid-L45 / floor-5 states so the agent
+      first masters "climb->princess", then backward-chains the floor-4
+      approach. Needs L45/floor-5 seeds (capture from the ~2% successes
+      or a manual save).
+  (b) stronger/leg-specific leftward shaping (PBRS already penalizes
+      going right but the visible-princess lure overpowers ~0.01/px).
+  (c) more concentrated, stable CP4 practice (anti-starvation weighting)
+      to grow the ~2%.
 - [ ] **H-O — fix `_max_cp_this_ep` init unit bug** (BACKLOG, found while
   doing H-M). It's initialized to `self._start_fruits` (fruits
   *remaining*) instead of the start *level* `4 - start_fruits`, so for
