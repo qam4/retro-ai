@@ -30,25 +30,31 @@ about those runs come from old logs / prior conversations and are marked
 
 ## TL;DR / Current status (after approach 35)
 
-**Current baseline: v9-150k** (`yeti_curriculum_v9_capture` snapshot at
-150k steps) — warm-started from the v6b/12M reset-only champion, then
-deep-CP curriculum (γ=1 PBRS reward). Clean reset eval (200 stochastic):
-**reach-2/3/4 all 100%, princess 0%.** It reaches all four fruits from
-reset essentially every time. The single remaining leg is
-**reset→CP4→princess** (the L45 ascent from a reset-arrived state) — the
-agent touches the princess thousands of times when *started* at CP4
-(curriculum) but not yet when arriving via a full reset run.
+**Current baseline: v11-4750k** (`yeti_curriculum_v11_floor` snapshot at
+4.75M) — deep-CP curriculum (γ=1 PBRS reward) with the **anti-starvation
+segment floor** (`segment_floor=0.5`). Clean reset eval (200 stochastic):
+**reach-4 93.5%, and the level is BEATEN (princess) ~9.5% from reset** —
+the first agent to complete Yeti from a cold start. (500-ep confirm
+running.)
 
-**How we got here (reward, then capture):** pure-reset γ=1 PBRS broke the
-2-fruit wall (reach-3 96%); deep-CP curriculum warm-started on that
-champion pushed reach-4 to ~100% but is unstable over long runs, so we
-snapshot frequently and keep the best (the deep curriculum's
-success-weighting over-concentrates on CP4 — partly a measurement bug,
-H-M — and oscillates). See "Reward-shaping pitfalls" and "Episode
-allocation."
+**How we got the princess:** the princess reward was always strong
+(~39 on touch, verified), but the deep practice kept getting forgotten
+(reach-4 oscillating), so rare princess successes never compounded. The
+anti-starvation floor stopped the (1-success) weighting from over-
+sampling the ~2%-hard CP4 and starving CP3->CP4; with stable practice the
+princess reward compounded (CP4->princess 1.9% -> 7%; princess-from-reset
+~0 -> ~4.6% in training, 9.5% at the best snapshot).
 
-**Prior baselines:** v6b (pure reset, reach-3 96% / reach-4 13%); 12M
-snapshot of the 20M run (reach-4 28%); both superseded by v9-150k.
+**Remaining frontier:** the F4->princess leg (L45 ascent) is still the
+*volatile* part — reach-4 is ~stable (~99% on late snapshots) but the
+princess rate swings 0-9.5% across snapshots. Pushing/stabilizing it is
+next (more compute at this recipe, capture, or reverse-curriculum on the
+ascent).
+
+**Earlier reward win (still the foundation):** pure-reset γ=1 PBRS broke
+the 2-fruit wall (reach-3 96%); see "Reward-shaping pitfalls". Prior
+baselines: v6b (reach-3 96%/reach-4 13%), v9-150k (reach-4 ~100%,
+princess 0).
 
 **Historical note (pre-v6b):** for most of this project the single-policy
 wall was F2->F3 — v2/v4/v6 all hit ~99% reach-2 / 0% reach-3 from reset.
