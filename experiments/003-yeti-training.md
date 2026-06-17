@@ -32,10 +32,9 @@ about those runs come from old logs / prior conversations and are marked
 
 **Current baseline: v11-4750k** (`yeti_curriculum_v11_floor` snapshot at
 4.75M) — deep-CP curriculum (γ=1 PBRS reward) with the **anti-starvation
-segment floor** (`segment_floor=0.5`). Clean reset eval (200 stochastic):
-**reach-4 93.5%, and the level is BEATEN (princess) ~9.5% from reset** —
-the first agent to complete Yeti from a cold start. (500-ep confirm
-running.)
+segment floor** (`segment_floor=0.5`). Clean reset eval (500 stochastic):
+**reach-4 94.8%, and the level is BEATEN (princess) 11.2% from reset**
+(56/500) — the first agent to complete Yeti from a cold start.
 
 **How we got the princess:** the princess reward was always strong
 (~39 on touch, verified), but the deep practice kept getting forgotten
