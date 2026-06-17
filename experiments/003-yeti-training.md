@@ -267,19 +267,24 @@ alone doesn't resolve the over-concentration.
   uselessly, instead of reversing LEFT to L45 to climb. Same
   "greedy-toward-visible-goal, won't take the detour" pattern that gated
   F2 — now the last leg with the biggest detour (away from the goal).
-- [ ] **H-Q — anti-starvation floor** (RUNNING, `yeti_curriculum_v11_floor`).
-  Verified first that the princess reward is real and strong (median
-  bonus ~780 at touch -> reward ~39; in-game score +806) and the agent
-  experiences it (~2% of CP4 starts) — so the incentive is NOT the
-  problem. Hypothesis: the deep-leg instability (the (1-success)
-  weighting pours budget onto CP4 ~2% -> weight ~1.0, starving CP3->CP4)
-  stops the rare princess successes from compounding. Fix (one change):
-  `segment_floor=0.5` blends the weighting with a uniform floor so
-  CP3->CP4 keeps a minimum share. Run 5M + 250k snapshots. *Metrics:*
-  reach-4 oscillation (diag std) and whether the **princess rate climbs
-  over training**. If reach-4 stabilizes but princess stays ~2% -> the
-  wall is purely the navigation detour -> H-P.
-- [ ] **H-P — crack the F4->princess detour** (after H-Q, design TBD).
+- [x] **H-Q — anti-starvation floor** (DONE, `yeti_curriculum_v11_floor`).
+  Verified first the princess reward is real and strong (median bonus
+  ~780 at touch -> reward ~39; in-game score +806). Fix (one change):
+  `segment_floor=0.5` blends (1-success) weighting with a uniform floor.
+  **Result: the user's hypothesis confirmed — and a milestone.**
+  - allocation rebalanced: `s4` (CP4 starts) 0.40 -> 0.29.
+  - reach-4 stabilized: mean 0.69 -> **0.78**, std 0.29 -> **0.25**.
+  - CP4->princess success 1.9% -> **7.0%**.
+  - **princess touches FROM RESET: ~0 -> 622 / 13466 reset eps (~4.6%)**
+    — the agent **beats the whole level from reset** for the first time.
+  Stabilizing the deep practice let the strong princess reward compound,
+  exactly as hypothesized. (Clean snapshot eval confirming the rate is
+  running.)
+- [ ] **H-P — crack the F4->princess detour** (now: push the ~4.6%
+  from-reset princess rate higher). The navigation detour is no longer a
+  hard 0 — it's being learned. Candidate next steps: more compute at this
+  recipe (does the rate keep climbing?), capture the best snapshot, or
+  reverse-curriculum seeding of the L45 ascent to accelerate it.
   Candidate single-experiment fixes:
   (a) reverse-curriculum: seed mid-L45 / floor-5 states so the agent
       first masters "climb->princess", then backward-chains the floor-4
