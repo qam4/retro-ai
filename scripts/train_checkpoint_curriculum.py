@@ -556,13 +556,15 @@ class CheckpointCurriculumEnv(gym.Env):
         # how the rest of the episode played out (real survival /
         # reached-next), not a passive probe.
         self._pending_saves = []
-        # Highest checkpoint level reached this episode (fruits
-        # collected; princess touch counts as level 5).
-        self._max_cp_this_ep = self._start_fruits
-        # Clean per-episode princess-touch flag (used to credit a
-        # CP4->princess success to record_episode; _max_cp_this_ep is
-        # not reliable for this — it's initialized in the wrong unit,
-        # see backlog).
+        # Highest checkpoint level reached this episode, in CP-level
+        # units (0..4 fruits collected; princess touch counts as 5).
+        # Start level = 4 - fruits_remaining. (H-O fix: was initialized
+        # to self._start_fruits — fruits *remaining*, the wrong unit —
+        # which pinned reset episodes at 4 and over-admitted their seed
+        # snapshots via save_scored's reached_next.)
+        self._max_cp_this_ep = 4 - self._start_fruits
+        # Clean per-episode princess-touch flag, credited to
+        # record_episode for CP4->princess success.
         self._princess_touched_this_ep = False
         self._episode_id = _next_episode_id()
 

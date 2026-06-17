@@ -299,14 +299,13 @@ alone doesn't resolve the over-concentration.
       going right but the visible-princess lure overpowers ~0.01/px).
   (c) more concentrated, stable CP4 practice (anti-starvation weighting)
       to grow the ~2%.
-- [ ] **H-O — fix `_max_cp_this_ep` init unit bug** (BACKLOG, found while
-  doing H-M). It's initialized to `self._start_fruits` (fruits
-  *remaining*) instead of the start *level* `4 - start_fruits`, so for
-  reset episodes it's pinned at 4 regardless of real progress. Only used
-  by `save_scored`'s `reached_next`, so it over-marks reset-origin
-  snapshots as "reached next" (weakens the survival admission filter).
-  Separate from H-M (H-M uses a clean flag, not `_max_cp_this_ep`). Fix
-  in its own cycle to keep attribution clean.
+- [x] **H-O — fix `_max_cp_this_ep` init unit bug** (DONE). Was
+  initialized to `self._start_fruits` (fruits *remaining*) instead of the
+  start *level* `4 - start_fruits`, pinning reset episodes at 4 and
+  over-admitting their seed snapshots via `save_scored`'s `reached_next`
+  (weakened the survival filter). Fixed to `4 - self._start_fruits`. Pure
+  correctness fix; restores the intended admission filtering for future
+  runs.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
