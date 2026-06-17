@@ -186,7 +186,9 @@ class CheckpointManager:
         # deep CP should become eligible promptly.
         self.reach_threshold = reach_threshold
         self.reach_alpha = 0.02
-        self.reset_reach_ema = [1.0, 0.0, 0.0, 0.0, 0.0]
+        # Index 0..4 = reach CP0..CP4 from reset; index 5 = reach the
+        # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
+        self.reset_reach_ema = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.seg_success_ema = [0.0] * (self.FRUITS_TOTAL + 1)
 
     def record_episode(self, start_level, reached_level):
@@ -206,7 +208,10 @@ class CheckpointManager:
         # for "can the agent get to CP_n unaided". For each n in 1..4
         # the episode reached n iff reached_level >= n.
         if start_level == 0:
-            for n in range(1, self.FRUITS_TOTAL + 1):
+            # n up to 5 = princess (reached_level==5 on a touch, via the
+            # H-M fix), so reset_reach_ema[5] is the live princess-from-
+            # reset rate — the actual goal.
+            for n in range(1, 6):
                 hit = 1.0 if reached_level >= n else 0.0
                 self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
 
@@ -775,7 +780,7 @@ class CurriculumCallback(BaseCallback):
             self._diag_file = open(self._diag_path, "w")
             self._diag_file.write(
                 "step,"
-                "reach1,reach2,reach3,reach4,"
+                "reach1,reach2,reach3,reach4,reach_princess,"
                 "succ_ema1,succ_ema2,succ_ema3,succ_ema4,"
                 "start_frac0,start_frac1,start_frac2,start_frac3,start_frac4\n"
             )
@@ -788,7 +793,7 @@ class CurriculumCallback(BaseCallback):
         se = _manager.seg_success_ema
         self._diag_file.write(
             f"{self.num_timesteps},"
-            f"{rr[1]:.3f},{rr[2]:.3f},{rr[3]:.3f},{rr[4]:.3f},"
+            f"{rr[1]:.3f},{rr[2]:.3f},{rr[3]:.3f},{rr[4]:.3f},{rr[5]:.3f},"
             f"{se[1]:.3f},{se[2]:.3f},{se[3]:.3f},{se[4]:.3f},"
             f"{fr[0]:.3f},{fr[1]:.3f},{fr[2]:.3f},{fr[3]:.3f},{fr[4]:.3f}\n"
         )

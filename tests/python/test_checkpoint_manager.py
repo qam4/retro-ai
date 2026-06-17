@@ -138,6 +138,21 @@ def test_reset_reach_ema_rises_only_for_reached_levels():
     assert mgr.reset_reach_ema[4] < 0.1
 
 
+def test_reset_reach_tracks_princess_from_reset():
+    # reset_reach_ema[5] is the princess-from-reset rate (the win
+    # condition). Reset episodes that reach the princess (reached_level=5,
+    # via the H-M fix) must drive it up; reaching only CP4 must not.
+    mgr = _mgr()
+    for _ in range(500):
+        mgr.record_episode(start_level=0, reached_level=5)
+    assert mgr.reset_reach_ema[5] > 0.9
+    mgr2 = _mgr()
+    for _ in range(500):
+        mgr2.record_episode(start_level=0, reached_level=4)
+    assert mgr2.reset_reach_ema[5] < 0.1
+    assert mgr2.reset_reach_ema[4] > 0.9
+
+
 def test_non_reset_episodes_do_not_move_reach_ema():
     mgr = _mgr()
     # Episodes starting from CP2 are not evidence of reset-reachability.
