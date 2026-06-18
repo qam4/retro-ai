@@ -305,7 +305,16 @@ alone doesn't resolve the over-concentration.
   over-admitting their seed snapshots via `save_scored`'s `reached_next`
   (weakened the survival filter). Fixed to `4 - self._start_fruits`. Pure
   correctness fix; restores the intended admission filtering for future
-  runs.
+  runs. *A/B (v12 = v11 + this fix, same seed 42):* v12 came out
+  **worse** — best snapshot princess 1.0% vs v11's 9.5% (champion 11.2%),
+  late snapshots mostly degraded. The fix changes only ~1% of admitted
+  seeds (filters "collected-fruit-then-died-within-30-frames" reset
+  dead-ends the bug mislabeled as "reached next"), yet the outcome swung
+  hugely. n=1 with training nondeterminism, and v11's own snapshots swing
+  0->9.5%, so **inconclusive on outcome** — most likely shows the deep
+  leg is too chaotic to A/B small changes with single runs (reliable
+  ranking needs multiple seeds). Fix kept (correctness); **v11-4750k
+  remains champion**; not a demonstrated improvement.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
