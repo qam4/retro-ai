@@ -315,6 +315,18 @@ alone doesn't resolve the over-concentration.
   leg is too chaotic to A/B small changes with single runs (reliable
   ranking needs multiple seeds). Fix kept (correctness); **v11-4750k
   remains champion**; not a demonstrated improvement.
+- [ ] **H-R — admission leniency / `min_survival_frames`** (BACKLOG).
+  Hypothesis for *why the H-O fix hurt*: the `survived >= 30` filter
+  biases seed pools toward states the agent already survives, throwing
+  away the hard on-distribution "collected fruit N then died fast" states
+  — which are the most valuable to practice (reverse-curriculum logic).
+  Test on fixed code: sweep `min_survival_frames` ∈ {0 (admit all), ~10,
+  30}; does more leniency recover/beat v11? `=0` gives the lenient
+  behavior cleanly (no bug). Maybe the answer is just a smaller threshold.
+- [ ] **H-S — multi-seed reliability** (BACKLOG). The deep leg is chaotic
+  (a ~1% seed-pool change swung princess 11%->1%; v11 snapshots swing
+  0->9.5%). Single-run A/Bs are unreliable. For any change we care about
+  ranking, run >=2-3 seeds and compare distributions, not single runs.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
