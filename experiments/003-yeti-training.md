@@ -30,25 +30,33 @@ about those runs come from old logs / prior conversations and are marked
 
 ## TL;DR / Current status (after approach 35)
 
-**Current baseline: v11-4750k** (`yeti_curriculum_v11_floor` snapshot at
-4.75M) — deep-CP curriculum (γ=1 PBRS reward) with the **anti-starvation
-segment floor** (`segment_floor=0.5`). Clean reset eval (500 stochastic):
-**reach-4 94.8%, and the level is BEATEN (princess) 11.2% from reset**
-(56/500) — the first agent to complete Yeti from a cold start.
+**Current champion: v14-12750k** (`yeti_curriculum_v14_aggscore` snapshot
+at 12.75M, saved to `output/mo5/yeti/champions/v14_aggscore_12750k`).
+Clean reset eval (300 stochastic): **reach-4 99.7%, princess 58.3% from
+reset** (175/300) — ~5x the prior champion. Produced by the H-T
+aggregate-goal-score allocation (simpler rule: one weight per start
+level, no reset reserve, no anti-starvation floor).
 
-**How we got the princess:** the princess reward was always strong
-(~39 on touch, verified), but the deep practice kept getting forgotten
-(reach-4 oscillating), so rare princess successes never compounded. The
-anti-starvation floor stopped the (1-success) weighting from over-
-sampling the ~2%-hard CP4 and starving CP3->CP4; with stable practice the
-princess reward compounded (CP4->princess 1.9% -> 7%; princess-from-reset
-~0 -> ~4.6% in training, 9.5% at the best snapshot).
+**Two big lessons from H-T:**
+1. *The oscillation is intrinsic, not a tuning bug.* Changing the
+   allocation (and earlier the floor) did not reduce the reach-4/princess
+   swings — they stay full 0<->1 across snapshots, and the swing
+   amplitude scales with depth (reach1 std 0.09 -> reach4 std 0.37), with
+   occasional whole-policy crashes (even reach1 craters, then recovers).
+   This is the expected behavior of one shared PPO policy on a sparse,
+   rarely-reached goal (catastrophic forgetting + destructive updates;
+   PPO's clipping limits but doesn't remove it). Tiny rollouts
+   (`n_steps`=16) are a suspected amplitude amplifier, untested.
+2. *Capture, don't stabilize.* Because peaks are transient, the win is
+   keeping the best one. v14's 58% policy was nearly lost: the
+   round-million snapshot sweep eval'd 0% everywhere (peaks fell between
+   snapshots; 13M=0% next to 12.75M=58%). The live training signal is a
+   directional pre-filter only — peaks must be confirmed by real
+   from-reset eval. Next: eval-based keep-best + finer snapshots (H-U).
 
-**Remaining frontier:** the F4->princess leg (L45 ascent) is still the
-*volatile* part — reach-4 is ~stable (~99% on late snapshots) but the
-princess rate swings 0-9.5% across snapshots. Pushing/stabilizing it is
-next (more compute at this recipe, capture, or reverse-curriculum on the
-ascent).
+**Prior champion (superseded): v11-4750k** — reach-4 94.8%, princess
+11.2% from reset; first agent to complete Yeti from a cold start, via the
+anti-starvation `segment_floor=0.5` on the deep-CP curriculum (γ=1 PBRS).
 
 **Earlier reward win (still the foundation):** pure-reset γ=1 PBRS broke
 the 2-fruit wall (reach-3 96%); see "Reward-shaping pitfalls". Prior
@@ -327,6 +335,111 @@ alone doesn't resolve the over-concentration.
   (a ~1% seed-pool change swung princess 11%->1%; v11 snapshots swing
   0->9.5%). Single-run A/Bs are unreliable. For any change we care about
   ranking, run >=2-3 seeds and compare distributions, not single runs.
+- [x] **H-T — aggregate-goal-score allocation** (DONE, v14 =
+  `yeti_curriculum_v14_aggscore`). *Kept (simpler + raised the ceiling);
+  refuted as an oscillation fix.*
+
+  **Problem.** The start-allocation weight is `1 - seg_success_ema`, and
+  `seg_success` is a **boolean**: "did the episode advance at least one
+  CP from its start." This saturates the instant a segment clears its own
+  CP — e.g. CP0's boolean is ~0.99 ("collected >=1 fruit") so its weight
+  -> 0 even though it reaches the princess only ~5% of the time. A
+  segment that looks "solved" gets starved, and in a shared net a starved
+  skill rots. The `(1-success)` rule then chases whatever is now worst,
+  which starves the previously-good one — a ping-pong that shows up as the
+  reach-4 / princess **oscillation** (v13 sweep: reach-4 99->0->10->89,
+  princess 0.7->27->0->0->0 across snapshots; 20M did not converge). The
+  `segment_floor=0.5` patch did not hold: at 20M, CP4 still drew
+  `start_frac=0.425` while CP3 was starved to `0.025`.
+
+  **Change (one knob, conceptually).** Replace the boolean with a
+  **scalar aggregate goal score** = `reached_level / 5` (4 fruits +
+  princess = 5 goals; princess = level 5). EMA it per start level
+  (`goal_score_ema`), and weight EVERY start level CP0..CP4 by
+  `1 - goal_score_ema` in a single normalized draw. Because a level's
+  score only approaches 1.0 when the policy actually reaches the PRINCESS
+  from there, no level is "done" (weight ~0) until the whole game is
+  solved from it — so nothing is starved prematurely. The fixed reset
+  reserve (`reset_fraction`) and the anti-starvation floor
+  (`segment_floor`) both fall out of the weighting and are set to 0.
+
+  **Why it should help the oscillation.** Computed from v13's
+  `episodes.csv` (last 20%, princess=5): per-start scores CP0 0.58 / CP1
+  0.56 / CP2 0.57 / CP3 0.70 / CP4 0.81 -> weights all moderate
+  (0.19-0.45), none near 0. Implied allocation flips CP4 from the biggest
+  share to the smallest (0.425 -> ~0.12) and feeds CP0-CP2 instead. Reset
+  (CP0) earns ~24% on its own from its score gap (vs the hardcoded 0.40),
+  and self-shrinks as the from-reset journey is solved. Smooth, non-
+  winner-take-all allocation should stop the ping-pong.
+
+  **Note / scope.** Aggregate vs boolean are IDENTICAL for the last
+  segment (CP4: only one goal left, score 0.8 or 1.0), so this does NOT
+  add reps to the F4->princess leg — if anything it gives it *less*. The
+  bet is that the leg is not rep-starved (we drilled CP4 at 42% with flat
+  ~4% success) but destabilized by the allocation; the expected outcome is
+  "oscillation -> stable", not necessarily a higher princess rate by
+  itself. Seed-picking (Pillar 1: the CP4 pool is only post-fruit-4
+  states) is a SEPARATE lever, deliberately not changed here (one
+  experiment at a time).
+
+  **What changed in code** (`scripts/train_checkpoint_curriculum.py`):
+  added `goal_score_ema`; `record_episode` maintains it; `pick_start`
+  weights all levels incl. CP0 by `1 - goal_score_ema` (cp0_floor /
+  segment_floor optional, default 0); `curriculum_diag.csv` gains
+  `gscore0..4`. v14 config = v13 recipe (warm-start 12M champion, gamma=1
+  PBRS, 20M, 250k snapshots) with ONLY the allocation rule changed
+  (`reset_fraction: 0.0`, `segment_floor: 0.0`).
+
+  **Success criteria.** (1) reach-4 / princess oscillation amplitude
+  across snapshots drops vs v13. (2) princess-from-reset is at least
+  stable, ideally trending up. (3) `gscore*` and `start_frac*` in the diag
+  confirm the allocation spreads as predicted (CP4 share ~0.12, reset
+  ~0.24). Per H-S, a single run can't rank small effects — but the
+  oscillation-amplitude question is visible within one run.
+
+  **RESULT (20M run).** Mixed, and very informative.
+  - *Allocation worked exactly as designed.* Final `start_frac` = reset
+    0.24 / CP1 0.21 / CP2 0.24 / CP3 0.18 / CP4 0.12; `gscore` =
+    0.58/0.60/0.66/0.74/0.80. The fixed reset reserve and the
+    anti-starvation floor were removed with NO starvation — the simpler
+    rule (one weight, no `reset_fraction`, no `segment_floor`) is kept.
+  - *Refuted as an oscillation fix.* reach-4 still swings the full 0<->1
+    range; second-half std 0.378 (v13: 0.370) — unchanged. princess std
+    0.10. Spreading the budget evenly did NOT stabilize anything, which
+    rules OUT allocation-starvation as the cause of the oscillation and
+    points at the shared-policy/PPO dynamics themselves (see the new
+    "Why it oscillates" note). Tiny rollouts (`n_steps` defaults to
+    128/num_envs = 16) are a prime amplitude suspect, untested.
+  - *But the ceiling rose ~5x.* Clean from-reset eval (300 ep,
+    stochastic) of the diag-peak snapshots: 4.0M 15.7%, 6.25M 0%,
+    **12.75M 58.3% (reach-4 99.7%)**, 18.75M 32.0%, 19.25M 52.7%,
+    19.75M 7.7%. New champion = **v14 12.75M, 58.3% princess from reset**
+    (`output/mo5/yeti/champions/v14_aggscore_12750k`), vs the prior
+    11.2% (v11-4750k). The aggregate-score allocation raised the PEAKS
+    even though it didn't stabilize the trace.
+  - *Capture is now the bottleneck, not the policy.* The routine
+    round-million sweep (5/8/11/13/15/17/19/20M) eval'd **0% on every
+    snapshot** and nearly got v14 written off as a dud — every good peak
+    fell BETWEEN the sampled snapshots (13M=0% sits right next to
+    12.75M=58%). The live diag `reach_princess` is a useful *pre-filter*
+    (it flagged 12.75/19.25/18.75M, which eval'd high) but NOT
+    trustworthy per-snapshot (it also flagged 6.25M, which eval'd 0%) —
+    so peaks must be confirmed by real from-reset eval, not the EMA.
+  - *Takeaway.* Oscillation looks intrinsic to one shared PPO policy on
+    a sparse deep goal; the productive response is to CAPTURE the peaks
+    (eval-based keep-best + finer snapshots), and optionally DAMP them
+    (bigger `n_steps`, lower LR, target-KL), rather than more curriculum
+    tuning. See H-U.
+- [ ] **H-U — eval-based keep-best + capture (BACKLOG/next).** Replace
+  the blind time-based snapshotting with: (a) finer snapshots, and (b) a
+  callback that periodically runs a cheap from-reset eval (small N) and
+  saves the model whenever its princess rate beats the best-so-far, then
+  a precise eval (300+) to rank the kept candidates. Motivated by H-T:
+  v14 produced a 58% policy that the snapshot grid nearly lost. Decouples
+  run length from output quality and enables early-stopping once the
+  captured-best plateaus. Optional follow-on: damp the oscillation
+  (sweep `n_steps` up from 16; lower LR; target-KL) and re-measure
+  amplitude.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.

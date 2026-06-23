@@ -1,0 +1,74 @@
+# yeti_curriculum v13 — does training LONGER converge or keep oscillating?
+#
+# Same winning recipe as v11 (warm-start 12M champion, deep-CP curriculum,
+# gamma=1 PBRS, segment_floor=0.5, 250k snapshots) but 20M steps (4x v11).
+# Question: does the princess-from-reset rate trend UP and stabilize with
+# more compute, or does reach-4 / princess keep oscillating chaotically?
+# Now observable live: reset_reach index 5 = princess-from-reset, and
+# curriculum_diag.csv has a reach_princess column.
+#
+# --- original v11 notes below ---
+# yeti_curriculum v11 — anti-starvation floor + extended drilling.
+#
+# Single change vs v10: segment_floor 0.0 -> 0.5 (blend the (1-success)
+# curriculum weighting with a uniform floor across eligible segments).
+# Plus a longer horizon (5M) to let the princess rate compound, and fine
+# snapshots (250k) for capture.
+#
+# Hypothesis (the user's): the F4->princess reward is real and strong
+# (~39 on a touch; bonus ~780 at touch) and the agent experiences it
+# (~2% of CP4 attempts). The reason it never compounds is INSTABILITY —
+# the (1-success) weighting pours budget onto CP4 (~2% success -> weight
+# ~1.0), starving CP3->CP4, so reach-4 oscillates and the rare princess
+# successes get washed out before they accumulate. The floor guarantees
+# CP3->CP4 a minimum share -> stable deep practice -> reach-4 stops
+# oscillating -> the strong, already-verified princess reward can keep
+# reinforcing the ~2% successes until the princess rate climbs.
+#
+# Metrics: (1) reach-4 oscillation amplitude vs v9/v10 (diag std); (2)
+# does the princess rate climb over training (the actual test)?
+#
+# If reach-4 stabilizes but princess stays ~2%, the blocker is purely the
+# navigation detour (H-N finding) and we move to reverse-curriculum (H-P).
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v13_long
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/champions/pbrs_g1_12M/final_model.zip
+  snapshot_freq_steps: 250_000
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.4
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0
+  segment_floor: 0.5

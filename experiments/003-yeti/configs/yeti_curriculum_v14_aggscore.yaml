@@ -1,0 +1,68 @@
+# yeti_curriculum v14 — aggregate-goal-score allocation (H-T).
+#
+# ONE change vs v13: the start-allocation rule. v13 weighted segments by
+# (1 - boolean_advanced) with a fixed 0.40 reset reserve and a 0.50
+# anti-starvation floor. v14 weights EVERY start level CP0..CP4 by
+# (1 - goal_score_ema), where goal_score = reached_level / 5 (4 fruits +
+# princess). reset_fraction and segment_floor are set to 0 — the reset
+# share and the anti-starvation behavior now fall out of the weighting
+# itself (a level only loses budget as the policy reaches the PRINCESS
+# from it, so nothing is starved prematurely).
+#
+# Hypothesis: v13's oscillation (reach-4 / princess swinging 0<->high
+# across snapshots, never converging at 20M) is caused by the boolean
+# weighting starving "solved-looking" segments, which then rot in the
+# shared net and become the next wall — a ping-pong. The scalar score
+# keeps every segment fed until the whole game is solved from it, giving
+# a smooth, non-winner-take-all allocation that should stop the ping-pong.
+#
+# Expected outcome: oscillation -> stable. This does NOT add practice to
+# the F4->princess leg (aggregate == boolean for the last segment), so a
+# higher princess rate is not the primary prediction; reduced oscillation
+# amplitude is. Seed-picking (the CP4 pool being only post-fruit-4 states)
+# is a separate lever, deliberately unchanged.
+#
+# Everything else identical to v13: warm-start the 12M champion, gamma=1
+# PBRS reward, 20M steps, 250k snapshots, seed 42.
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v14_aggscore
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/champions/pbrs_g1_12M/final_model.zip
+  snapshot_freq_steps: 250_000
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0
+  segment_floor: 0.0

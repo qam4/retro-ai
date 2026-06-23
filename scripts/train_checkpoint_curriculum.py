@@ -156,6 +156,14 @@ class CheckpointManager:
             # How many snapshots we rejected for being too precarious
             # (died too soon under the policy, didn't reach next CP).
             "rejected_precarious": [0] * (self.FRUITS_TOTAL + 1),
+            # Admission breakdown (H-R instrumentation): of the snapshots
+            # offered to save_scored, how many were admitted because the
+            # episode reached the next CP (reached_next) vs admitted only
+            # because the agent survived >= min_survival frames. With
+            # rejected_precarious (the third outcome) this shows what the
+            # filter keeps vs throws away, per CP, over time.
+            "admit_reached": [0] * (self.FRUITS_TOTAL + 1),
+            "admit_survived": [0] * (self.FRUITS_TOTAL + 1),
         }
         self.segment_attempts = [0] * (self.FRUITS_TOTAL + 1)
         self.segment_successes = [0] * (self.FRUITS_TOTAL + 1)
@@ -190,6 +198,16 @@ class CheckpointManager:
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
         self.reset_reach_ema = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.seg_success_ema = [0.0] * (self.FRUITS_TOTAL + 1)
+        # H-T: per-start EMA of the AGGREGATE goal score =
+        # reached_level / total_goals (4 fruits + princess = 5). Unlike
+        # seg_success_ema (boolean "advanced at least one CP"), this only
+        # saturates toward 1.0 when the policy actually reaches the
+        # PRINCESS from that start — so an early segment that clears its
+        # own CP but dies before the princess keeps a real score deficit
+        # (and budget), instead of looking "solved" and being starved.
+        # pick_start weights every level by (1 - this); the anti-
+        # starvation floor and fixed reset reserve fall out naturally.
+        self.goal_score_ema = [0.0] * (self.FRUITS_TOTAL + 1)
 
     def record_episode(self, start_level, reached_level):
         if not (0 <= start_level <= self.FRUITS_TOTAL):
@@ -204,6 +222,14 @@ class CheckpointManager:
         self.seg_success_ema[start_level] = (1 - a) * self.seg_success_ema[
             start_level
         ] + a * (1.0 if advanced else 0.0)
+        # H-T: aggregate goal-score EMA — fraction of the 5 total goals
+        # (4 fruits + princess) reached from this start. reached_level is
+        # 0..5 (5 = princess via the H-M fix). This is what pick_start
+        # weights by (1 - score).
+        total_goals = self.FRUITS_TOTAL + 1
+        self.goal_score_ema[start_level] = (1 - a) * self.goal_score_ema[
+            start_level
+        ] + a * (reached_level / float(total_goals))
         # Reach-from-reset EMA: only reset (CP0) episodes are evidence
         # for "can the agent get to CP_n unaided". For each n in 1..4
         # the episode reached n iff reached_level >= n.
@@ -285,8 +311,16 @@ class CheckpointManager:
         """
         if not (0 <= fruits_collected <= self.FRUITS_TOTAL):
             return
-        admit = reached_next or survived_frames >= self.min_survival_frames
-        if not admit:
+        # Admission with a logged reason (H-R instrumentation):
+        #   reached_next  -> episode went on to the next CP
+        #   survived-only -> didn't reach next, but stayed alive >= min
+        #   rejected      -> neither (the "collected fruit then died fast"
+        #                    states the H-O fix started filtering out)
+        if reached_next:
+            self.stats["admit_reached"][fruits_collected] += 1
+        elif survived_frames >= self.min_survival_frames:
+            self.stats["admit_survived"][fruits_collected] += 1
+        else:
             self.stats["rejected_precarious"][fruits_collected] += 1
             return
         self._insert(fruits_collected, source_cp, bonus, state_bytes)
@@ -307,48 +341,49 @@ class CheckpointManager:
             break
 
     def pick_start(self):
-        """Pick a starting checkpoint level (approach 31, reach-gated).
+        """Pick a starting checkpoint level (H-T: aggregate-goal-score
+        weighting — one rule for every level, no fixed reset reserve,
+        no anti-starvation floor).
 
-        - Reserve a fixed ``cp0_floor`` share for reset (CP0) starts:
-          the engine that feeds fresh, on-distribution deep-CP seeds
-          and forces end-to-end composition.
-        - Otherwise pick among *eligible* levels only. A level is
-          eligible iff its pool is non-empty AND the agent reaches it
-          from reset often enough (``reset_reach_ema >= reach_threshold``).
-          The reach gate keeps budget off levels whose pools are built
-          from rare lucky reaches (off-distribution) — those don't
-          transfer to P(princess | CP0).
-        - Among eligible levels, weight by (1 - seg_success_ema) so
-          practice concentrates on the deepest unsolved reset-reachable
-          segment, and the frontier shifts forward as walls crack.
-          Solved levels keep a small floor so the skill isn't abandoned.
+        Every start level CP0..CP4 competes in a single weighting:
+        ``weight(level) = 1 - goal_score_ema[level]`` where goal_score is
+        the EMA of (reached_level / 5) — how much of the whole journey
+        (4 fruits + princess) the policy completes from there.
+
+        Candidates are CP0 (reset, always available) plus any deeper
+        level whose pool is non-empty and which passes the reach gate
+        (``reset_reach_ema >= reach_threshold``; gate off when threshold
+        is 0). Because a level's score only approaches 1.0 once the
+        policy reaches the PRINCESS from it, no level is starved while it
+        still matters, and reset (CP0) earns a substantial share on its
+        own exactly when the from-reset journey is unsolved — shrinking
+        as it improves. ``cp0_floor`` (reset_fraction) and
+        ``segment_floor`` are retained as optional safety knobs; both
+        default to 0 (pure weighting).
         """
-        # CP0 floor (always-available reset starts).
-        if random.random() < self.cp0_floor:
+        # Optional hard reset floor (safety net only; 0 = pure weighting).
+        if self.cp0_floor > 0.0 and random.random() < self.cp0_floor:
             self.stats["starts"][0] += 1
             return 0, None
 
-        eligible = [
-            n
-            for n in range(1, self.FRUITS_TOTAL + 1)
-            if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold
-        ]
-        if not eligible:
-            # Nothing reset-reachable yet: keep building reach via reset.
-            self.stats["starts"][0] += 1
-            return 0, None
+        # Candidates: reset always; deeper levels once their pool is
+        # non-empty and reset-reachable enough (reach gate).
+        candidates = [0]
+        for n in range(1, self.FRUITS_TOTAL + 1):
+            if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold:
+                candidates.append(n)
 
-        weights = [max(1.0 - self.seg_success_ema[n], 1e-3) for n in eligible]
-        # Anti-starvation floor: blend the success-weighting with a
-        # uniform distribution so no eligible segment is starved by a
-        # much-harder sibling. floor=0 -> pure weighting (old behavior).
-        if self.segment_floor > 0.0 and len(eligible) > 1:
+        weights = [max(1.0 - self.goal_score_ema[n], 1e-3) for n in candidates]
+        # Optional anti-starvation floor (default 0 -> pure weighting).
+        if self.segment_floor > 0.0 and len(candidates) > 1:
             total = sum(weights)
-            k = len(eligible)
+            k = len(candidates)
             f = self.segment_floor
             weights = [(1.0 - f) * (w / total) + f / k for w in weights]
-        level = random.choices(eligible, weights=weights, k=1)[0]
+        level = random.choices(candidates, weights=weights, k=1)[0]
         self.stats["starts"][level] += 1
+        if level == 0:
+            return 0, None
         # Pool entries are (source_cp, bonus, state_bytes).
         _src, _bonus, state = random.choice(self.checkpoints[level])
         return level, state
@@ -364,10 +399,11 @@ class CheckpointManager:
                 rates.append(f"{i}->{i+1}:N/A")
         rej = self.stats.get("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
         reach = "[" + ", ".join(f"{r:.2f}" for r in self.reset_reach_ema) + "]"
+        gscore = "[" + ", ".join(f"{g:.2f}" for g in self.goal_score_ema) + "]"
         return (
             f"cp={sizes} saves={self.stats['saves']} "
             f"rejected={rej} success=[{', '.join(rates)}] "
-            f"reset_reach={reach}"
+            f"reset_reach={reach} gscore={gscore}"
         )
 
     def save_to_disk(self, path):
@@ -405,9 +441,10 @@ class CheckpointManager:
                 if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
                     self.checkpoints[i].append(entry)
         loaded_stats = data.get("stats", self.stats)
-        # Tolerate older checkpoint files that predate the
-        # rejected_precarious counter.
+        # Tolerate older checkpoint files that predate newer counters.
         loaded_stats.setdefault("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
+        loaded_stats.setdefault("admit_reached", [0] * (self.FRUITS_TOTAL + 1))
+        loaded_stats.setdefault("admit_survived", [0] * (self.FRUITS_TOTAL + 1))
         self.stats = loaded_stats
         print(f"  Loaded checkpoints from {path}: {self.summary()}", flush=True)
 
@@ -735,7 +772,17 @@ class CurriculumCallback(BaseCallback):
         super().__init__()
         self._diag_path = diag_path
         self._diag_file = None
+        self._adm_file = None
         self._last_starts = [0] * 5
+        # H-R instrumentation: last cumulative admission counters, for
+        # per-interval deltas.
+        self._last_adm_reached = [0] * 5
+        self._last_adm_survived = [0] * 5
+        self._last_rejected = [0] * 5
+        # First diag write captures current counters as the baseline so
+        # interval deltas don't include history loaded from a resumed
+        # checkpoints.pkl.
+        self._baseline_captured = False
         self._total = total_timesteps
         self._log_interval = log_interval
         self._last_log = 0
@@ -776,13 +823,23 @@ class CurriculumCallback(BaseCallback):
         explained_variance) are in tensorboard."""
         if self._diag_path is None or _manager is None:
             return
+        if not self._baseline_captured:
+            # Resumed runs load lifetime counters from checkpoints.pkl;
+            # seed the per-interval baselines from current values so the
+            # first emitted deltas reflect only new activity.
+            self._last_starts = list(_manager.stats["starts"])
+            self._last_adm_reached = list(_manager.stats["admit_reached"])
+            self._last_adm_survived = list(_manager.stats["admit_survived"])
+            self._last_rejected = list(_manager.stats["rejected_precarious"])
+            self._baseline_captured = True
         if self._diag_file is None:
             self._diag_file = open(self._diag_path, "w")
             self._diag_file.write(
                 "step,"
                 "reach1,reach2,reach3,reach4,reach_princess,"
                 "succ_ema1,succ_ema2,succ_ema3,succ_ema4,"
-                "start_frac0,start_frac1,start_frac2,start_frac3,start_frac4\n"
+                "start_frac0,start_frac1,start_frac2,start_frac3,start_frac4,"
+                "gscore0,gscore1,gscore2,gscore3,gscore4\n"
             )
         starts = _manager.stats["starts"]
         delta = [starts[i] - self._last_starts[i] for i in range(5)]
@@ -791,13 +848,53 @@ class CurriculumCallback(BaseCallback):
         fr = [d / tot for d in delta]
         rr = _manager.reset_reach_ema
         se = _manager.seg_success_ema
+        gs = _manager.goal_score_ema
         self._diag_file.write(
             f"{self.num_timesteps},"
             f"{rr[1]:.3f},{rr[2]:.3f},{rr[3]:.3f},{rr[4]:.3f},{rr[5]:.3f},"
             f"{se[1]:.3f},{se[2]:.3f},{se[3]:.3f},{se[4]:.3f},"
-            f"{fr[0]:.3f},{fr[1]:.3f},{fr[2]:.3f},{fr[3]:.3f},{fr[4]:.3f}\n"
+            f"{fr[0]:.3f},{fr[1]:.3f},{fr[2]:.3f},{fr[3]:.3f},{fr[4]:.3f},"
+            f"{gs[0]:.3f},{gs[1]:.3f},{gs[2]:.3f},{gs[3]:.3f},{gs[4]:.3f}\n"
         )
         self._diag_file.flush()
+        self._write_admission_diag()
+
+    def _write_admission_diag(self) -> None:
+        """Per-CP time series of the seed-admission filter (H-R): how many
+        snapshots this interval were admitted via reaching the next CP
+        (a_reach), admitted only on survival (a_surv), or rejected (rej);
+        plus pool diversity (distinct = unique save-states; psize = pool
+        size). Shows whether a stricter filter admits fewer CPs and/or
+        collapses pool diversity over time."""
+        if self._diag_path is None or _manager is None:
+            return
+        if self._adm_file is None:
+            adm_path = os.path.join(
+                os.path.dirname(self._diag_path), "admission_diag.csv"
+            )
+            self._adm_file = open(adm_path, "w")
+            cols = ["step"]
+            for cp in range(1, _manager.FRUITS_TOTAL + 1):
+                cols += [f"a_reach{cp}", f"a_surv{cp}", f"rej{cp}",
+                         f"distinct{cp}", f"psize{cp}"]
+            self._adm_file.write(",".join(cols) + "\n")
+        ar = _manager.stats["admit_reached"]
+        asv = _manager.stats["admit_survived"]
+        rj = _manager.stats["rejected_precarious"]
+        row = [str(self.num_timesteps)]
+        for cp in range(1, _manager.FRUITS_TOTAL + 1):
+            d_reach = ar[cp] - self._last_adm_reached[cp]
+            d_surv = asv[cp] - self._last_adm_survived[cp]
+            d_rej = rj[cp] - self._last_rejected[cp]
+            pool = _manager.checkpoints[cp]
+            distinct = len({e[2] for e in pool})
+            row += [str(d_reach), str(d_surv), str(d_rej),
+                    str(distinct), str(len(pool))]
+        self._last_adm_reached = list(ar)
+        self._last_adm_survived = list(asv)
+        self._last_rejected = list(rj)
+        self._adm_file.write(",".join(row) + "\n")
+        self._adm_file.flush()
 
 
 def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
