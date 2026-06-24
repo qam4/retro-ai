@@ -58,6 +58,12 @@ class TrainingConfig:
     # Save a model snapshot every N timesteps (None -> 2,000,000). Useful
     # for capturing a transient peak in a run that later degrades.
     snapshot_freq_steps: Optional[int] = None
+    # Phase-2 warm-start: load only the network WEIGHTS from ``resume``
+    # and keep this run's PPO hyperparameters (n_steps, target_kl, ...).
+    # A full PPO.load would instead restore the checkpoint's saved
+    # hyperparameters, silently ignoring the new ones. Default False
+    # preserves the original full-state resume behavior.
+    warmstart_weights_only: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,6 +102,10 @@ class PPOConfig:
     clip_range: float = 0.2
     gamma: float = 0.99
     gae_lambda: float = 0.95
+    # Optional KL budget per update (SB3 early-stops the epoch loop once
+    # approx_kl exceeds it). None = no cap (default). Lowering it tames
+    # oversized policy updates — see experiment 003 H-V (phase-2 anneal).
+    target_kl: Optional[float] = None
 
 
 @dataclass(frozen=True)

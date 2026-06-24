@@ -1,0 +1,68 @@
+# yeti_curriculum v15 — PHASE-2 ANNEAL (H-V).
+#
+# Idea (the user's, by analogy to LMS step-size annealing): phase 1 uses
+# big, jerky updates for fast exploration (that produced the 58% champion,
+# v14-12750k). Phase 2 warm-starts that good policy and SHRINKS THE STEP
+# to settle it, testing whether the reach-4/princess oscillation damps.
+#
+# Diagnosis behind it (H-T analysis): the crashes coincide with oversized
+# policy updates (per-update KL ran ~0.8 vs the ~0.02 PPO norm) and
+# transient value-function shocks (explained_variance dipping negative).
+# Phase-2 levers, both aimed at smaller/steadier updates:
+#   - n_steps 16 -> 512 (much larger rollout -> less noisy advantages)
+#   - target_kl 0.05 (abort an update once it moves the policy too far)
+#
+# warmstart_weights_only: load ONLY the champion's network weights and
+# apply THIS run's hyperparameters (a full PPO.load would restore the
+# old n_steps/no-target_kl and ignore the change).
+#
+# Success test: does per-update KL drop toward ~0.05, does
+# explained_variance stop going negative, and does the reach-4 swing
+# amplitude shrink vs v14? Keep-best (scripts/keep_best_sweep.py --watch)
+# captures any peak regardless. Everything except the two PPO knobs (and
+# finer snapshots) is identical to v14.
+
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v15_phase2
+  num_envs: 8
+  seed: 42
+  resume: output/mo5/yeti/champions/v14_aggscore_12750k/final_model.zip
+  warmstart_weights_only: true
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0
+  segment_floor: 0.0

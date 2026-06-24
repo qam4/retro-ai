@@ -1,0 +1,59 @@
+# yeti_curriculum v16 — COLD start with the steady-update params (H-W).
+#
+# Question raised by v15's success: phase-2 (steady updates: n_steps=512,
+# target_kl=0.05) annealed a warm policy from 58% -> ~100%. But was the
+# big-step phase-1 exploration NECESSARY to first find the behavior, or
+# can the steady recipe learn it from scratch?
+#
+# This is v15's PPO settings with NO warm-start (fresh policy, cold pools)
+# and a longer horizon. Two plausible outcomes, both informative:
+#   - It learns fine -> phase-1 was unnecessary; steady params are just
+#     better, and we simplify to a single-phase recipe.
+#   - It learns slowly / gets stuck -> the big-step phase was needed for
+#     early exploration (matches the LMS "big mu early, small mu late"
+#     intuition), and warm-then-anneal is the right two-phase recipe.
+#
+# Everything except resume (removed) matches v15.
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_v16_coldsteady
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.0
+  segment_floor: 0.0

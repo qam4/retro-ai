@@ -30,33 +30,43 @@ about those runs come from old logs / prior conversations and are marked
 
 ## TL;DR / Current status (after approach 35)
 
-**Current champion: v14-12750k** (`yeti_curriculum_v14_aggscore` snapshot
-at 12.75M, saved to `output/mo5/yeti/champions/v14_aggscore_12750k`).
-Clean reset eval (300 stochastic): **reach-4 99.7%, princess 58.3% from
-reset** (175/300) — ~5x the prior champion. Produced by the H-T
-aggregate-goal-score allocation (simpler rule: one weight per start
-level, no reset reserve, no anti-starvation floor).
+**Current champion: v15-4500k** (`yeti_curriculum_v15_phase2` snapshot at
+4.5M, saved to `output/mo5/yeti/champions/v15_phase2_4500k`). Clean reset
+eval (300 stochastic): **princess 99.7% from reset** (299/300) — Yeti is
+essentially SOLVED from a cold start. Completion is also tightly speed-
+optimized: ~259 steps, leftover bonus ~787 (median within 0.1% of the
+best ever seen, 98% of wins within 2% of best).
 
-**Two big lessons from H-T:**
-1. *The oscillation is intrinsic, not a tuning bug.* Changing the
-   allocation (and earlier the floor) did not reduce the reach-4/princess
-   swings — they stay full 0<->1 across snapshots, and the swing
-   amplitude scales with depth (reach1 std 0.09 -> reach4 std 0.37), with
-   occasional whole-policy crashes (even reach1 craters, then recovers).
-   This is the expected behavior of one shared PPO policy on a sparse,
-   rarely-reached goal (catastrophic forgetting + destructive updates;
-   PPO's clipping limits but doesn't remove it). Tiny rollouts
-   (`n_steps`=16) are a suspected amplitude amplifier, untested.
-2. *Capture, don't stabilize.* Because peaks are transient, the win is
-   keeping the best one. v14's 58% policy was nearly lost: the
-   round-million snapshot sweep eval'd 0% everywhere (peaks fell between
-   snapshots; 13M=0% next to 12.75M=58%). The live training signal is a
-   directional pre-filter only — peaks must be confirmed by real
-   from-reset eval. Next: eval-based keep-best + finer snapshots (H-U).
+**How we got here (the arc): 11.2% -> 58% -> 99.7%.**
+1. *Allocation (H-T, v14).* Aggregate-goal-score weighting (one weight per
+   start level, no reset reserve / floor) raised the peak to 58% but did
+   NOT stop the oscillation.
+2. *Diagnosis.* The reach-4/princess oscillation is driven by
+   **destructive PPO updates**: with `n_steps`=16 and no `target_kl`,
+   individual updates hit **KL up to 68** (vs the ~0.02 norm), slamming
+   the value function negative (explained_variance to -30). No
+   curriculum/seed/allocation signal predicted the crashes; the cause was
+   internal to the optimizer.
+3. *Fix (H-V, v15): phase-2 anneal.* Warm-start the 58% champion's weights
+   and SHRINK THE STEP — `n_steps` 16->512, `target_kl`=0.05. Updates
+   capped (max KL 68->0.13), value function never went negative, the
+   oscillation collapsed (reach-4 std 0.38->0.17), and princess-from-reset
+   climbed 58% -> ~99.7%. (Analogy: LMS step-size annealing — big mu to
+   explore, small mu to converge.)
 
-**Prior champion (superseded): v11-4750k** — reach-4 94.8%, princess
-11.2% from reset; first agent to complete Yeti from a cold start, via the
-anti-starvation `segment_floor=0.5` on the deep-CP curriculum (γ=1 PBRS).
+**Still true — capture matters.** Even v15's *final* model eval'd 0% (it
+landed in a residual dip); the 3M/4M/4.5M snapshots are all ~99.7%. So
+periodic snapshots + from-reset eval (keep-best, H-U, `keep_best_sweep.py`)
+remain essential — the best policy is a snapshot, not the final model.
+
+**Open (H-W, running): cold + steady.** Does the steady recipe
+(`n_steps`=512, `target_kl`=0.05) learn from scratch, or was the big-step
+phase-1 exploration necessary first? Run `yeti_curriculum_v16_coldsteady`
+in progress.
+
+**Prior champion (superseded): v14-12750k** — princess 58.3%, via H-T
+aggregate-score allocation. Before that v11-4750k — 11.2%, first cold-start
+completion, via the anti-starvation `segment_floor=0.5`.
 
 **Earlier reward win (still the foundation):** pure-reset γ=1 PBRS broke
 the 2-fruit wall (reach-3 96%); see "Reward-shaping pitfalls". Prior
@@ -440,6 +450,30 @@ alone doesn't resolve the over-concentration.
   captured-best plateaus. Optional follow-on: damp the oscillation
   (sweep `n_steps` up from 16; lower LR; target-KL) and re-measure
   amplitude.
+- [x] **H-V — phase-2 anneal (DONE, v15 = `yeti_curriculum_v15_phase2`).
+  THE BREAKTHROUGH.** Diagnosis first (raw TFRecord scan of v14's TB):
+  the oscillation coincides with **destructive PPO updates** — per-update
+  approx_kl hit **max 68** (median 0.06, p99 0.33) with no `target_kl`
+  cap and `n_steps`=16, driving explained_variance negative (min -30,
+  0.7% of updates). No curriculum/seed/allocation signal predicted the
+  crashes — the cause is internal to the optimizer. Fix: warm-start the
+  v14 58% champion's WEIGHTS (new `warmstart_weights_only` flag — a full
+  PPO.load would restore the old hyperparameters) and shrink the step:
+  `n_steps` 16->512, `target_kl`=0.05. *Result:* updates capped (max KL
+  68 -> 0.13, p99 0.043), explained_variance never went negative again,
+  reach-4 std 0.38 -> 0.17, and **princess-from-reset 58% -> 99.7%**
+  (clean 300-ep eval of the 3M/4M/4.5M snapshots; champion = 4.5M). Speed
+  is also tightly converged: ~259 steps, leftover bonus ~787 (98% of wins
+  within 2% of the best-ever 788) — though whether 788 is the GLOBAL
+  speed optimum is unverified (could be a stable local optimum). NOTE the
+  *final* model still eval'd 0% (residual end-of-run dip) — keep-best /
+  snapshots remain essential even here.
+- [ ] **H-W — cold + steady (RUNNING, v16 = `yeti_curriculum_v16_coldsteady`).**
+  Does the steady recipe (`n_steps`=512, `target_kl`=0.05) learn from
+  SCRATCH (no warm-start), or was the big-step phase-1 exploration
+  necessary first? If it learns fine, phase-1 was unnecessary and we
+  simplify to a single steady recipe; if it stalls, warm-then-anneal
+  (big mu -> small mu) is the right two-phase recipe. 20M steps.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.

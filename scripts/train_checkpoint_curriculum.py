@@ -143,11 +143,13 @@ class CheckpointManager:
         #     trajectory = more on-distribution for P(princess|CP0).
         #     This is the primary retention key (approach 30, R2).
         #   bonus: in-game bonus countdown at the snapshot moment;
-        #     tiebreaker only (higher = faster reach).
-        # When a pool is full we evict the entry with the HIGHEST
-        # source_cp first (most artificial), tiebreaking on lowest
-        # bonus — so the pool drifts toward reset-origin states the
-        # agent actually reaches from reset.
+        #     retained for logging only — it no longer drives eviction.
+        # When a pool is full we evict from the HIGHEST source_cp tier
+        # (most artificial) first, picking a UNIFORMLY RANDOM entry
+        # within that tier. (The old lowest-bonus tiebreak froze pools
+        # onto a few high-bonus states -> the v6 collapse; random keeps
+        # them diverse.) So the pool drifts toward reset-origin states
+        # the agent actually reaches from reset.
         self.checkpoints = [[] for _ in range(self.FRUITS_TOTAL + 1)]
         self.frontier = 0
         self.stats = {
@@ -1019,6 +1021,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         clip_range=cfg.ppo.clip_range,
         gamma=cfg.ppo.gamma,
         gae_lambda=cfg.ppo.gae_lambda,
+        target_kl=cfg.ppo.target_kl,
         verbose=0,
         tensorboard_log=os.path.join(cfg.training.output, "tb"),
         device="auto",
@@ -1027,11 +1030,23 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     if cfg.training.resume:
         print(f"  Resuming from {cfg.training.resume}", flush=True)
-        model = PPO.load(
-            cfg.training.resume,
-            env=vec_env,
-            tensorboard_log=os.path.join(cfg.training.output, "tb"),
-        )
+        if getattr(cfg.training, "warmstart_weights_only", False):
+            # Phase-2 anneal: keep the freshly-built model (this run's new
+            # PPO hyperparameters — n_steps, target_kl, ...) and copy ONLY
+            # the network weights from the checkpoint. A full PPO.load
+            # would restore the checkpoint's old hyperparameters and
+            # silently ignore the new ones.
+            src = PPO.load(cfg.training.resume, device="auto")
+            model.policy.load_state_dict(src.policy.state_dict())
+            del src
+            print("  (weights-only warm-start; new PPO hyperparameters kept)",
+                  flush=True)
+        else:
+            model = PPO.load(
+                cfg.training.resume,
+                env=vec_env,
+                tensorboard_log=os.path.join(cfg.training.output, "tb"),
+            )
         ckpt_path = os.path.join(
             os.path.dirname(cfg.training.resume), "checkpoints.pkl"
         )
