@@ -474,6 +474,31 @@ alone doesn't resolve the over-concentration.
   necessary first? If it learns fine, phase-1 was unnecessary and we
   simplify to a single steady recipe; if it stalls, warm-then-anneal
   (big mu -> small mu) is the right two-phase recipe. 20M steps.
+- [ ] **H-X — beat level 2 (next target; mapping work).** Yeti has
+  further levels with DIFFERENT layouts; level 2 is top-down/descending
+  (vs level 1's ascent). The transition: princess touch -> victory music
+  -> bonus added to score -> next level loads, **bonus resets to 1000**
+  (that reset is the clean level-2-start signal; no level-counter byte is
+  known — approach 6).
+  - DONE (prep): `scripts/capture_level2_start.py` rides the champion past
+    the princess, detects `bonus->1000`, and dumps the level-2 start
+    save-state -> `output/mo5/yeti/level2/level2_start.sav` (+ png + a
+    transition mp4). This is the level-2 CP0 seed.
+  - Carries over for free: global RAM (x/y, lives, bonus, score, princess
+    flag) and the entire RL pipeline (checkpoint curriculum, aggregate-
+    goal-score allocation, phase-2 anneal, keep-best, eval/render tools).
+  - New mapping work (the labor): (a) level-2 fruit RAM addresses +
+    positions (snapshot RAM as each fruit is collected, find bytes that
+    zero — as approach 10 did for L1); (b) a new nav graph + floor bands
+    for the descending geometry; (c) a level-2 game profile wiring the new
+    fruit addrs + nav graph + goal node.
+  - Train with the proven recipe (curriculum -> phase-2 anneal ->
+    keep-best). Open choice: warm-start from the L1 champion (transfers
+    ladder/snowball/joystick skills if visuals are similar) vs cold; A/B.
+  - Policy scope: one policy per level for now (simpler; we have the
+    recipe). A single multi-level policy (train on both, or condition on
+    level) is possible but reintroduces the shared-net interference we
+    fought — revisit later.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
