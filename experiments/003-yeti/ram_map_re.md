@@ -134,10 +134,22 @@ rows21-24 ladders (x=48, x=224) descend below the bottom floor F6 — likely
 toward the princess.
 
 ### Fruits (both on floor F5, row 18)
-| fruit | tile ids | pixel (x,y) | agent (x,y) |
-|-------|----------|-------------|-------------|
-| left  | 31-34    | (56,128)    | (14,128)    |
-| right | 35-38    | (256,128)   | (64,128)    |
+| fruit | tile ids | pixel (x,y) | agent (x,y) | presence addr |
+|-------|----------|-------------|-------------|---------------|
+| left  | 31-34    | (56,128)    | (14,128)    | 0x2EAE (11950)|
+| right | 35-38    | (256,128)   | (64,128)    | 0x2EC7 (11975)|
+
+**Fruit presence addresses are positional, not fixed.** The presence byte IS
+the fruit's UL cell in the tilemap (`0x2C27 + row*40 + col`), so it moves with
+the fruit. That's why level 1's `{0x2FAD,0x2F00,0x2E68,0x2DD8}` cannot be
+reused for level 2 — reading them against the L2 state gives garbage
+(0x2FAD->0 would even look like a *collected* fruit, 0x2F00->5 is a floor
+tile, 0x2E68->2 a ladder tile). Verified: L2 addrs 0x2EAE=31 and 0x2EC7=35,
+stable as the player moves; fruits_remaining(11055)=2. Design upshot: derive
+per-fruit presence addrs from the tilemap (`extract_level_map.py` now emits
+`presence_addr`) rather than hard-coding per level — generalizes to all levels.
+NOT yet collection-tested (zeroing-on-pickup needs level-2 gameplay; same
+engine mechanism as L1, so inferred).
 
 ### Princess (FOUND — separate entity bytes, not in the tilemap)
 

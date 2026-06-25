@@ -199,10 +199,11 @@ def main() -> None:
     print(f"\n=== FRUITS ({len(fruits)}) ===")
     for fr in fruits:
         a = agent_xy(fr["col"], fr["row"])
+        presence = args.base + fr["row"] * W + fr["col"]
         print(
             f"  tile(col={fr['col']},row={fr['row']})  ids={fr['tile_ids']}  "
             f"px={a['pixel']}  agent=(x={a['agent_x']},y={a['agent_y']})  "
-            f"({fr['n_tiles']} tiles)"
+            f"presence_addr=0x{presence:04X} ({presence})  ({fr['n_tiles']} tiles)"
         )
 
     print(f"\n=== PRINCESS ===")
@@ -218,7 +219,14 @@ def main() -> None:
             "grid": [W, H],
             "floors": floors,
             "ladders": ladders,
-            "fruits": [{**fr, **agent_xy(fr["col"], fr["row"])} for fr in fruits],
+            "fruits": [
+                {
+                    **fr,
+                    **agent_xy(fr["col"], fr["row"]),
+                    "presence_addr": args.base + fr["row"] * W + fr["col"],
+                }
+                for fr in fruits
+            ],
             "princess": princess,
         }
         with open(args.json, "w") as fh:
