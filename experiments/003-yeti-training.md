@@ -487,11 +487,23 @@ alone doesn't resolve the over-concentration.
   - Carries over for free: global RAM (x/y, lives, bonus, score, princess
     flag) and the entire RL pipeline (checkpoint curriculum, aggregate-
     goal-score allocation, phase-2 anneal, keep-best, eval/render tools).
-  - New mapping work (the labor): (a) level-2 fruit RAM addresses +
-    positions (snapshot RAM as each fruit is collected, find bytes that
-    zero — as approach 10 did for L1); (b) a new nav graph + floor bands
-    for the descending geometry; (c) a level-2 game profile wiring the new
-    fruit addrs + nav graph + goal node.
+  - New mapping work (the labor): ~~(a) level-2 fruit RAM addresses +
+    positions; (b) a new nav graph + floor bands~~ **DONE via RAM map RE
+    (see `experiments/003-yeti/ram_map_re.md`)**, (c) a level-2 game profile
+    wiring the fruit positions + nav graph + goal node (TODO).
+  - **BREAKTHROUGH (RAM map):** the static level layout is a tilemap in user
+    RAM — a 40x25 grid of 1-byte tile-ids, base 0x2C27, `tile(col,row) =
+    RAM[0x2C27 + row*40 + col]`. Calibrated + validated against level 1's
+    known map (recovered all 5 ladders + 4 fruits + princess exactly). For
+    level 2 we now read the WHOLE map directly (no Go-Explore needed — it was
+    confirmed stuck at floor-2 gap jumps): 6 floors, 10 ladders, 2 fruits
+    (on floor F5, agent x=14 & x=64, y=128), princess bottom-right at
+    agent (x=72,y=182). Tile-ids: ladder 1-4, floor 5-8, fruits = 2x2 sprite
+    blocks. Princess is a separate entity (Y=RAM 0x2B00, X=0x2B01, 4px
+    units). Tools: `find_map_in_ram.py`, `render_tilemap.py`,
+    `extract_level_map.py`; data: `output/mo5/yeti/level2/level2_map.json`.
+    This generalizes to ALL future levels (read the map, build the nav graph
+    automatically).
   - Train with the proven recipe (curriculum -> phase-2 anneal ->
     keep-best). Open choice: warm-start from the L1 champion (transfers
     ladder/snowball/joystick skills if visuals are similar) vs cold; A/B.
