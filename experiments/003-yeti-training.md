@@ -59,10 +59,30 @@ landed in a residual dip); the 3M/4M/4.5M snapshots are all ~99.7%. So
 periodic snapshots + from-reset eval (keep-best, H-U, `keep_best_sweep.py`)
 remain essential — the best policy is a snapshot, not the final model.
 
-**Open (H-W, running): cold + steady.** Does the steady recipe
-(`n_steps`=512, `target_kl`=0.05) learn from scratch, or was the big-step
-phase-1 exploration necessary first? Run `yeti_curriculum_v16_coldsteady`
-in progress.
+**Resolved (H-W): cold + steady FAILS — phase-1 instability is required.**
+v16 (`yeti_curriculum_v16_coldsteady`: `n_steps`=512, `target_kl`=0.05, NO
+warm-start, 20M steps) was swept from reset across ALL 200 snapshots
+(`keep_best_sweep.py`, 20 ep each, GPU): **every snapshot scored princess
+0.0 AND reach4 0.0** — it plateaus at reach-3 and never once crosses the
+reach-4 (F3->F4) wall in the entire run. So the steady recipe cannot learn
+from scratch; the big-step phase-1 was doing essential exploration.
+
+*Interpretation — the recipe is simulated annealing on the policy.* Phase 1
+(`n_steps`=16, no `target_kl`) = HIGH temperature in policy-parameter space:
+large, noisy, sometimes destructive updates (measured KL up to 68) that take
+big jumps and can stumble across behavioral plateaus like the reach-4 wall
+(crossing it needs a whole new skill chunk, so small greedy steps can't —
+nothing nearby improves the return). Phase 2 (`n_steps`=512,
+`target_kl`=0.05) = LOW temperature: small KL-bounded steps that settle into
+the basin without destroying it. Same shape as LMS mu-annealing (big mu to
+escape, small mu to converge). The catch: that instability is double-edged —
+it's the *same* mechanism as the oscillation we fought (big jumps also leave
+good policies, hence reach-4 swinging and degraded final models). So the win
+is the *schedule* (instability early, annealed away), not either extreme:
+too much for too long never converges, none at all stays trapped (v16).
+*Practical rule:* never start cold-steady — use phase-1 exploration (or
+warm-start past the early walls) to find the basin, then anneal. This also
+guides level 2.
 
 **Prior champion (superseded): v14-12750k** — princess 58.3%, via H-T
 aggregate-score allocation. Before that v11-4750k — 11.2%, first cold-start
@@ -468,12 +488,14 @@ alone doesn't resolve the over-concentration.
   speed optimum is unverified (could be a stable local optimum). NOTE the
   *final* model still eval'd 0% (residual end-of-run dip) — keep-best /
   snapshots remain essential even here.
-- [ ] **H-W — cold + steady (RUNNING, v16 = `yeti_curriculum_v16_coldsteady`).**
-  Does the steady recipe (`n_steps`=512, `target_kl`=0.05) learn from
-  SCRATCH (no warm-start), or was the big-step phase-1 exploration
-  necessary first? If it learns fine, phase-1 was unnecessary and we
-  simplify to a single steady recipe; if it stalls, warm-then-anneal
-  (big mu -> small mu) is the right two-phase recipe. 20M steps.
+- [x] **H-W — cold + steady (DONE, NEGATIVE; v16 = `yeti_curriculum_v16_coldsteady`).**
+  Verdict: the steady recipe (`n_steps`=512, `target_kl`=0.05) does NOT learn
+  from scratch. Swept all 200 snapshots from reset — every one scored
+  princess 0.0 / reach4 0.0; it plateaus at reach-3 and never crosses the
+  reach-4 wall in 20M steps. The big-step phase-1 exploration WAS necessary.
+  Recipe = simulated annealing on the policy (phase-1 high-temperature jumps
+  escape the plateau; phase-2 low-temperature steps converge). Never start
+  cold-steady; explore-then-anneal. (Full interpretation in TL;DR.)
 - [ ] **H-X — beat level 2 (next target; mapping work).** Yeti has
   further levels with DIFFERENT layouts; level 2 is top-down/descending
   (vs level 1's ascent). The transition: princess touch -> victory music
