@@ -69,8 +69,6 @@
       "name": "ci-windows",
       "displayName": "CI Windows Build",
       "description": "Build configuration for Windows CI",
-      "generator": "Visual Studio 17 2022",
-      "architecture": "x64",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
