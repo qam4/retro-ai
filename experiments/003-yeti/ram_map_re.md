@@ -190,3 +190,80 @@ map exactly), so this is just a floor-counting-convention difference.
 - `scripts/render_tilemap.py`    — dump the 40x25 tilemap (occupancy + tile-id views)
 - `scripts/extract_level_map.py` — structured floors/ladders/fruits (+ JSON)
 
+
+---
+
+# Level-2 training plan (approach A — chosen)
+
+Decision (user): **approach A** — get a first level-2 run going with the
+*simplest* setup, no nav-graph path shaping. Add the full nav graph (B) only
+if A stalls. Rationale: H-W showed phase-1 exploration + checkpoint curriculum
+is powerful, the gap-jump geometry is fiddly to model, and level 2 is *shorter*
+than level 1 (2 fruits vs 4), so a baseline may crack it without shaping.
+
+## Reward (A)
+`fruit_princess_bonus` (already registered in `rewards.py`): C++ fruit-bonus
+per pickup + a one-shot princess-touch bonus. **No `yeti_map` nav graph**, so
+none of the level-1 floor/ladder/gap geometry is needed for the reward. Keep
+the survival bonus + PBRS as on level 1. (Path-progress rewards
+`fruit_bonus_path_progress[_universal]` are the level-1 nav-graph ones we are
+deliberately NOT using for L2 yet.)
+
+## Recipe (from H-V / H-W)
+Two-phase anneal: phase-1 = big exploratory steps (`n_steps`=16, no
+`target_kl`) to escape plateaus; phase-2 = anneal (`n_steps`=512,
+`target_kl`=0.05) to converge. Checkpoint curriculum bootstraps CP seeds as
+fruits are collected. keep-best snapshot sweep to capture the transient peak.
+
+## Verified RAM hooks (level 2)
+- CP0 start state: `output/mo5/yeti/level2/level2_start.sav` (load on reset
+  instead of game-reset, which boots level 1).
+- Fruits (2): presence `0x2EAE` (11950) and `0x2EC7` (11975) — auto-derived
+  from the tilemap; verified to hold the fruit tile-ids and be position-stable.
+  NOT yet collection-tested (zeroing on pickup) — needs L2 gameplay.
+- `fruits_remaining` (11055) = 2 at start. Globals (lives 11095, bonus
+  11010/11, score 11093/94, x 11090, y 11089, princess-flag 11050) carry over.
+- Goals = 2 fruits + princess = **3** (level 1 had 5).
+
+## Code seams to parameterize (in `scripts/train_checkpoint_curriculum.py`)
+Everything below hard-codes level 1; all need a level param (default = L1, so
+level-1 runs stay byte-identical):
+1. `FRUIT_PRESENCE_ADDRS = {1:0x2FAD,...}` (module const) -> per-level dict.
+2. `CheckpointManager.FRUITS_TOTAL = 4` (class attr) -> instance, from config.
+3. `4 - fruits` CP math in `reset()`/`step()`/`_log_episode()` -> `fruits_total - fruits`.
+4. Princess = CP level `5` -> `fruits_total + 1`.
+5. `_fruit_vector()` returns a 4-d vector (for MultiInputPolicy) -> `fruits_total`-d.
+6. CP0 reset: `gym_env.reset()` -> load `start_state` save when configured.
+7. `CurriculumCallback._write_diag` / `_write_admission_diag` hard-code 5 goal
+   columns (reach1..reach_princess, gscore0..4) -> size to `fruits_total`.
+   (Highest-risk spot: fixed-width CSV header + f-string rows.)
+8. New config fields (likely a `level:` block or `curriculum` additions):
+   `start_state`, `fruits_total`, `fruit_presence_addrs`.
+
+Same constants are duplicated in `scripts/train_segment.py`,
+`scripts/eval_from_reset.py`, `scripts/go_explore.py` — for the first L2 run we
+only need the curriculum-training + eval paths. Cleanest long-term: a shared
+per-level table (dataclass/registry) the profile selects; the inline dicts in
+~10 scripts then collapse to one source.
+
+## Open questions / hypotheses
+- **H (A-works):** the 2-fruit level is short enough that fruit+princess
+  reward + curriculum + phase-1 exploration reaches the princess without nav
+  shaping. If reach-fruit plateaus like level-1's pre-PBRS 2-fruit wall, add B.
+- **Gaps:** level 2 has floor gaps requiring jumps (walking off = death). No
+  reward models this; the CNN must learn it from pixels (it learned jumps on
+  L1). If the agent farms deaths at gaps, may need a gap-aware penalty/shaping.
+- **Enemies:** goats chase (Pac-Man style) + a bottom yeti paces L/R. Death
+  penalty already exists; evasion learned from pixels. Watch for the agent
+  getting stuck avoiding rather than progressing.
+- **Princess detect:** assume the level-cleared flag (11050) rising edge works
+  on L2 as on L1 (same engine). Verify on the first run that a princess touch
+  registers (it gates CP_last success + the one-shot bonus).
+- **Start-state determinism:** every CP0 episode loads the same
+  `level2_start.sav`; rely on env stochasticity (action sampling) for diversity
+  as on level 1. May want random no-op frames at reset if it's too deterministic.
+
+## Status
+Map + hooks done & verified. Next: implement the seam parameterization
+(level-1-preserving defaults), add a `yeti_curriculum_l2_v1` config + L2
+profile, smoke-test 50-100 steps from `level2_start.sav`, then launch phase-1.

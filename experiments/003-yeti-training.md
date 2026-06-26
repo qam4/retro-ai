@@ -511,8 +511,15 @@ alone doesn't resolve the over-concentration.
     goal-score allocation, phase-2 anneal, keep-best, eval/render tools).
   - New mapping work (the labor): ~~(a) level-2 fruit RAM addresses +
     positions; (b) a new nav graph + floor bands~~ **DONE via RAM map RE
-    (see `experiments/003-yeti/ram_map_re.md`)**, (c) a level-2 game profile
-    wiring the fruit positions + nav graph + goal node (TODO).
+    (see `experiments/003-yeti/ram_map_re.md`)**, (c) wire a level-2 training
+    setup (TODO — plan below).
+  - **Training plan (approach A, chosen):** simplest first —
+    `fruit_princess_bonus` reward (no nav-graph path shaping) + checkpoint
+    curriculum + the phase-1->anneal recipe, starting from `level2_start.sav`.
+    Add the full nav graph (B) only if A stalls. Verified RAM hooks + the code
+    seams to parameterize (FRUITS_TOTAL=2, fruit-presence dict {0x2EAE,0x2EC7},
+    CP0 start-state, princess=goal3, diag CSV widths) are in
+    `experiments/003-yeti/ram_map_re.md` ("Level-2 training plan").
   - **BREAKTHROUGH (RAM map):** the static level layout is a tilemap in user
     RAM — a 40x25 grid of 1-byte tile-ids, base 0x2C27, `tile(col,row) =
     RAM[0x2C27 + row*40 + col]`. Calibrated + validated against level 1's
