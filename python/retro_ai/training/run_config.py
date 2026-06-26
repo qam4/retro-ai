@@ -163,6 +163,22 @@ class CurriculumConfig:
     # pickups. A snapshot that led to the next checkpoint in the same
     # episode is always admitted regardless of this threshold.
     min_survival_frames: int = 30
+    # --- Level awareness (defaults preserve level-1 behavior) ---
+    # Total collectible fruits in the level (level 1 = 4, level 2 = 2).
+    # Drives CP indexing, the fruit-presence vector dim, and the
+    # princess goal index (= fruits_total + 1).
+    fruits_total: int = 4
+    # Per-fruit presence RAM addresses (byte != 0 = on map, 0 =
+    # collected). ``None`` -> the level-1 default
+    # {1:0x2FAD, 2:0x2F00, 3:0x2E68, 4:0x2DD8}. These are *positional*
+    # tilemap cells, so they differ per level (see
+    # experiments/003-yeti/ram_map_re.md). YAML maps int->int, e.g.
+    # ``{1: 11950, 2: 11975}`` for level 2 (0x2EAE, 0x2EC7).
+    fruit_presence_addrs: Optional[Dict[int, int]] = None
+    # Path to a save-state loaded on a CP0 (reset) start, instead of a
+    # fresh game reset. ``None`` -> game reset (= level 1 start). Level 2
+    # uses ``output/mo5/yeti/level2/level2_start.sav``.
+    start_state: Optional[str] = None
 
 
 @dataclass(frozen=True)

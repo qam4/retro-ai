@@ -1,0 +1,76 @@
+# yeti_curriculum L2 v1 — FIRST LEVEL-2 RUN (approach A, H-X).
+#
+# Level 2 = top-down descending layout: start top floor, 2 fruits on a
+# lower floor, princess bottom-right. Geometry read straight from RAM
+# (see experiments/003-yeti/ram_map_re.md). Go-Explore can't map it
+# (stuck at floor-2 gap jumps), so we train directly.
+#
+# APPROACH A (chosen): simplest setup, NO nav-graph path shaping.
+#   - Reward = fruit_princess_bonus: +bonus*scale per fruit pickup, plus a
+#     one-shot princess-touch bonus. Nav-graph-free (uses only the
+#     level-independent fruits_remaining + level-cleared flag). NOTE: this
+#     reward is SPARSE (signal only at the 2 pickups + princess). If reach
+#     plateaus, switch to approach B (a level-2 nav graph with gap-jump
+#     edges + path-progress shaping). "PBRS" in this codebase IS the
+#     nav-graph path-progress reward, so it is deliberately NOT used here.
+#   - PPO phase-1 exploration recipe (H-W lesson): big, jerky updates
+#     (n_steps=16, no target_kl) to escape plateaus. Anneal later
+#     (phase-2: n_steps=512, target_kl=0.05) once a good policy appears,
+#     via a warm-start config like v15.
+#   - Checkpoint curriculum bootstraps CP seeds as fruits are collected,
+#     starting every CP0 episode from the level-2 start save.
+#
+# Level awareness (NEW config fields, default to level 1 if omitted):
+#   curriculum.fruits_total          = 2  (level 2 has 2 fruits)
+#   curriculum.fruit_presence_addrs  = {1: 11950, 2: 11975}  (0x2EAE, 0x2EC7)
+#   curriculum.start_state           = the level-2 start save-state
+#
+# Capture snapshots every 100k for a keep-best sweep (the policy peaks
+# transiently — see H-U / keep_best_sweep.py).
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v1
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level2   # relaxed bonus-stall for level 2's frozen/slow bonus
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+
+reward:
+  name: fruit_princess_bonus
+  params:
+    fruit_scale: 0.01
+    princess_scale: 0.05
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16                  # phase-1: small rollouts -> big exploratory updates
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  # no target_kl in phase-1 (big steps escape plateaus; H-W)
+
+curriculum:
+  reset_fraction: 0.0          # pure aggregate-goal-score weighting (H-T)
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.15        # CP1/CP2 eligible once reached from reset
+  segment_floor: 0.0
+  # --- level 2 ---
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950                   # 0x2EAE  (fruit A, tile col7,row16)
+    2: 11975                   # 0x2EC7  (fruit B, tile col32,row16)
+  start_state: output/mo5/yeti/level2/level2_start.sav

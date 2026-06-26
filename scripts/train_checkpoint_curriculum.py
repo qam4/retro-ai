@@ -94,8 +94,6 @@ class CheckpointManager:
     on construction).
     """
 
-    FRUITS_TOTAL = 4
-
     def __init__(
         self,
         max_states_per_checkpoint: int,
@@ -106,7 +104,13 @@ class CheckpointManager:
         min_survival_frames: int = 30,
         reach_threshold: float = 0.15,
         segment_floor: float = 0.0,
+        fruits_total: int = 4,
     ):
+        # Number of collectible fruits in this level (level 1 = 4,
+        # level 2 = 2). Instance value (was a class constant); drives
+        # CP pool count (0..fruits_total), the princess goal index
+        # (fruits_total + 1), and all EMA array sizes.
+        self.FRUITS_TOTAL = int(fruits_total)
         # frontier_fraction / earlier_fraction are retained for config
         # back-compat but no longer used by pick_start (approach 30).
         # reset_fraction is reinterpreted as the CP0 floor and only
@@ -196,9 +200,9 @@ class CheckpointManager:
         # deep CP should become eligible promptly.
         self.reach_threshold = reach_threshold
         self.reach_alpha = 0.02
-        # Index 0..4 = reach CP0..CP4 from reset; index 5 = reach the
+        # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
-        self.reset_reach_ema = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.reset_reach_ema = [1.0] + [0.0] * (self.FRUITS_TOTAL + 1)
         self.seg_success_ema = [0.0] * (self.FRUITS_TOTAL + 1)
         # H-T: per-start EMA of the AGGREGATE goal score =
         # reached_level / total_goals (4 fruits + princess = 5). Unlike
@@ -236,10 +240,10 @@ class CheckpointManager:
         # for "can the agent get to CP_n unaided". For each n in 1..4
         # the episode reached n iff reached_level >= n.
         if start_level == 0:
-            # n up to 5 = princess (reached_level==5 on a touch, via the
-            # H-M fix), so reset_reach_ema[5] is the live princess-from-
-            # reset rate — the actual goal.
-            for n in range(1, 6):
+            # n up to N+1 = princess (reached_level==N+1 on a touch, via
+            # the H-M fix), so reset_reach_ema[-1] is the live princess-
+            # from-reset rate — the actual goal.
+            for n in range(1, self.FRUITS_TOTAL + 2):
                 hit = 1.0 if reached_level >= n else 0.0
                 self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
 
@@ -474,8 +478,28 @@ class CheckpointCurriculumEnv(gym.Env):
         self.action_space = stack.gym.action_space
         self.iface = stack.base._interface
 
+        # --- Level awareness (defaults preserve level-1 behavior) ---
+        # fruits_total, the per-fruit presence RAM addresses, and an
+        # optional CP0 start-state save (level 2 boots from a save, not
+        # a game reset). Pulled from the curriculum config.
+        cur = cfg.curriculum
+        self._fruits_total = getattr(cur, "fruits_total", 4) if cur else 4
+        addrs = getattr(cur, "fruit_presence_addrs", None) if cur else None
+        # Default to the level-1 dict; coerce YAML int keys/values to int.
+        self._fruit_addrs = (
+            {int(k): int(v) for k, v in addrs.items()}
+            if addrs
+            else dict(FRUIT_PRESENCE_ADDRS)
+        )
+        self._fruit_ids = sorted(self._fruit_addrs)
+        self._start_state_bytes: Optional[bytes] = None
+        start_path = getattr(cur, "start_state", None) if cur else None
+        if start_path:
+            with open(start_path, "rb") as _f:
+                self._start_state_bytes = _f.read()
+
         # MultiInputPolicy support: when enabled, the observation becomes
-        # a Dict of the image plus a 4-d fruit-presence vector (1.0 =
+        # a Dict of the image plus a fruit-presence vector (1.0 =
         # fruit still on map, 0.0 = collected). This de-aliases the
         # checkpoint states: a reset state and a "F1 already collected"
         # state look near-identical at 84x84, so a pixels-only policy
@@ -491,7 +515,10 @@ class CheckpointCurriculumEnv(gym.Env):
                 {
                     "image": image_space,
                     "fruits": gym.spaces.Box(
-                        low=0.0, high=1.0, shape=(4,), dtype=np.float32
+                        low=0.0,
+                        high=1.0,
+                        shape=(self._fruits_total,),
+                        dtype=np.float32,
                     ),
                 }
             )
@@ -507,12 +534,12 @@ class CheckpointCurriculumEnv(gym.Env):
 
         # Per-episode state
         self._step_count = 0
-        self._prev_fruits = 4
+        self._prev_fruits = self._fruits_total
         self._prev_lives = 5
         self._prev_bonus = 0
         self._prev_score = 0
         self._stall = 0
-        self._start_fruits = 4
+        self._start_fruits = self._fruits_total
         self._initialized = False
 
         # Logging state
@@ -543,11 +570,12 @@ class CheckpointCurriculumEnv(gym.Env):
         )
 
     def _fruit_vector(self) -> np.ndarray:
-        """4-d fruit-presence vector (1.0 = on map, 0.0 = collected)."""
+        """Fruit-presence vector (1.0 = on map, 0.0 = collected), one
+        entry per fruit in this level (level 1 = 4, level 2 = 2)."""
         return np.array(
             [
-                1.0 if self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0 else 0.0
-                for i in (1, 2, 3, 4)
+                1.0 if self.iface.read_ram_byte(self._fruit_addrs[i]) != 0 else 0.0
+                for i in self._fruit_ids
             ],
             dtype=np.float32,
         )
@@ -569,6 +597,11 @@ class CheckpointCurriculumEnv(gym.Env):
             self._initialized = True
 
         level, state_bytes = _manager.pick_start()
+
+        if state_bytes is None and self._start_state_bytes is not None:
+            # CP0 for a level that boots from a save-state rather than a
+            # fresh game reset (level 2 starts from level2_start.sav).
+            state_bytes = self._start_state_bytes
 
         if state_bytes is not None:
             self.base._interface.load_state(state_bytes)
@@ -601,12 +634,12 @@ class CheckpointCurriculumEnv(gym.Env):
         # reached-next), not a passive probe.
         self._pending_saves = []
         # Highest checkpoint level reached this episode, in CP-level
-        # units (0..4 fruits collected; princess touch counts as 5).
-        # Start level = 4 - fruits_remaining. (H-O fix: was initialized
-        # to self._start_fruits — fruits *remaining*, the wrong unit —
-        # which pinned reset episodes at 4 and over-admitted their seed
-        # snapshots via save_scored's reached_next.)
-        self._max_cp_this_ep = 4 - self._start_fruits
+        # units (0..fruits_total fruits collected; princess touch counts
+        # as fruits_total+1). Start level = fruits_total - fruits_remaining.
+        # (H-O fix: was initialized to self._start_fruits — fruits
+        # *remaining*, the wrong unit — which pinned reset episodes at the
+        # top and over-admitted their seed snapshots via reached_next.)
+        self._max_cp_this_ep = self._fruits_total - self._start_fruits
         # Clean per-episode princess-touch flag, credited to
         # record_episode for CP4->princess success.
         self._princess_touched_this_ep = False
@@ -626,7 +659,7 @@ class CheckpointCurriculumEnv(gym.Env):
         x = self.iface.read_ram_byte(X_POS)
         y = self.iface.read_ram_byte(Y_POS)
         fruits_present = tuple(
-            self.iface.read_ram_byte(FRUIT_PRESENCE_ADDRS[i]) != 0 for i in (1, 2, 3, 4)
+            self.iface.read_ram_byte(self._fruit_addrs[i]) != 0 for i in self._fruit_ids
         )
         princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         princess_touched = princess_flag == 1 and self._prev_princess_flag == 0
@@ -653,7 +686,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # of the real episode unfolds, not a passive probe.
         if fruits < self._prev_fruits:
             self._fruits_collected_this_ep += self._prev_fruits - fruits
-            collected_total = 4 - fruits
+            collected_total = self._fruits_total - fruits
             self._max_cp_this_ep = max(self._max_cp_this_ep, collected_total)
             self._pending_saves.append(
                 (
@@ -667,10 +700,10 @@ class CheckpointCurriculumEnv(gym.Env):
         # Princess touch ends the episode and counts as a success.
         if princess_touched:
             self._fruits_collected_this_ep += 1
-            # Princess is the terminal "checkpoint" (level 5); any
-            # pending fruit snapshot in this episode therefore reached
+            # Princess is the terminal "checkpoint" (level fruits_total+1);
+            # any pending fruit snapshot in this episode therefore reached
             # the next checkpoint.
-            self._max_cp_this_ep = max(self._max_cp_this_ep, 5)
+            self._max_cp_this_ep = max(self._max_cp_this_ep, self._fruits_total + 1)
             self._princess_touched_this_ep = True
 
         self._prev_fruits = fruits
@@ -707,13 +740,18 @@ class CheckpointCurriculumEnv(gym.Env):
                 end_reason = "princess_touched"
 
         if done or truncated:
-            start_level = 4 - self._start_fruits
-            # H-M fix: a princess touch is CP5, so CP4->princess
-            # registers as a segment success. Without this, reached_level
-            # = 4 - fruits caps at 4 and CP4's success is never recorded,
-            # pinning its curriculum weight at the max (over-sampling CP4,
+            start_level = self._fruits_total - self._start_fruits
+            # H-M fix: a princess touch is CP(fruits_total+1), so the
+            # last fruit -> princess registers as a segment success.
+            # Without this, reached_level = fruits_total - fruits caps at
+            # fruits_total and the last segment's success is never
+            # recorded, pinning its curriculum weight at the max (over-sampling CP4,
             # starving CP3->CP4).
-            reached_level = 5 if self._princess_touched_this_ep else 4 - fruits
+            reached_level = (
+                self._fruits_total + 1
+                if self._princess_touched_this_ep
+                else self._fruits_total - fruits
+            )
             _manager.record_episode(start_level, reached_level)
             # Flush deferred checkpoint snapshots, scored by how the
             # rest of this episode actually played out. ``source_cp``
@@ -743,8 +781,8 @@ class CheckpointCurriculumEnv(gym.Env):
         if self.episode_logger is None:
             return
         final_xy = self._read_pos()
-        start_level = 4 - self._start_fruits
-        reached_level = 4 - fruits
+        start_level = self._fruits_total - self._start_fruits
+        reached_level = self._fruits_total - fruits
         self.episode_logger.log(
             global_step=_get_global_step(),
             env_id=self.env_id,
@@ -770,17 +808,26 @@ class CheckpointCurriculumEnv(gym.Env):
 class CurriculumCallback(BaseCallback):
     """Log curriculum progress during training."""
 
-    def __init__(self, total_timesteps: int, log_interval: int = 5000, diag_path=None):
+    def __init__(
+        self,
+        total_timesteps: int,
+        log_interval: int = 5000,
+        diag_path=None,
+        fruits_total: int = 4,
+    ):
         super().__init__()
         self._diag_path = diag_path
         self._diag_file = None
         self._adm_file = None
-        self._last_starts = [0] * 5
+        # Number of start levels = fruits_total + 1 (CP0..CP_fruits_total).
+        self._fruits_total = int(fruits_total)
+        n = self._fruits_total + 1
+        self._last_starts = [0] * n
         # H-R instrumentation: last cumulative admission counters, for
         # per-interval deltas.
-        self._last_adm_reached = [0] * 5
-        self._last_adm_survived = [0] * 5
-        self._last_rejected = [0] * 5
+        self._last_adm_reached = [0] * n
+        self._last_adm_survived = [0] * n
+        self._last_rejected = [0] * n
         # First diag write captures current counters as the baseline so
         # interval deltas don't include history loaded from a resumed
         # checkpoints.pkl.
@@ -836,28 +883,30 @@ class CurriculumCallback(BaseCallback):
             self._baseline_captured = True
         if self._diag_file is None:
             self._diag_file = open(self._diag_path, "w")
-            self._diag_file.write(
-                "step,"
-                "reach1,reach2,reach3,reach4,reach_princess,"
-                "succ_ema1,succ_ema2,succ_ema3,succ_ema4,"
-                "start_frac0,start_frac1,start_frac2,start_frac3,start_frac4,"
-                "gscore0,gscore1,gscore2,gscore3,gscore4\n"
-            )
+            n = self._fruits_total
+            reach_cols = [f"reach{i}" for i in range(1, n + 1)] + ["reach_princess"]
+            succ_cols = [f"succ_ema{i}" for i in range(1, n + 1)]
+            sfrac_cols = [f"start_frac{i}" for i in range(0, n + 1)]
+            gscore_cols = [f"gscore{i}" for i in range(0, n + 1)]
+            header = ["step"] + reach_cols + succ_cols + sfrac_cols + gscore_cols
+            self._diag_file.write(",".join(header) + "\n")
+        n = self._fruits_total
         starts = _manager.stats["starts"]
-        delta = [starts[i] - self._last_starts[i] for i in range(5)]
+        delta = [starts[i] - self._last_starts[i] for i in range(n + 1)]
         self._last_starts = list(starts)
         tot = sum(delta) or 1
         fr = [d / tot for d in delta]
         rr = _manager.reset_reach_ema
         se = _manager.seg_success_ema
         gs = _manager.goal_score_ema
-        self._diag_file.write(
-            f"{self.num_timesteps},"
-            f"{rr[1]:.3f},{rr[2]:.3f},{rr[3]:.3f},{rr[4]:.3f},{rr[5]:.3f},"
-            f"{se[1]:.3f},{se[2]:.3f},{se[3]:.3f},{se[4]:.3f},"
-            f"{fr[0]:.3f},{fr[1]:.3f},{fr[2]:.3f},{fr[3]:.3f},{fr[4]:.3f},"
-            f"{gs[0]:.3f},{gs[1]:.3f},{gs[2]:.3f},{gs[3]:.3f},{gs[4]:.3f}\n"
-        )
+        # reach1..reach_N then princess (index N+1); succ_ema1..N;
+        # start_frac0..N; gscore0..N.
+        vals = [str(self.num_timesteps)]
+        vals += [f"{rr[i]:.3f}" for i in range(1, n + 2)]
+        vals += [f"{se[i]:.3f}" for i in range(1, n + 1)]
+        vals += [f"{fr[i]:.3f}" for i in range(0, n + 1)]
+        vals += [f"{gs[i]:.3f}" for i in range(0, n + 1)]
+        self._diag_file.write(",".join(vals) + "\n")
         self._diag_file.flush()
         self._write_admission_diag()
 
@@ -877,8 +926,13 @@ class CurriculumCallback(BaseCallback):
             self._adm_file = open(adm_path, "w")
             cols = ["step"]
             for cp in range(1, _manager.FRUITS_TOTAL + 1):
-                cols += [f"a_reach{cp}", f"a_surv{cp}", f"rej{cp}",
-                         f"distinct{cp}", f"psize{cp}"]
+                cols += [
+                    f"a_reach{cp}",
+                    f"a_surv{cp}",
+                    f"rej{cp}",
+                    f"distinct{cp}",
+                    f"psize{cp}",
+                ]
             self._adm_file.write(",".join(cols) + "\n")
         ar = _manager.stats["admit_reached"]
         asv = _manager.stats["admit_survived"]
@@ -890,8 +944,13 @@ class CurriculumCallback(BaseCallback):
             d_rej = rj[cp] - self._last_rejected[cp]
             pool = _manager.checkpoints[cp]
             distinct = len({e[2] for e in pool})
-            row += [str(d_reach), str(d_surv), str(d_rej),
-                    str(distinct), str(len(pool))]
+            row += [
+                str(d_reach),
+                str(d_surv),
+                str(d_rej),
+                str(distinct),
+                str(len(pool)),
+            ]
         self._last_adm_reached = list(ar)
         self._last_adm_survived = list(asv)
         self._last_rejected = list(rj)
@@ -919,6 +978,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         min_survival_frames=cfg.curriculum.min_survival_frames,
         reach_threshold=cfg.curriculum.reach_threshold,
         segment_floor=cfg.curriculum.segment_floor,
+        fruits_total=cfg.curriculum.fruits_total,
     )
 
     print("Checkpoint Curriculum Training", flush=True)
@@ -1039,8 +1099,9 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
             src = PPO.load(cfg.training.resume, device="auto")
             model.policy.load_state_dict(src.policy.state_dict())
             del src
-            print("  (weights-only warm-start; new PPO hyperparameters kept)",
-                  flush=True)
+            print(
+                "  (weights-only warm-start; new PPO hyperparameters kept)", flush=True
+            )
         else:
             model = PPO.load(
                 cfg.training.resume,
@@ -1074,6 +1135,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
                 CurriculumCallback(
                     cfg.training.timesteps,
                     diag_path=os.path.join(cfg.training.output, "curriculum_diag.csv"),
+                    fruits_total=cfg.curriculum.fruits_total,
                 ),
                 EpisodeMetricsCallback(episode_logger, log_interval=10_000),
                 snapshot_cb,

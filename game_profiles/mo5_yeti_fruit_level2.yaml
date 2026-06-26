@@ -1,0 +1,39 @@
+# Yeti — fruit-reward profile for LEVEL 2.
+#
+# Identical to mo5_yeti_fruit.yaml EXCEPT bonus_stall_frames is relaxed.
+# Why: level 2 freezes the bonus at 1000 for ~24-30 frames at level start,
+# then ticks it down slowly (~0.13/frame ≈ one decrement per ~8 frames).
+# The level-1 value (bonus_stall_frames: 10) treats that as a "stuck agent"
+# and terminates the episode almost immediately (within ~2 gym steps at
+# frame_skip=4). Level 1's bonus ticks fast/continuously from frame 0, so 10
+# was fine there; level 2 needs a threshold that survives both the initial
+# freeze and the slow inter-tick gaps. See experiments/003-yeti/ram_map_re.md.
+#
+# Note: the start-state load (level2_start.sav) is handled by the training
+# env (curriculum.start_state), not here — this profile only fixes the
+# termination mechanics.
+
+name: yeti_fruit_level2
+display_name: "Yeti (fruit reward, level 2)"
+emulator_type: mo5
+rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/Yeti (1984) (Loriciels).k7"
+action_mode: joystick
+reward_mode: memory
+
+reward_params:
+  score_address_count: "0"
+  lives_addr: "11095"
+  bonus_addr_hi: "11010"
+  bonus_addr_lo: "11011"
+  # Relaxed for level 2's frozen-then-slow bonus (was 10 on level 1).
+  bonus_stall_frames: "120"
+  fruits_remaining_addr: "11055"
+  basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
+  monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
+  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:100"
+
+grayscale: true
+resize: null
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true

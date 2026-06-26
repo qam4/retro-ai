@@ -267,3 +267,55 @@ per-level table (dataclass/registry) the profile selects; the inline dicts in
 Map + hooks done & verified. Next: implement the seam parameterization
 (level-1-preserving defaults), add a `yeti_curriculum_l2_v1` config + L2
 profile, smoke-test 50-100 steps from `level2_start.sav`, then launch phase-1.
+
+---
+
+# Level-2 wiring — implementation notes & a key gotcha (approach A)
+
+Wired level-2 support into the checkpoint curriculum with **level-1-preserving
+defaults** (level-1 runs are byte-identical; new behavior only when configured):
+
+- `run_config.py` `CurriculumConfig` gained `fruits_total` (default 4),
+  `fruit_presence_addrs` (default None -> level-1 dict), `start_state`
+  (default None -> game reset).
+- `train_checkpoint_curriculum.py`: `CheckpointManager.FRUITS_TOTAL` is now an
+  instance value; the env reads the per-level fruit addrs / fruits_total /
+  start-state; all `4 - fruits` -> `fruits_total - fruits`, princess level =
+  `fruits_total + 1`; the fruit-presence vector and the diag-CSV column widths
+  size to `fruits_total`.
+- New `game_profiles/mo5_yeti_fruit_level2.yaml` (profile `yeti_fruit_level2`).
+- New config `experiments/003-yeti/configs/yeti_curriculum_l2_v1.yaml`.
+
+## GOTCHA found by the smoke test: the bonus-stall termination
+Loading `level2_start.sav` made every episode end at length 1 (`env_done`).
+Root cause: the save loads with the **bonus frozen at 1000** (level 2 holds
+it ~6 gym steps / ~24 frames before ticking) and **flag 11050 = 1** (carryover
+from clearing level 1). The level-1 profile's C++ `bonus_stall_frames: 10`
+treats a frozen bonus as a stuck agent and terminates within ~2 gym steps
+(frame_skip=4). Level 1 never hits this because its bonus ticks continuously
+from frame 0.
+- **Fix:** `mo5_yeti_fruit_level2.yaml` sets `bonus_stall_frames: 120` —
+  survives the initial freeze and the slow inter-tick gaps (~8 frames). The
+  Python env-level `stall_threshold` (15 gym steps) remains the binding
+  anti-stuck guard during play.
+- **flag 11050 behavior (good news):** it is 1 at the level-2 start, then
+  drops to 0 once level 2 is underway (~step 6), and would rise 0->1 on a
+  level-2 princess touch — so the existing rising-edge princess detector
+  works on level 2 (the env reads `_prev_princess_flag` after the reset
+  noops, sees 1, and no spurious touch fires).
+- **Open:** the bonus can also freeze mid-level in odd/stuck states (seen with
+  a dumb fixed action). 120 frames is a generous guard; watch real runs for
+  spurious stalls and whether bonus-stall is even the right signal for L2.
+
+## Validation
+- L2 smoke (1500 steps): episodes now normal length (37-89, mean 66), start
+  at y=30 (level-2 top), 3 CP pools (CP0/CP1/CP2 for 2 fruits). No crashes.
+- L1 smoke (game reset, defaults): still collects fruits (0->1 success,
+  CP1 pool filled) — **no regression**.
+- Diag-CSV writer unit-tested for fruits_total=2: columns
+  `reach1,reach2,reach_princess,succ_ema1..2,start_frac0..2,gscore0..2` — no
+  index errors.
+
+## Status / next
+Implementation complete & validated by smoke tests. Not yet committed; the
+real 20M phase-1 run (`yeti_curriculum_l2_v1`) not yet launched.
