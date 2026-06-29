@@ -1,0 +1,74 @@
+# yeti_curriculum L2 v2 — LIKE LEVEL 1 (nav-graph path-progress shaping).
+#
+# v1 (approach A, fruit_princess_bonus, NO shaping) FAILED: 0 fruits in 20M
+# steps — the agent never descended the 5 floors to the first fruit because
+# sparse reward gives no gradient (and the stall guard cut episodes to ~72
+# steps). See experiments/003-yeti/ram_map_re.md "run 1 RESULT: NEGATIVE".
+#
+# v2 = do it like level 1: PBRS path-progress shaping over the level-2 nav
+# graph (yeti_map LEVEL2, built from the RAM-collected floors/ladders/fruits/
+# princess). The potential Phi = -scale * sum(path distance to remaining
+# targets) pulls the agent DOWN toward the fruits (floor 5) then the princess
+# (floor 6). Distances decrease monotonically as it descends (verified).
+#
+# THE OPEN QUESTION: the nav graph guides direction along floors + ladders,
+# but does NOT model the floor GAPS. So the agent is pulled toward a target
+# across a gap, but must learn to JUMP the gap (vs walk off and die) on its
+# own, from pixels. This run tests whether PPO discovers the gap-jump unaided.
+#
+# Changes from v1:
+#   - reward: fruit_princess_bonus -> fruit_bonus_path_progress_pbrs, level: 2
+#     (gamma is injected from ppo.gamma by the trainer for PBRS invariance).
+#   - env.stall_threshold 15 -> 40: v1 died on stall every episode at ~72
+#     steps; give the descent room (bonus ticks during active play, so 40
+#     gym-steps of frozen bonus still catches a genuinely stuck agent).
+# Unchanged: phase-1 exploration (n_steps=16, no target_kl), curriculum L2
+#   (2 fruits, presence 0x2EAE/0x2EC7, start from level2_start.sav),
+#   profile yeti_fruit_level2 (relaxed bonus-stall).
+
+training:
+  timesteps: 20_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v2
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level2
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 2
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950
+    2: 11975
+  start_state: output/mo5/yeti/level2/level2_start.sav

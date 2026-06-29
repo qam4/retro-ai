@@ -319,3 +319,43 @@ from frame 0.
 ## Status / next
 Implementation complete & validated by smoke tests. Not yet committed; the
 real 20M phase-1 run (`yeti_curriculum_l2_v1`) not yet launched.
+
+---
+
+# Level-2 run 1 (yeti_curriculum_l2_v1, approach A) — RESULT: NEGATIVE
+
+20M steps, 9.5h, phase-1 exploration, fruit_princess_bonus (no shaping).
+**Zero fruits collected in the entire run** — cp=[0,0,0], saves=[0,0,0],
+reset_reach=[1.00, 0,0,0]. The curriculum never bootstrapped a single CP seed.
+
+Diagnosis from episodes.csv (275,864 episodes):
+- **All** episodes ended in `stall` (none death/max_steps/princess), mean
+  length **72 steps** (max_steps=1000 never reached).
+- `reached_level` always 0; `final_y` mostly 16-48 (start y=30; the agent
+  rarely leaves the **top floor F1 @ y48**), deepest-ever y=102, vs fruits at
+  y~128-144 (floor F5). `final_x` max 27.
+
+Root causes (compounding):
+1. **No gradient to descend.** Level 2 spawns at the TOP; the nearest fruit is
+   ~5 floors DOWN. fruit_princess_bonus only pays at a fruit/princess, so PPO
+   has nothing to move toward and never discovers the multi-floor descent.
+   (Level 1 worked sparse because spawn is right next to fruit 1.)
+2. **Stall guard truncates exploration.** Bonus freezes whenever the agent
+   isn't actively progressing, so the env stall (15 gym steps) kills episodes
+   at ~72 steps — far too short to stumble down 5 floors under sparse reward.
+
+Conclusion: **approach A is insufficient for level 2.** Need (a) descent
+shaping and (b) longer episodes.
+
+## Next: approach B-lite (proposed)
+- **Shaping:** reward progress toward the nearest uncollected target using the
+  RAM-derived coordinates (fruit A agent(14,128), fruit B (64,128), then
+  princess (72,182)). A simple pixel/Manhattan distance potential gives a
+  descent gradient WITHOUT a full floor/ladder nav graph. (If the agent farms
+  the gradient by oscillating, use the per-target best-distance ratchet like
+  fruit_bonus_path_progress.)
+- **Episodes:** relax/disable the bonus-stall termination (it fires constantly
+  and isn't a useful signal on level 2) and let max_steps bound the episode,
+  so the agent has room to explore the descent.
+- Keep phase-1 exploration + curriculum (which will start bootstrapping CP
+  seeds once the agent reaches a fruit even occasionally).

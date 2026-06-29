@@ -738,13 +738,14 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
     fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
     princess_scale = float(params.get("princess_scale", 0.05))
     gamma = float(params.get("gamma", 0.99))
+    level = int(params.get("level", 1))
 
     from retro_ai.training.yeti_map import (
         agent_floor_from_pixel_y,
         build_navigation_map,
     )
 
-    nav = build_navigation_map()
+    nav = build_navigation_map(level)
 
     class _PBRSPathProgressReward:
         def __init__(self) -> None:
@@ -758,7 +759,7 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
         def _potential(self, ctx: RewardContext) -> float | None:
             """Phi(s) = -scale * sum of path distances to remaining
             targets, or None if the floor can't be resolved."""
-            floor = agent_floor_from_pixel_y(int(ctx.curr_y))
+            floor = agent_floor_from_pixel_y(int(ctx.curr_y), level)
             if floor is None:
                 floor = self.last_floor
             else:
