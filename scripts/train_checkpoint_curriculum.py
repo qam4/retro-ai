@@ -33,6 +33,7 @@ from retro_ai.training.callbacks import EpisodeMetricsCallback
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.rewards import RewardContext, RewardFn
 from retro_ai.training.rewards import create as create_reward
+from retro_ai.training.rewards import reset_reward
 from retro_ai.training.run_config import RunConfig
 from retro_ai.training.run_manifest import (
     EpisodeLogger,
@@ -591,6 +592,17 @@ class CheckpointCurriculumEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         assert _manager is not None, "CheckpointManager not initialized"
+
+        # Reset the (possibly stateful) reward at the episode boundary.
+        # Without this, a stateful reward — e.g. the PBRS path-progress
+        # reward's prev_phi / last_floor — leaks across episodes. That is
+        # especially harmful for save-state starts (every curriculum CP, and
+        # all of level 2): the agent is dropped at a new position but the
+        # reward still carries the PREVIOUS episode's potential/floor, so the
+        # first shaping step is a spurious cross-episode delta and (when the
+        # new position's floor doesn't resolve, as at the level-2 spawn) the
+        # whole episode is shaped on the stale last_floor.
+        reset_reward(self._reward_fn)
 
         if not self._initialized:
             self.gym_env.reset(seed=seed)

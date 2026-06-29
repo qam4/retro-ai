@@ -359,3 +359,41 @@ shaping and (b) longer episodes.
   so the agent has room to explore the descent.
 - Keep phase-1 exploration + curriculum (which will start bootstrapping CP
   seeds once the agent reaches a fruit even occasionally).
+
+---
+
+# Two bugs found diagnosing the v2 probe (why the agent never moved)
+
+The v2 probe (nav-graph shaping) never descended — instrumented rollout of the
+1.4M snapshot showed the agent **sits at x=0 and never moves right** (max_x_ram
+= 0 across episodes). Two root causes:
+
+1. **Reward state leaks across episodes (affects ALL curriculum runs).**
+   `train_checkpoint_curriculum.py` never called `reset_reward()` at episode
+   boundaries (only `train_segment.py` did). So a stateful reward — the PBRS
+   path-progress `prev_phi` / `last_floor` — carried over between episodes.
+   - Benign on a game-reset start (spawn resolves to a real floor).
+   - **Harmful for every save-state start** (all curriculum CPs, all of level
+     2): the agent is dropped at a new position but the reward still holds the
+     PREVIOUS episode's potential/floor. On level 2 it's fatal — the agent
+     sits at y=30 (floor unresolved all episode), so shaping is computed on
+     the stale `last_floor` for the whole episode. Likely also added noise to
+     level-1 curriculum runs (a candidate contributor to the oscillation).
+   - **Fix:** call `reset_reward(self._reward_fn)` in `CheckpointCurriculumEnv.reset()`.
+
+2. **Level-2 floor calibration was off by the sprite height.** RAM y (11089)
+   is the sprite's UPPER-LEFT, and the 16px sprite stands on top of the floor
+   tile, so standing RAM-y is ~18 px ABOVE the tile row. The agent rests at
+   y=30 at spawn, but LEVEL2 had F1 at the tile y=48 -> `agent_floor` returned
+   None at spawn -> the path-progress shaping was SILENT exactly where the
+   agent lives, so there was no gradient to move at all.
+   - **Fix:** LEVEL2 `floor_top_y` = tile_y - 18 = {1:30,2:54,3:78,4:102,
+     5:126,6:150}. Verified: y=30->F1, y=54->F2, y=126->F5; moving right on
+     F1 now lowers the path distance (984->840) so it pays.
+
+Note on the user's "does the score drop crossing the first gap?" — checked the
+potential along F1: it is **monotonic** (Phi -9.84 at x=0 -> -8.40 at x=18, all
+reward+); no barrier at the first gap. It only drops if the agent overshoots
+PAST the F1->F2 ladder (x_ram 20). So with both bugs fixed the shaping should
+pull the agent right across the first gap; whether PPO discovers the JUMP is
+the (now-testable) open question.

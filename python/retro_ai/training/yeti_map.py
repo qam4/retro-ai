@@ -69,15 +69,14 @@ LEVEL1 = LevelMap(
 )
 
 # Level 2 — descending layout, read from RAM (ram_map_re.md). Floors numbered
-# top->bottom: F1 (start, y48) .. F6 (bottom, y168), 24 px apart. Both fruits
-# on floor 5 (y144). Ladder centre_x = extracted UL x_px + 8 (16 px wide).
-# Princess modelled on floor 6 at her RAM x (288); she actually sits ~14 px
-# below F6 (RAM y=182) reachable via the floor-6 descending ladders (x56,
-# x232, omitted here) — a deliberate approximation: the shaping only needs to
-# pull the agent down-and-right; the final step is learned from the sparse
-# princess bonus. Refine to a floor 7 if the agent stalls just above her.
+# top->bottom: F1 (start) .. F6 (bottom), 24 px apart. floor_top_y is the
+# agent's STANDING RAM-y (sprite upper-left), which is ~18 px ABOVE the floor
+# *tile* row (the 16px sprite stands on top of the tile): F1 tile y48 -> agent
+# stands at y30 (verified: the agent rests at y=30 at spawn). So standing-y =
+# tile_y - 18 = {48,72,96,120,144,168} - 18. Both fruits on floor 5; ladder
+# centre_x = extracted UL x_px + 8. Princess on floor 6 at her RAM x (288).
 LEVEL2 = LevelMap(
-    floor_top_y={1: 48, 2: 72, 3: 96, 4: 120, 5: 144, 6: 168},
+    floor_top_y={1: 30, 2: 54, 3: 78, 4: 102, 5: 126, 6: 150},
     floor_height=24,
     fruit_centre_px={1: (64, 136), 2: (264, 136)},
     fruit_floor={1: 5, 2: 5},
