@@ -45,9 +45,31 @@ def main() -> None:
     p.add_argument("--stall-threshold", type=int, default=15)
     p.add_argument("--stochastic", action="store_true")
     p.add_argument("--out", default=None)
+    # Level awareness (defaults = level 1). For level 2 pass e.g.:
+    #   --profile yeti_fruit_level2 --fruits-total 2 --stall-threshold 40
+    #   --start-state output/mo5/yeti/level2/level2_start.sav
+    p.add_argument(
+        "--fruits-total",
+        type=int,
+        default=4,
+        help="collectible fruits in the level (L1=4, L2=2). Sets CP indexing "
+        "and the princess goal index (= fruits_total + 1).",
+    )
+    p.add_argument(
+        "--start-state",
+        default=None,
+        help="save-state to load on each reset (level 2 starts from a save, "
+        "not a game reset). Omit for level 1 (game reset).",
+    )
     args = p.parse_args()
 
     deterministic = not args.stochastic
+    fruits_total = args.fruits_total
+    princess_cp = fruits_total + 1
+    start_state_bytes = None
+    if args.start_state:
+        with open(args.start_state, "rb") as f:
+            start_state_bytes = f.read()
 
     env_cfg = EnvConfig(
         profile=args.profile,
@@ -59,6 +81,7 @@ def main() -> None:
     stack = build_training_env(args.profile, env_cfg)
     base = stack.base
     gym_env = stack.gym
+    preprocessed = stack.preprocessed
     iface = base._interface
 
     model = PPO.load(args.model, device="auto")
@@ -72,12 +95,20 @@ def main() -> None:
 
     for ep in range(args.episodes):
         obs, _ = gym_env.reset()
+        # Level 2 boots from a save-state, not a game reset. Load it and
+        # settle a few noop frames so the bonus/flag/position stabilize
+        # (mirrors the curriculum env's CP0 reset).
+        if start_state_bytes is not None:
+            iface.load_state(start_state_bytes)
+            preprocessed.notify_state_loaded()  # drop pre-load frames (H-Z)
+            for _ in range(5):
+                obs, _, _, _, _ = gym_env.step([0, 0, 0])
         prev_fruits = iface.read_ram_byte(FRUITS_ADDR)
         prev_lives = iface.read_ram_byte(LIVES_ADDR)
         prev_bonus = read_bonus()
         prev_princess = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         start_fruits = prev_fruits
-        max_cp = 4 - start_fruits
+        max_cp = fruits_total - start_fruits
         stall = 0
         steps = 0
         touched = False
@@ -94,11 +125,11 @@ def main() -> None:
             bonus = read_bonus()
             princess = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
 
-            max_cp = max(max_cp, 4 - fruits)
+            max_cp = max(max_cp, fruits_total - fruits)
 
             if princess == 1 and prev_princess == 0:
                 touched = True
-                max_cp = 5
+                max_cp = princess_cp
                 end_reason = "princess"
                 break
             prev_princess = princess
@@ -128,10 +159,12 @@ def main() -> None:
             {"ep": ep, "max_cp": max_cp, "steps": steps, "end_reason": end_reason}
         )
         if (ep + 1) % 25 == 0:
+            reach1 = sum(v for k, v in max_cp_counts.items() if k >= 1)
+            reach_top = sum(v for k, v in max_cp_counts.items() if k >= fruits_total)
             print(
                 f"  {ep + 1}/{args.episodes} episodes "
-                f"(reach2={sum(v for k, v in max_cp_counts.items() if k >= 2)}, "
-                f"reach3={sum(v for k, v in max_cp_counts.items() if k >= 3)})",
+                f"(reach1={reach1}, reach{fruits_total}={reach_top}, "
+                f"princess={princess_touches})",
                 flush=True,
             )
 
@@ -140,9 +173,9 @@ def main() -> None:
     print(f"episodes={n}  policy={'deterministic' if deterministic else 'stochastic'}")
     print("\nDeepest checkpoint reached (cumulative):")
     cum = 0
-    for cp in range(5, -1, -1):
+    for cp in range(princess_cp, -1, -1):
         cum += max_cp_counts.get(cp, 0)
-        label = "princess" if cp == 5 else f"{cp} fruits"
+        label = "princess" if cp == princess_cp else f"{cp} fruits"
         print(
             f"  reached >= {label:>10}: {cum:>4}/{n}  ({100*cum/n:5.1f}%)"
             + (
@@ -160,6 +193,8 @@ def main() -> None:
                     "model": args.model,
                     "episodes": n,
                     "deterministic": deterministic,
+                    "fruits_total": fruits_total,
+                    "start_state": args.start_state,
                     "max_cp_counts": dict(max_cp_counts),
                     "princess_touches": princess_touches,
                     "rows": rows,

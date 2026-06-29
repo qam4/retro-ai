@@ -540,6 +540,43 @@ alone doesn't resolve the over-concentration.
     recipe). A single multi-level policy (train on both, or condition on
     level) is possible but reintroduces the shared-net interference we
     fought — revisit later.
+- [x] **H-Y — reward state leaked across episodes (FIXED, commit 61a9f3a).**
+  `train_checkpoint_curriculum.py` never called `reset_reward()` at episode
+  boundaries, so a stateful reward (PBRS `prev_phi`/`last_floor`, the `best_d`
+  ratchets, novelty `visited`/`best_floor`) carried over between episodes.
+  Benign for game-reset starts (spawn resolves to a real floor) but harmful
+  for EVERY save-state start (all curriculum CPs + all of level 2): the reward
+  holds the previous episode's potential/floor. On L2 fatal (agent at y=30 =
+  floor unresolved all episode -> shaped on stale last_floor). Fix: call
+  `reset_reward(self._reward_fn)` in `CheckpointCurriculumEnv.reset()`.
+  CAVEAT: every prior L1 curriculum run ran under this leak — likely a
+  contributor to the oscillation we chased; re-examine old L1 conclusions
+  cautiously.
+- [x] **H-Z — harden `load_state` against stale frame buffers (bug class).** (DONE)
+  The preprocessing pipeline holds two cross-step buffers — the `frame_buffer`
+  deque (frame_stack) and `_prev_raw_frame` (maxpool). A direct
+  `iface.load_state()` bypasses `gym.reset()`, so neither is cleared on a
+  save-state start; the first post-load frame even maxpools against a PRE-load
+  frame. It works today ONLY because the reset does 5 noop steps (>=
+  frame_stack=4), evicting stale frames before the episode starts — fragile
+  (breaks silently if the noop count drops below frame_stack). Fix: explicit
+  frame-buffer reset on load_state (clear + refill) + a test asserting no
+  pre-load frame survives a CP reset. Same recurring class as H-Y.
+- [x] **H-AA — `best_d` rewards hard-code 4 fruits (level-1-only).** (DONE)
+  `fruit_bonus_path_progress` and `..._universal` initialise
+  `best_d = {1,2,3,4}`, so they silently mis-handle any level with a different
+  fruit count (level 2 has 2). PBRS dodges this (iterates `ctx.fruits_present`),
+  but those two rewards should derive their fruit set from `fruits_present`.
+- [ ] **H-AB — save/restore the frame stack with checkpoints (enhancement).**
+  Better alternative to H-Z's reseed: when snapshotting a checkpoint, also
+  store the frame-stack (+ maxpool frame) and RESTORE it on load, instead of
+  reseeding to a frozen stack. Makes a CP-start observation identical to the
+  real mid-episode observation (true motion history, perfectly
+  on-distribution) and lets us drop the 5 settle-noops that currently advance
+  the game ~20 frames past the snapshot. Cost: checkpoint format carries the
+  stack blob; file-based starts (level2_start.sav) have no stack -> fall back
+  to reseed (H-Z). Only matters once the curriculum bootstraps CP1+ snapshots
+  (on L2 today every start is CP0 from a file), so deferred until then.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.

@@ -480,8 +480,8 @@ def _fruit_bonus_path_progress(params: Mapping[str, Any]) -> RewardFn:
     - A ladder climb changes the floor, which drops path distance to
       fruits on the new floor and beyond — so ladder travel pays.
     """
-    fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
     progress_scale = float(params.get("scale", 0.01))
+    fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
 
     from retro_ai.training.yeti_map import (
         agent_floor_from_pixel_y,
@@ -497,11 +497,11 @@ def _fruit_bonus_path_progress(params: Mapping[str, Any]) -> RewardFn:
             # distance we store it as the baseline and pay nothing;
             # subsequent strictly smaller distances pay
             # ``(prev_best - new) * scale``.
-            self.best_d: dict[int, int | None] = {1: None, 2: None, 3: None, 4: None}
+            self.best_d: dict[int, int | None] = {}
             self.last_floor: int | None = None
 
         def reset(self) -> None:
-            self.best_d = {1: None, 2: None, 3: None, 4: None}
+            self.best_d = {}
             self.last_floor = None
 
         def __call__(self, ctx: RewardContext) -> float:
@@ -518,7 +518,7 @@ def _fruit_bonus_path_progress(params: Mapping[str, Any]) -> RewardFn:
                 # exactly where the agent must commit to a long
                 # traversal. Resetting on pickup gives each inter-fruit
                 # leg a fresh full-distance budget.
-                self.best_d = {1: None, 2: None, 3: None, 4: None}
+                self.best_d = {}
             pixel_y = int(ctx.curr_y)
             floor = agent_floor_from_pixel_y(pixel_y)
             if floor is None:
@@ -548,7 +548,7 @@ def _fruit_bonus_path_progress(params: Mapping[str, Any]) -> RewardFn:
                 if not is_present:
                     continue
                 d = nav.path_distance_from_agent(floor, agent_pix_x, f"F{fid}")
-                prev_best = self.best_d[fid]
+                prev_best = self.best_d.get(fid)
                 if prev_best is None:
                     self.best_d[fid] = d
                     continue
@@ -603,12 +603,12 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
 
     class _UniversalPathProgressReward:
         def __init__(self) -> None:
-            self.best_d: dict[int, int | None] = {1: None, 2: None, 3: None, 4: None}
+            self.best_d: dict[int, int | None] = {}
             self.best_d_princess: int | None = None
             self.last_floor: int | None = None
 
         def reset(self) -> None:
-            self.best_d = {1: None, 2: None, 3: None, 4: None}
+            self.best_d = {}
             self.best_d_princess = None
             self.last_floor = None
 
@@ -625,7 +625,7 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
                 # inheriting a leaked-low best_d from earlier travel
                 # (e.g. passing the L23 ladder while heading to F2). See
                 # the F2->F3 reward audit (approach 33).
-                self.best_d = {1: None, 2: None, 3: None, 4: None}
+                self.best_d = {}
                 self.best_d_princess = None
 
             # Princess touch: caller flagged the rising edge of the
@@ -634,7 +634,7 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
             # fruits=4 and bonus=1000).
             if ctx.princess_touched:
                 reward += ctx.prev_bonus * princess_scale
-                self.best_d = {1: None, 2: None, 3: None, 4: None}
+                self.best_d = {}
                 self.best_d_princess = None
 
             # Resolve agent floor.
@@ -661,7 +661,7 @@ def _fruit_bonus_path_progress_universal(params: Mapping[str, Any]) -> RewardFn:
                     if not is_present:
                         continue
                     d = nav.path_distance_from_agent(floor, agent_pix_x, f"F{fid}")
-                    prev_best = self.best_d[fid]
+                    prev_best = self.best_d.get(fid)
                     if prev_best is None:
                         self.best_d[fid] = d
                         continue

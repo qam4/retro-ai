@@ -476,6 +476,7 @@ class CheckpointCurriculumEnv(gym.Env):
         stack = build_training_env(cfg.env.profile, cfg.env)
         self.base = stack.base
         self.gym_env = stack.gym
+        self.preprocessed = stack.preprocessed
         self.action_space = stack.gym.action_space
         self.iface = stack.base._interface
 
@@ -617,6 +618,11 @@ class CheckpointCurriculumEnv(gym.Env):
 
         if state_bytes is not None:
             self.base._interface.load_state(state_bytes)
+            # Drop pre-load frames from the stack/maxpool buffers (load_state
+            # bypasses gym.reset). Without this, stale frames leak into the
+            # first observations unless >= frame_stack noops happen to flush
+            # them (H-Z).
+            self.preprocessed.notify_state_loaded()
             for _ in range(5):
                 obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
             self._start_state_hash = hashlib.blake2b(

@@ -64,6 +64,11 @@ class PreprocessingPipeline:
             self.frame_buffer: Optional[deque] = deque(maxlen=frame_stack)
         else:
             self.frame_buffer = None
+        # When True, the next ``process()`` re-seeds the stack (fills it with
+        # the incoming frame, like ``reset()``) instead of appending. Set via
+        # ``mark_reseed()`` after a mid-episode ``load_state`` so no pre-load
+        # frame survives in the stack. See PreprocessedEnv.notify_state_loaded.
+        self._reseed_pending = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -76,6 +81,7 @@ class PreprocessingPipeline:
         of the first processed frame so that the output shape is
         immediately ``(H, W, C * frame_stack)``.
         """
+        self._reseed_pending = False
         processed = self._process_single_frame(observation)
 
         if self.frame_buffer is not None:
@@ -86,12 +92,29 @@ class PreprocessingPipeline:
 
         return processed
 
+    def mark_reseed(self) -> None:
+        """Request that the next :meth:`process` re-seed the frame stack
+        (fill it entirely with the incoming frame) instead of appending.
+
+        Used after a mid-episode ``load_state`` so the stack contains no
+        frames from before the load — without relying on stepping
+        ``>= frame_stack`` noops to flush them.
+        """
+        self._reseed_pending = True
+
     def process(self, observation: np.ndarray) -> np.ndarray:
         """Process a single observation through the pipeline."""
         processed = self._process_single_frame(observation)
 
         if self.frame_buffer is not None:
-            self.frame_buffer.append(processed)
+            if self._reseed_pending:
+                # Re-seed: drop any pre-load frames, fill with this frame.
+                self._reseed_pending = False
+                self.frame_buffer.clear()
+                for _ in range(self.frame_stack):
+                    self.frame_buffer.append(processed)
+            else:
+                self.frame_buffer.append(processed)
             return self._stack_frames()
 
         return processed
@@ -196,6 +219,20 @@ class PreprocessedEnv:
         if self._frame_maxpool:
             self._prev_raw_frame = obs.copy()
         return self.preprocessing.reset(obs), info
+
+    def notify_state_loaded(self) -> None:
+        """Call right after a mid-episode ``load_state`` on the underlying
+        env (which bypasses :meth:`reset`).
+
+        Clears the cross-step buffers so no pre-load frame leaks into the
+        policy's observations: the maxpool ``_prev_raw_frame`` is dropped
+        (so the next step doesn't max a post-load frame against a pre-load
+        one) and the frame stack is flagged to re-seed on the next
+        ``process``. After this, ONE step yields a fully post-load stacked
+        observation — no dependence on stepping ``>= frame_stack`` noops.
+        """
+        self._prev_raw_frame = None
+        self.preprocessing.mark_reseed()
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute *action* with frame skipping and preprocessing.

@@ -471,3 +471,43 @@ class TestStepNIntegration:
         _, reward_slow, _, _, _ = wrapped_slow.step(0)
 
         assert reward_fast == pytest.approx(reward_slow)
+
+
+class TestReseedAfterLoadState:
+    """H-Z: after a mid-episode load_state (which bypasses reset), no
+    pre-load frame may survive in the stack/maxpool buffers."""
+
+    def test_mark_reseed_fills_stack_with_new_frame(self):
+        pipe = PreprocessingPipeline(frame_stack=4)
+        a = np.full((10, 10, 3), 10, dtype=np.uint8)
+        b = np.full((10, 10, 3), 20, dtype=np.uint8)
+        c = np.full((10, 10, 3), 30, dtype=np.uint8)
+        d = np.full((10, 10, 3), 40, dtype=np.uint8)
+        pipe.reset(a)
+        pipe.process(b)
+        pipe.process(c)  # stack now holds older frames
+        pipe.mark_reseed()
+        out = pipe.process(d)
+        # 4 stacked RGB frames -> 12 channels, ALL must be the new frame.
+        assert out.shape[-1] == 12
+        assert np.all(out == 40), "reseed must drop every pre-load frame"
+
+    def test_process_appends_normally_without_reseed(self):
+        pipe = PreprocessingPipeline(frame_stack=2)
+        a = np.full((8, 8, 3), 1, dtype=np.uint8)
+        b = np.full((8, 8, 3), 2, dtype=np.uint8)
+        pipe.reset(a)  # [a, a]
+        out = pipe.process(b)  # [a, b] — must NOT reseed
+        assert np.all(out[..., :3] == 1) and np.all(out[..., 3:] == 2)
+
+    def test_notify_state_loaded_resets_maxpool_and_flags_reseed(self):
+        pipe = PreprocessingPipeline(frame_stack=4)
+        env = PreprocessedEnv(FakeEnv(), pipe, frame_maxpool=True)
+        env.reset()
+        env.step(0)
+        assert env._prev_raw_frame is not None
+        env.notify_state_loaded()
+        assert env._prev_raw_frame is None  # no pre-load frame for maxpool
+        assert pipe._reseed_pending is True
+        env.step(0)  # next step consumes the reseed flag
+        assert pipe._reseed_pending is False
