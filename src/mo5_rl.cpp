@@ -432,15 +432,17 @@ public:
     }
 
     void load_state(const std::vector<uint8_t>& data) {
-        auto result = crayon::SaveStateManager::deserialize_from_buffer(data.data(), data.size());
-        if (result.is_err() || !result.value.has_value()) {
+        // Use the emulator's COMPLETE restore (cpu, gate array, memory, pia,
+        // audio, input, light pen, cassette, master clock, frame count). The
+        // previous partial restore here applied only cpu/gate_array/memory/pia
+        // and dropped the master-clock / frame-count timing state. That left
+        // the vsync-IRQ phase slightly off after load, so the game's on-change
+        // HUD (bonus/score) repaint fired differently and the HUD failed to
+        // re-render deterministically (RAM was fine; ~90 HUD pixels differed).
+        auto result = emulator_->load_state_from_buffer(data.data(), data.size());
+        if (result.is_err()) {
             throw StateError("Failed to load MO5 emulator state");
         }
-        const auto& state = result.value.value();
-        emulator_->get_cpu().set_state(state.cpu_state);
-        emulator_->get_gate_array().set_state(state.gate_array_state);
-        emulator_->get_memory().set_state(state.memory_state);
-        emulator_->get_pia().set_state(state.pia_state);
 
         // Reset reward/death trackers to reflect the just-loaded memory.
         // Without this, per-episode counters (bonus stall, lives delta,

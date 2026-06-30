@@ -155,3 +155,107 @@ TEST(SaveStateV2Compat, V2BufferLoadsCleanly) {
 
     EXPECT_EQ(state.frame_count, 999u);
 }
+
+// Regression for the v3 -> v4 control-freeze bug.
+//
+// v4 added game-extension-PIA latches, the gate-array video-bank select and a
+// couple of audio bits to the save format. A pre-v4 buffer lacks them, so they
+// deserialize as 0. They must be FLAGGED as absent (has_v4_fields == false) so
+// that set_state does not apply the zero-defaults over live hardware. The game
+// extension PIA carries the joystick I/O, so clobbering it froze input after
+// loading any old save under v4 code.
+TEST(SaveStateV2Compat, PreV4StatesFlaggedIncomplete) {
+    auto buf = build_v2_buffer(/*user_ram_marker=*/0xAB);
+    auto result = crayon::SaveStateManager::deserialize_from_buffer(
+        buf.data(), buf.size());
+    ASSERT_FALSE(result.is_err()) << result.error;
+    ASSERT_TRUE(result.value.has_value());
+    const auto& state = result.value.value();
+    EXPECT_FALSE(state.memory_state.has_v4_fields);
+    EXPECT_FALSE(state.gate_array_state.has_v4_fields);
+    EXPECT_FALSE(state.pia_state.has_v4_fields);
+}
+
+// set_state must PRESERVE the live game-PIA latches and video bank when given a
+// pre-v4 state (has_v4_fields == false), rather than zeroing them.
+TEST(SaveStatePreV4Apply, GamePiaAndVideoBankPreserved) {
+    crayon::MemorySystem mem;
+
+    // Establish a known, non-zero game-PIA config + video bank (as a running
+    // game would have after configuring its joystick I/O).
+    crayon::MO5MemoryState live;
+    live.has_v4_fields = true;
+    live.game_pia_cra = 0x3F;
+    live.game_pia_ddra = 0xFF;
+    live.game_pia_crb = 0x04;
+    live.game_pia_ddrb = 0xAA;
+    live.game_pia_ora = 0x12;
+    live.game_pia_orb = 0x34;
+    live.video_page = 1;
+    live.gate_array_reg = 0x21;
+    mem.set_state(live);
+    ASSERT_EQ(mem.get_state().game_pia_cra, 0x3F);
+
+    // Load a pre-v4 state: all v4 fields zero, flagged absent.
+    crayon::MO5MemoryState old_save;  // game_pia_*/video_page default to 0
+    old_save.has_v4_fields = false;
+    mem.set_state(old_save);
+
+    auto after = mem.get_state();
+    EXPECT_EQ(after.game_pia_cra, 0x3F) << "game PIA CRA clobbered on pre-v4 load";
+    EXPECT_EQ(after.game_pia_ddra, 0xFF);
+    EXPECT_EQ(after.game_pia_crb, 0x04);
+    EXPECT_EQ(after.game_pia_ddrb, 0xAA);
+    EXPECT_EQ(after.game_pia_ora, 0x12);
+    EXPECT_EQ(after.game_pia_orb, 0x34);
+    EXPECT_EQ(after.video_page, 1) << "video bank clobbered on pre-v4 load";
+    EXPECT_EQ(after.gate_array_reg, 0x21);
+    EXPECT_TRUE(after.has_v4_fields) << "live state should normalize to complete";
+}
+
+// A v4 state (has_v4_fields == true) must still apply its values fully.
+TEST(SaveStatePreV4Apply, V4StateAppliesFully) {
+    crayon::MemorySystem mem;
+    crayon::MO5MemoryState s;
+    s.has_v4_fields = true;
+    s.game_pia_cra = 0x2A;
+    s.video_page = 1;
+    s.gate_array_reg = 0x05;
+    mem.set_state(s);
+    auto after = mem.get_state();
+    EXPECT_EQ(after.game_pia_cra, 0x2A);
+    EXPECT_EQ(after.video_page, 1);
+    EXPECT_EQ(after.gate_array_reg, 0x05);
+}
+
+// set_state must NOT wipe the immutable system ROMs. They are loaded from
+// files at boot and deliberately not serialized; the deserialized state has
+// zero-filled ROM arrays. The MO5 character font lives in the monitor ROM, so
+// wiping it on load blanked all HUD/text glyphs (a save-state determinism bug).
+TEST(SaveStateRomPreserve, RomsSurviveSetState) {
+    crayon::MemorySystem mem;
+
+    // Establish known ROM contents via the loader (as boot does).
+    std::vector<uint8_t> monitor(0x1000);
+    std::vector<uint8_t> basic(0x3000);
+    for (size_t i = 0; i < monitor.size(); ++i) monitor[i] = uint8_t(0xC0 + (i & 0x1F));
+    for (size_t i = 0; i < basic.size(); ++i) basic[i] = uint8_t(0x40 + (i & 0x1F));
+    ASSERT_FALSE(mem.load_monitor_rom(monitor.data(), monitor.size()).is_err());
+    ASSERT_FALSE(mem.load_basic_rom(basic.data(), basic.size()).is_err());
+
+    // Sanity: font byte readable from monitor ROM (0xFD24 used by the HUD).
+    uint8_t font_before = mem.read(0xFD24);
+    EXPECT_EQ(font_before, monitor[0xFD24 - 0xF000]);
+
+    // Load a state whose ROM arrays are zero (as a deserialized save would be).
+    crayon::MO5MemoryState st;  // basic_rom/monitor_rom default to all-zero
+    st.has_v4_fields = true;
+    mem.set_state(st);
+
+    // ROMs must be intact (NOT wiped to zero).
+    EXPECT_EQ(mem.read(0xFD24), font_before)
+        << "monitor ROM wiped by set_state — HUD/text font would blank on load";
+    EXPECT_EQ(mem.read(0xF000), monitor[0]);
+    EXPECT_EQ(mem.read(0xFFFF), monitor[0xFFF]);
+    EXPECT_EQ(mem.read(0xC000), basic[0]);
+}

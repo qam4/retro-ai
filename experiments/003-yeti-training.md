@@ -577,6 +577,63 @@ alone doesn't resolve the over-concentration.
   stack blob; file-based starts (level2_start.sav) have no stack -> fall back
   to reseed (H-Z). Only matters once the curriculum bootstraps CP1+ snapshots
   (on L2 today every start is CP0 from a file), so deferred until then.
+- [x] **H-AC — crayon HUD does not fully re-render after load_state.** (FIXED)
+  Long-standing bug, reproduced deterministically
+  (`tests/python/test_savestate_determinism.py`). Three distinct save/load
+  bugs were found and fixed (the native module is rebuilt from the crayon
+  submodule):
+  (1) **video bank-select not serialized** (savestate v3->v4): `video_page` +
+  `gate_array_reg` (0xA7C0) reset to 0 on load -> redraws hit the wrong video
+  bank. Serialized in v4. Restored play-area determinism.
+  (2) **v3->v4 backward-compat control freeze.** v4 added the game-extension
+  PIA latches (`game_pia_*`, the SX 90-018 joystick I/O) to the memory state;
+  `set_state` applied them unconditionally, so loading a *v3* save (fields = 0)
+  zeroed the live joystick PIA -> agent uncontrollable after load. Fixed with a
+  per-struct `has_v4_fields` flag: pre-v4 saves don't clobber the v4-only
+  fields. (This is why every v3 save broke the instant we rebuilt with v4.)
+  (3) **THE HUD root cause: `set_state` wiped the ROMs.** `MemorySystem::
+  set_state` did `state_ = state`, overwriting the live (immutable, NOT
+  serialized) `basic_rom`/`monitor_rom` with the deserialized state's
+  zero-filled arrays. The MO5 character font lives in the monitor ROM, so the
+  font read as zeros after load and all HUD/text glyphs drew as blanks. (Game
+  logic survived because it runs from RAM; only ROM *data* reads broke, which
+  is exactly why RAM round-tripped while the HUD didn't.) Found by tracing
+  every memory read during the first post-load step and diffing continuous vs
+  reloaded: a single ROM read at 0xFD24 returned 0x3C (continuous) vs 0x00
+  (reloaded). Fixed by preserving the ROMs across `set_state`. Also completed
+  the RL load path (`mo5_rl.cpp` now calls `load_state_from_buffer`, restoring
+  master_clock/frame_count/etc. instead of only 4 subsystems).
+  The observation determinism test now PASSES (was xfail) and guards the fix;
+  C++ regression tests added in `tests/test_savestate_v2_compat.cpp`.
+- [ ] **H-AD — residual 2-cycle save/load phase wobble (benign, accepted).**
+  After the H-AC fixes, RAM and rendered-frame determinism are exact. One
+  residual: when a save is captured while the game is in a timing-sensitive
+  region (a `DECA;BNE` delay loop straddling the 20000-cycle frame boundary),
+  resume can differ by ~2 CPU cycles for 1-2 frames, then RECONVERGES. Ruled
+  out: emulator non-determinism (two continuous runs are byte-identical),
+  reset-before-load (same with/without), frame-skip mod-4 (k-sweep is not
+  periodic), and hidden timing state in any subsystem (all serialized). The
+  puzzle: step 0 matches the full save exactly yet step 1 diverges by 2 cycles
+  -> a non-serialized transient shifts where the frame budget cuts the CPU
+  mid-instruction. ZERO functional impact: RAM (rewards), the rendered obs, and
+  Go-Explore's cell archive all depend on RAM/render, which are deterministic.
+  Pinning the exact bit needs instruction-cycle master-clock tracing; deferred
+  as not worth the effort.
+- [x] **H-AE — ALL prior level-2 training was invalid (dead start state).**
+  `capture_level2_start.py` saved the level-2 seed only 20 frames after the
+  level loaded — inside the non-interactive intro — and that seed was a v3 save
+  later loaded by v4 code (bug #2 above). Net effect: from `level2_start.sav`
+  the player had NO control. Proof: all 34,215 episodes of the 3M-step probe
+  `yeti_curriculum_l2_v2_probe` ended at the IDENTICAL position (x=11, y=44)
+  with the same start-state hash — if the agent could move, those would vary.
+  So every level-2 "RL finding" (won't cross gaps, sits on the top floor,
+  reset_reach=[1,0,0,0], the whole gap-jump-exploration debate) was an artifact
+  of a frozen start, not agent behavior. **Lesson: validate that the agent can
+  actually act from a start state before drawing ANY behavioral conclusion.**
+  Fixed: `capture_level2_start.py` now snapshots a window of candidates and
+  keeps the earliest one where holding RIGHT actually moves the agent (control
+  verified), with bonus still 1000. Regenerated `level2_start.sav` is a v4 save
+  validated controllable.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
