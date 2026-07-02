@@ -656,6 +656,89 @@ alone doesn't resolve the over-concentration.
   right at all? watch a rollout of the final model; check whether max_final_x
   declining over training is real avoidance or exploration cooling; check the
   reward/potential trace on a descent attempt.
+- [x] **H-AG — diagnose WHY v3 fails, then fix it (v4 = 3M, BREAKTHROUGH:
+  first fruits on L2).** The open questions above were answered by rolling
+  out v3 checkpoints from the *actual L2 start state* (`scripts/rollout_l2.py`
+  — the only tool that boots `level2_start.sav`; the others boot L1). Every v3
+  checkpoint gets stuck at the first gap: max agent_x 6-11, **0/15 rollouts
+  reach the descent ladder at x≈18**. "Goes left" = pushes into the wall.
+  Then measured (not guessed) four compounding reward-mechanics bugs:
+  1. **γ bug.** `train_checkpoint_curriculum.py` did
+     `reward_params.setdefault("gamma", cfg.ppo.gamma)` = **0.99**. PBRS
+     `F = γΦ − Φ` with Φ<0 pays **+0.098/step for idling** (~+37/episode =
+     essentially the entire episode reward). L1 champions set
+     `reward.params.gamma: 1.0`; the L2 configs never did. (Same living-reward
+     pitfall as v6 on L1 — see "Reward-shaping pitfalls #1".)
+  2. **Fall-spike.** The nav-graph potential credits *reaching a lower floor
+     regardless of HOW you got there*, so falling out-pays crossing the gap
+     (~3.6×). Tolerance tweaks don't fix it — the corpse rests exactly on the
+     floor line.
+  3. **Death-detection lag.** Death was detected by bonus-freeze (the lives
+     byte is inert on L2); `bonus_stall_frames=120` detects death ~30 gym-steps
+     late, so a dead/falling agent keeps banking shaping reward.
+  4. **Sprite-pose byte 0x2B54.** surface/creditable = {0-5 walk, 8 ladder};
+     airborne/freeze = {9/10 jump, 11 fall, 12 death-anim}. Pose=11 (falling)
+     fires ~30 frames before the 0x2AFC death flag.
+
+  **Fix (one new reward style, L1 untouched):**
+  `fruit_bonus_path_progress_pbrs_grounded` in `rewards.py` — freezes shaping
+  while airborne (pose ∉ {0-5,8}), reuses the base reward via a `_potential`
+  override, and keeps `last_floor` across airborne frames (stateful but
+  Markovian on `(s,s')` + the bounded floor residue). Config sets
+  **gamma: 1.0**. (0x2AFC prompt-death termination was wired separately into
+  `src/mo5_rl.cpp`, opt-in via `death_flag_addr/value`; L2 profile opts in.)
+
+  **Result (`yeti_curriculum_l2_v4_grounded_3m`, 3M steps, measured from
+  `episodes.csv`, 27,964 eps):**
+  - **Gap wall broken:** 16,866 / 27,964 eps (**60%**) now reach x≥18 (the
+    descent ladder) vs v3's 190/27,802 (0.7%) past x≥14, and 0/15 in the
+    checkpoint rollouts. Max final_x 57→**76**; max final_y 92→**172** (deep
+    multi-floor descent).
+  - **First fruits ever collected on L2:** 2 (both from reset starts).
+  - **Loiter gone:** mean episode reward collapsed 35.85 (v3) → ~1.1-2.9
+    (v4 windows) — the idle living-reward is gone, confirming the γ bug was
+    the dominant driver.
+  - Best snapshot = **1000k** (real ladder descents). USER confirmed via video:
+    the 2000k snapshot reaches F4 *by falling*; the earlier "reached floor 6"
+    reading was a fall-through mislabeled by a since-fixed depth metric.
+  - Model + logs: `output/mo5/yeti/training/yeti_curriculum_l2_v4_grounded_3m/`.
+  Tooling built this round: `scripts/rollout_l2.py` (L2 rollout from the real
+  start state; depth-sweep + video + heatmap; RAM-sourced HUD banner working
+  around the load_state HUD bug; 0x2AFC death detection). Also: grounded
+  checkpoint admission (defer seed snapshot to the next grounded frame — the 2
+  v4 CP1 seeds were mid-jump and doomed on reload) and the
+  `min_survival_frames`→`min_survival_steps` rename (it counts gym steps).
+- [~] **H-AH — v5 (15M) longer cook at the v4 recipe (IN PROGRESS).**
+  `yeti_curriculum_l2_v5_grounded_15m` — same grounded reward + γ=1 + 0x2AFC
+  + grounded admission, 15M steps. Running (~2300 emu_fps, ~5h wall). Interim
+  read at 4.2M/15M (28%): `cp=[0,1,0]` (1 clean grounded CP1 seed),
+  `success=[0→1:0%]`, `reset_reach=[1.00,0,0,0]` — i.e. the agent descends and
+  explores but has NOT yet reliably reached a fruit from reset. Same signal as
+  the 3.55M interim read; watching for whether more compute converts the deep
+  descents into fruit collection or plateaus. FINAL RESULT + snapshot sweep to
+  be filled in when the run completes.
+- [ ] **H-AI — reverse curriculum via WAYPOINT START-SEEDS (design, only if
+  v5 plateaus).** Reaching the first fruit on L2 requires a long multi-floor
+  descent across ~14 gaps and many ladders, and L2 goats *cannot be jumped*
+  like L1 snowballs — the agent must sometimes RETREAT (climb back up a
+  ladder). With γ=1 PBRS the potential telescopes, so a retreat-then-return
+  nets ~0 reward (a designed benefit of the γ=1 choice). Plan: manufacture
+  per-floor / ladder-top **waypoint start-seeds** (scripted or nav-graph
+  descent snapshotting, like `level2_start.sav` was made) and seed a reverse
+  curriculum from them. **CRITICAL distinction (user):** waypoints are START
+  SEEDS ONLY, *not* success-checkpoints — success stays defined as "grab a
+  fruit", and waypoints must NOT pollute the reach/success metrics (you don't
+  need to *reach* waypoints, you need to grab fruits). Needs: a waypoint-capture
+  script + a curriculum mode that seeds from waypoints while scoring success by
+  fruit collection only.
+  **Second rationale — start-state DIVERSITY (not just reverse-chaining).**
+  Beyond backward-chaining the descent, seeding from many waypoints spreads the
+  training start distribution across the whole level instead of the single
+  `level2_start.sav` spawn. That diversity is valuable on its own: it exposes
+  the policy to mid-level geometry (gaps, ladder-tops, goat encounters) it would
+  otherwise almost never see from a cold start, which should improve robustness
+  and exploration coverage. So H-AI is worth trying whenever we hit trouble /
+  plateau — its benefit isn't limited to the reverse-curriculum framing.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.

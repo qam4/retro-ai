@@ -1,0 +1,60 @@
+# yeti_curriculum L2 v3 — FIRST VALID level-2 run (10M).
+#
+# All prior level-2 runs (v1, v2, the v2 probe) were INVALID: the player had
+# NO control from level2_start.sav (dead start state — captured mid-intro AND
+# a v3 save loaded by v4 code froze the joystick PIA; see backlog H-AC/H-AE).
+# Every one of those 34k probe episodes ended at the identical position. The
+# save/load bugs are now fixed and level2_start.sav is control-verified, so
+# this is the first run where the agent can actually act in level 2.
+#
+# Same setup as v2 (PBRS path-progress shaping over the level-2 nav graph,
+# phase-1 exploration n_steps=16 / no target_kl), just a fresh 10M run on the
+# fixed save. THE OPEN QUESTION (now genuinely testable): can PPO learn to jump
+# the floor gaps unaided, pulled by the nav-graph potential?
+
+training:
+  timesteps: 10_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v3_10m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level2
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 2
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_frames: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950
+    2: 11975
+  start_state: output/mo5/yeti/level2/level2_start.sav

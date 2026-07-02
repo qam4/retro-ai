@@ -72,15 +72,41 @@ def _save_state(path, state):
     os.replace(tmp, path)
 
 
-def _eval_snapshot(model_path, episodes, device, tmp_json):
-    """Run eval_from_reset.py in a subprocess; return (princess, reach4)."""
+def _eval_snapshot(
+    model_path,
+    episodes,
+    device,
+    tmp_json,
+    *,
+    profile,
+    fruits_total,
+    start_state,
+    stall_threshold,
+    max_steps,
+):
+    """Run eval_from_reset.py in a subprocess; return (princess, reach_top)
+    where reach_top = P(reached all fruits) for the level."""
     cmd = [
-        sys.executable, "scripts/eval_from_reset.py",
-        "--model", model_path,
-        "--episodes", str(episodes),
+        sys.executable,
+        "scripts/eval_from_reset.py",
+        "--model",
+        model_path,
+        "--episodes",
+        str(episodes),
         "--stochastic",
-        "--out", tmp_json,
+        "--out",
+        tmp_json,
+        "--profile",
+        profile,
+        "--fruits-total",
+        str(fruits_total),
+        "--stall-threshold",
+        str(stall_threshold),
+        "--max-steps",
+        str(max_steps),
     ]
+    if start_state:
+        cmd += ["--start-state", start_state]
     env = dict(os.environ)
     if device == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""
@@ -89,25 +115,46 @@ def _eval_snapshot(model_path, episodes, device, tmp_json):
         data = json.load(f)
     n = data["episodes"]
     princess = data["princess_touches"] / n
-    reach4 = sum(v for k, v in data["max_cp_counts"].items() if int(k) >= 4) / n
-    return princess, reach4
+    reach_top = (
+        sum(v for k, v in data["max_cp_counts"].items() if int(k) >= fruits_total) / n
+    )
+    return princess, reach_top
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--snapshots-dir", required=True)
-    p.add_argument("--best-dir", default=None,
-                   help="where to keep best_model.zip (default: "
-                        "<snapshots-dir>/../best)")
-    p.add_argument("--episodes", type=int, default=30,
-                   help="episodes per eval (cheap trigger; re-eval the "
-                        "winner with more for a precise number)")
-    p.add_argument("--device", choices=["cpu", "gpu"], default="cpu",
-                   help="cpu (safe alongside training) or gpu")
-    p.add_argument("--watch", action="store_true",
-                   help="poll for new snapshots until idle")
+    p.add_argument(
+        "--best-dir",
+        default=None,
+        help="where to keep best_model.zip (default: " "<snapshots-dir>/../best)",
+    )
+    p.add_argument(
+        "--episodes",
+        type=int,
+        default=30,
+        help="episodes per eval (cheap trigger; re-eval the "
+        "winner with more for a precise number)",
+    )
+    p.add_argument(
+        "--device",
+        choices=["cpu", "gpu"],
+        default="cpu",
+        help="cpu (safe alongside training) or gpu",
+    )
+    p.add_argument(
+        "--watch", action="store_true", help="poll for new snapshots until idle"
+    )
     p.add_argument("--poll-sec", type=int, default=120)
     p.add_argument("--max-idle-min", type=float, default=30.0)
+    # Level awareness (defaults = level 1). For level 2 pass:
+    #   --profile yeti_fruit_level2 --fruits-total 2 --stall-threshold 40
+    #   --start-state output/mo5/yeti/level2/level2_start.sav
+    p.add_argument("--profile", default="yeti_fruit")
+    p.add_argument("--fruits-total", type=int, default=4)
+    p.add_argument("--start-state", default=None)
+    p.add_argument("--stall-threshold", type=int, default=15)
+    p.add_argument("--max-steps", type=int, default=1000)
     args = p.parse_args()
 
     snap_dir = args.snapshots_dir
@@ -123,30 +170,50 @@ def main() -> None:
     last_new = time.time()
     while True:
         snaps = _snapshots(snap_dir)
-        new = [(s, path) for s, path in snaps
-               if os.path.basename(path) not in state["evaluated"]]
+        new = [
+            (s, path)
+            for s, path in snaps
+            if os.path.basename(path) not in state["evaluated"]
+        ]
         if new:
             last_new = time.time()
         for step, path in new:
             name = os.path.basename(path)
             try:
-                princess, reach4 = _eval_snapshot(
-                    path, args.episodes, args.device, tmp_json)
+                princess, reach_top = _eval_snapshot(
+                    path,
+                    args.episodes,
+                    args.device,
+                    tmp_json,
+                    profile=args.profile,
+                    fruits_total=args.fruits_total,
+                    start_state=args.start_state,
+                    stall_threshold=args.stall_threshold,
+                    max_steps=args.max_steps,
+                )
             except Exception as e:
                 print(f"[keep-best] {name}: eval FAILED ({e})", flush=True)
                 continue
-            score = princess + 1e-3 * reach4
+            score = princess + 1e-3 * reach_top
             state["evaluated"][name] = {
-                "step": step, "princess": princess, "reach4": reach4,
-                "score": score, "n_eval": args.episodes,
+                "step": step,
+                "princess": princess,
+                "reach_top": reach_top,
+                "score": score,
+                "n_eval": args.episodes,
             }
-            msg = (f"[keep-best] step {step}: princess={princess:.3f} "
-                   f"reach4={reach4:.3f} (best={best_score():.3f})")
+            msg = (
+                f"[keep-best] step {step}: princess={princess:.3f} "
+                f"reach_top={reach_top:.3f} (best={best_score():.3f})"
+            )
             if score > best_score():
                 shutil.copyfile(path, os.path.join(best_dir, "best_model.zip"))
                 state["best"] = {
-                    "model": name, "step": step, "score": score,
-                    "princess": princess, "reach4": reach4,
+                    "model": name,
+                    "step": step,
+                    "score": score,
+                    "princess": princess,
+                    "reach_top": reach_top,
                     "n_eval": args.episodes,
                 }
                 with open(os.path.join(best_dir, "best_meta.json"), "w") as f:
@@ -165,12 +232,16 @@ def main() -> None:
 
     b = state["best"]
     if b:
-        print(f"\nBest: {b['model']} (step {b['step']}) "
-              f"princess={b['princess']:.3f} reach4={b['reach4']:.3f}  "
-              f"-> {os.path.join(best_dir, 'best_model.zip')}")
+        print(
+            f"\nBest: {b['model']} (step {b['step']}) "
+            f"princess={b['princess']:.3f} reach_top={b.get('reach_top', 0):.3f}  "
+            f"-> {os.path.join(best_dir, 'best_model.zip')}"
+        )
         print("Re-eval the winner with more episodes for a precise number, e.g.:")
-        print(f"  python scripts/eval_from_reset.py --model "
-              f"{os.path.join(best_dir, 'best_model.zip')} --episodes 300 --stochastic")
+        print(
+            f"  python scripts/eval_from_reset.py --model "
+            f"{os.path.join(best_dir, 'best_model.zip')} --episodes 300 --stochastic"
+        )
     else:
         print("No snapshots evaluated.")
 
