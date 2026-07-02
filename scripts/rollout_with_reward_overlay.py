@@ -61,6 +61,7 @@ def _draw_hud(
     cum_reward: float,
     fruits_present: tuple,
     best_d: dict,
+    best_d_princess,
     agent_x: int,
     agent_y: int,
 ) -> np.ndarray:
@@ -72,18 +73,24 @@ def _draw_hud(
     draw.rectangle([(0, 0), (320, 28)], fill=(0, 0, 0))
     # Top-left: instantaneous reward + cumulative.
     color = (0, 255, 0) if reward > 0 else (200, 200, 200)
-    draw.text((4, 2), f"step {step:>4}  r={reward:+.3f}  Σ={cum_reward:.2f}",
-              fill=color)
+    draw.text(
+        (4, 2), f"step {step:>4}  r={reward:+.3f}  Σ={cum_reward:.2f}", fill=color
+    )
     # Below: agent position + which fruits remain.
     fp_str = "".join("Y" if p else "-" for p in fruits_present)
-    draw.text((4, 14), f"({agent_x:>3},{agent_y:>3})  fruits={fp_str}",
-              fill=(255, 255, 255))
-    # Right: best_d per fruit, lined up.
+    draw.text(
+        (4, 14),
+        f"({agent_x:>3},{agent_y:>3})  fruits={fp_str}",
+        fill=(255, 255, 255),
+    )
+    # Right: best_d per fruit + princess if any.
     bd_strs = []
     for fid in (1, 2, 3, 4):
         v = best_d.get(fid)
         bd_strs.append(f"{fid}:{'-' if v is None else v}")
-    draw.text((180, 14), "  ".join(bd_strs), fill=(255, 220, 0))
+    if best_d_princess is not None:
+        bd_strs.append(f"P:{best_d_princess}")
+    draw.text((150, 14), "  ".join(bd_strs), fill=(255, 220, 0))
     return np.asarray(img, dtype=np.uint8)
 
 
@@ -186,10 +193,9 @@ def main() -> None:
             r = float(reward_fn(ctx))
             cum_reward += r
             best_d = (
-                dict(reward_fn.best_d)
-                if hasattr(reward_fn, "best_d")
-                else {}
+                dict(reward_fn.best_d) if hasattr(reward_fn, "best_d") else {}
             )
+            best_d_princess = getattr(reward_fn, "best_d_princess", None)
 
             raw = base._last_raw_obs
             if raw is not None:
@@ -200,6 +206,7 @@ def main() -> None:
                     cum_reward=cum_reward,
                     fruits_present=fp,
                     best_d=best_d,
+                    best_d_princess=best_d_princess,
                     agent_x=x,
                     agent_y=y,
                 )
