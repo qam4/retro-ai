@@ -55,6 +55,15 @@ SCORE_HI = 11093
 SCORE_LO = 11094
 X_POS = 11090
 Y_POS = 11089
+# Player sprite-pose index (0x2B54). Surface codes {0-5 walk, 8 ladder};
+# airborne/falling {9,10 jump, 11 fall, 12 death-anim}. Used by pose-gated
+# rewards to freeze shaping while airborne. See experiments/003-yeti-
+# training.md "run 3" for the measured table.
+POSE_ADDR = 11092
+# Poses where the agent is on a surface (grounded floor / ladder). A
+# checkpoint seed is only snapshotted while grounded, so we never seed the
+# curriculum with a mid-jump/airborne state that inherits a fall.
+SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
 # Level-cleared flag. See scripts/train_segment.py for the empirical
 # justification (probe_princess_flag_long_baseline.py PASSes with zero
 # false positives across 26k frames). Detect princess touch via 0->1
@@ -102,7 +111,7 @@ class CheckpointManager:
         reset_fraction: float,
         frontier_fraction: float,
         earlier_fraction: float,
-        min_survival_frames: int = 30,
+        min_survival_steps: int = 30,
         reach_threshold: float = 0.15,
         segment_floor: float = 0.0,
         fruits_total: int = 4,
@@ -125,7 +134,7 @@ class CheckpointManager:
         self.min_states_to_advance = min_states_to_advance
         self.reset_fraction = reset_fraction
         self.frontier_fraction = frontier_fraction
-        self.min_survival_frames = min_survival_frames
+        self.min_survival_steps = min_survival_steps
         # Approach 30: pick_start now weights non-reset levels by
         # (1 - success_rate) and reserves a fixed CP0 floor. We reuse
         # ``reset_fraction`` as that floor (frontier_fraction /
@@ -294,14 +303,14 @@ class CheckpointManager:
         self,
         fruits_collected,
         state_bytes,
-        survived_frames,
+        survived_steps,
         reached_next,
         bonus,
         source_cp,
     ):
         """Admit a checkpoint snapshot judged by *real play*, not a probe.
 
-        ``survived_frames`` is how long the agent stayed alive after
+        ``survived_steps`` is how many gym steps the agent stayed alive after
         the snapshot, under its own policy, in the episode that
         produced it. ``reached_next`` is whether that same episode went
         on to collect the next fruit (or the princess). ``bonus`` is
@@ -312,7 +321,7 @@ class CheckpointManager:
 
         Admission is lenient (approach 30): keep the snapshot if it
         either led to the next checkpoint OR the agent survived at
-        least ``min_survival_frames`` from it. Leniency protects the
+        least ``min_survival_steps`` gym steps from it. Leniency protects the
         rare reaches at hard, sparse CPs; retention priority
         (source_cp) does the quality work on full, easy CPs.
         """
@@ -325,7 +334,7 @@ class CheckpointManager:
         #                    states the H-O fix started filtering out)
         if reached_next:
             self.stats["admit_reached"][fruits_collected] += 1
-        elif survived_frames >= self.min_survival_frames:
+        elif survived_steps >= self.min_survival_steps:
             self.stats["admit_survived"][fruits_collected] += 1
         else:
             self.stats["rejected_precarious"][fruits_collected] += 1
@@ -651,6 +660,10 @@ class CheckpointCurriculumEnv(gym.Env):
         # how the rest of the episode played out (real survival /
         # reached-next), not a passive probe.
         self._pending_saves = []
+        # A checkpoint snapshot deferred to the next grounded frame:
+        # (collected_total, save_step) or None. Avoids seeding the curriculum
+        # with a mid-jump state (which inherits a fall on reload).
+        self._grounded_snap_due = None
         # Highest checkpoint level reached this episode, in CP-level
         # units (0..fruits_total fruits collected; princess touch counts
         # as fruits_total+1). Start level = fruits_total - fruits_remaining.
@@ -696,24 +709,33 @@ class CheckpointCurriculumEnv(gym.Env):
             curr_x=x,
             fruits_present=fruits_present,
             princess_touched=princess_touched,
+            pose=self.iface.read_ram_byte(POSE_ADDR),
         )
         reward = float(self._reward_fn(ctx))
 
         # Snapshot on fruit collection. Scoring is deferred to episode
         # end (see _pending_saves): we judge the state by how the rest
-        # of the real episode unfolds, not a passive probe.
+        # of the real episode unfolds, not a passive probe. The snapshot
+        # itself is deferred to the next GROUNDED frame (pose in
+        # SURFACE_POSES) so we never seed the curriculum with a mid-jump /
+        # airborne state that inherits a fall on reload.
         if fruits < self._prev_fruits:
             self._fruits_collected_this_ep += self._prev_fruits - fruits
             collected_total = self._fruits_total - fruits
             self._max_cp_this_ep = max(self._max_cp_this_ep, collected_total)
+            self._grounded_snap_due = collected_total
+        # Take any deferred snapshot once the agent is on a surface. If the
+        # agent dies before grounding (a fatal fall), no snapshot is taken.
+        if self._grounded_snap_due is not None and ctx.pose in SURFACE_POSES:
             self._pending_saves.append(
                 (
-                    collected_total,
+                    self._grounded_snap_due,
                     self.base._interface.save_state(),
                     self._step_count,
                     bonus,
                 )
             )
+            self._grounded_snap_due = None
 
         # Princess touch ends the episode and counts as a success.
         if princess_touched:
@@ -776,12 +798,12 @@ class CheckpointCurriculumEnv(gym.Env):
             # is the CP this episode started from — the retention key
             # that biases pools toward reset-origin states (approach 30).
             for level, state_bytes, save_step, save_bonus in self._pending_saves:
-                survived = self._step_count - save_step
+                survived_steps = self._step_count - save_step
                 reached_next = self._max_cp_this_ep > level
                 _manager.save_scored(
                     level,
                     state_bytes,
-                    survived,
+                    survived_steps,
                     reached_next,
                     save_bonus,
                     source_cp=start_level,
@@ -993,7 +1015,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         reset_fraction=cfg.curriculum.reset_fraction,
         frontier_fraction=cfg.curriculum.frontier_fraction,
         earlier_fraction=cfg.curriculum.earlier_fraction,
-        min_survival_frames=cfg.curriculum.min_survival_frames,
+        min_survival_steps=cfg.curriculum.min_survival_steps,
         reach_threshold=cfg.curriculum.reach_threshold,
         segment_floor=cfg.curriculum.segment_floor,
         fruits_total=cfg.curriculum.fruits_total,

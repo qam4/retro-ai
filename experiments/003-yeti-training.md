@@ -634,6 +634,28 @@ alone doesn't resolve the over-concentration.
   keeps the earliest one where holding RIGHT actually moves the agent (control
   verified), with bonus still 1000. Regenerated `level2_start.sav` is a v4 save
   validated controllable.
+- **H-AF — first VALID level-2 run (`yeti_curriculum_l2_v3_10m`), raw data.**
+  First L2 training on the fixed, control-verified start save (config = the
+  latest L2 config, `fruit_bonus_path_progress_pbrs` level 2, phase-1
+  exploration, 10M steps, 8 envs, seed 42). Completed clean (4h34m, exit 0).
+  Recording MEASUREMENTS ONLY — no conclusions yet (prior early reads have
+  repeatedly been wrong; e.g. the whole v1/v2/probe interpretation was an
+  artifact). 27,802 episodes. Per-window (~3475 eps each), first->last:
+    - death rate (end_reason=death): ~38% -> ~2-4%.
+    - mean final_x: ~3 -> ~6; max final_x per window: 48-57 early -> 16-31 late.
+    - mean final_y: ~24 -> ~42 (spawn y=30; F2 standing y=54); max final_y=54
+      in almost every window (one window hit 92 ~= F4).
+    - deepest floor by max final_y: F2 in nearly all windows.
+    - end_reason totals: env_done 21,070; death 6,732.
+  Overall: max final_x=57, max final_y=92; episodes crossing gap-1
+  (final_x>=14) = 190 / 27,802 (0.7%); episodes with final_y>=48 = 65; fruits
+  collected = 0; princess = 0; final `reset_reach=[1.00,0,0,0]`.
+  Model + logs: `output/mo5/yeti/training/yeti_curriculum_l2_v3_10m/`.
+  Open questions (NOT conclusions) to investigate before deciding next step:
+  does the agent approach the gap and die, approach and retreat, or not move
+  right at all? watch a rollout of the final model; check whether max_final_x
+  declining over training is real avoidance or exploration cooling; check the
+  reward/potential trace on a descent attempt.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
@@ -3488,3 +3510,208 @@ the agent at the L34/L45 ascents far more often than reset does, drilling
 exactly the failing skill. Bonus-scaled reward already rewards speed (we
 are NOT changing the reward). Watch: does reach-4 stabilize >28% and do
 princess touches appear at eval (vs the 12M champion baseline)?
+
+---
+
+# Level-2 run 3 (`yeti_curriculum_l2_v3_10m`) — RESULT: NEGATIVE + full reward-mechanics diagnosis
+
+First control-verified L2 run (save/restore bugs fixed; agent can actually
+act, unlike v1/v2). 10M steps, phase-1 exploration, PBRS path-progress
+shaping (`fruit_bonus_path_progress_pbrs`, level 2). Config:
+`experiments/003-yeti/configs/yeti_curriculum_l2_v3_10m.yaml`.
+
+## Result: 0 fruits, stuck on floor 1
+
+- `cp=[0,0,0] saves=[0,0,0]`, all 27,802 episodes `reached_level=0`.
+- Direct snapshot rollout from `level2_start.sav` (`scripts/rollout_l2.py`,
+  new): **every** checkpoint (100k … 10M) tops out at the first gap.
+  Max `agent_x` reached = 6–11; **0/N episodes reach the F1→F2 ladder at
+  x≈18**. Heatmaps/trajectories (`--heatmap`): a single hot blob at the
+  top-left of floor 1. "Best" descender (9.9M) reliably walks off the edge,
+  falls to floor 2, and dies.
+
+## Why it never crosses the first gap (all scripted/measured)
+
+- First gap ≈ `agent_x` 8–11; the F1→F2 descent ladder is at x≈18, on the
+  **far** side of the gap. Scripted tests from spawn:
+  - hold RIGHT → walks off the edge at x≈6, falls.
+  - hold RIGHT+JUMP → reaches x=11 at the apex, falls into the gap.
+  - run-up (≥5 right steps, THEN jump) → clears to x=27, lands alive on the
+    far floor.
+  So the gap IS crossable, but only with a precise run-up jump the policy
+  never discovered.
+
+## Reward pathologies (measured on the actual reward fn, not inferred)
+
+### A. Loiter / gamma bug
+- PBRS term `F = γ·Φ(s') − Φ(s)`, `Φ = −scale·dist` (always ≤ 0). Standing
+  still → `F = (γ−1)·Φ = +0.098/step` at γ=0.99. Over ~375 steps ≈ **+37**,
+  which matches the run's mean episode reward (**35.85**). Measured: noop
+  for 60 steps → **+5.9 at γ=0.99, exactly 0 at γ=1.0**.
+- Root cause: `train_checkpoint_curriculum.py` does
+  `reward_params.setdefault("gamma", cfg.ppo.gamma)` → 0.99. The **L1
+  champions (v10/v11, and the `*_g1` configs) explicitly set
+  `reward.params.gamma: 1.0`**; the L2 configs (v1/v2/v3) never did, so they
+  silently got 0.99.
+- Consequence: the idle trickle is largest at the most-negative Φ (farthest
+  from goal) = the spawn/left-wall, and it's safe there. That is why the
+  agent hugs the far-left wall — idling out-earns any risky move.
+
+### B. Falling is rewarded (fall-spike)
+- The path-progress potential credits reaching a *lower floor* regardless of
+  HOW it got there. Reward-to-reach at γ=1 (measured): F1→F2 fall **+2.08**,
+  F1→F3 **+3.20**; a survivable gap-cross to (F1, x=27) only **+0.72**. So
+  falling out-pays crossing ~3.6×, and multi-floor falls accumulate more.
+- **Tolerance is a red herring.** The corpse comes to rest at exactly y=54
+  (= floor-2 standing line), so even ±0 exact match fires the +2.153 spike
+  (measured at t=17, one step before death); ±8 just fires it earlier
+  (t=14). Same magnitude either way.
+
+### C. Death-detection lag
+- Death is detected by **bonus-freeze** in `mo5_rl.cpp` (comment:
+  "When the player dies, the bonus freezes"), NOT by lives — the lives byte
+  (11095) is **inert on L2** (stays 5 through a fall death). The L2 profile
+  relaxed `bonus_stall_frames` 10→120, so death (bonus freezes ~t=18 in
+  gym-steps) isn't detected until **~t=48** (≈30 steps late). During that
+  lag the dead agent banks the +2.15 spike + ~+2.2 loiter income, with no
+  penalty.
+- Faster, cause-agnostic death flag found: **0x2AFC (11004)** = 32 alive /
+  65 dead, flips at the true death frame (t=18). Validated only for the
+  fall death so far — NOT yet for enemy (goat/yeti) deaths.
+
+## Sprite-pose byte 0x2B54 (11092) — measured table
+
+Direction-dependent **sprite index** (a display artifact, not a clean
+physics flag):
+
+| value | meaning | on a surface (creditable)? |
+|-------|---------|----------------------------|
+| 0–3 | walk/idle facing right | yes |
+| 4–5 | walk/idle facing left  | yes |
+| 8   | on a ladder (up/down/idle, both) | yes |
+| 9   | jump, facing right/straight | no (airborne) |
+| 10  | jump, facing left | no (airborne) |
+| 11  | fall | no (falling) |
+| 12  | death "float-up" animation | no (dead) |
+
+- 11 fires at step-off (BEFORE landing), persists through landing AND the
+  frozen-dead period, then → 12 (~120 frames later) for the float-up.
+- Survivable jump/fall → returns to a grounded code (0–5) on landing; a
+  fatal fall stays 11 → never grounded. So it separates fatal-fall from
+  survived-landing.
+- CAVEATS (measured): (1) it is **not** the complete sprite state — the
+  on-screen ground-touch change is in another, unidentified player byte;
+  0x2B54 stays 11 across landing. (2) It is a per-game enumeration and
+  direction-dependent, so key on **sets** with a safe default, never a
+  single value like `==11`. (3) fall-left code not measured (inferred 12?).
+- Same codes observed on L1 (walk 0–3, ladder 8), so semantics carry across
+  levels.
+
+## Proposed fix — as a NEW reward style; L1 left untouched
+
+Not yet implemented. Three cooperating pieces:
+1. **Pose-gated, stateful credit (L2 only):** withhold floor credit while
+   pose ∈ {airborne/fall}; ladder(8)+grounded(0–5) stay creditable. Because
+   pose=11 precedes the landing spike, the fall never scores at all — no
+   penalty to tune. Stateful because "floor 2 by fall" vs "floor 2 by
+   ladder" are the same position and differ only in history.
+2. **γ=1.0** in the reward params (kills the loiter trickle).
+3. **0x2AFC for prompt, cause-agnostic death termination** (detection, not
+   penalty) so no reward accrues after death.
+
+Why a new style, not editing `fruit_bonus_path_progress_pbrs` in place: on
+L1 the goal is UP, so a fall is already anti-progress (negative shaping);
+pose-gating would remove that penalty — a behavior change on the 99.7%
+policy. Keep L1 on the existing reward; register a new L2 variant. L1 reward
+unit tests (`tests/python/test_yeti_map.py`) pin the ±8 anchors; keep green.
+
+## Open items to validate BEFORE implementing
+- Complete the pose table (fall-left, any hurt/level-transition poses) and
+  choose a conservative default for unknown codes.
+- Confirm 0x2AFC=65 fires on non-fall deaths (goat/yeti contact).
+- Check whether a cleaner underlying physics/state byte exists vs the
+  display sprite index.
+- Decide whether a *survived* fall (returns to grounded on a lower floor)
+  should be credited or also suppressed.
+
+## New tooling added this investigation
+- `scripts/rollout_l2.py` — rollout/eval from an L2 start-state (video,
+  heatmap, trajectory, action distribution, agent-x extent, per-checkpoint
+  depth sweep). The from-reset renderers can't target L2 (they boot L1).
+
+---
+
+# Level-2 run 4 (`yeti_curriculum_l2_v4_grounded_3m`) — reward fix, PROMISING
+
+First run with the two reward fixes from "run 3", isolated and validated on
+fixed trajectories first. Same recipe as v3 EXCEPT:
+1. `reward.name = fruit_bonus_path_progress_pbrs_grounded` — new pose-gated
+   PBRS style: freezes shaping while the sprite pose (0x2B54) is
+   airborne/falling (not in surface set {0-5 walk, 8 ladder}); `last_floor`
+   kept. Reuses the ungated reward object and only overrides `_potential`,
+   so the ungated reward (and L1) is byte-identical.
+2. `reward.params.gamma: 1.0` (v3 defaulted to 0.99 → the loiter bug).
+Only 3M steps (vs v3's 10M) — a shorter first check.
+
+Pre-run isolated validation (all measured):
+- Fatal fall: old reward +2.56 (spike), new **+0.48** (spike frozen; only
+  the pre-fall grounded walk credits).
+- L1 walk+ladder-climb: new reward **byte-identical** to old at every step
+  (0 mismatches) — differs only when airborne. Ladder climb (pose 8)
+  credited normally.
+- Reward/map unit tests: 73 passed, 1 skipped.
+
+Result (episodes.csv, v4 3M vs v3 10M):
+
+| metric | v3 (old, 10M) | v4 (fixed, 3M) |
+|--------|---------------|-----------------|
+| reward mean | 35.85 (idle income) | **1.80** (loiter gone) |
+| fruits collected | 0 / 27802 | **2 / 27964** (first on L2) |
+| CP1 seeds captured (`cp`) | [0,0,0] | **[0,2,0]** |
+| deepest floor by final_y | F1:27725 F2:75 F3:2 | F1:15820 F2:4143 **F3:7668 F5:290** F6:2 |
+| deaths | 6732 (24%) | 665 (2.4%) |
+
+Interpretation (confirmed): both fixes did what they should. γ=1 removed the
+idle income (35.85→1.80). The agent now descends far deeper (v3 was
+floor-1-only; v4 reaches F3 in ~27% of episodes, the F5 fruit region in ~1%)
+and collected the first 2 fruits, so the curriculum finally captured CP1
+seeds. Deaths dropped 10x.
+
+NOT solved: 2/28k fruit rate ≈ 0.007%. This is a much better starting point,
+not a win.
+
+OPEN / to verify: whether the deep descents are controlled (ladders) or the
+agent still falling but no longer rewarded for it. Low death rate + most
+episodes ending via stall (not death) suggest real descent; characterizing
+with `scripts/rollout_l2.py --heatmap` on v4 snapshots (output/mo5/yeti/
+videos/l2_v4_probe).
+
+Next: with CP1 seeds now captured, a longer run + curriculum bootstrapping
+is the natural follow-up (the curriculum was inert on v3 because it never
+reached a fruit). This is where the curriculum warm-start work begins.
+
+### v4 rollout characterization (`scripts/rollout_l2.py`, output/mo5/yeti/videos/l2_v4_probe)
+
+Resolves the open question above: the deep descents are real navigation, not
+falls. Deterministic-ish snapshot rollout (15 ep from level2_start.sav):
+
+| snapshot | deepest floor | reaches F1->F2 ladder (x>=18) |
+|----------|---------------|-------------------------------|
+| 1.0M | F3 (mean 3.0) | 15/15 |
+| 2.0M | **F4** (mean 2.9) | 15/15 |
+| 2.9M | F2 (mean 1.9) — regressed | 15/15 |
+
+vs v3 where **0/15 ever reached x>=18** (stuck at x<=11 at the first gap).
+So the gap-crossing wall is broken: the agent crosses the first gap in 15/15
+rollouts and descends to F3-F4. Right-biased (57-60% at the good snapshots),
+low deaths, ends via stall not death → controlled descent, not fall-farming.
+
+Non-monotonic (2.9M regressed to F2) — same "best is a snapshot" pattern as
+L1; best so far = 2.0M snapshot. Fruits (F5) still only via rare stochastic
+exploration (not in the deterministic rollout).
+
+Next: (1) longer run (the recipe clearly works at 3M; give it room), with
+snapshots + keep-best sweep to capture the transient peak; (2) curriculum
+now has CP1 seeds to bootstrap deeper segments. Reward mechanics are no
+longer the bottleneck — it's now the usual exploration/curriculum problem,
+which is the tractable part.

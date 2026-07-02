@@ -127,6 +127,16 @@ public:
             try { fruits_remaining_addr_ = std::stoi(fruit_it->second); } catch (...) {}
         }
 
+        // Parse fast death-flag detection (e.g. Yeti 0x2AFC=65).
+        auto dfa = reward_params.find("death_flag_addr");
+        if (dfa != reward_params.end()) {
+            try { death_flag_addr_ = std::stoi(dfa->second); } catch (...) {}
+        }
+        auto dfv = reward_params.find("death_flag_value");
+        if (dfv != reward_params.end()) {
+            try { death_flag_value_ = std::stoi(dfv->second); } catch (...) {}
+        }
+
         // Wire up memory reader for reward system
         wire_memory_reward_system();
     }
@@ -272,6 +282,11 @@ public:
             }
             previous_lives_ = current_lives;
         }
+        // Fast death flag: fires at the actual death frame (cause-agnostic).
+        if (death_flag_addr_ >= 0
+            && read_ram_byte(static_cast<uint16_t>(death_flag_addr_)) == death_flag_value_) {
+            result.done = true;
+        }
 
         // Check for bonus stall (death detection)
         // The bonus countdown decreases every few frames during gameplay.
@@ -372,6 +387,11 @@ public:
                     done = true;
                 }
                 previous_lives_ = current_lives;
+            }
+            // Fast death flag: fires at the actual death frame.
+            if (death_flag_addr_ >= 0
+                && read_ram_byte(static_cast<uint16_t>(death_flag_addr_)) == death_flag_value_) {
+                done = true;
             }
 
             // Check bonus stall
@@ -628,6 +648,11 @@ private:
     int bonus_stall_count_ = 0;
     int fruits_remaining_addr_ = -1;
     int previous_fruits_remaining_ = 4;
+    // Fast, cause-agnostic death flag (e.g. Yeti 0x2AFC=65). -1 = disabled.
+    // Fires at the actual death frame, unlike the lives byte (inert on some
+    // levels) and the bonus-stall (up to bonus_stall_frames_ late).
+    int death_flag_addr_ = -1;
+    int death_flag_value_ = 0;
     std::vector<uint8_t> startup_state_;
 };
 

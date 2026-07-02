@@ -32,7 +32,7 @@ def _mgr(**overrides):
         reset_fraction=1.0,  # = cp0_floor
         frontier_fraction=0.0,
         earlier_fraction=0.0,
-        min_survival_frames=30,
+        min_survival_steps=30,
     )
     kwargs.update(overrides)
     return CheckpointManager(**kwargs)
@@ -50,7 +50,7 @@ def _pool_source_cps(mgr, level):
 def test_reached_next_is_admitted_regardless_of_survival():
     mgr = _mgr()
     mgr.save_scored(
-        1, b"state", survived_frames=5, reached_next=True, bonus=100, source_cp=0
+        1, b"state", survived_steps=5, reached_next=True, bonus=100, source_cp=0
     )
     assert len(mgr.checkpoints[1]) == 1
     assert mgr.stats["rejected_precarious"][1] == 0
@@ -59,7 +59,7 @@ def test_reached_next_is_admitted_regardless_of_survival():
 def test_short_survival_no_next_is_rejected():
     mgr = _mgr()
     mgr.save_scored(
-        1, b"state", survived_frames=5, reached_next=False, bonus=100, source_cp=0
+        1, b"state", survived_steps=5, reached_next=False, bonus=100, source_cp=0
     )
     assert len(mgr.checkpoints[1]) == 0
     assert mgr.stats["rejected_precarious"][1] == 1
@@ -68,7 +68,7 @@ def test_short_survival_no_next_is_rejected():
 def test_long_survival_admitted_even_without_next():
     mgr = _mgr()
     mgr.save_scored(
-        1, b"state", survived_frames=200, reached_next=False, bonus=100, source_cp=0
+        1, b"state", survived_steps=200, reached_next=False, bonus=100, source_cp=0
     )
     assert len(mgr.checkpoints[1]) == 1
 

@@ -162,7 +162,11 @@ class CurriculumConfig:
     # (state_validator) which rejected ~99% of real mid-action
     # pickups. A snapshot that led to the next checkpoint in the same
     # episode is always admitted regardless of this threshold.
-    min_survival_frames: int = 30
+    # NOTE: this counts GYM STEPS (each = frame_skip emulator frames), not
+    # emulator frames — hence the name (was `min_survival_frames`, which was
+    # misleading). Legacy configs using `min_survival_frames` are aliased in
+    # from_dict().
+    min_survival_steps: int = 30
     # --- Level awareness (defaults preserve level-1 behavior) ---
     # Total collectible fruits in the level (level 1 = 4, level 2 = 2).
     # Drives CP indexing, the fruit-presence vector dim, and the
@@ -231,6 +235,15 @@ class RunConfig:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "RunConfig":
         kwargs: Dict[str, Any] = {}
+
+        # Backward-compat: `min_survival_frames` was renamed to
+        # `min_survival_steps` (it counts gym steps, not emulator frames).
+        cur = data.get("curriculum")
+        if isinstance(cur, Mapping) and "min_survival_frames" in cur:
+            cur = dict(cur)
+            cur.setdefault("min_survival_steps", cur.pop("min_survival_frames"))
+            data = dict(data)
+            data["curriculum"] = cur
 
         # Required sub-configs
         kwargs["training"] = _build(TrainingConfig, data.get("training"), "training")

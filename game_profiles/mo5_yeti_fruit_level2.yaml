@@ -28,6 +28,11 @@ reward_params:
   # Relaxed for level 2's frozen-then-slow bonus (was 10 on level 1).
   bonus_stall_frames: "120"
   fruits_remaining_addr: "11055"
+  # Fast, cause-agnostic death flag (0x2AFC=65): fires at the actual death
+  # frame, so episodes end promptly instead of ~120 frames later via the
+  # bonus-stall. Validated on L1 (ladder/jump/snowball) + L2 (falls).
+  death_flag_addr: "11004"
+  death_flag_value: "65"
   basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
   monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
   startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:100"

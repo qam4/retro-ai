@@ -87,6 +87,11 @@ class RewardContext:
     # caller is responsible for the rising-edge check; reward
     # functions can treat this as authoritative.
     princess_touched: bool = False
+    # Player sprite-pose index (MO5 Yeti RAM 0x2B54). -1 = not provided.
+    # Pose-gated rewards freeze shaping while this is an airborne/falling
+    # code; ungated rewards ignore it. See experiments/003-yeti-training.md
+    # "run 3" for the measured pose table.
+    pose: int = -1
 
 
 RewardFn = Callable[[RewardContext], float]
@@ -805,6 +810,44 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
             return reward
 
     return _PBRSPathProgressReward()
+
+
+# Player sprite-pose codes (0x2B54) that mean "on a surface" (grounded floor
+# or ladder) and are therefore creditable for path-progress shaping. Every
+# other code (jump 9/10, fall 11, death-anim 12, and any unseen code) is
+# treated as airborne/off-surface -> shaping frozen (fails safe). Measured
+# table: experiments/003-yeti-training.md "run 3".
+SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
+
+
+@register("fruit_bonus_path_progress_pbrs_grounded")
+def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> RewardFn:
+    """Pose-gated variant of ``fruit_bonus_path_progress_pbrs``.
+
+    Identical to the PBRS path-progress reward EXCEPT shaping is frozen
+    (potential -> None -> re-baseline, no credit) whenever the player sprite
+    pose (``ctx.pose``, RAM 0x2B54) is not a surface code. This stops the
+    reward from crediting a *fall* into a lower floor (the level-2 failure
+    mode: falling out-pays crossing at every one of ~14 gaps) while still
+    crediting ladder descents (pose 8) and jump-landings (grounded on
+    arrival). ``last_floor`` is preserved (deliberately not removed).
+
+    Reuses the ungated reward object verbatim and only overrides its
+    ``_potential`` with a pose guard, so the base reward's logic is
+    untouched. Only active when a pose is supplied (``ctx.pose >= 0``); with
+    no pose it behaves exactly like the ungated reward.
+    """
+    base = _fruit_bonus_path_progress_pbrs(params)
+    orig_potential = base._potential
+
+    def gated_potential(ctx: RewardContext):
+        pose = getattr(ctx, "pose", -1)
+        if pose is not None and pose >= 0 and pose not in SURFACE_POSES:
+            return None  # airborne / falling -> freeze shaping this step
+        return orig_potential(ctx)
+
+    base._potential = gated_potential
+    return base
 
 
 __all__ = [
