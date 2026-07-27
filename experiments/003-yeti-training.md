@@ -801,6 +801,25 @@ alone doesn't resolve the over-concentration.
   agent keeps walking into the goat. Points at (c): waypoint/curriculum practice
   past the F3 goat (or a goat-aware mechanic). NEXT: confirm the goat visually
   (video), then design the F3-goat practice.
+  ROUTE TRACE (v6 3M, 6 eps, path to death): EVERY episode goes
+  F1@x0 -> F2@x18 -> F3@x46 -> dies x~34. Two findings:
+  (A) DANGER-BLIND SHAPING (user's insight, confirmed). L2 F2->F3 has two
+  ladders: L23a x=16 (left) and L23b x=192 (right); L34 (F3->F4) is x=136. The
+  agent ALWAYS takes the left ladder (lands F3 left, x=46) and dies to the goat
+  at x~34; the right ladder L23b is NEVER used. Coming down L23b lands at x=192,
+  right of L34 (x=136), so it would walk left to L34 and AVOID the x=34 goat —
+  but that route is longer, so the shortest-path PBRS potential (danger-blind)
+  prefers the cheap left ladder and routes the agent into the goat. Fix options:
+  make the nav graph danger-aware (raise the goat edge's cost so the potential
+  prefers L23b), and/or seed waypoints on the safe route.
+  (B) THE L2 NAV MAP MAY BE WRONG (validate before trusting shaping). The agent
+  lands on F2 at x=18, but the map lists the F1->F2 ladders at x=80 (L12a) and
+  x=304 (L12b) — neither matches. This matches the user's recollection that F2
+  has effectively one ladder (near x~16), and implies the map's ladder
+  positions are off. Since the PBRS potential is computed FROM this map, wrong
+  ladder positions = miscalibrated shaping. TODO: re-validate/re-extract the L2
+  nav map (map_level2.py / extract_level_map.py) against observed ladder
+  landings before the next L2 run.
 - [ ] **H-AI — reverse curriculum via WAYPOINT START-SEEDS (design, only if
   v5 plateaus).** Reaching the first fruit on L2 requires a long multi-floor
   descent across ~14 gaps and many ladders, and L2 goats *cannot be jumped*
@@ -823,6 +842,19 @@ alone doesn't resolve the over-concentration.
   otherwise almost never see from a cold start, which should improve robustness
   and exploration coverage. So H-AI is worth trying whenever we hit trouble /
   plateau — its benefit isn't limited to the reverse-curriculum framing.
+  **Refinement (user, post-v6) — waypoints must be OPTIONAL / non-gating,
+  because the level branches.** Topology: F1->F2 has ONE ladder, but F2->F3 has
+  TWO ladders (alternate routes) — the agent may legitimately take either. So a
+  waypoint can NOT be a required checkpoint (unlike fruits, which are
+  mandatory): we must capture MULTIPLE waypoints per floor (covering both
+  ladders) and sample among them as start-seeds, and NEVER require reaching a
+  specific one. This reinforces the start-seeds-only design: waypoints seed
+  episodes and add diversity, but success/advancement is only ever "grab a
+  fruit". Concretely the CheckpointManager needs a SEPARATE "waypoint pool"
+  (optional start states, no success semantics) distinct from the CP (fruit)
+  pools. Also: v6 was only 3M steps (L1 champions ran 12-20M) — L2 will need
+  MORE steps regardless; waypoints are an accelerator (more F3-goat reps per
+  wall-clock), not a substitute for compute.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
