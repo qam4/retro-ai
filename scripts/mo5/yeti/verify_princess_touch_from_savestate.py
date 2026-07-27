@@ -8,11 +8,11 @@ all four fruits collected, ~32 px left of the princess centre. There
 are no snowballs between the agent and princess on floor 5, so the
 expected outcome is a princess touch within ~30 frames.
 
-Detection rule under test (mirrors `scripts/train_segment.py`):
+Detection rule under test (mirrors `scripts/mo5/yeti/train_segment.py`):
 
     rising edge of byte 11050 (level-cleared flag): 0 -> 1
 
-Verified empirically in `scripts/probe_princess_flag_long_baseline.py`:
+Verified empirically in `scripts/mo5/yeti/probe_princess_flag_long_baseline.py`:
 the flag stayed at 0 across 26k frames of varied non-touch gameplay.
 """
 
@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT / "build" / "ci-linux"))
 from retro_ai.training.env_builder import build_training_env  # noqa: E402
 from retro_ai.training.run_config import EnvConfig  # noqa: E402
 
-# Yeti RAM addresses (see scripts/walk_to_princess.py for cross-ref).
+# Yeti RAM addresses (see scripts/mo5/yeti/walk_to_princess.py for cross-ref).
 X_ADDR = 11090
 Y_ADDR = 11089
 LIVES_ADDR = 11095

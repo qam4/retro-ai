@@ -10,7 +10,7 @@ following CP or its episode ends.
 Usage example: chain v7 (CP2→CP3) and v8 (CP3→CP4) from CP2 seeds:
 
   env PYTHONPATH=python:build/ci-linux RETRO_AI_ROM_DIR=roms \\
-    python3 scripts/eval_chained_policies.py \\
+    python3 scripts/mo5/yeti/eval_chained_policies.py \\
       --policies output/.../segment_2to3_v7/final_model.zip \\
                  output/.../segment_3to4_v1/final_model.zip \\
       --seeds output/mo5/yeti/seeds/v9_v3_cp3enriched.pkl \\

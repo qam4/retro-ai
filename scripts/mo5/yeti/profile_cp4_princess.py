@@ -13,7 +13,7 @@ Map refs: F4 (272,88) floor4; ladder L45 x=208; princess (312,60) floor5.
 Example::
 
     RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \\
-      python scripts/profile_cp4_princess.py \\
+      python scripts/mo5/yeti/profile_cp4_princess.py \\
         --model <model.zip> --seeds <checkpoints.pkl> --episodes 300
 """
 

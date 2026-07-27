@@ -8,7 +8,7 @@ sections.
 
 Example::
 
-    python scripts/train_segment.py \\
+    python scripts/mo5/yeti/train_segment.py \\
         --config experiments/003-yeti/configs/segment_1to2_v3.yaml
 """
 
@@ -53,7 +53,7 @@ SCORE_LO = 11094
 X_POS = 11090
 Y_POS = 11089
 # Level-cleared flag. Verified empirically (see
-# scripts/probe_princess_flag_long_baseline.py): byte 11050 is 0
+# scripts/mo5/yeti/probe_princess_flag_long_baseline.py): byte 11050 is 0
 # during all normal gameplay (walking, jumping, climbing, fruit
 # pickups, deaths, respawns) and only flips to 1 on the frame the
 # agent touches the princess. It auto-clears when the next level
@@ -493,7 +493,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     # Persist full, resolved config via the run manifest.
     manifest_extras = cfg.to_dict()
     manifest_extras["resolved_seed"] = seed
-    manifest_extras["script"] = "scripts/train_segment.py"
+    manifest_extras["script"] = "scripts/mo5/yeti/train_segment.py"
     manifest_extras["num_checkpoint_states"] = len(states)
     manifest = RunManifest.capture(
         {"config_path": config_path},

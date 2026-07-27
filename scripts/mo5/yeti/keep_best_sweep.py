@@ -10,7 +10,7 @@ read ~0%%). Training metrics can't identify it (most training episodes
 don't start from reset; the live signal is a noisy EMA), so we must eval
 frozen snapshots from reset and keep the best.
 
-This runs each eval as a SEPARATE PROCESS (scripts/eval_from_reset.py).
+This runs each eval as a SEPARATE PROCESS (scripts/mo5/yeti/eval_from_reset.py).
 The Crayon emulator keeps in-process global state, so eval must not share
 a process with training; a subprocess is fully isolated. Defaults to CPU
 so it is safe to run *alongside* a GPU training job (pass --device gpu to
@@ -21,12 +21,12 @@ Usage
 One-shot (eval every snapshot present, keep the best)::
 
     RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \\
-      python scripts/keep_best_sweep.py \\
+      python scripts/mo5/yeti/keep_best_sweep.py \\
         --snapshots-dir output/mo5/yeti/training/<run>/snapshots
 
 Watch a live run (poll for new snapshots, stop after idle)::
 
-    ... python scripts/keep_best_sweep.py --snapshots-dir <run>/snapshots --watch
+    ... python scripts/mo5/yeti/keep_best_sweep.py --snapshots-dir <run>/snapshots --watch
 
 The best policy is copied to ``<best-dir>/best_model.zip`` with
 ``best_meta.json``; per-snapshot results accumulate in
@@ -88,7 +88,7 @@ def _eval_snapshot(
     where reach_top = P(reached all fruits) for the level."""
     cmd = [
         sys.executable,
-        "scripts/eval_from_reset.py",
+        "scripts/mo5/yeti/eval_from_reset.py",
         "--model",
         model_path,
         "--episodes",
@@ -239,7 +239,7 @@ def main() -> None:
         )
         print("Re-eval the winner with more episodes for a precise number, e.g.:")
         print(
-            f"  python scripts/eval_from_reset.py --model "
+            f"  python scripts/mo5/yeti/eval_from_reset.py --model "
             f"{os.path.join(best_dir, 'best_model.zip')} --episodes 300 --stochastic"
         )
     else:

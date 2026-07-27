@@ -15,7 +15,7 @@ are candidate position bytes.
 
 Usage:
   env PYTHONPATH=python:build/ci-linux RETRO_AI_ROM_DIR=roms \\
-    python3 scripts/find_fruit_positions.py
+    python3 scripts/mo5/yeti/find_fruit_positions.py
 """
 from __future__ import annotations
 

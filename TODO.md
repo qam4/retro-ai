@@ -136,7 +136,7 @@
 - HUD stale after load_state (MO5 Yeti). After loading a save state, the
   score/bonus HUD region renders whatever text was on screen at save time
   and does not update when RAM values change. Reproduced with
-  ``scripts/play_state.py``: load a state with bonus=828, step forward; at
+  ``scripts/mo5/yeti/play_state.py``: load a state with bonus=828, step forward; at
   frame 18 RAM shows bonus=1000 (new-life reset) but the HUD still shows
   828 (or goes blank entirely for some saves). Training isn't affected —
   policy input is an 84×84 grayscale resize and reward reads RAM — but
@@ -146,7 +146,7 @@
   loaded states. Not urgent while we solve CP2→CP3; fix after.
   Note: the save/load *state* fix (trustworthy state + working controls)
   did NOT fix this HUD-render issue — separate bug. Workaround for debug
-  videos: scripts/rollout_l2.py draws the real RAM lives/bonus/score/fruits
+  videos: scripts/mo5/yeti/rollout_l2.py draws the real RAM lives/bonus/score/fruits
   in a strip BELOW the frame (not over the game HUD).
 
 ## Yeti Level 2 (see experiments/003-yeti-training.md "run 3" for full diagnosis)
@@ -168,7 +168,7 @@
 - Before implementing: complete the 0x2B54 pose table (fall-left, unknown
   poses), validate 0x2AFC on non-fall (goat/yeti) deaths, and look for a
   cleaner physics byte than the display sprite index.
-- Tooling: scripts/rollout_l2.py (L2 rollout/video/heatmap/depth-sweep).
+- Tooling: scripts/mo5/yeti/rollout_l2.py (L2 rollout/video/heatmap/depth-sweep).
 
 ### Naming / cleanup
 - [OPEN] `min_survival_frames` renamed to `min_survival_steps` (it counts gym

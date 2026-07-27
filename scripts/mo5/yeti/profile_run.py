@@ -9,7 +9,7 @@ L45 ladder) vs timing (dies on the climb).
 Example::
 
     RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \\
-      python scripts/profile_run.py --model <snapshot.zip> --episodes 150
+      python scripts/mo5/yeti/profile_run.py --model <snapshot.zip> --episodes 150
 """
 
 from __future__ import annotations

@@ -18,14 +18,14 @@ Two uses:
 1. Sweep candidate checkpoints to find promising ones::
 
      env RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \\
-       python3 scripts/rollout_l2.py \\
+       python3 scripts/mo5/yeti/rollout_l2.py \\
          --snapshots-dir output/mo5/yeti/training/yeti_curriculum_l2_v3_10m/snapshots \\
          --steps 100000,6300000,7600000,9900000,10000000 \\
          --episodes 20 --out output/mo5/yeti/videos/l2_v3_probe --video-best 1
 
 2. Inspect a single model with video of every kept episode::
 
-     ... python3 scripts/rollout_l2.py \\
+     ... python3 scripts/mo5/yeti/rollout_l2.py \\
          --model .../snapshots/model_9900000_steps.zip \\
          --episodes 8 --out debug/l2_9900k --video
 """

@@ -11,7 +11,7 @@ with ``training``, ``env``, ``ppo``, ``reward``, and
 
 Example::
 
-    python scripts/go_explore_phase2.py \\
+    python scripts/mo5/yeti/go_explore_phase2.py \\
         --config experiments/003-yeti/configs/go_explore_phase2_v4.yaml
 """
 
@@ -384,7 +384,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     manifest_extras = cfg.to_dict()
     manifest_extras["resolved_seed"] = seed
-    manifest_extras["script"] = "scripts/go_explore_phase2.py"
+    manifest_extras["script"] = "scripts/mo5/yeti/go_explore_phase2.py"
     manifest_extras["num_archive_cells"] = len(archive)
     manifest_extras["cells_by_floor"] = floors
     manifest = RunManifest.capture(

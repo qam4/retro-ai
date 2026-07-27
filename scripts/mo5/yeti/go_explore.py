@@ -6,7 +6,7 @@ Hard-Exploration Problems". Uses save states to return to promising
 cells, then explores randomly from there.
 
 Usage:
-    python scripts/go_explore.py --profile yeti --steps 500000 \
+    python scripts/mo5/yeti/go_explore.py --profile yeti --steps 500000 \
         --output output/mo5/yeti/go_explore
 """
 

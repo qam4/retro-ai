@@ -9,7 +9,7 @@ Also prints a summary histogram.
 
 Usage:
   env PYTHONPATH=python:build/ci-linux RETRO_AI_ROM_DIR=roms \\
-    python3 scripts/probe_archive_done_frames.py \\
+    python3 scripts/mo5/yeti/probe_archive_done_frames.py \\
       --archive output/mo5/yeti/go_explore_v9/archive.pkl \\
       --settle 5 --probe 120
 """

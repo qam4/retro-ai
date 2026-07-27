@@ -13,7 +13,7 @@ Configuration is YAML-driven — pass ``--config`` pointing at a file with
 
 Example::
 
-    python scripts/train_checkpoint_curriculum.py \\
+    python scripts/mo5/yeti/train_checkpoint_curriculum.py \\
         --config experiments/003-yeti/configs/curriculum_v6.yaml
 """
 
@@ -66,7 +66,7 @@ POSE_ADDR = 11092
 # curriculum with a mid-jump/airborne state that inherits a fall.
 # (Shared definition in retro_ai.games.yeti; re-exported here.)
 SURFACE_POSES = yeti.SURFACE_POSES
-# Level-cleared flag. See scripts/train_segment.py for the empirical
+# Level-cleared flag. See scripts/mo5/yeti/train_segment.py for the empirical
 # justification (probe_princess_flag_long_baseline.py PASSes with zero
 # false positives across 26k frames). Detect princess touch via 0->1
 # rising edge.
@@ -1095,7 +1095,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     # Persist full, resolved config.
     manifest_extras = cfg.to_dict()
     manifest_extras["resolved_seed"] = seed
-    manifest_extras["script"] = "scripts/train_checkpoint_curriculum.py"
+    manifest_extras["script"] = "scripts/mo5/yeti/train_checkpoint_curriculum.py"
     manifest = RunManifest.capture(
         {"config_path": config_path},
         cfg.training.output,

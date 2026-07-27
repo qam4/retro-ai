@@ -18,7 +18,7 @@
 #
 # Success test: does per-update KL drop toward ~0.05, does
 # explained_variance stop going negative, and does the reach-4 swing
-# amplitude shrink vs v14? Keep-best (scripts/keep_best_sweep.py --watch)
+# amplitude shrink vs v14? Keep-best (scripts/mo5/yeti/keep_best_sweep.py --watch)
 # captures any peak regardless. Everything except the two PPO knobs (and
 # finer snapshots) is identical to v14.
 

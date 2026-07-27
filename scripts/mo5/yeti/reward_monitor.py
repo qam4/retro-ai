@@ -7,14 +7,14 @@ analysis and prints a summary.
 
 Usage:
     # Random agent
-    python scripts/reward_monitor.py --profile yeti --mode random
+    python scripts/mo5/yeti/reward_monitor.py --profile yeti --mode random
 
     # Trained agent
-    python scripts/reward_monitor.py --profile yeti --mode agent \
+    python scripts/mo5/yeti/reward_monitor.py --profile yeti --mode agent \
         --model output/yeti/ppo_5M/final_model.zip
 
     # Scripted actions (go right)
-    python scripts/reward_monitor.py --profile yeti --mode script \
+    python scripts/mo5/yeti/reward_monitor.py --profile yeti --mode script \
         --script "right"
 """
 

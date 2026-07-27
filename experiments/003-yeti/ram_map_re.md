@@ -42,7 +42,7 @@ Ladders (x = UL pixel, 16 px wide, between floor pairs): L12 @112, L12 @272,
 L23 @232, L34 @168, L45 @200. Princess @ x=304, floor 5. Floor-top pixel y:
 {1:200, 2:168, 3:136, 4:104, 5:72}.
 
-## Finding the map region (diff method, `scripts/find_map_in_ram.py`)
+## Finding the map region (diff method, `scripts/mo5/yeti/find_map_in_ram.py`)
 
 Diffed RAM across: L1 start, L2 start, L2-after-moving.
 A static map table is level-specific (differs L1 vs L2) AND unchanged as the
@@ -80,7 +80,7 @@ Coordinate conversions (8x8 tiles):
 | 5,6,7,8    | floor (e body / alt body / f left-end / g right-end)|
 | >=10       | sprites: each **fruit** = a 2x2 block of 4 distinct ids; **princess** (L1) = id 30 over ~9 tiles |
 
-### Validation on level 1 (`scripts/extract_level_map.py`)
+### Validation on level 1 (`scripts/mo5/yeti/extract_level_map.py`)
 
 Recovered level 1 **exactly**:
 - 5 ladders at x = 112, 168, 200, 232, 272  (matches the 5 hand-mapped ladders)
@@ -90,7 +90,7 @@ Recovered level 1 **exactly**:
 ## LEVEL 2 MAP (read from RAM, `output/mo5/yeti/level2/level2_map.json`)
 
 6 full floors (top to bottom), 10 ladders, 2 fruits. Annotated grid
-(`=` floor, `H` ladder, `1`/`2` fruit; from `scripts/render_tilemap.py`):
+(`=` floor, `H` ladder, `1`/`2` fruit; from `scripts/mo5/yeti/render_tilemap.py`):
 
 ```
     col 0         1         2         3
@@ -175,7 +175,7 @@ So level-2 princess: pixel ~(288,182), **agent (x=72, y=182)**, bottom-right.
 - Level 2 has **goats** that chase the player (Pac-Man style; jump gaps, use
   ladders) and a **yeti** that paces left/right along the bottom. These are
   dynamic sprites (they show up in the "moves-in-L2" bytes of
-  `scripts/compare_entity_region.py`, e.g. around 0x2B27-0x2B2E, 0x2B40,
+  `scripts/mo5/yeti/compare_entity_region.py`, e.g. around 0x2B27-0x2B2E, 0x2B40,
   0x2B44-0x2B46). Exact per-enemy records not yet pinned (not needed for the
   static map; the CNN will learn evasion from pixels).
 
@@ -186,9 +186,9 @@ coords are validated ground truth (the level-1 extractor matched the known
 map exactly), so this is just a floor-counting-convention difference.
 
 ## Tooling
-- `scripts/find_map_in_ram.py`   — diff RAM to locate level-specific static bytes
-- `scripts/render_tilemap.py`    — dump the 40x25 tilemap (occupancy + tile-id views)
-- `scripts/extract_level_map.py` — structured floors/ladders/fruits (+ JSON)
+- `scripts/mo5/yeti/find_map_in_ram.py`   — diff RAM to locate level-specific static bytes
+- `scripts/mo5/yeti/render_tilemap.py`    — dump the 40x25 tilemap (occupancy + tile-id views)
+- `scripts/mo5/yeti/extract_level_map.py` — structured floors/ladders/fruits (+ JSON)
 
 
 ---
@@ -225,7 +225,7 @@ fruits are collected. keep-best snapshot sweep to capture the transient peak.
   11010/11, score 11093/94, x 11090, y 11089, princess-flag 11050) carry over.
 - Goals = 2 fruits + princess = **3** (level 1 had 5).
 
-## Code seams to parameterize (in `scripts/train_checkpoint_curriculum.py`)
+## Code seams to parameterize (in `scripts/mo5/yeti/train_checkpoint_curriculum.py`)
 Everything below hard-codes level 1; all need a level param (default = L1, so
 level-1 runs stay byte-identical):
 1. `FRUIT_PRESENCE_ADDRS = {1:0x2FAD,...}` (module const) -> per-level dict.
@@ -240,8 +240,8 @@ level-1 runs stay byte-identical):
 8. New config fields (likely a `level:` block or `curriculum` additions):
    `start_state`, `fruits_total`, `fruit_presence_addrs`.
 
-Same constants are duplicated in `scripts/train_segment.py`,
-`scripts/eval_from_reset.py`, `scripts/go_explore.py` — for the first L2 run we
+Same constants are duplicated in `scripts/mo5/yeti/train_segment.py`,
+`scripts/mo5/yeti/eval_from_reset.py`, `scripts/mo5/yeti/go_explore.py` — for the first L2 run we
 only need the curriculum-training + eval paths. Cleanest long-term: a shared
 per-level table (dataclass/registry) the profile selects; the inline dicts in
 ~10 scripts then collapse to one source.

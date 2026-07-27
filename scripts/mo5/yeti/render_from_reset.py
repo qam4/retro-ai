@@ -9,7 +9,7 @@ episodes, whichever first; always keeps the first few for contrast.
 Example::
 
     RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \\
-      python scripts/render_from_reset.py \\
+      python scripts/mo5/yeti/render_from_reset.py \\
         --model output/mo5/yeti/champions/v11_4750k/final_model.zip \\
         --out output/mo5/yeti/videos/v11 --episodes 60 --wins 3
 """

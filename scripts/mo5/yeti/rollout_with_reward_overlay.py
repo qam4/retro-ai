@@ -9,7 +9,7 @@ guide what we wanted?".
 
 Usage:
   env PYTHONPATH=python:build/ci-linux RETRO_AI_ROM_DIR=roms \\
-    python3 scripts/rollout_with_reward_overlay.py \\
+    python3 scripts/mo5/yeti/rollout_with_reward_overlay.py \\
       --model output/.../final_model.zip \\
       --seeds output/mo5/yeti/seeds/v9_checkpoints_v2.pkl \\
       --cp 2 \\

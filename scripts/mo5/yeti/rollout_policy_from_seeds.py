@@ -11,7 +11,7 @@ Usage
 Rollout from every seed in the re-validated v9 archive's CP2 bucket::
 
     env PYTHONPATH=python:build/ci-linux RETRO_AI_ROM_DIR=roms \\
-      python3 scripts/rollout_policy_from_seeds.py \\
+      python3 scripts/mo5/yeti/rollout_policy_from_seeds.py \\
         --model output/mo5/yeti/training/segment_2to3_v3/final_model.zip \\
         --seeds output/mo5/yeti/seeds/v9_checkpoints_v2.pkl \\
         --cp 2 \\
@@ -34,7 +34,7 @@ from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.run_config import EnvConfig
 
 
-# Yeti RAM addresses (documented in scripts/trace_state.py).
+# Yeti RAM addresses (documented in scripts/mo5/yeti/trace_state.py).
 FRUITS_ADDR = 11055
 LIVES_ADDR = 11095
 X_ADDR = 11090

@@ -15,27 +15,27 @@ Usage
 
 Replay a single state (PNGs per frame, all-noops, 120 frames)::
 
-    python scripts/play_state.py \\
+    python scripts/mo5/yeti/play_state.py \\
         path/to/state.pkl \\
         --out debug/playback \\
         --frames 120
 
 Replay with a fixed action every frame (e.g. hold UP+RIGHT)::
 
-    python scripts/play_state.py state.pkl --out debug/playback \\
+    python scripts/mo5/yeti/play_state.py state.pkl --out debug/playback \\
         --action 1 1 0
 
 Load from a cell inside a Go-Explore archive.pkl or curriculum
 checkpoints.pkl by index::
 
-    python scripts/play_state.py \\
+    python scripts/mo5/yeti/play_state.py \\
         output/.../go_explore_v9/archive.pkl \\
         --cell-index 7 \\
         --out debug/playback_cell7
 
 Write an MP4 instead of per-frame PNGs::
 
-    python scripts/play_state.py state.pkl --out debug/pb.mp4 --video
+    python scripts/mo5/yeti/play_state.py state.pkl --out debug/pb.mp4 --video
 """
 
 from __future__ import annotations

@@ -18,7 +18,7 @@ Usage
 Replay the first 3 short-failure CP2-start episodes from
 segment_2to3_v2, using v9 seeds::
 
-    python scripts/replay_short_episodes.py \\
+    python scripts/mo5/yeti/replay_short_episodes.py \\
         output/.../segment_2to3_v2/episodes.csv \\
         --seeds output/mo5/yeti/seeds/v9_checkpoints.pkl \\
         --start-level 2 \\
@@ -127,7 +127,7 @@ def main() -> None:
         subprocess.run(
             [
                 sys.executable,
-                "scripts/play_state.py",
+                "scripts/mo5/yeti/play_state.py",
                 state_path,
                 "--profile",
                 args.profile,

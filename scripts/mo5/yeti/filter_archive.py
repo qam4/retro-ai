@@ -11,7 +11,7 @@ Usage
 
 ::
 
-    python scripts/filter_archive.py \\
+    python scripts/mo5/yeti/filter_archive.py \\
         output/.../go_explore_fruit/archive.pkl \\
         --profile yeti_fruit \\
         --out output/.../go_explore_fruit/archive_validated.pkl

@@ -12,7 +12,7 @@ load through to death (or the full probe window if it survived).
 
 Usage:
   env PYTHONPATH=python:build/ci-linux RETRO_AI_ROM_DIR=roms \\
-    python3 scripts/dump_probe_videos.py \\
+    python3 scripts/mo5/yeti/dump_probe_videos.py \\
       --archive output/mo5/yeti/go_explore_v9/archive.pkl \\
       --csv debug/probe_v9_sweep_500.csv \\
       --out debug/v9_probe_videos \\

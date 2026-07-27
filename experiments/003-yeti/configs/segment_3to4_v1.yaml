@@ -2,7 +2,7 @@
 #
 # Seeds enriched: 19 v9 CP3 + 800 v7 collected_states, validated and
 # deduplicated, total 187 CP3 seeds (vs 19 from v9 alone).
-# See scripts/build_cp3_seeds.py.
+# See scripts/mo5/yeti/build_cp3_seeds.py.
 #
 # Reward is fruit_bonus_path_progress (same as v7 for CP2->CP3) so
 # we can compare directly. Approach 20 fix is in place — each env

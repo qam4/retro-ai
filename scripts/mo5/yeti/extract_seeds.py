@@ -11,7 +11,7 @@ Usage
 Extract all CPs from a Go-Explore archive (new or old format),
 validate, and write the curriculum-format file::
 
-    python scripts/extract_seeds.py \\
+    python scripts/mo5/yeti/extract_seeds.py \\
         output/mo5/yeti/go_explore_v9/archive.pkl \\
         --out output/mo5/yeti/seeds/v9_checkpoints.pkl
 

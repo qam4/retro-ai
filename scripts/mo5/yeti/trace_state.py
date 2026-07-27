@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print a per-frame RAM trace for a save state under a fixed action.
 
-Companion to ``scripts/play_state.py`` — while that one dumps
+Companion to ``scripts/mo5/yeti/play_state.py`` — while that one dumps
 framebuffer PNGs, this one dumps every RAM variable we currently care
 about, one row per frame. Useful for understanding what signals fire
 when, in cases where death / stall / life-loss semantics are unclear.
@@ -14,16 +14,16 @@ Usage
 
 Trace a single state for 60 noop frames::
 
-    python scripts/trace_state.py state.pkl --frames 60
+    python scripts/mo5/yeti/trace_state.py state.pkl --frames 60
 
 Trace a cell inside an archive::
 
-    python scripts/trace_state.py output/.../archive.pkl \\
+    python scripts/mo5/yeti/trace_state.py output/.../archive.pkl \\
         --cell-index 7 --frames 60
 
 Trace while holding UP::
 
-    python scripts/trace_state.py state.pkl --action 1 0 0 --frames 60
+    python scripts/mo5/yeti/trace_state.py state.pkl --action 1 0 0 --frames 60
 """
 
 from __future__ import annotations

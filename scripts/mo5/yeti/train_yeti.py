@@ -2,9 +2,9 @@
 """Train a PPO agent on Yeti (Thomson MO5).
 
 Usage:
-    python scripts/train_yeti.py              # 100k steps
-    python scripts/train_yeti.py --timesteps 500000
-    python scripts/train_yeti.py --eval       # eval only
+    python scripts/mo5/yeti/train_yeti.py              # 100k steps
+    python scripts/mo5/yeti/train_yeti.py --timesteps 500000
+    python scripts/mo5/yeti/train_yeti.py --eval       # eval only
 """
 
 import argparse

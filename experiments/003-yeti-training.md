@@ -262,7 +262,7 @@ alone doesn't resolve the over-concentration.
   reach-4 28.3 / princess 0). Periodic snapshots (added this run) saved
   us from shipping the degraded final.
 - [x] **Efficiency/failure profile of the 12M champion** (DONE,
-  `scripts/profile_run.py`). CP1 already near-optimal (F1 by step 47,
+  `scripts/mo5/yeti/profile_run.py`). CP1 already near-optimal (F1 by step 47,
   bonus 954); agent is fast (all 4 fruits by ~step 207, bonus 825), so
   "dawdling -> snowballs" is NOT the issue. **Failures are at the
   ladders:** CP3->CP4 dies at ~(180,114)=L34, CP4->princess dies at
@@ -412,7 +412,7 @@ alone doesn't resolve the over-concentration.
   states) is a SEPARATE lever, deliberately not changed here (one
   experiment at a time).
 
-  **What changed in code** (`scripts/train_checkpoint_curriculum.py`):
+  **What changed in code** (`scripts/mo5/yeti/train_checkpoint_curriculum.py`):
   added `goal_score_ema`; `record_episode` maintains it; `pick_start`
   weights all levels incl. CP0 by `1 - goal_score_ema` (cp0_floor /
   segment_floor optional, default 0); `curriculum_diag.csv` gains
@@ -502,7 +502,7 @@ alone doesn't resolve the over-concentration.
   -> bonus added to score -> next level loads, **bonus resets to 1000**
   (that reset is the clean level-2-start signal; no level-counter byte is
   known — approach 6).
-  - DONE (prep): `scripts/capture_level2_start.py` rides the champion past
+  - DONE (prep): `scripts/mo5/yeti/capture_level2_start.py` rides the champion past
     the princess, detects `bonus->1000`, and dumps the level-2 start
     save-state -> `output/mo5/yeti/level2/level2_start.sav` (+ png + a
     transition mp4). This is the level-2 CP0 seed.
@@ -658,7 +658,7 @@ alone doesn't resolve the over-concentration.
   reward/potential trace on a descent attempt.
 - [x] **H-AG — diagnose WHY v3 fails, then fix it (v4 = 3M, BREAKTHROUGH:
   first fruits on L2).** The open questions above were answered by rolling
-  out v3 checkpoints from the *actual L2 start state* (`scripts/rollout_l2.py`
+  out v3 checkpoints from the *actual L2 start state* (`scripts/mo5/yeti/rollout_l2.py`
   — the only tool that boots `level2_start.sav`; the others boot L1). Every v3
   checkpoint gets stuck at the first gap: max agent_x 6-11, **0/15 rollouts
   reach the descent ladder at x≈18**. "Goes left" = pushes into the wall.
@@ -702,7 +702,7 @@ alone doesn't resolve the over-concentration.
     the 2000k snapshot reaches F4 *by falling*; the earlier "reached floor 6"
     reading was a fall-through mislabeled by a since-fixed depth metric.
   - Model + logs: `output/mo5/yeti/training/yeti_curriculum_l2_v4_grounded_3m/`.
-  Tooling built this round: `scripts/rollout_l2.py` (L2 rollout from the real
+  Tooling built this round: `scripts/mo5/yeti/rollout_l2.py` (L2 rollout from the real
   start state; depth-sweep + video + heatmap; RAM-sourced HUD banner working
   around the load_state HUD bug; 0x2AFC death detection). Also: grounded
   checkpoint admission (defer seed snapshot to the next grounded frame — the 2
@@ -718,7 +718,7 @@ alone doesn't resolve the over-concentration.
   ladder (final_x≥18) collapsed 65%→78%→…→~1% while mean episode reward *rose*
   2.1→7.9. Last-20% median final position = (x=1, y=30) = **the spawn point**:
   the late policy sits at spawn ~328 steps for ~7.9 reward and never descends.
-  Snapshot depth-sweep (`scripts/rollout_l2.py`, 10 stochastic eps each):
+  Snapshot depth-sweep (`scripts/mo5/yeti/rollout_l2.py`, 10 stochastic eps each):
   500k→F3, 1M→F1, 3M→F3, 6M/10M/15M→F1 (never past floor 1 from ~6M on; never
   reaches floor 5 / the fruits in any snapshot).
   **ROOT CAUSE (proven, not inferred) — the airborne-freeze breaks PBRS
@@ -915,7 +915,7 @@ Between the phase-2 work and the ablation, we iterated on a different
 curriculum design: a **checkpoint curriculum** where the agent starts
 most episodes from game reset and a subset from saved states captured
 whenever it previously reached CP1, CP2, etc. See
-`scripts/train_checkpoint_curriculum.py`.
+`scripts/mo5/yeti/train_checkpoint_curriculum.py`.
 
 Three runs on disk with `checkpoints.pkl`:
 
@@ -1043,14 +1043,14 @@ runs — they didn't get close enough for it to matter.
 First half of the closed-loop plan from approach 9's followup: use
 Go-Explore to push past the CP2→CP3 wall, starting from CP2 save-states
 rather than game reset. Implemented via
-`scripts/go_explore.py --seed-archive ... --seed-min-cp 2`, which loads
+`scripts/mo5/yeti/go_explore.py --seed-archive ... --seed-min-cp 2`, which loads
 the given archive, filters it through the state validator, and adds
 the viable cells to the exploration archive before the main loop starts.
 
 Two prerequisites added for this experiment:
 
 - **State validator** (`python/retro_ai/training/state_validator.py` +
-  `scripts/filter_archive.py`). Rule: load state, noop probe, reject if
+  `scripts/mo5/yeti/filter_archive.py`). Rule: load state, noop probe, reject if
   bonus==0 at load OR bonus doesn't drop by min_drop=2 over 30 frames.
   Unit-tested, spot-checked against B's known-doomed CP4 and
   `go_explore_fruit` cells. The curriculum's inline `_validate_checkpoint`
@@ -1111,7 +1111,7 @@ died back down to CP0/CP1.
 Revisiting approach 10 after realising the cell-key scheme was
 collapsing meaningfully distinct game states into one bucket.
 
-Two fixes to `scripts/go_explore.py`:
+Two fixes to `scripts/mo5/yeti/go_explore.py`:
 
 - **Cell-key grid rework**: y-buckets are 32 px tall anchored at the
   bottom of the screen (one bucket per floor); x-buckets are 8 px in
@@ -1198,7 +1198,7 @@ per-segment training actually learn.
 
 Config: `experiments/003-yeti/configs/segment_1to2_v4.yaml` (fresh
 PPO policy, 5M steps, fruit_bonus reward, 5 settle frames after
-load_state). Seeds extracted from v9 via `scripts/extract_seeds.py`.
+load_state). Seeds extracted from v9 via `scripts/mo5/yeti/extract_seeds.py`.
 
 **Result: 41% CP1→CP2 success in the last 20%, learning curve still
 climbing.**
@@ -1324,7 +1324,7 @@ end, we need to understand why `segment_1to2` failed.
    fed it bad data.
 2. **Re-run `segment_1to2` with validated starts.** Point
    `train_segment.py` at the filtered checkpoints.pkl (either via
-   `scripts/filter_archive.py` applied to a converted archive, or by
+   `scripts/mo5/yeti/filter_archive.py` applied to a converted archive, or by
    extending the segment script to call the validator on load).
    5M steps, same config otherwise. If it now hits non-trivial
    success, per-segment training is viable. If it stays at 0%, the
@@ -1601,7 +1601,7 @@ Reading across:
   move up (there's nowhere to go up to).
 
 Anecdotal confirmation from 12 sample rollouts
-(`scripts/rollout_policy_from_seeds.py` against v3's final_model):
+(`scripts/mo5/yeti/rollout_policy_from_seeds.py` against v3's final_model):
 policy mostly jumps left/right in place, eventually falls to a lower
 floor or walks onto a snowball. It doesn't seek ladders. Same pattern
 from diverse seed positions.
@@ -2038,7 +2038,7 @@ candidate causes I haven't pinpointed:
   large progress on each pseudo-episode.
 
 I tried to reproduce with the saved final_model.zip on the same seed
-(`scripts/repro_v7_farming.py`) and the trained policy stays
+(`scripts/mo5/yeti/repro_v7_farming.py`) and the trained policy stays
 completely stationary at start position — total reward 0 over 1000
 steps. So the trained policy and the reward-collection during
 training disagree.
@@ -2174,7 +2174,7 @@ Commit: `d540831`.
 10 floor-3 CP2 seeds in the v9_v2 archive, all with F3 already
 collected. After v7 fixed (50% overall CP3), floor-3 starts only
 hit 0.51%. Rolled out the trained policy from each, with a live
-reward HUD overlay (`scripts/rollout_with_reward_overlay.py`).
+reward HUD overlay (`scripts/mo5/yeti/rollout_with_reward_overlay.py`).
 
 What we saw on a sample:
 
@@ -2262,7 +2262,7 @@ have F4 remaining, because v7's agent reached CP3 most often by
 collecting F1+F2+F3 in that order, leaving F4 last. We capped that
 group to avoid sample-bias.)
 
-Tooling: `scripts/build_cp3_seeds.py`.
+Tooling: `scripts/mo5/yeti/build_cp3_seeds.py`.
 
 #### 21.2. Headline result
 
@@ -2427,7 +2427,7 @@ at scale.
 
 ### 23. Chaining v7 + v8 = 0.4% CP2→CP4  *(verified)*
 
-Wired up chained-policy eval (`scripts/eval_chained_policies.py`).
+Wired up chained-policy eval (`scripts/mo5/yeti/eval_chained_policies.py`).
 Loads both trained models, plays v7 from CP2 seeds, hands off to v8
 when CP3 is reached, plays until CP4 or episode ends. Records max
 CP reached per episode.
@@ -2574,9 +2574,9 @@ gameplay (random rollouts from CP4 seeds, random play from CP0
 including 2 fruit pickups and 1 death/respawn): zero 0 → 1
 transitions. The flag is a clean level-cleared signal.
 
-The implementation is in `scripts/probe_princess_flag_long_baseline.py`
+The implementation is in `scripts/mo5/yeti/probe_princess_flag_long_baseline.py`
 (re-runnable confidence check) and the new detection lives in
-`scripts/train_segment.py` as the rising-edge check
+`scripts/mo5/yeti/train_segment.py` as the rising-edge check
 `prev=0, curr=1` of `ram[11050]`.
 
 #### Re-analysing v1 with the new rule
@@ -3402,7 +3402,7 @@ incompatible with the CnnPolicy warmstarts). 20M steps.
 
 ### Clean from-reset baseline eval (v2)  *(verified)*
 
-`scripts/eval_from_reset.py`, 200 stochastic episodes from a clean reset
+`scripts/mo5/yeti/eval_from_reset.py`, 200 stochastic episodes from a clean reset
 under training-equivalent termination:
 
 | reached | rate |
@@ -3630,7 +3630,7 @@ works and is simpler.
   essential, and a curriculum that makes the deep states frequent is the
   principled fix.
 
-**Profile (`scripts/profile_run.py`, 12M champion, 150 eps).** Per-leg
+**Profile (`scripts/mo5/yeti/profile_run.py`, 12M champion, 150 eps).** Per-leg
 arrival: CP1 step47/bonus954, CP2 80/926, CP3 158/863, CP4 207/825 — the
 agent is FAST and CP1 is already optimal, so dawdling/snowball-by-slowness
 is not the problem. Failures localize at the ladders: CP3->CP4 ends at
@@ -3660,7 +3660,7 @@ shaping (`fruit_bonus_path_progress_pbrs`, level 2). Config:
 ## Result: 0 fruits, stuck on floor 1
 
 - `cp=[0,0,0] saves=[0,0,0]`, all 27,802 episodes `reached_level=0`.
-- Direct snapshot rollout from `level2_start.sav` (`scripts/rollout_l2.py`,
+- Direct snapshot rollout from `level2_start.sav` (`scripts/mo5/yeti/rollout_l2.py`,
   new): **every** checkpoint (100k … 10M) tops out at the first gap.
   Max `agent_x` reached = 6–11; **0/N episodes reach the F1→F2 ladder at
   x≈18**. Heatmaps/trajectories (`--heatmap`): a single hot blob at the
@@ -3772,7 +3772,7 @@ unit tests (`tests/python/test_yeti_map.py`) pin the ±8 anchors; keep green.
   should be credited or also suppressed.
 
 ## New tooling added this investigation
-- `scripts/rollout_l2.py` — rollout/eval from an L2 start-state (video,
+- `scripts/mo5/yeti/rollout_l2.py` — rollout/eval from an L2 start-state (video,
   heatmap, trajectory, action distribution, agent-x extent, per-checkpoint
   depth sweep). The from-reset renderers can't target L2 (they boot L1).
 
@@ -3820,14 +3820,14 @@ not a win.
 OPEN / to verify: whether the deep descents are controlled (ladders) or the
 agent still falling but no longer rewarded for it. Low death rate + most
 episodes ending via stall (not death) suggest real descent; characterizing
-with `scripts/rollout_l2.py --heatmap` on v4 snapshots (output/mo5/yeti/
+with `scripts/mo5/yeti/rollout_l2.py --heatmap` on v4 snapshots (output/mo5/yeti/
 videos/l2_v4_probe).
 
 Next: with CP1 seeds now captured, a longer run + curriculum bootstrapping
 is the natural follow-up (the curriculum was inert on v3 because it never
 reached a fruit). This is where the curriculum warm-start work begins.
 
-### v4 rollout characterization (`scripts/rollout_l2.py`, output/mo5/yeti/videos/l2_v4_probe)
+### v4 rollout characterization (`scripts/mo5/yeti/rollout_l2.py`, output/mo5/yeti/videos/l2_v4_probe)
 
 Resolves the open question above: the deep descents are real navigation, not
 falls. Deterministic-ish snapshot rollout (15 ep from level2_start.sav):

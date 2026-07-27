@@ -9,7 +9,7 @@ Generates:
   5. Summary stats
 
 Usage:
-    python scripts/analyze_agent.py --model output/yeti/ppo_5M/final_model.zip
+    python scripts/mo5/yeti/analyze_agent.py --model output/yeti/ppo_5M/final_model.zip
 """
 
 import argparse

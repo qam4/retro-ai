@@ -14,7 +14,7 @@ Outputs to <out>/:
 
 Example:
   CUDA_VISIBLE_DEVICES= RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \\
-    python scripts/capture_level2_start.py \\
+    python scripts/mo5/yeti/capture_level2_start.py \\
       --model output/mo5/yeti/champions/v15_phase2_4500k/final_model.zip \\
       --out output/mo5/yeti/level2
 """

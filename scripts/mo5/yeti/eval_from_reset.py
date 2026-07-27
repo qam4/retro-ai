@@ -13,7 +13,7 @@ sample actions instead.
 Example::
 
     RETRO_AI_ROM_DIR=roms PYTHONPATH=python:build/ci-linux \\
-      python scripts/eval_from_reset.py \\
+      python scripts/mo5/yeti/eval_from_reset.py \\
         --model output/mo5/yeti/warmstart/v2_clean/final_model.zip \\
         --episodes 200
 """

@@ -3,7 +3,7 @@
 #
 # v3 broke the CP2->CP3 wall (frontier advanced to CP3) but stalled
 # at CP3->CP4 (0%, even from CP3 starts). Rollout diagnosis
-# (scripts/rollout_cp3_diagnose.py) showed the agent, from the CP3
+# (scripts/mo5/yeti/rollout_cp3_diagnose.py) showed the agent, from the CP3
 # spot (px~156, floor 3), walks LEFT (away from F4) and falls to its
 # death every time. The path-progress reward correctly points right
 # (toward L34 at px=176 then F4 at px=272) but the policy never
