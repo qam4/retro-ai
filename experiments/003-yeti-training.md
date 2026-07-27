@@ -783,6 +783,17 @@ alone doesn't resolve the over-concentration.
   (a) let it cook longer now that the reward is honest; (b) diagnose the F3->F4
   failure with a rollout (gap-death? goat? navigation?); (c) H-AI reverse-
   curriculum / waypoint seeds to practice the deep descent + goat-dodging.
+  DIAGNOSIS (b) DONE (rollout of the v6 3M policy, 20 eps): 19/20 reach F3
+  (grounded, legit descent, NOT falls); ALL 20 die GROUNDED with no fall-pose
+  before death, clustered at a FIXED spot floor 3 x~34 (y=78). I.e. the agent
+  descends to F3, walks to x~34, and is killed there every time — a goat/enemy
+  collision, not a gap-fall and not a navigate-to-ladder failure. This is the
+  "goats can't be jumped, must retreat up a ladder" wall. Implication: more
+  compute alone is unlikely to crack it — with gamma=1 PBRS a retreat-and-retry
+  telescopes to ~0 reward, so there's no gradient rewarding the dodge and the
+  agent keeps walking into the goat. Points at (c): waypoint/curriculum practice
+  past the F3 goat (or a goat-aware mechanic). NEXT: confirm the goat visually
+  (video), then design the F3-goat practice.
 - [ ] **H-AI — reverse curriculum via WAYPOINT START-SEEDS (design, only if
   v5 plateaus).** Reaching the first fruit on L2 requires a long multi-floor
   descent across ~14 gaps and many ladders, and L2 goats *cannot be jumped*
