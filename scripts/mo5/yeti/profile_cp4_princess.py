@@ -25,16 +25,10 @@ import random
 import statistics
 from collections import Counter
 
-import numpy as np
+from retro_ai.games.yeti_rollout import rollout_episode
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.run_config import EnvConfig
 from stable_baselines3 import PPO
-
-FRUITS_ADDR = 11055
-LIVES_ADDR = 11095
-BONUS_HI, BONUS_LO = 11010, 11011
-X_POS, Y_POS = 11090, 11089
-PRINCESS_FLAG_ADDR = 11050
 
 
 def main() -> None:
@@ -54,8 +48,6 @@ def main() -> None:
         resize=(84, 84),
     )
     stack = build_training_env("yeti_fruit", env_cfg)
-    gym_env, iface = stack.gym, stack.base._interface
-    base_iface = stack.base._interface
     model = PPO.load(args.model, device="auto")
 
     with open(args.seeds, "rb") as f:
@@ -63,59 +55,31 @@ def main() -> None:
     cp4 = [e[-1] for e in data["checkpoints"][4]]  # state_bytes
     assert cp4, "no CP4 seeds in checkpoints.pkl"
 
-    def bonus():
-        return (iface.read_ram_byte(BONUS_HI) << 8) | iface.read_ram_byte(BONUS_LO)
-
     touches = 0
     fail_pos = []
     end_reasons: Counter[str] = Counter()
-    gym_env.reset()
+    stack.gym.reset()  # boot once; rollout_episode(reset_env=False) load_states below
 
     for _ep in range(args.episodes):
-        state = random.choice(cp4)
-        base_iface.load_state(state)
-        obs = None
-        for _ in range(5):
-            obs, _, _, _, _ = gym_env.step([0, 0, 0])
-        prev_lives = iface.read_ram_byte(LIVES_ADDR)
-        prev_bonus = bonus()
-        prev_pr = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-        stall = 0
-        end = "max_steps"
-        touched = False
-        for _ in range(args.max_steps):
-            a, _ = model.predict(np.transpose(obs, (2, 0, 1)), deterministic=False)
-            obs, _, done, trunc, _ = gym_env.step(a)
-            lives = iface.read_ram_byte(LIVES_ADDR)
-            b = bonus()
-            pr = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-            if pr == 1 and prev_pr == 0:
-                touched = True
-                end = "princess"
-                break
-            prev_pr = pr
-            if lives < prev_lives and prev_lives > 0:
-                end = "death"
-                break
-            prev_lives = lives
-            if b == prev_bonus:
-                stall += 1
-            else:
-                stall = 0
-                prev_bonus = b
-            if stall >= args.stall_threshold:
-                end = "stall"
-                break
-            if done or trunc:
-                end = "env_done"
-                break
-        end_reasons[end] += 1
-        if touched:
+        # Seed-pool rollout: a different CP4 state each episode, no per-episode
+        # game reset (reset_env=False) to avoid the ~32s MO5 startup each time.
+        result = rollout_episode(
+            stack,
+            model,
+            level=1,
+            fruits_total=4,
+            start_state=random.choice(cp4),
+            settle=5,
+            max_steps=args.max_steps,
+            stall_threshold=args.stall_threshold,
+            deterministic=False,
+            reset_env=False,
+        )
+        end_reasons[result.end_reason] += 1
+        if result.princess_touched:
             touches += 1
         else:
-            fx = iface.read_ram_byte(X_POS) * 4 + 8
-            fy = iface.read_ram_byte(Y_POS)
-            fail_pos.append((fx, fy))
+            fail_pos.append((result.final_x * 4 + 8, result.final_y))
 
     n = args.episodes
     print(f"\n=== CP4->princess profile: {args.model} ===")

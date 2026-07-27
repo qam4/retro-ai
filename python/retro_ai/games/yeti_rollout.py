@@ -55,6 +55,7 @@ def rollout_episode(
     stall_threshold: int = 15,
     deterministic: bool = True,
     keep_frames: bool = False,
+    reset_env: bool = True,
 ) -> EpisodeResult:
     """Roll out a single Yeti episode under the training termination rules.
 
@@ -70,12 +71,23 @@ def rollout_episode(
     level, fruits_total : level geometry (L1: 4 fruits, L2: 2).
     start_state : optional save-state bytes to load each episode (level 2 boots
         from a save, not a game reset). None => plain game reset.
+    reset_env : if True (default) call ``gym_env.reset()`` each episode (fresh
+        game reset — required when ``start_state`` is None). Set False for
+        seed-pool rollouts that ``load_state`` a different seed each episode:
+        this skips the (~32s on MO5) startup per episode. The CALLER must have
+        booted the env once (one ``gym_env.reset()``) before the first call,
+        and must pass a ``start_state`` with ``settle >= 1``.
     """
     base = stack.base
     gym_env = stack.gym
     iface = base._interface
 
-    obs, _ = gym_env.reset()
+    if reset_env:
+        obs, _ = gym_env.reset()
+    elif start_state is None:
+        raise ValueError("reset_env=False requires a start_state (seed-pool mode)")
+    else:
+        obs = None
     if start_state is not None:
         iface.load_state(start_state)
         stack.preprocessed.notify_state_loaded()  # drop pre-load frames
