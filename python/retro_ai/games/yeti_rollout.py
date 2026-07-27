@@ -14,7 +14,7 @@ heatmap logic and read what they need off :class:`EpisodeResult`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -38,6 +38,9 @@ class EpisodeResult:
     positions: List[Tuple[int, int]] = field(default_factory=list)  # (x_px, y)
     actions: List[Tuple[int, ...]] = field(default_factory=list)
     frames: Optional[List[np.ndarray]] = None  # raw frames if keep_frames
+    # First time each checkpoint was reached this episode: cp -> (step, bonus).
+    # cp = fruits collected; princess = fruits_total + 1. Used by profiling.
+    cp_arrival: Dict[int, Tuple[int, int]] = field(default_factory=dict)
 
 
 def rollout_episode(
@@ -94,6 +97,7 @@ def rollout_episode(
     positions: List[Tuple[int, int]] = []
     actions: List[Tuple[int, ...]] = []
     frames: Optional[List[np.ndarray]] = [] if keep_frames else None
+    cp_arrival: Dict[int, Tuple[int, int]] = {}
 
     while steps < max_steps:
         action, _ = model.predict(
@@ -120,12 +124,16 @@ def rollout_episode(
         if keep_frames and base._last_raw_obs is not None:
             frames.append(np.asarray(base._last_raw_obs, dtype=np.uint8).copy())
 
-        max_cp = max(max_cp, fruits_total - fruits)
+        cp_now = fruits_total - fruits
+        if cp_now > max_cp:
+            max_cp = cp_now
+            cp_arrival.setdefault(cp_now, (steps, bonus))
 
         # Termination priority: princess -> death -> stall -> env done.
         if princess == 1 and prev_princess == 0:
             touched = True
             max_cp = fruits_total + 1
+            cp_arrival.setdefault(fruits_total + 1, (steps, bonus))
             end_reason = "princess"
             break
         prev_princess = princess
@@ -161,4 +169,5 @@ def rollout_episode(
         positions=positions,
         actions=actions,
         frames=frames,
+        cp_arrival=cp_arrival,
     )

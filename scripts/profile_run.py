@@ -18,18 +18,10 @@ import argparse
 import statistics
 from collections import defaultdict
 
-import numpy as np
+from retro_ai.games.yeti_rollout import rollout_episode
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.run_config import EnvConfig
 from stable_baselines3 import PPO
-
-FRUITS_ADDR = 11055
-LIVES_ADDR = 11095
-BONUS_HI = 11010
-BONUS_LO = 11011
-X_POS = 11090
-Y_POS = 11089
-PRINCESS_FLAG_ADDR = 11050
 
 
 def main() -> None:
@@ -48,11 +40,7 @@ def main() -> None:
         resize=(84, 84),
     )
     stack = build_training_env("yeti_fruit", env_cfg)
-    gym_env, iface = stack.gym, stack.base._interface
     model = PPO.load(args.model, device="auto")
-
-    def bonus():
-        return (iface.read_ram_byte(BONUS_HI) << 8) | iface.read_ram_byte(BONUS_LO)
 
     # arrival[cp] = list of (step, bonus) at first time reaching cp this ep
     arrival_step = defaultdict(list)
@@ -62,53 +50,22 @@ def main() -> None:
     end_reasons = defaultdict(int)
 
     for _ep in range(args.episodes):
-        obs, _ = gym_env.reset()
-        prev_fruits = iface.read_ram_byte(FRUITS_ADDR)
-        prev_lives = iface.read_ram_byte(LIVES_ADDR)
-        prev_bonus = bonus()
-        prev_princess = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-        stall = 0
-        max_cp = 4 - prev_fruits
-        end = "max_steps"
-        step = 0
-        while step < args.max_steps:
-            a, _ = model.predict(np.transpose(obs, (2, 0, 1)), deterministic=False)
-            obs, _, done, trunc, _ = gym_env.step(a)
-            step += 1
-            fruits = iface.read_ram_byte(FRUITS_ADDR)
-            lives = iface.read_ram_byte(LIVES_ADDR)
-            b = bonus()
-            pr = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-            cp = 4 - fruits
-            if cp > max_cp:
-                max_cp = cp
-                arrival_step[cp].append(step)
-                arrival_bonus[cp].append(b)
-            if pr == 1 and prev_princess == 0:
-                max_cp = 5
-                arrival_step[5].append(step)
-                arrival_bonus[5].append(b)
-                end = "princess"
-                break
-            prev_princess = pr
-            if lives < prev_lives and prev_lives > 0:
-                end = "death"
-                break
-            prev_lives = lives
-            if b == prev_bonus:
-                stall += 1
-            else:
-                stall = 0
-                prev_bonus = b
-            if stall >= args.stall_threshold:
-                end = "stall"
-                break
-            if done or trunc:
-                end = "env_done"
-                break
-        end_reasons[end] += 1
-        fx, fy = iface.read_ram_byte(X_POS) * 4 + 8, iface.read_ram_byte(Y_POS)
-        fail_pos[max_cp].append((fx, fy, end))
+        result = rollout_episode(
+            stack,
+            model,
+            level=1,
+            fruits_total=4,
+            max_steps=args.max_steps,
+            stall_threshold=args.stall_threshold,
+            deterministic=False,
+        )
+        for cp, (astep, abonus) in result.cp_arrival.items():
+            arrival_step[cp].append(astep)
+            arrival_bonus[cp].append(abonus)
+        end_reasons[result.end_reason] += 1
+        fail_pos[result.max_cp].append(
+            (result.final_x * 4 + 8, result.final_y, result.end_reason)
+        )
 
     n = args.episodes
     print(f"\n=== efficiency/failure profile: {args.model} ({n} eps) ===\n")
