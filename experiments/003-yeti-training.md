@@ -842,18 +842,44 @@ alone doesn't resolve the over-concentration.
   and exploration coverage. So H-AI is worth trying whenever we hit trouble /
   plateau — its benefit isn't limited to the reverse-curriculum framing.
   **Refinement (user, post-v6) — waypoints must be OPTIONAL / non-gating,
-  because the level branches.** Topology: F1->F2 has ONE ladder, but F2->F3 has
-  TWO ladders (alternate routes) — the agent may legitimately take either. So a
-  waypoint can NOT be a required checkpoint (unlike fruits, which are
-  mandatory): we must capture MULTIPLE waypoints per floor (covering both
-  ladders) and sample among them as start-seeds, and NEVER require reaching a
-  specific one. This reinforces the start-seeds-only design: waypoints seed
-  episodes and add diversity, but success/advancement is only ever "grab a
-  fruit". Concretely the CheckpointManager needs a SEPARATE "waypoint pool"
-  (optional start states, no success semantics) distinct from the CP (fruit)
-  pools. Also: v6 was only 3M steps (L1 champions ran 12-20M) — L2 will need
-  MORE steps regardless; waypoints are an accelerator (more F3-goat reps per
-  wall-clock), not a substitute for compute.
+  because the level branches.** Topology (corrected): F1->F2 has TWO ladders
+  (L12a px80, L12b px304), F2->F3 has TWO (L23a px16, L23b px192), F3->F4 has
+  ONE (L34 px136). Where a floor has two down-ladders the agent may legitimately
+  take either, so a waypoint can NOT be a required checkpoint (unlike fruits,
+  which are mandatory): capture MULTIPLE waypoints per floor and sample among
+  them as start-seeds, NEVER require reaching a specific one. The
+  CheckpointManager needs a SEPARATE "waypoint pool" (optional start states, no
+  success semantics) distinct from the CP (fruit) pools. Also: v6 was only 3M
+  steps (L1 champions ran 12-20M) — L2 needs MORE steps regardless; waypoints
+  are an accelerator, not a substitute for compute.
+
+  **FINALIZED CAPTURE DESIGN (user, post-v6) — capture real states on reach,
+  like CPs; do NOT synthesize by RAM-poke.** An earlier idea (load level2_start
+  and write the agent's x/y to a computed waypoint) was rejected: writing only
+  position bytes leaves the rest of the machine state (floor var, velocity,
+  goats, pose, render) inconsistent -> invalid/desynced state, the exact class
+  of save/load bug we fought. Instead:
+  - **WP positions** are computed from the tilemap (ladder tops/bottoms) using
+    the confirmed pixel<->RAM equation (x_ram=(px-8)/4, y=floor_top_y). These are
+    DETECTION TARGETS only.
+  - **WP is position-based, not a flag** (unlike a fruit): "reached WP_k" =
+    agent GROUNDED (pose in SURFACE_POSES) within a tolerance of WP_k's (x,y).
+  - **Capture on reach**, exactly like CP capture on fruit pickup: when the
+    agent reaches a WP during a real episode, snapshot save_state -> that WP's
+    pool (grounded-only admission, live state only). Real states, no synthesis.
+  - **Guard — do NOT re-capture the seeded start-WP.** When an episode is seeded
+    from WP_k, the agent starts AT WP_k, so the detector would fire on frame 1
+    and re-snapshot a near-duplicate / log a bogus "reached WP_k from WP_k".
+    Track the start-WP and suppress its re-save (require leave-and-return, or
+    skip it for the episode) — mirrors the CP start-level admission guard.
+  - **Seeding**: reset + WP-pool seeds mixed, deep/frontier-weighted; success
+    metric stays fruit-only (WPs never enter reach/success stats).
+  - **Bootstrap caveat (honest):** capture-on-reach means floor-4+ WPs only
+    populate once the agent FIRST reaches them, which is still gated by the F3
+    goat. So WP-seeding accelerates AFTER a first breakthrough (bootstraps like
+    the CP curriculum did from rare reset-chains) but does not manufacture the
+    first floor-4 state alone -> run WP-seeding ALONGSIDE a longer run (a lucky
+    stochastic goat pass seeds the first deep WP, then it compounds).
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
