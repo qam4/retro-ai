@@ -891,15 +891,27 @@ alone doesn't resolve the over-concentration.
   NOT a reported metric (keeps WPs out of success/reach stats). L2 note: CP
   pools are near-empty until fruits get collected (v6 ended cp=[0,1,0]), so the
   CP share is ~0 automatically early and grows later — no special-casing; WP is
-  the primary deep source on L2. RECOMMENDED v1 (keep simple, isolate the
-  effect): fixed reset reserve (~0.25, preserve end-to-end composition) +
-  remaining budget to a DEPTH-WEIGHTED WP draw (small floor for shallow WPs) +
-  CP via existing success weighting (~0 while empty). Tune the WP weighting
-  empirically (frontier-tracking / scarcity) once working — same discipline as
-  the CP allocation arc (H-T/H-Q). From a WP start the agent plays normally with
-  the grounded reward and success stays fruit-only; the PBRS potential from the
-  WP position gives a short path to the fruit reward (discover + practice the
-  deep segment).
+  the primary deep source on L2.
+  RECOMMENDED (revised — self-regulating, no thresholds, matches L1). An earlier
+  draft proposed a fixed reset reserve (~0.25) + depth-weighted WP draw;
+  RETRACTED. Verified the last L1 champions (v14, v15) use reset_fraction=0.0
+  AND segment_floor=0.0 — NO fixed reset reserve; reset's share EMERGED from the
+  H-T aggregate-goal-score allocation. And depth-weighting needs hand-picked
+  thresholds (dispreferred). Instead EXTEND H-T to WPs: treat reset, CP, and WP
+  uniformly as "start states", each weighted by `1 - goal_score_ema` where
+  goal_score = fruit/princess progress reached FROM that start (reached_level/N).
+  - No reset reserve, no depth thresholds — fully self-regulating (matches L1).
+  - Naturally gives "more reps further down": a newly-captured deep WP inits at
+    goal_score=0 (like CPs) -> weight 1.0 -> heavily sampled -> many reps at the
+    new frontier; weight decays as it's mastered and the frontier moves deeper.
+    The hardest reachable spot (the goat WP) keeps the lowest goal_score -> the
+    most reps. Self-bootstrapping reverse-curriculum, no tuning.
+  - Still non-gating: goal_score-from-WP is only a SAMPLING weight (scored by
+    reaching the FRUIT, not the WP); WPs never gate advancement or enter reported
+    reach/success stats.
+  From a WP start the agent plays normally with the grounded reward, success
+  stays fruit-only; the PBRS potential from the WP position gives a short path to
+  the fruit reward (discover + practice the deep segment).
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
