@@ -92,6 +92,32 @@ def is_grounded(iface) -> bool:
     return read_pose(iface) in SURFACE_POSES
 
 
+def waypoints(level: int) -> Mapping[str, Tuple[int, int, int]]:
+    """Ladder-top/bottom WAYPOINTS for a level, as (x_ram, y_px, floor).
+
+    Positions are DERIVED from the level's tilemap (via yeti_map), not
+    captured by play: each vertical ladder gives a top waypoint (on its
+    upper floor) and a bottom waypoint (on its lower floor), both at the
+    ladder's x. Ladder x is stored in PIXELS; the agent's X RAM byte is in
+    4px units offset by 8 (pixel = x_ram*4 + 8), so x_ram = (x_px - 8)//4.
+    y is the floor-top pixel (the standing y on that floor).
+
+    These are used only as position DETECTION TARGETS for curriculum
+    waypoint capture — a waypoint is reached when the agent is grounded
+    within a tolerance of one of these (x_ram, y). Waypoints are NOT goals
+    and carry no success semantics (success is always "grab a fruit").
+    """
+    from retro_ai.training.yeti_map import get_level_map
+
+    m = get_level_map(level)
+    wps: dict[str, Tuple[int, int, int]] = {}
+    for name, upper_floor, lower_floor, x_px in m.ladders:
+        x_ram = (int(x_px) - 8) // 4
+        wps[f"{name}_top"] = (x_ram, m.floor_top_y[upper_floor], upper_floor)
+        wps[f"{name}_bot"] = (x_ram, m.floor_top_y[lower_floor], lower_floor)
+    return wps
+
+
 def is_dead(iface) -> bool:
     """Authoritative death check for any Yeti level.
 
