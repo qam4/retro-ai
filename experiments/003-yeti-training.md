@@ -769,8 +769,20 @@ alone doesn't resolve the over-concentration.
   fire on grounded frames, not just airborne. Accepted residual: a fall that
   lands ALIVE and dies 1 step later still banks the landing credit (bounded,
   requires surviving the impact; not farmable).
-  NEXT: 3M smoke re-run to confirm no regression and that the agent stops
-  loitering; then a longer run.
+  RESULT (v6 = `yeti_curriculum_l2_v6_grounded_3m`, 3M, exit 0, 35,704 eps):
+  **fix validated — the farm is gone.** Mean episode reward stays low and flat
+  across training (2.9/4.8/4.8/3.6/1.6/3.8 by window) instead of climbing to ~8
+  like v5; reach-ladder (final_x>=18) stays HIGH (68/96/95/79/75/94%) instead of
+  collapsing to ~1%. Depth-sweep (rollout_l2, 8 eps): every snapshot incl. the
+  FINAL 3M descends to F2-F3 (3M reaches F3 88%), vs v5's 6M/10M/15M sitting at
+  F1. So the agent now descends consistently and does NOT loiter at spawn.
+  REMAINING WALL: it plateaus at **F3** — never reaches F4/F5 (where the 2
+  fruits are); only 3 fruits collected from reset in the whole run. This is the
+  genuine L2 difficulty (the F3->F4 transition: gaps + goats that can't be
+  jumped like L1 snowballs, must be dodged/retreated). NEXT candidates:
+  (a) let it cook longer now that the reward is honest; (b) diagnose the F3->F4
+  failure with a rollout (gap-death? goat? navigation?); (c) H-AI reverse-
+  curriculum / waypoint seeds to practice the deep descent + goat-dodging.
 - [ ] **H-AI — reverse curriculum via WAYPOINT START-SEEDS (design, only if
   v5 plateaus).** Reaching the first fruit on L2 requires a long multi-floor
   descent across ~14 gaps and many ladders, and L2 goats *cannot be jumped*
