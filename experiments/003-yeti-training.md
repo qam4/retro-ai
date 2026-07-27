@@ -880,6 +880,26 @@ alone doesn't resolve the over-concentration.
     the CP curriculum did from rare reset-chains) but does not manufacture the
     first floor-4 state alone -> run WP-seeding ALONGSIDE a longer run (a lucky
     stochastic goat pass seeds the first deep WP, then it compounds).
+  **START MIXING (reset vs CP vs WP) — objective: max reps further down.**
+  Three start sources now: reset (level2_start), CP pool (fruit-collected
+  states), WP pool (position waypoints). Key difference: CPs are weighted by
+  `1-success` ("practice where you fail"), but WPs are NON-GATING (no success
+  metric), so weight them by DEPTH/FRONTIER instead (deeper / just past the
+  current from-reset frontier = more) — classic reverse-curriculum, and it
+  directly serves "more reps further down". Optional secondary signal:
+  reach-scarcity (seed rarely-reached WPs more) — an internal sampling heuristic
+  NOT a reported metric (keeps WPs out of success/reach stats). L2 note: CP
+  pools are near-empty until fruits get collected (v6 ended cp=[0,1,0]), so the
+  CP share is ~0 automatically early and grows later — no special-casing; WP is
+  the primary deep source on L2. RECOMMENDED v1 (keep simple, isolate the
+  effect): fixed reset reserve (~0.25, preserve end-to-end composition) +
+  remaining budget to a DEPTH-WEIGHTED WP draw (small floor for shallow WPs) +
+  CP via existing success weighting (~0 while empty). Tune the WP weighting
+  empirically (frontier-tracking / scarcity) once working — same discipline as
+  the CP allocation arc (H-T/H-Q). From a WP start the agent plays normally with
+  the grounded reward and success stays fruit-only; the PBRS potential from the
+  WP position gives a short path to the fruit reward (discover + practice the
+  deep segment).
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
