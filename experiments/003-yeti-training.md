@@ -779,7 +779,14 @@ alone doesn't resolve the over-concentration.
   REMAINING WALL: it plateaus at **F3** — never reaches F4/F5 (where the 2
   fruits are); only 3 fruits collected from reset in the whole run. This is the
   genuine L2 difficulty (the F3->F4 transition: gaps + goats that can't be
-  jumped like L1 snowballs, must be dodged/retreated). NEXT candidates:
+  jumped like L1 snowballs, must be dodged/retreated).
+  CROSS-RUN CHECK (grounded-depth sweeps, rollout_l2): the agent has NEVER stood
+  on floor 4+ in ANY L2 run — max grounded floor = F3 for v4, v5, v6 (v3 was
+  stuck at F1). The only "F4" sightings were falls-to-death (deep final_y), not
+  legitimate reaching. v6 is the best: same F3 ceiling but it reaches F3 most
+  RELIABLY (stable across snapshots incl. the final one), vs v4/v5 which touched
+  F3 only transiently before collapsing. The F3 goat (x~34) is the ceiling.
+  NEXT candidates:
   (a) let it cook longer now that the reward is honest; (b) diagnose the F3->F4
   failure with a rollout (gap-death? goat? navigation?); (c) H-AI reverse-
   curriculum / waypoint seeds to practice the deep descent + goat-dodging.
