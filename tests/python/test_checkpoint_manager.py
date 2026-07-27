@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "mo5" / "yeti"))
 
 # Importing the training script pulls SB3/gym; skip cleanly if absent.
 ccm = pytest.importorskip("train_checkpoint_curriculum")
@@ -205,10 +205,15 @@ def test_pick_start_picks_only_nonempty_level():
     mgr.save_scored(2, b"cp2_state", 100, True, bonus=10, source_cp=0)
     # Reach gate: CP2 is only eligible once it's reset-reachable.
     mgr.reset_reach_ema[2] = 1.0
-    for _ in range(20):
+    # H-T: reset (CP0) always competes; only EMPTY levels (1, 3, 4) are
+    # never picked. So a pick is either reset (0, None) or CP2 (2, state).
+    for _ in range(50):
         level, state = mgr.pick_start()
-        assert level == 2
-        assert state == b"cp2_state"
+        assert level in (0, 2)
+        if level == 2:
+            assert state == b"cp2_state"
+        else:
+            assert state is None
 
 
 def test_pick_start_gated_out_returns_reset():
@@ -231,10 +236,12 @@ def test_pick_start_weights_toward_failing_segment():
     # Both reset-reachable (eligible).
     mgr.reset_reach_ema[1] = 1.0
     mgr.reset_reach_ema[2] = 1.0
-    # CP1 is "solved" (high success EMA), CP2 is "failing" (low).
-    mgr.seg_success_ema[1] = 0.95  # -> weight 0.05
-    mgr.seg_success_ema[2] = 0.05  # -> weight 0.95
-    counts = {1: 0, 2: 0}
+    # H-T weights by (1 - goal_score_ema): CP1 "solved" (high score),
+    # CP2 "failing" (low score). (reset/CP0 also competes; we only
+    # compare the two deep levels.)
+    mgr.goal_score_ema[1] = 0.95  # -> weight 0.05
+    mgr.goal_score_ema[2] = 0.05  # -> weight 0.95
+    counts = {0: 0, 1: 0, 2: 0}
     import random
 
     random.seed(0)
@@ -254,12 +261,16 @@ def test_pick_start_floor_prevents_starvation():
     mgr.save_scored(2, b"cp2", 100, True, bonus=10, source_cp=0)
     mgr.reset_reach_ema[1] = 1.0
     mgr.reset_reach_ema[2] = 1.0
-    mgr.seg_success_ema[1] = 0.95  # "solved" -> raw weight 0.05
-    mgr.seg_success_ema[2] = 0.05  # "failing" -> raw weight 0.95
+    # H-T weights by (1 - goal_score_ema). Push reset (CP0) out of
+    # contention (goal_score 1.0 -> weight ~0) to isolate the CP1-vs-CP2
+    # floor behavior. CP1 "solved", CP2 "failing".
+    mgr.goal_score_ema[0] = 1.0
+    mgr.goal_score_ema[1] = 0.95  # "solved" -> raw weight 0.05
+    mgr.goal_score_ema[2] = 0.05  # "failing" -> raw weight 0.95
     import random
 
     random.seed(0)
-    counts = {1: 0, 2: 0}
+    counts = {0: 0, 1: 0, 2: 0}
     for _ in range(4000):
         level, _ = mgr.pick_start()
         counts[level] += 1
