@@ -39,7 +39,7 @@ def _mgr(**overrides):
 
 
 def _pool_source_cps(mgr, level):
-    return sorted(src for src, _b, _s in mgr.checkpoints[level])
+    return sorted(src for src, _b, _s in mgr.checkpoints[level].states)
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ def test_full_pool_refreshes_instead_of_freezing():
         # so the old bonus-rule would have rejected every one after the
         # first three.
         mgr.save_scored(1, f"s{i}".encode(), 100, True, bonus=100 - i, source_cp=0)
-    pool_states = {s for _src, _b, s in mgr.checkpoints[1]}
+    pool_states = {s for _src, _b, s in mgr.checkpoints[1].states}
     assert len(mgr.checkpoints[1]) == 3
     # The last inserted state must be in the pool (proves no freeze).
     assert b"s19" in pool_states
@@ -236,11 +236,11 @@ def test_pick_start_weights_toward_failing_segment():
     # Both reset-reachable (eligible).
     mgr.reset_reach_ema[1] = 1.0
     mgr.reset_reach_ema[2] = 1.0
-    # H-T weights by (1 - goal_score_ema): CP1 "solved" (high score),
+    # H-T weights by (1 - goal_score): CP1 "solved" (high score),
     # CP2 "failing" (low score). (reset/CP0 also competes; we only
-    # compare the two deep levels.)
-    mgr.goal_score_ema[1] = 0.95  # -> weight 0.05
-    mgr.goal_score_ema[2] = 0.05  # -> weight 0.95
+    # compare the two deep levels.) goal_score now lives per-pool.
+    mgr.checkpoints[1].goal_score = 0.95  # -> weight 0.05
+    mgr.checkpoints[2].goal_score = 0.05  # -> weight 0.95
     counts = {0: 0, 1: 0, 2: 0}
     import random
 
@@ -261,12 +261,12 @@ def test_pick_start_floor_prevents_starvation():
     mgr.save_scored(2, b"cp2", 100, True, bonus=10, source_cp=0)
     mgr.reset_reach_ema[1] = 1.0
     mgr.reset_reach_ema[2] = 1.0
-    # H-T weights by (1 - goal_score_ema). Push reset (CP0) out of
-    # contention (goal_score 1.0 -> weight ~0) to isolate the CP1-vs-CP2
-    # floor behavior. CP1 "solved", CP2 "failing".
-    mgr.goal_score_ema[0] = 1.0
-    mgr.goal_score_ema[1] = 0.95  # "solved" -> raw weight 0.05
-    mgr.goal_score_ema[2] = 0.05  # "failing" -> raw weight 0.95
+    # H-T weights by (1 - goal_score). Push reset (CP0) out of contention
+    # (goal_score 1.0 -> weight ~0) to isolate the CP1-vs-CP2 floor
+    # behavior. CP1 "solved", CP2 "failing". goal_score now lives per-pool.
+    mgr.checkpoints[0].goal_score = 1.0
+    mgr.checkpoints[1].goal_score = 0.95  # "solved" -> raw weight 0.05
+    mgr.checkpoints[2].goal_score = 0.05  # "failing" -> raw weight 0.95
     import random
 
     random.seed(0)
@@ -291,7 +291,7 @@ def test_save_checkpoint_seed_archive_defaults():
     mgr = _mgr()
     mgr.save_checkpoint(1, b"seed")  # defaults source_cp=0, bonus=0
     assert len(mgr.checkpoints[1]) == 1
-    assert mgr.checkpoints[1][0] == (0, 0, b"seed")
+    assert mgr.checkpoints[1].states[0] == (0, 0, b"seed")
 
 
 def test_disk_roundtrip_preserves_3tuple(tmp_path):
@@ -302,7 +302,7 @@ def test_disk_roundtrip_preserves_3tuple(tmp_path):
 
     mgr2 = _mgr()
     mgr2.load_from_disk(str(p))
-    assert mgr2.checkpoints[1][0] == (0, 42, b"new_state")
+    assert mgr2.checkpoints[1].states[0] == (0, 42, b"new_state")
 
 
 def test_disk_roundtrip_normalizes_legacy_2tuple(tmp_path):
@@ -320,4 +320,4 @@ def test_disk_roundtrip_normalizes_legacy_2tuple(tmp_path):
     mgr = _mgr()
     mgr.load_from_disk(str(p))
     # Legacy entry gets source_cp = level (1) and the original bonus.
-    assert mgr.checkpoints[1][0] == (1, 55, b"old1")
+    assert mgr.checkpoints[1].states[0] == (1, 55, b"old1")

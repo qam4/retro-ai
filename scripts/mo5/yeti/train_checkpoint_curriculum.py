@@ -98,6 +98,65 @@ def _get_global_step() -> int:
         return _global_step
 
 
+class StartPool:
+    """A pool of captured start-states with a self-regulating goal-score.
+
+    The shared base (by composition) for both start sources: fruit
+    CHECKPOINTS and position WAYPOINTS. It owns exactly what they have in
+    common:
+      - ``states``: retained (source_cp, bonus, state_bytes) entries;
+      - ``goal_score``: EMA of reached_level/total_goals from this start
+        (the H-T self-regulating weight is ``1 - goal_score``);
+      - admission/retention/eviction (reset-origin + diversity);
+      - sampling.
+    Level ORDERING, the reach-gate, per-segment success and frontier
+    advancement are CP-specific and deliberately stay in CheckpointManager
+    — a waypoint has none of those.
+    """
+
+    def __init__(self, capacity: int, reach_alpha: float = 0.02):
+        self.capacity = int(capacity)
+        self.reach_alpha = float(reach_alpha)
+        self.states: list = []  # (source_cp, bonus, state_bytes)
+        self.goal_score = 0.0
+
+    def __len__(self) -> int:
+        return len(self.states)
+
+    def update_goal_score(self, score: float) -> None:
+        a = self.reach_alpha
+        self.goal_score = (1 - a) * self.goal_score + a * float(score)
+
+    def weight(self) -> float:
+        """H-T allocation weight: starts you can't finish from get more."""
+        return max(1.0 - self.goal_score, 1e-3)
+
+    def sample(self):
+        """A uniformly random (source_cp, bonus, state_bytes) entry."""
+        return random.choice(self.states)
+
+    def insert(self, source_cp, bonus, state_bytes):
+        """Insert keeping the pool reset-origin AND diverse.
+
+        Retention priority is source_cp (lower = closer to a reset
+        trajectory = more on-distribution). When full, admit a newcomer
+        only if it's at least as reset-origin as the worst tier we hold,
+        evicting a UNIFORMLY RANDOM member of that worst tier (diversity-
+        preserving, recency-biased). Returns "appended" (pool grew),
+        "replaced" (evict+insert), or None (rejected).
+        """
+        entry = (int(source_cp), int(bonus), bytes(state_bytes))
+        if len(self.states) < self.capacity:
+            self.states.append(entry)
+            return "appended"
+        worst_cp = max(e[0] for e in self.states)
+        if entry[0] > worst_cp:
+            return None
+        worst_idxs = [i for i, e in enumerate(self.states) if e[0] == worst_cp]
+        self.states[random.choice(worst_idxs)] = entry
+        return "replaced"
+
+
 class CheckpointManager:
     """Manages save state buffers for each fruit checkpoint.
 
@@ -166,7 +225,10 @@ class CheckpointManager:
         # onto a few high-bonus states -> the v6 collapse; random keeps
         # them diverse.) So the pool drifts toward reset-origin states
         # the agent actually reaches from reset.
-        self.checkpoints = [[] for _ in range(self.FRUITS_TOTAL + 1)]
+        self.checkpoints = [
+            StartPool(self.max_states_per_checkpoint)
+            for _ in range(self.FRUITS_TOTAL + 1)
+        ]
         self.frontier = 0
         self.stats = {
             "saves": [0] * (self.FRUITS_TOTAL + 1),
@@ -225,7 +287,9 @@ class CheckpointManager:
         # (and budget), instead of looking "solved" and being starved.
         # pick_start weights every level by (1 - this); the anti-
         # starvation floor and fixed reset reserve fall out naturally.
-        self.goal_score_ema = [0.0] * (self.FRUITS_TOTAL + 1)
+        # NOTE: the goal-score EMA now lives PER-POOL on each StartPool
+        # (self.checkpoints[level].goal_score) so it unifies with waypoint
+        # pools; see StartPool.
 
     def record_episode(self, start_level, reached_level):
         if not (0 <= start_level <= self.FRUITS_TOTAL):
@@ -245,9 +309,9 @@ class CheckpointManager:
         # 0..5 (5 = princess via the H-M fix). This is what pick_start
         # weights by (1 - score).
         total_goals = self.FRUITS_TOTAL + 1
-        self.goal_score_ema[start_level] = (1 - a) * self.goal_score_ema[
-            start_level
-        ] + a * (reached_level / float(total_goals))
+        self.checkpoints[start_level].update_goal_score(
+            reached_level / float(total_goals)
+        )
         # Reach-from-reset EMA: only reset (CP0) episodes are evidence
         # for "can the agent get to CP_n unaided". For each n in 1..4
         # the episode reached n iff reached_level >= n.
@@ -260,41 +324,16 @@ class CheckpointManager:
                 self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
 
     def _insert(self, level, source_cp, bonus, state_bytes):
-        """Insert a (source_cp, bonus, state) entry, keeping the pool
-        reset-origin AND diverse.
-
-        Retention priority is source_cp (lower = closer to a reset
-        trajectory = more on-distribution, serves R2). When the pool is
-        full we evict a *uniformly random* entry from the worst
-        (highest source_cp) tier. The randomness is deliberate: it keeps
-        the pool refreshing with recent, on-distribution states instead
-        of freezing on a few snapshots.
-
-        This replaces the old bonus-tiebreak eviction, which caused the
-        v6 collapse: keeping only the highest-bonus (fastest-reach)
-        states froze the CP1 pool to 2 distinct entries, and the
-        curriculum then over-trained on those 2 stale states. ``bonus``
-        is retained on the entry for logging but no longer drives
-        eviction.
+        """Insert into CP ``level``'s pool (delegates retention/eviction to
+        StartPool), then update save stats and advance the frontier only
+        when the pool actually GREW (append), matching prior behavior.
         """
-        pool = self.checkpoints[level]
-        entry = (int(source_cp), int(bonus), bytes(state_bytes))
-        if len(pool) < self.max_states_per_checkpoint:
-            pool.append(entry)
-            self.stats["saves"][level] += 1
-            self._maybe_advance_frontier()
+        status = self.checkpoints[level].insert(source_cp, bonus, state_bytes)
+        if status is None:
             return
-        # Pool full. Keep the most reset-origin states: only admit a
-        # newcomer that is at least as reset-origin as the worst tier
-        # we currently hold, and when we do, evict a random member of
-        # that worst tier (diversity-preserving, recency-biased).
-        worst_cp = max(e[0] for e in pool)
-        if entry[0] > worst_cp:
-            # Newcomer is more artificial than everything we have; drop.
-            return
-        worst_idxs = [i for i, e in enumerate(pool) if e[0] == worst_cp]
-        pool[random.choice(worst_idxs)] = entry
         self.stats["saves"][level] += 1
+        if status == "appended":
+            self._maybe_advance_frontier()
 
     def save_checkpoint(self, fruits_collected, state_bytes, source_cp=0, bonus=0):
         # Used for offline seed_archive / preseed (no play-based score).
@@ -391,7 +430,7 @@ class CheckpointManager:
             if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold:
                 candidates.append(n)
 
-        weights = [max(1.0 - self.goal_score_ema[n], 1e-3) for n in candidates]
+        weights = [self.checkpoints[n].weight() for n in candidates]
         # Optional anti-starvation floor (default 0 -> pure weighting).
         if self.segment_floor > 0.0 and len(candidates) > 1:
             total = sum(weights)
@@ -403,7 +442,7 @@ class CheckpointManager:
         if level == 0:
             return 0, None
         # Pool entries are (source_cp, bonus, state_bytes).
-        _src, _bonus, state = random.choice(self.checkpoints[level])
+        _src, _bonus, state = self.checkpoints[level].sample()
         return level, state
 
     def summary(self):
@@ -417,7 +456,7 @@ class CheckpointManager:
                 rates.append(f"{i}->{i+1}:N/A")
         rej = self.stats.get("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
         reach = "[" + ", ".join(f"{r:.2f}" for r in self.reset_reach_ema) + "]"
-        gscore = "[" + ", ".join(f"{g:.2f}" for g in self.goal_score_ema) + "]"
+        gscore = "[" + ", ".join(f"{p.goal_score:.2f}" for p in self.checkpoints) + "]"
         return (
             f"cp={sizes} saves={self.stats['saves']} "
             f"rejected={rej} success=[{', '.join(rates)}] "
@@ -429,7 +468,7 @@ class CheckpointManager:
 
         data = {
             "checkpoints": [
-                list(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)
+                list(self.checkpoints[i].states) for i in range(self.FRUITS_TOTAL + 1)
             ],
             "stats": self.stats,
         }
@@ -457,7 +496,7 @@ class CheckpointManager:
                 else:
                     entry = (i, 0, bytes(s))
                 if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
-                    self.checkpoints[i].append(entry)
+                    self.checkpoints[i].states.append(entry)
         loaded_stats = data.get("stats", self.stats)
         # Tolerate older checkpoint files that predate newer counters.
         loaded_stats.setdefault("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
@@ -968,7 +1007,7 @@ class CurriculumCallback(BaseCallback):
         fr = [d / tot for d in delta]
         rr = _manager.reset_reach_ema
         se = _manager.seg_success_ema
-        gs = _manager.goal_score_ema
+        gs = [p.goal_score for p in _manager.checkpoints]
         # reach1..reach_N then princess (index N+1); succ_ema1..N;
         # start_frac0..N; gscore0..N.
         vals = [str(self.num_timesteps)]
@@ -1013,7 +1052,7 @@ class CurriculumCallback(BaseCallback):
             d_surv = asv[cp] - self._last_adm_survived[cp]
             d_rej = rj[cp] - self._last_rejected[cp]
             pool = _manager.checkpoints[cp]
-            distinct = len({e[2] for e in pool})
+            distinct = len({e[2] for e in pool.states})
             row += [
                 str(d_reach),
                 str(d_surv),
