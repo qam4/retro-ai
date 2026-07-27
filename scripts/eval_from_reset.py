@@ -25,15 +25,15 @@ import json
 from collections import Counter
 
 import numpy as np
+from retro_ai.games import yeti
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.run_config import EnvConfig
 from stable_baselines3 import PPO
 
-FRUITS_ADDR = 11055
-LIVES_ADDR = 11095
-BONUS_HI = 11010
-BONUS_LO = 11011
-PRINCESS_FLAG_ADDR = 11050
+# RAM layout / death detection live in retro_ai.games.yeti (single source of
+# truth). Aliased here for readability.
+FRUITS_ADDR = yeti.FRUITS_ADDR
+PRINCESS_FLAG_ADDR = yeti.PRINCESS_FLAG_ADDR
 
 
 def main() -> None:
@@ -87,7 +87,7 @@ def main() -> None:
     model = PPO.load(args.model, device="auto")
 
     def read_bonus() -> int:
-        return (iface.read_ram_byte(BONUS_HI) << 8) | iface.read_ram_byte(BONUS_LO)
+        return yeti.read_bonus(iface)
 
     rows = []
     max_cp_counts: Counter[int] = Counter()
@@ -104,7 +104,6 @@ def main() -> None:
             for _ in range(5):
                 obs, _, _, _, _ = gym_env.step([0, 0, 0])
         prev_fruits = iface.read_ram_byte(FRUITS_ADDR)
-        prev_lives = iface.read_ram_byte(LIVES_ADDR)
         prev_bonus = read_bonus()
         prev_princess = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         start_fruits = prev_fruits
@@ -121,7 +120,6 @@ def main() -> None:
             steps += 1
 
             fruits = iface.read_ram_byte(FRUITS_ADDR)
-            lives = iface.read_ram_byte(LIVES_ADDR)
             bonus = read_bonus()
             princess = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
 
@@ -134,10 +132,12 @@ def main() -> None:
                 break
             prev_princess = princess
 
-            if lives < prev_lives and prev_lives > 0:
+            # Death via the shared 0x2AFC detector (fires at the true death
+            # frame on BOTH levels). The old lives-only check here missed every
+            # L2 death — the lives byte is inert at death on both levels.
+            if yeti.is_dead(iface):
                 end_reason = "death"
                 break
-            prev_lives = lives
 
             if bonus == prev_bonus:
                 stall += 1

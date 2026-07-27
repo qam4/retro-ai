@@ -40,6 +40,7 @@ from retro_ai.training.run_manifest import (
     RunManifest,
     seed_everything,
 )
+from retro_ai.games import yeti
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -63,15 +64,8 @@ POSE_ADDR = 11092
 # Poses where the agent is on a surface (grounded floor / ladder). A
 # checkpoint seed is only snapshotted while grounded, so we never seed the
 # curriculum with a mid-jump/airborne state that inherits a fall.
-SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
-# Fast, cause-agnostic death flag (0x2AFC == 65 => dead, 32 => alive). Flips
-# at the true death frame regardless of cause (fall/goat/snowball). Same
-# address the native interface uses (game_profiles/mo5_yeti_fruit_level2.yaml
-# death_flag_addr/value) and rollout_l2.py. On level 2 the lives byte is INERT
-# (verified: it stays put through death), so lives-based death detection can
-# never fire there; this flag is the authoritative death signal on L2.
-DEATH_FLAG_ADDR = 11004
-DEATH_FLAG_VALUE = 65
+# (Shared definition in retro_ai.games.yeti; re-exported here.)
+SURFACE_POSES = yeti.SURFACE_POSES
 # Level-cleared flag. See scripts/train_segment.py for the empirical
 # justification (probe_princess_flag_long_baseline.py PASSes with zero
 # false positives across 26k frames). Detect princess touch via 0->1
@@ -722,10 +716,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # death signal (lives byte inert). Read once; used both for the reward
         # (ctx.died -> grounded reward suppresses shaping on the fatal step)
         # and for termination/labeling below.
-        died = (
-            self._use_death_flag
-            and self.iface.read_ram_byte(DEATH_FLAG_ADDR) == DEATH_FLAG_VALUE
-        )
+        died = self._use_death_flag and yeti.is_dead(self.iface)
 
         ctx = RewardContext(
             prev_fruits=self._prev_fruits,

@@ -39,12 +39,29 @@
   * **SURFACE_POSES / pose table** defined 3x (rewards.py,
     train_checkpoint_curriculum.py, rollout_l2.py).
   * **end_reason / termination** re-rolled in every env + eval script.
-  Plan: add `python/retro_ai/games/yeti.py` (or similar) with the RAM
-  addresses, per-level fruit-presence maps, SURFACE_POSES, and a single
-  `death` predicate (`is_dead(iface)` reading 0x2AFC, lives fallback for
-  levels where it's live), and an `end_reason` helper. Migrate call sites
-  incrementally, death-detection FIRST (it's a correctness bug), test each.
-  Prioritize fixing eval_from_reset.py before trusting any L2 eval.
+  Plan: add `python/retro_ai/games/yeti.py` with the RAM addresses, per-level
+  fruit-presence maps, SURFACE_POSES, and a single `is_dead(iface)` predicate
+  (0x2AFC). Migrate call sites incrementally, death-detection FIRST.
+  PROGRESS (2026-07):
+  * DONE: created `python/retro_ai/games/yeti.py` (addresses, poses, per-level
+    fruit maps, read helpers, `is_dead`).
+  * DONE: migrated `eval_from_reset.py` (the L2-broken eval path used by
+    keep_best_sweep) and de-duped `train_checkpoint_curriculum.py`'s death
+    constants + SURFACE_POSES into the module.
+  * FINDING (measured, corrects a long-held assumption): the lives byte does
+    NOT decrement at the death frame on EITHER level. 0x2AFC fires at the true
+    death frame on both (L1: exactly when bonus freezes, ~1 gym-step before the
+    native bonus-stall termination; lives stays put). So L1's "lives-based"
+    death detection was really the bonus-stall all along. `is_dead` is 0x2AFC
+    only (no lives fallback — it never fires promptly).
+  * TODO next: migrate profile_run.py, profile_cp4_princess.py,
+    render_from_reset.py, train_segment.py, go_explore*, rollout_l2.py,
+    rollout_with_reward_overlay.py to the module; then the RAM-address and
+    fruit-presence dupes; then an end_reason helper. Test each.
+  * NOTE: L1 *training* termination is deliberately NOT switched to 0x2AFC
+    (train_checkpoint_curriculum gates the flag to level>=2) to avoid
+    perturbing the 99.7% L1 champion recipe; eval is safe to switch (0x2AFC
+    ends at the true death frame, CP results unchanged).
 - MO5 BIOS paths passed via reward_params hack — should be proper
   constructor params on MO5RLInterface (like videopac has bios_path).
 - Videopac RL interface hardcodes NTSC — should be configurable per game
