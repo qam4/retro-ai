@@ -69,10 +69,15 @@
     predict/transpose/step -> read RAM -> death/stall/princess termination ->
     deepest-CP tracking). This is exactly where the lives-based death bug
     spread to ~8 copies. `training/evaluation.py` is generic (reward/length
-    only) and unused by analysis scripts. Generalize `rollout_l2._run_episode`
-    + its `EpisodeResult` into one shared harness that consumes games/yeti.py.
-    Migrate analysis/eval scripts first (not training envs), one at a time,
-    each verified against current output.
+    only) and unused by analysis scripts.
+    PROGRESS: DONE created `python/retro_ai/games/yeti_rollout.py`
+    (`EpisodeResult` + `rollout_episode()`, consumes games/yeti.py; termination
+    princess->death(0x2AFC)->stall->env_done->max_steps; optional frames/
+    positions). Migrated eval_from_reset.py onto it (verified: v9_150k reaches
+    reach-4 100% / princess 0%, matching its known profile). TODO next migrate
+    render_from_reset, profile_run, profile_cp4_princess, rollout_cp3_diagnose,
+    rollout_policy_from_seeds, then rollout_l2 (fold its HUD/heatmap on top of
+    the harness), one at a time, each verified.
   * TIER 2: **two near-identical training envs.** train_checkpoint_curriculum
     (CheckpointCurriculumEnv) and train_segment each define a full gym.Env with
     duplicated step/reset/RAM/termination — the L2 death fix exists in only

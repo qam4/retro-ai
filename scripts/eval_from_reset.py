@@ -24,16 +24,10 @@ import argparse
 import json
 from collections import Counter
 
-import numpy as np
-from retro_ai.games import yeti
+from retro_ai.games.yeti_rollout import rollout_episode
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.run_config import EnvConfig
 from stable_baselines3 import PPO
-
-# RAM layout / death detection live in retro_ai.games.yeti (single source of
-# truth). Aliased here for readability.
-FRUITS_ADDR = yeti.FRUITS_ADDR
-PRINCESS_FLAG_ADDR = yeti.PRINCESS_FLAG_ADDR
 
 
 def main() -> None:
@@ -79,84 +73,37 @@ def main() -> None:
         resize=(84, 84),
     )
     stack = build_training_env(args.profile, env_cfg)
-    base = stack.base
-    gym_env = stack.gym
-    preprocessed = stack.preprocessed
-    iface = base._interface
 
     model = PPO.load(args.model, device="auto")
-
-    def read_bonus() -> int:
-        return yeti.read_bonus(iface)
 
     rows = []
     max_cp_counts: Counter[int] = Counter()
     princess_touches = 0
 
     for ep in range(args.episodes):
-        obs, _ = gym_env.reset()
-        # Level 2 boots from a save-state, not a game reset. Load it and
-        # settle a few noop frames so the bonus/flag/position stabilize
-        # (mirrors the curriculum env's CP0 reset).
-        if start_state_bytes is not None:
-            iface.load_state(start_state_bytes)
-            preprocessed.notify_state_loaded()  # drop pre-load frames (H-Z)
-            for _ in range(5):
-                obs, _, _, _, _ = gym_env.step([0, 0, 0])
-        prev_fruits = iface.read_ram_byte(FRUITS_ADDR)
-        prev_bonus = read_bonus()
-        prev_princess = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-        start_fruits = prev_fruits
-        max_cp = fruits_total - start_fruits
-        stall = 0
-        steps = 0
-        touched = False
-        end_reason = "max_steps"
-
-        while steps < args.max_steps:
-            obs_chw = np.transpose(obs, (2, 0, 1))
-            action, _ = model.predict(obs_chw, deterministic=deterministic)
-            obs, _, done, trunc, _ = gym_env.step(action)
-            steps += 1
-
-            fruits = iface.read_ram_byte(FRUITS_ADDR)
-            bonus = read_bonus()
-            princess = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-
-            max_cp = max(max_cp, fruits_total - fruits)
-
-            if princess == 1 and prev_princess == 0:
-                touched = True
-                max_cp = princess_cp
-                end_reason = "princess"
-                break
-            prev_princess = princess
-
-            # Death via the shared 0x2AFC detector (fires at the true death
-            # frame on BOTH levels). The old lives-only check here missed every
-            # L2 death — the lives byte is inert at death on both levels.
-            if yeti.is_dead(iface):
-                end_reason = "death"
-                break
-
-            if bonus == prev_bonus:
-                stall += 1
-            else:
-                stall = 0
-                prev_bonus = bonus
-            if stall >= args.stall_threshold:
-                end_reason = "stall"
-                break
-
-            if done or trunc:
-                end_reason = "env_done"
-                break
-
-        max_cp_counts[max_cp] += 1
-        if touched:
+        # Shared rollout harness: identical termination (princess -> death via
+        # 0x2AFC -> stall -> env done -> max_steps) and CP tracking for all
+        # eval/analysis scripts. Level 2 boots from a save-state.
+        result = rollout_episode(
+            stack,
+            model,
+            level=2 if start_state_bytes is not None else 1,
+            fruits_total=fruits_total,
+            start_state=start_state_bytes,
+            max_steps=args.max_steps,
+            stall_threshold=args.stall_threshold,
+            deterministic=deterministic,
+        )
+        max_cp_counts[result.max_cp] += 1
+        if result.princess_touched:
             princess_touches += 1
         rows.append(
-            {"ep": ep, "max_cp": max_cp, "steps": steps, "end_reason": end_reason}
+            {
+                "ep": ep,
+                "max_cp": result.max_cp,
+                "steps": result.length,
+                "end_reason": result.end_reason,
+            }
         )
         if (ep + 1) % 25 == 0:
             reach1 = sum(v for k, v in max_cp_counts.items() if k >= 1)
