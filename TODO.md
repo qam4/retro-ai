@@ -20,6 +20,31 @@
   The skip-render should help more here (VDC was 71% of frame time).
 
 ## Tech Debt
+- [IMPORTANT, correctness] **Duplicated Yeti logic — consolidate into one
+  module.** Audit (2026-07) found the same things re-implemented across ~20
+  scripts, and some copies are actively WRONG on level 2:
+  * **Death detection (~8 sites, most broken on L2).** `lives < prev_lives`
+    is copy-pasted in eval_from_reset.py, profile_run.py, profile_cp4_princess
+    .py, render_from_reset.py, train_segment.py, go_explore_phase2.py,
+    go_explore.py. The lives byte is INERT on L2, so all of these miss L2
+    deaths. Only rollout_l2.py and train_checkpoint_curriculum.py use the
+    0x2AFC flag (11004==65). Impact: keep_best_sweep -> eval_from_reset scores
+    L2 snapshots without honest death detection.
+  * **RAM address constants** (LIVES_ADDR=11095, FRUITS_ADDR=11055,
+    X/Y/BONUS/SCORE/POSE) redefined in ~20 scripts; no shared module in
+    python/retro_ai/.
+  * **Fruit-presence addrs** hand-branched per level: L1 {0x2FAD,0x2F00,
+    0x2E68,0x2DD8} in ~7 scripts; L2 {11950,11975} in rollout_l2 + a
+    run_config comment.
+  * **SURFACE_POSES / pose table** defined 3x (rewards.py,
+    train_checkpoint_curriculum.py, rollout_l2.py).
+  * **end_reason / termination** re-rolled in every env + eval script.
+  Plan: add `python/retro_ai/games/yeti.py` (or similar) with the RAM
+  addresses, per-level fruit-presence maps, SURFACE_POSES, and a single
+  `death` predicate (`is_dead(iface)` reading 0x2AFC, lives fallback for
+  levels where it's live), and an `end_reason` helper. Migrate call sites
+  incrementally, death-detection FIRST (it's a correctness bug), test each.
+  Prioritize fixing eval_from_reset.py before trusting any L2 eval.
 - MO5 BIOS paths passed via reward_params hack — should be proper
   constructor params on MO5RLInterface (like videopac has bios_path).
 - Videopac RL interface hardcodes NTSC — should be configurable per game

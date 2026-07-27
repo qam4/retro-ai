@@ -759,3 +759,121 @@ def test_universal_reset_clears_state():
     assert fn.best_d_princess is None
     assert fn.last_floor is None
     assert all(v is None for v in fn.best_d.values())
+
+
+# ---------------------------------------------------------------------------
+# fruit_bonus_path_progress_pbrs_grounded (level-2 airborne-freeze + death gate)
+#
+# Regression guards for the v5 loiter-farm bug (experiments/003 H-AH): the
+# earlier version returned Phi=None while airborne, which rebaselined prev_phi
+# and DELETED the return-leg debt -> an approach-then-jump-back round trip
+# banked free reward. The fix holds prev_phi across airborne (restoring PBRS
+# telescoping) and gates credit on aliveness (0x2AFC via ctx.died).
+# Level-2 floors: floor 1 at y=30, floor 2 at y=54. Poses: 0-5,8 = surface
+# (grounded/ladder); 9/10 = jump, 11 = fall (airborne).
+# ---------------------------------------------------------------------------
+
+_L2 = {
+    "scale": 0.01,
+    "fruit_scale": 0.01,
+    "princess_scale": 0.05,
+    "gamma": 1.0,
+    "level": 2,
+}
+
+
+def _g2(x, y, pose, died=False):
+    """Level-2 grounded-reward context at (x, y) with a sprite pose."""
+    return _ctx(
+        prev_fruits=2,
+        curr_fruits=2,
+        prev_bonus=1000,
+        curr_bonus=1000,
+        curr_x=x,
+        curr_y=y,
+        fruits_present=(True, True),
+        pose=pose,
+        died=died,
+    )
+
+
+def _run_g2(traj):
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L2)
+    fn.reset()
+    return sum(fn(_g2(*step)) for step in traj)
+
+
+def test_grounded_registered():
+    assert "fruit_bonus_path_progress_pbrs_grounded" in available()
+
+
+def test_grounded_grounded_roundtrip_nets_zero():
+    """All-grounded walk out and back telescopes to 0 (PBRS invariant)."""
+    net = _run_g2([(1, 30, 0), (3, 30, 0), (5, 30, 0), (3, 30, 0), (1, 30, 0)])
+    assert abs(net) < 1e-9
+
+
+def test_grounded_jumpback_farm_nets_zero():
+    """THE v5 BUG: approach grounded, then jump back to the SAME floor.
+    Holding prev_phi across airborne charges the retreat on landing, so the
+    round trip nets 0 (no free reward to farm)."""
+    net = _run_g2(
+        [
+            (1, 30, 0),
+            (3, 30, 0),
+            (5, 30, 0),
+            (7, 30, 0),  # banked +0.48 approaching
+            (7, 28, 9),  # jump (airborne)
+            (5, 26, 9),
+            (3, 28, 11),
+            (1, 30, 0),  # land back at spawn -> retreat charged
+        ]
+    )
+    assert abs(net) < 1e-9
+
+
+def test_grounded_fatal_fall_not_credited():
+    """Fall to a deeper floor that ends in death (ctx.died on landing) is
+    not credited -- the death gate suppresses the potential jump."""
+    net = _run_g2(
+        [
+            (7, 30, 0),
+            (7, 38, 11),  # falling
+            (7, 46, 11),
+            (7, 54, 0, True),  # lands on floor 2 but DEAD
+        ]
+    )
+    assert abs(net) < 1e-9
+
+
+def test_grounded_survived_descent_is_credited():
+    """A descent the agent survives (alive on the grounded landing) IS real
+    progress and is credited. Cannot be farmed: climbing back up is grounded
+    and charged symmetrically at gamma=1."""
+    net = _run_g2([(7, 30, 0), (7, 38, 11), (7, 46, 11), (7, 54, 0, False)])
+    assert net > 0
+
+
+def test_grounded_gap_cross_is_credited():
+    """A jump that lands on the SAME floor further along (a gap crossing) is
+    credited -- this is the level-2 skill we want to reinforce."""
+    net = _run_g2([(3, 30, 0), (4, 28, 9), (6, 28, 9), (8, 30, 0, False)])
+    assert net > 0
+
+
+def test_grounded_ladder_descent_is_credited():
+    """A ladder descent (grounded pose 8 throughout) is credited continuously
+    -- it is the intended way down, not a fall."""
+    net = _run_g2([(7, 30, 8), (7, 38, 8), (7, 46, 8), (7, 54, 8)])
+    assert net > 0
+
+
+def test_grounded_reset_clears_state():
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L2)
+    fn.reset()
+    fn(_g2(1, 30, 0))
+    assert fn(_g2(3, 30, 0)) > 0
+    rewards.reset_reward(fn)
+    assert fn.last_floor is None
+    # After reset the next step is again a no-shaping baseline.
+    assert fn(_g2(3, 30, 0)) == 0.0

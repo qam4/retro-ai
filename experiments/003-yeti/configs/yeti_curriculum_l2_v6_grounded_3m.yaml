@@ -1,0 +1,67 @@
+# yeti_curriculum L2 v6 — reward fix: airborne HOLD (telescoping-preserving)
+# + death gate. 3M VALIDATION run.
+#
+# v5 (15M) regressed: the grounded reward's airborne freeze returned Phi=None,
+# which rebaselined prev_phi and DELETED the return-leg debt, so an approach-
+# then-jump-back round trip banked free reward. PPO farmed it and sat at spawn
+# (reward rose 2->8 while descent collapsed 65%->1%; see experiments/003 H-AH).
+#
+# The reward CODE is fixed (fruit_bonus_path_progress_pbrs_grounded rewritten):
+#   - airborne frames HOLD prev_phi (no rebaseline) so PBRS telescoping
+#     survives a jump and the return leg is charged -> jump-back nets 0.
+#   - death gate: on a grounded frame that is a death (0x2AFC via ctx.died),
+#     credit nothing, so a fatal fall is never rewarded.
+# Validated by synthetic probe + 8 unit tests (farm->0, fatal-fall->0,
+# survived-descent->+, gap-cross->+, ladder->+, grounded round-trip->0).
+# The config is otherwise byte-identical to v5; the fix is in code, not params.
+#
+# This is a SHORT run to confirm (a) no farm/loiter regression and (b) the
+# agent descends instead of sitting at spawn, before committing to a long run.
+
+training:
+  timesteps: 3_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v6_grounded_3m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level2
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 2
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950
+    2: 11975
+  start_state: output/mo5/yeti/level2/level2_start.sav

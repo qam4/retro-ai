@@ -64,6 +64,14 @@ POSE_ADDR = 11092
 # checkpoint seed is only snapshotted while grounded, so we never seed the
 # curriculum with a mid-jump/airborne state that inherits a fall.
 SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
+# Fast, cause-agnostic death flag (0x2AFC == 65 => dead, 32 => alive). Flips
+# at the true death frame regardless of cause (fall/goat/snowball). Same
+# address the native interface uses (game_profiles/mo5_yeti_fruit_level2.yaml
+# death_flag_addr/value) and rollout_l2.py. On level 2 the lives byte is INERT
+# (verified: it stays put through death), so lives-based death detection can
+# never fire there; this flag is the authoritative death signal on L2.
+DEATH_FLAG_ADDR = 11004
+DEATH_FLAG_VALUE = 65
 # Level-cleared flag. See scripts/train_segment.py for the empirical
 # justification (probe_princess_flag_long_baseline.py PASSes with zero
 # false positives across 26k frames). Detect princess touch via 0->1
@@ -540,6 +548,21 @@ class CheckpointCurriculumEnv(gym.Env):
         self.stall_threshold = cfg.env.stall_threshold
         self._reward_fn = reward_fn
 
+        # Death detection via the fast 0x2AFC flag, gated to level >= 2 where
+        # the lives byte is inert (so the lives-based branch below is dead
+        # code there). Left OFF for level 1 so its termination timing is
+        # byte-for-byte unchanged (no L1 regression). When on, it provides
+        # ctx.died to the reward (the grounded reward suppresses shaping on a
+        # fatal step) AND labels end_reason="death" (which the lives branch
+        # cannot do on L2). The flag itself is validated cause-agnostic on
+        # both levels; we simply don't re-wire L1's working path.
+        _level = 1
+        try:
+            _level = int(cfg.reward.params.get("level", 1))
+        except (AttributeError, TypeError, ValueError):
+            _level = 1
+        self._use_death_flag = _level >= 2
+
         self.env_id = env_id
         self.episode_logger = episode_logger
 
@@ -695,6 +718,15 @@ class CheckpointCurriculumEnv(gym.Env):
         princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         princess_touched = princess_flag == 1 and self._prev_princess_flag == 0
 
+        # Fast, cause-agnostic death (0x2AFC). On L2 this is the ONLY reliable
+        # death signal (lives byte inert). Read once; used both for the reward
+        # (ctx.died -> grounded reward suppresses shaping on the fatal step)
+        # and for termination/labeling below.
+        died = (
+            self._use_death_flag
+            and self.iface.read_ram_byte(DEATH_FLAG_ADDR) == DEATH_FLAG_VALUE
+        )
+
         ctx = RewardContext(
             prev_fruits=self._prev_fruits,
             curr_fruits=fruits,
@@ -710,6 +742,7 @@ class CheckpointCurriculumEnv(gym.Env):
             fruits_present=fruits_present,
             princess_touched=princess_touched,
             pose=self.iface.read_ram_byte(POSE_ADDR),
+            died=died,
         )
         reward = float(self._reward_fn(ctx))
 
@@ -753,7 +786,13 @@ class CheckpointCurriculumEnv(gym.Env):
 
         # Termination
         end_reason = None
-        if lives < self._prev_lives and self._prev_lives > 0:
+        # Death: on L2 via the fast 0x2AFC flag (lives byte is inert there, so
+        # the lives check below can never fire — it stays for L1, where 0x2AFC
+        # detection is intentionally off to preserve L1's termination timing).
+        if died:
+            done = True
+            end_reason = "death"
+        elif lives < self._prev_lives and self._prev_lives > 0:
             done = True
             end_reason = "death"
         self._prev_lives = lives

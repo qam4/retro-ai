@@ -708,15 +708,69 @@ alone doesn't resolve the over-concentration.
   checkpoint admission (defer seed snapshot to the next grounded frame — the 2
   v4 CP1 seeds were mid-jump and doomed on reload) and the
   `min_survival_frames`→`min_survival_steps` rename (it counts gym steps).
-- [~] **H-AH — v5 (15M) longer cook at the v4 recipe (IN PROGRESS).**
-  `yeti_curriculum_l2_v5_grounded_15m` — same grounded reward + γ=1 + 0x2AFC
-  + grounded admission, 15M steps. Running (~2300 emu_fps, ~5h wall). Interim
-  read at 4.2M/15M (28%): `cp=[0,1,0]` (1 clean grounded CP1 seed),
-  `success=[0→1:0%]`, `reset_reach=[1.00,0,0,0]` — i.e. the agent descends and
-  explores but has NOT yet reliably reached a fruit from reset. Same signal as
-  the 3.55M interim read; watching for whether more compute converts the deep
-  descents into fruit collection or plateaus. FINAL RESULT + snapshot sweep to
-  be filled in when the run completes.
+- [x] **H-AH — v5 (15M) longer cook at the v4 recipe (DONE, NEGATIVE — exposed
+  a reward bug in the grounded gate).** `yeti_curriculum_l2_v5_grounded_15m` —
+  same grounded reward + γ=1 + 0x2AFC + grounded admission, 15M steps, exit 0,
+  6h57m, 72,657 episodes.
+  **Result: regressed, did not plateau.** Total fruits in the whole run = 4
+  (same near-zero rate as v4's 2/28k); from-reset fruit success 0% throughout.
+  Across training the agent converged AWAY from the task: reaching the descent
+  ladder (final_x≥18) collapsed 65%→78%→…→~1% while mean episode reward *rose*
+  2.1→7.9. Last-20% median final position = (x=1, y=30) = **the spawn point**:
+  the late policy sits at spawn ~328 steps for ~7.9 reward and never descends.
+  Snapshot depth-sweep (`scripts/rollout_l2.py`, 10 stochastic eps each):
+  500k→F3, 1M→F1, 3M→F3, 6M/10M/15M→F1 (never past floor 1 from ~6M on; never
+  reaches floor 5 / the fruits in any snapshot).
+  **ROOT CAUSE (proven, not inferred) — the airborne-freeze breaks PBRS
+  telescoping and re-opens jump-farming.** The grounded gate returns
+  `phi=None` while airborne; in the base reward `phi is None` triggers a
+  *re-baseline* (`prev_phi=None`), and the landing step re-baselines again — so
+  the "moved-away" half of a jump is never charged. Synthetic reward-trace
+  probe of a NET-ZERO round trip (walk right grounded, then jump back to start
+  airborne): ungated reward nets **+0.0000** (telescoping cancels the round
+  trip) but the grounded reward nets **+0.4800** — the retreat is free. PPO
+  farms this approach-then-jump-back loop (~+0.48/cycle) near spawn indefinitely
+  instead of descending. This is the same class of pathology as the γ<1 living
+  reward (v6/H-AG bug #1), reintroduced by the airborne freeze; v4 (3M) was too
+  short to exploit it, v5 (15M) found it. **The fruit/descent problem is NOT a
+  compute or curriculum shortfall — fix the reward first.**
+  Model + logs: `output/mo5/yeti/training/yeti_curriculum_l2_v5_grounded_15m/`.
+- [x] **H-AH2 — fix the airborne-freeze telescoping break (DONE, code +
+  unit tests; awaiting 3M smoke).** Tension: re-baselining `prev_phi` on
+  landing correctly *neutralizes a fall* (don't credit dropping into a deeper,
+  closer floor) but *forgives a retreat* (the farm), and a naive "hold prev_phi
+  across airborne" kills the farm but re-credits survivable falls — two goals
+  that conflict under a scalar potential. Considered a floor-based tie-break
+  (re-baseline only when landing DEEPER), then chose a cleaner rule (user's
+  suggestion): **gate credit on ALIVENESS, not floor.**
+  Fix in `_fruit_bonus_path_progress_pbrs_grounded`, rewritten from the
+  `_potential`-override monkeypatch to an explicit class with three documented
+  non-Markovian deviations: (D1) `last_floor` fallback; (D2) airborne freeze
+  that **holds** `prev_phi` (no re-baseline) so telescoping survives the jump
+  and the return leg is charged on landing; (D3) **death gate** — on a grounded
+  frame that is a death (`ctx.died`, the 0x2AFC flag) credit nothing. Net
+  behavior (synthetic probe + 8 unit tests in `test_rewards.py`):
+  farm/jump-back → **0**, fatal fall (died on landing) → **0**, survived
+  descent → **+** (real progress; can't be farmed — climbing back up is
+  grounded and charged at γ=1), gap-cross (same floor) → **+**, ladder descent
+  → **+**, grounded round-trip → **0**.
+  Why aliveness over floor: targets the actual objective ("don't reward
+  dying"), is not level-direction-specific, and covers ALL death causes.
+  Plumbing: `RewardContext.died` (append-only); `train_checkpoint_curriculum`
+  sets it from 0x2AFC, gated to level ≥ 2 (L1 termination timing untouched),
+  and also uses it to label `end_reason="death"`.
+  **Live-trace findings (per-step, 3M snapshot)** validating the wiring: the
+  lives byte stays put through death on L2 (so the old lives-based
+  `end_reason="death"` was DEAD CODE on L2 — deaths mislabeled `env_done`);
+  0x2AFC flips 32→65 on the exact terminating frame (`done` same step), so the
+  reward sees `died` on the fatal step; and the sampled deaths were NOT falls —
+  the agent descends to floor 3, then loiters/jumps-in-place there (the farm)
+  and dies to a goat while GROUNDED, confirming the death gate must (and does)
+  fire on grounded frames, not just airborne. Accepted residual: a fall that
+  lands ALIVE and dies 1 step later still banks the landing credit (bounded,
+  requires surviving the impact; not farmable).
+  NEXT: 3M smoke re-run to confirm no regression and that the agent stops
+  loitering; then a longer run.
 - [ ] **H-AI — reverse curriculum via WAYPOINT START-SEEDS (design, only if
   v5 plateaus).** Reaching the first fruit on L2 requires a long multi-floor
   descent across ~14 gaps and many ladders, and L2 goats *cannot be jumped*

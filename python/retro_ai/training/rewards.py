@@ -92,6 +92,13 @@ class RewardContext:
     # code; ungated rewards ignore it. See experiments/003-yeti-training.md
     # "run 3" for the measured pose table.
     pose: int = -1
+    # True on the step where the player has just died (cause-agnostic MO5
+    # Yeti death flag 0x2AFC == 65; lives byte is inert on level 2). Default
+    # False = "not provided / alive". Used by the grounded reward to suppress
+    # shaping credit on a fatal transition (so a fall that ends in death is
+    # never credited even if it briefly grounds). Reward functions that don't
+    # read it are unaffected.
+    died: bool = False
 
 
 RewardFn = Callable[[RewardContext], float]
@@ -838,16 +845,107 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     no pose it behaves exactly like the ungated reward.
     """
     base = _fruit_bonus_path_progress_pbrs(params)
-    orig_potential = base._potential
+    gamma = float(params.get("gamma", 0.99))
+    fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
+    princess_scale = float(params.get("princess_scale", 0.05))
 
-    def gated_potential(ctx: RewardContext):
-        pose = getattr(ctx, "pose", -1)
-        if pose is not None and pose >= 0 and pose not in SURFACE_POSES:
-            return None  # airborne / falling -> freeze shaping this step
-        return orig_potential(ctx)
+    class _GroundedPBRS:
+        """PBRS path-progress shaping with an airborne freeze + death gate.
 
-    base._potential = gated_potential
-    return base
+        Reuses the base reward's ``_potential`` (and its deliberate
+        ``last_floor`` residue) verbatim, but reimplements the per-step
+        shaping bookkeeping.
+
+        ~~~ NON-MARKOVIAN DEVIATIONS (all deliberate; documented so we don't
+        re-litigate them) ~~~
+
+        PBRS is Markovian by construction: shaping is ``gamma*Phi(s') -
+        Phi(s)``, a function of the (s, s') transition only, and round trips
+        telescope to zero so nothing can be farmed. The level-2 problem
+        ("don't reward a fall") is fundamentally a statement about *how* the
+        agent got somewhere, which state alone cannot express (falling to
+        floor 2 and laddering to floor 2 are the SAME state). So a correct
+        fix MUST look at the transition, i.e. be slightly non-Markovian. The
+        three deviations, each bounded and intentional:
+
+        (D1) ``last_floor`` fallback (inside base ``_potential``): current
+             floor is inferred with one step of memory because pixel-y is
+             ambiguous mid-jump. Keeps a jump from looking like graph
+             progress.
+
+        (D2) AIRBORNE FREEZE + HOLD. While the sprite pose is airborne
+             (jump/fall/death-anim, i.e. pose not in ``SURFACE_POSES``) we
+             credit nothing AND hold ``prev_phi`` unchanged (we do NOT
+             rebaseline it, and we do NOT sample the potential). Holding is
+             what restores telescoping across a jump: the pre-jump baseline
+             survives the airborne frames, so the return leg is charged on
+             landing and an approach-then-jump-back round trip nets exactly 0.
+             (The earlier version returned ``Phi=None`` while airborne, which
+             rebaselined ``prev_phi`` to None and DELETED the return-leg debt
+             -> a free +Phi per approach/jump-back cycle. PPO farmed that over
+             15M steps and sat at spawn; see experiments/003 H-AH.)
+
+        (D3) DEATH GATE. On a grounded frame that is a death (``ctx.died``,
+             the cause-agnostic 0x2AFC flag), we credit nothing and
+             rebaseline. Combined with (D2) deferring all credit to the
+             grounded landing, this guarantees a fatal transition is never
+             rewarded, for ANY cause (fall, goat, snowball) and on any level
+             direction. A *survived* descent (alive on landing) IS credited
+             (it is real progress and cannot be farmed -- climbing back up is
+             grounded and charged symmetrically at gamma=1).
+        """
+
+        def __init__(self) -> None:
+            self._base = base
+            self.prev_phi: float | None = None
+
+        def reset(self) -> None:
+            self._base.reset()
+            self.prev_phi = None
+
+        @property
+        def last_floor(self):  # exposed for probes/tests
+            return self._base.last_floor
+
+        def __call__(self, ctx: RewardContext) -> float:
+            reward = 0.0
+
+            # Sparse terms (identical to the base reward).
+            picked = ctx.curr_fruits < ctx.prev_fruits
+            if picked:
+                collected = ctx.prev_fruits - ctx.curr_fruits
+                reward += collected * ctx.curr_bonus * fruit_scale
+            if ctx.princess_touched:
+                reward += ctx.prev_bonus * princess_scale
+
+            pose = getattr(ctx, "pose", -1)
+            airborne = pose is not None and pose >= 0 and pose not in SURFACE_POSES
+
+            # (D2) Airborne: no credit, HOLD prev_phi (don't sample/rebaseline).
+            if airborne:
+                return reward
+
+            phi = self._base._potential(ctx)  # grounded; also updates last_floor
+
+            # (D3) death gate + standard PBRS rebaseline on discontinuities
+            # (episode start: prev_phi None; unresolved floor: phi None;
+            # fruit pickup / princess: target set changes -- sparse terms
+            # cover those). Shaping resumes on the next grounded, alive step.
+            if (
+                ctx.died
+                or picked
+                or ctx.princess_touched
+                or self.prev_phi is None
+                or phi is None
+            ):
+                self.prev_phi = phi
+                return reward
+
+            reward += gamma * phi - self.prev_phi
+            self.prev_phi = phi
+            return reward
+
+    return _GroundedPBRS()
 
 
 __all__ = [
