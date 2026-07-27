@@ -73,11 +73,40 @@
     PROGRESS: DONE created `python/retro_ai/games/yeti_rollout.py`
     (`EpisodeResult` + `rollout_episode()`, consumes games/yeti.py; termination
     princess->death(0x2AFC)->stall->env_done->max_steps; optional frames/
-    positions). Migrated eval_from_reset.py onto it (verified: v9_150k reaches
-    reach-4 100% / princess 0%, matching its known profile). TODO next migrate
-    render_from_reset, profile_run, profile_cp4_princess, rollout_cp3_diagnose,
-    rollout_policy_from_seeds, then rollout_l2 (fold its HUD/heatmap on top of
-    the harness), one at a time, each verified.
+    positions; `cp_arrival` cp->(step,bonus)).
+    MIGRATED (verified): eval_from_reset.py, profile_run.py, render_from_reset.py.
+    REMAINING migration targets (each: migrate + parity-verify, one at a time):
+    - From-reset scripts (reset each episode, migrate as-is): analyze_agent.py,
+      smoke_test_eval.py, reward_monitor.py, viz.py, train_yeti.py(?).
+    - Seed-pool scripts (reset ONCE then load_state per episode for speed):
+      profile_cp4_princess.py, rollout_cp3_diagnose.py,
+      rollout_policy_from_seeds.py, rollout_floor4_seed7.py, repro_v7_farming.py,
+      trace_v7_farming.py. These need a `reset_env=False` option on
+      rollout_episode (skip per-episode gym reset; caller boots once) — ADD THAT
+      to the harness before migrating them, else they re-run the ~32s MO5
+      startup every episode.
+    - rollout_l2.py: fold its HUD/heatmap/video on top of the harness last
+      (biggest; the harness was extracted from its _run_episode).
+- **Script directory reorganization (per emulator/game).** scripts/ is a flat
+  pile of 80 files; 51 are Yeti/MO5-specific but nothing in the path says so
+  (the library side is already namespaced: retro_ai.games.yeti). Target layout
+  (mirrors output/mo5/yeti/ and games/):
+    scripts/mo5/yeti/  <- the 51 Yeti scripts
+    scripts/videopac/  <- satellite/exp002 + videopac debug tools
+    scripts/common/    <- emulator-agnostic (benchmarks, profile_cpp,
+                          episodes_to_tb, run_eval, print_episode_matrix, ...)
+  Mechanics: scripts are invoked by PATH (not imported), so git mv + MANUAL
+  update of the ~15 live references (.kiro/steering/training-runs.md &
+  reward-discovery.md, .kiro/specs/*, docs/training_speed.md,
+  experiments/003-yeti-training.md, game_profiles/README.md + videopac profile
+  yamls). Do it as ONE dedicated commit (no half-moved state). Leave the ~60
+  historical output/*/run.yaml command records stale (archival provenance).
+  Cautions: (1) moving train_checkpoint_curriculum.py changes the training
+  launch path in steering + kiro-monitor commands — a running job's process is
+  unaffected (module already loaded) but update steering + future launches;
+  (2) re-check "videopac" hits that are actually generic (ram_watcher,
+  benchmark_emulator) before filing them; (3) verify no inter-script imports
+  before moving.
   * TIER 2: **two near-identical training envs.** train_checkpoint_curriculum
     (CheckpointCurriculumEnv) and train_segment each define a full gym.Env with
     duplicated step/reset/RAM/termination — the L2 death fix exists in only
