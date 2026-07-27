@@ -62,6 +62,30 @@
     (train_checkpoint_curriculum gates the flag to level>=2) to avoid
     perturbing the 99.7% L1 champion recipe; eval is safe to switch (0x2AFC
     ends at the true death frame, CP results unchanged).
+- **Modularization review (2026-07) — prioritized by impact.** Broader audit
+  of "multiple ways of doing the same thing" beyond death detection:
+  * TIER 1 (highest value): **rollout-loop harness.** 19 scripts hand-roll the
+    same episode loop (load model -> reset/load-state -> settle -> per-step
+    predict/transpose/step -> read RAM -> death/stall/princess termination ->
+    deepest-CP tracking). This is exactly where the lives-based death bug
+    spread to ~8 copies. `training/evaluation.py` is generic (reward/length
+    only) and unused by analysis scripts. Generalize `rollout_l2._run_episode`
+    + its `EpisodeResult` into one shared harness that consumes games/yeti.py.
+    Migrate analysis/eval scripts first (not training envs), one at a time,
+    each verified against current output.
+  * TIER 2: **two near-identical training envs.** train_checkpoint_curriculum
+    (CheckpointCurriculumEnv) and train_segment each define a full gym.Env with
+    duplicated step/reset/RAM/termination — the L2 death fix exists in only
+    one. Unify carefully (higher risk: touches training).
+  * TIER 3 (cheap): fold princess rising-edge (`princess==1 and prev==0`) and
+    CP math (`fruits_total - fruits`) into games/yeti.py (~12 scripts).
+  * TIER 4: `make_yeti_env(profile, start_state=, settle=)` helper for the
+    build_training_env + load_state + settle boilerplate (~39 scripts).
+  * TIER 5 (mechanical): migrate remaining ~18 scripts' local RAM-address
+    constants to games/yeti.py.
+  * TIER 6: videopac/satellite has the same scatter (~12 scripts:
+    train_satellite_attack, exp002_*, smoke tests) — apply the games/ module
+    pattern (games/satellite.py or a per-emulator layer). Lower urgency.
 - MO5 BIOS paths passed via reward_params hack — should be proper
   constructor params on MO5RLInterface (like videopac has bios_path).
 - Videopac RL interface hardcodes NTSC — should be configurable per game
