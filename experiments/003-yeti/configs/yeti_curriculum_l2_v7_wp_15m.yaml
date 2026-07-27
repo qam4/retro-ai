@@ -1,0 +1,67 @@
+# yeti_curriculum L2 v7 — v6 recipe + WAYPOINT curriculum (H-AI), 15M.
+#
+# v6 (3M) validated the reward fix: farm gone, agent descends reliably to
+# floor 3, then dies to the goat guarding L34 (the single F3->F4 ladder). It
+# never reached floor 4+ in any run (grounded). Two changes vs v6, both to
+# get MORE reps further down at that goat and past it:
+#   1. curriculum.waypoints: true — capture grounded states at every ladder
+#      top/bottom into optional, non-gating start-pools; pick_start samples
+#      them in the same self-regulating goal-score draw as CPs/reset. A
+#      freshly-captured deep waypoint inits at goal_score 0 -> weight 1.0 ->
+#      heavily sampled, so the frontier (the goat) gets the reps automatically.
+#      Waypoints are start-seeds ONLY (success is still "grab a fruit").
+#   2. timesteps 3M -> 15M. L2 needs more compute regardless (L1 champions ran
+#      12-20M); the extra steps also give the first lucky goat-pass a chance to
+#      seed the first floor-4 waypoint, after which WP-seeding compounds.
+# Everything else identical to v6 (grounded reward, gamma=1, 0x2AFC death,
+# grounded checkpoint admission).
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v7_wp_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level2
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 2
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950
+    2: 11975
+  start_state: output/mo5/yeti/level2/level2_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
