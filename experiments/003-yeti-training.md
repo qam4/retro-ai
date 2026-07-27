@@ -801,25 +801,24 @@ alone doesn't resolve the over-concentration.
   agent keeps walking into the goat. Points at (c): waypoint/curriculum practice
   past the F3 goat (or a goat-aware mechanic). NEXT: confirm the goat visually
   (video), then design the F3-goat practice.
-  ROUTE TRACE (v6 3M, 6 eps, path to death): EVERY episode goes
-  F1@x0 -> F2@x18 -> F3@x46 -> dies x~34. Two findings:
-  (A) DANGER-BLIND SHAPING (user's insight, confirmed). L2 F2->F3 has two
-  ladders: L23a x=16 (left) and L23b x=192 (right); L34 (F3->F4) is x=136. The
-  agent ALWAYS takes the left ladder (lands F3 left, x=46) and dies to the goat
-  at x~34; the right ladder L23b is NEVER used. Coming down L23b lands at x=192,
-  right of L34 (x=136), so it would walk left to L34 and AVOID the x=34 goat —
-  but that route is longer, so the shortest-path PBRS potential (danger-blind)
-  prefers the cheap left ladder and routes the agent into the goat. Fix options:
-  make the nav graph danger-aware (raise the goat edge's cost so the potential
-  prefers L23b), and/or seed waypoints on the safe route.
-  (B) THE L2 NAV MAP MAY BE WRONG (validate before trusting shaping). The agent
-  lands on F2 at x=18, but the map lists the F1->F2 ladders at x=80 (L12a) and
-  x=304 (L12b) — neither matches. This matches the user's recollection that F2
-  has effectively one ladder (near x~16), and implies the map's ladder
-  positions are off. Since the PBRS potential is computed FROM this map, wrong
-  ladder positions = miscalibrated shaping. TODO: re-validate/re-extract the L2
-  nav map (map_level2.py / extract_level_map.py) against observed ladder
-  landings before the next L2 run.
+  ROUTE TRACE (v6 3M, 6 eps, path to death). CORRECTION: an earlier version of
+  this note misread agent RAM-x as pixels and drew the WRONG conclusions
+  (retracted). Ladders are in PIXELS; agent RAM-x -> pixel = x*4+8. Converting
+  the traced route (RAM -> pixel, nearest ladder):
+    F2 landing RAM x=18 -> px80  = L12a
+    F3 landing RAM x=46 -> px192 = L23b (RIGHT F2->F3 ladder)
+    death      RAM x=34 -> px144 ~ L34 (px136, the single F3->F4 ladder)
+  So the agent descends F1->F2 via L12a, F2->F3 via L23b, walks left to L34, and
+  dies at px~144 to the goat GUARDING L34. Corrected implications:
+  - The nav map is NOT wrong (the "F1->F2 ladder mismatch" was the units error).
+  - This is NOT a "short route has goat, safe route exists" case: F3->F4 has
+    only ONE ladder (L34), a chokepoint the agent MUST pass. The danger-blind-
+    shaping concern is real in GENERAL (would bite where 2 ladders exist:
+    F1->F2, F2->F3) but is not what kills the agent here.
+  - The wall is simply: the only F3->F4 descent (L34) is guarded by a goat the
+    agent must learn to beat (timing/dodge) — supports more compute (if the goat
+    is timeable like L1 snowballs) and/or seeding waypoints just past L34 (on F4)
+    so the agent gets many reps + discovers the deeper reward.
 - [ ] **H-AI — reverse curriculum via WAYPOINT START-SEEDS (design, only if
   v5 plateaus).** Reaching the first fruit on L2 requires a long multi-floor
   descent across ~14 gaps and many ladders, and L2 goats *cannot be jumped*
