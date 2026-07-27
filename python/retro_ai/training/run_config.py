@@ -183,6 +183,14 @@ class CurriculumConfig:
     # fresh game reset. ``None`` -> game reset (= level 1 start). Level 2
     # uses ``output/mo5/yeti/level2/level2_start.sav``.
     start_state: Optional[str] = None
+    # WAYPOINT curriculum (H-AI). When true, the env captures grounded
+    # states at computed ladder-top/bottom positions (yeti.waypoints) into
+    # optional, non-gating start-pools, and pick_start samples them in the
+    # same self-regulating goal-score draw as CPs. Off by default (L1 and
+    # non-WP L2 runs are byte-identical). ``waypoint_tolerance`` is the
+    # per-axis RAM-x/pixel-y window for "reached a waypoint".
+    waypoints: bool = False
+    waypoint_tolerance: int = 2
 
 
 @dataclass(frozen=True)

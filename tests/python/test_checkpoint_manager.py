@@ -321,3 +321,109 @@ def test_disk_roundtrip_normalizes_legacy_2tuple(tmp_path):
     mgr.load_from_disk(str(p))
     # Legacy entry gets source_cp = level (1) and the original bonus.
     assert mgr.checkpoints[1].states[0] == (1, 55, b"old1")
+
+
+# ---------------------------------------------------------------------------
+# Waypoint start-pools (optional, non-gating, position-based)
+# ---------------------------------------------------------------------------
+
+
+def test_waypoint_saved_creates_pool():
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_waypoint("L34_top", b"wp_state", source_cp=0, bonus=5)
+    assert "L34_top" in mgr.waypoints
+    assert len(mgr.waypoints["L34_top"]) == 1
+    assert mgr.waypoints["L34_top"].states[0] == (0, 5, b"wp_state")
+
+
+def test_fresh_waypoint_has_max_weight():
+    # A newly-captured WP has goal_score 0 -> weight 1.0 -> heavily sampled
+    # (this is what gives "more reps further down" automatically).
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_waypoint("L45a_bot", b"s")
+    assert mgr.waypoints["L45a_bot"].weight() == pytest.approx(1.0)
+
+
+def test_pick_start_can_return_waypoint():
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_waypoint("L34_top", b"wp_state")
+    # Make reset unattractive (goal_score 1 -> weight ~0) so the WP wins.
+    mgr.checkpoints[0].goal_score = 1.0
+    import random
+
+    random.seed(0)
+    seen_wp = False
+    for _ in range(50):
+        key, state = mgr.pick_start()
+        if isinstance(key, str):
+            seen_wp = True
+            assert key == "L34_top"
+            assert state == b"wp_state"
+    assert seen_wp
+
+
+def test_record_episode_waypoint_updates_only_wp_goal_score():
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_waypoint("L34_top", b"s")
+    reach_before = list(mgr.reset_reach_ema)
+    seg_before = list(mgr.seg_success_ema)
+    w0 = mgr.waypoints["L34_top"].weight()
+    # A WP start that reaches the princess (max) raises its goal_score.
+    for _ in range(200):
+        mgr.record_episode("L34_top", reached_level=mgr.FRUITS_TOTAL + 1)
+    # WP weight dropped (self-regulated), but the CP/reset metrics are
+    # untouched — WPs are non-gating and out of the success stats.
+    assert mgr.waypoints["L34_top"].weight() < w0
+    assert mgr.reset_reach_ema == reach_before
+    assert mgr.seg_success_ema == seg_before
+
+
+def test_record_episode_unknown_waypoint_is_safe():
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.record_episode("nonexistent_wp", 1)  # no pool -> no-op, no crash
+
+
+def test_no_waypoints_leaves_cp_selection_unchanged():
+    # With no WPs captured, pick_start returns only int CP keys (L1-safe:
+    # identical to pre-WP behavior).
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_scored(2, b"cp2", 100, True, bonus=10, source_cp=0)
+    mgr.reset_reach_ema[2] = 1.0
+    import random
+
+    random.seed(0)
+    for _ in range(50):
+        key, _ = mgr.pick_start()
+        assert isinstance(key, int)
+
+
+def test_waypoint_disk_roundtrip(tmp_path):
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_waypoint("L34_top", b"wp_state", source_cp=0, bonus=7)
+    mgr.waypoints["L34_top"].goal_score = 0.42
+    p = tmp_path / "checkpoints.pkl"
+    mgr.save_to_disk(str(p))
+
+    mgr2 = _mgr(reset_fraction=0.0)
+    mgr2.load_from_disk(str(p))
+    assert "L34_top" in mgr2.waypoints
+    assert mgr2.waypoints["L34_top"].states[0] == (0, 7, b"wp_state")
+    assert mgr2.waypoints["L34_top"].goal_score == pytest.approx(0.42)
+
+
+def test_pre_wp_checkpoint_file_loads_without_waypoints(tmp_path):
+    # A checkpoint file with no "waypoints" key (pre-WP) must load fine.
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_scored(1, b"cp1", 100, True, bonus=10, source_cp=0)
+    p = tmp_path / "checkpoints.pkl"
+    mgr.save_to_disk(str(p))
+    import pickle
+
+    data = pickle.load(open(p, "rb"))
+    del data["waypoints"]  # simulate an old file
+    pickle.dump(data, open(p, "wb"))
+
+    mgr2 = _mgr(reset_fraction=0.0)
+    mgr2.load_from_disk(str(p))  # must not crash
+    assert mgr2.waypoints == {}
+    assert len(mgr2.checkpoints[1]) == 1

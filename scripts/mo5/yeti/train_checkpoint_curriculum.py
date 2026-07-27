@@ -229,6 +229,13 @@ class CheckpointManager:
             StartPool(self.max_states_per_checkpoint)
             for _ in range(self.FRUITS_TOTAL + 1)
         ]
+        # Waypoint start-pools, keyed by waypoint id (e.g. "L34_top").
+        # Lazily created on first capture. Same StartPool as CP pools, so
+        # they share the self-regulating goal-score weighting in pick_start
+        # — but WPs are NON-GATING: no reach-gate, no seg_success, and they
+        # never enter the reported reach/success metrics (success = fruit).
+        self.waypoints: dict = {}
+        self.wp_start_counts: dict = {}
         self.frontier = 0
         self.stats = {
             "saves": [0] * (self.FRUITS_TOTAL + 1),
@@ -292,6 +299,16 @@ class CheckpointManager:
         # pools; see StartPool.
 
     def record_episode(self, start_level, reached_level):
+        total_goals = self.FRUITS_TOTAL + 1
+        # Waypoint start (id is a str, e.g. "L34_top"): update ONLY that
+        # WP pool's goal-score (the self-regulating sampling weight). WPs
+        # are non-gating, so they never touch seg_success / reset_reach /
+        # the reported success metrics.
+        if isinstance(start_level, str):
+            pool = self.waypoints.get(start_level)
+            if pool is not None:
+                pool.update_goal_score(reached_level / float(total_goals))
+            return
         if not (0 <= start_level <= self.FRUITS_TOTAL):
             return
         # Cumulative counters (display only).
@@ -382,6 +399,21 @@ class CheckpointManager:
             return
         self._insert(fruits_collected, source_cp, bonus, state_bytes)
 
+    def save_waypoint(self, wp_id, state_bytes, source_cp=0, bonus=0):
+        """Admit a WAYPOINT snapshot (captured when the agent was grounded
+        at a computed waypoint position — see the env's capture logic).
+
+        Unlike ``save_scored`` (fruit checkpoints) this has no success/
+        reached-next semantics: a waypoint is just a start-state. The pool
+        is lazily created on first capture and shares StartPool's
+        reset-origin retention. Grounded-ness is enforced by the caller.
+        """
+        pool = self.waypoints.get(wp_id)
+        if pool is None:
+            pool = StartPool(self.max_states_per_checkpoint, self.reach_alpha)
+            self.waypoints[wp_id] = pool
+        pool.insert(source_cp, bonus, state_bytes)
+
     def _maybe_advance_frontier(self):
         while (
             self.frontier < self.FRUITS_TOTAL
@@ -423,27 +455,42 @@ class CheckpointManager:
             self.stats["starts"][0] += 1
             return 0, None
 
-        # Candidates: reset always; deeper levels once their pool is
-        # non-empty and reset-reachable enough (reach gate).
-        candidates = [0]
+        # Unified candidate set, all weighted by StartPool.weight()
+        # (= 1 - goal_score, the H-T rule):
+        #  - CP0 (reset) always; deeper CP levels once non-empty AND
+        #    reset-reachable (reach gate);
+        #  - every WAYPOINT with a non-empty pool (NO reach gate — WPs are
+        #    non-gating). A freshly-captured deep WP inits at goal_score 0
+        #    -> weight 1.0 -> heavily sampled, giving "more reps further
+        #    down" automatically.
+        cp_candidates = [0]
         for n in range(1, self.FRUITS_TOTAL + 1):
             if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold:
-                candidates.append(n)
+                cp_candidates.append(n)
+        wp_candidates = [w for w, pool in self.waypoints.items() if len(pool) > 0]
 
-        weights = [self.checkpoints[n].weight() for n in candidates]
+        candidates = list(cp_candidates) + wp_candidates
+        pools = [self.checkpoints[n] for n in cp_candidates]
+        pools += [self.waypoints[w] for w in wp_candidates]
+        weights = [p.weight() for p in pools]
         # Optional anti-starvation floor (default 0 -> pure weighting).
         if self.segment_floor > 0.0 and len(candidates) > 1:
             total = sum(weights)
             k = len(candidates)
             f = self.segment_floor
             weights = [(1.0 - f) * (w / total) + f / k for w in weights]
-        level = random.choices(candidates, weights=weights, k=1)[0]
-        self.stats["starts"][level] += 1
-        if level == 0:
+        key = random.choices(candidates, weights=weights, k=1)[0]
+        # Waypoint start (str id): non-gating, tracked separately.
+        if isinstance(key, str):
+            self.wp_start_counts[key] = self.wp_start_counts.get(key, 0) + 1
+            _src, _bonus, state = self.waypoints[key].sample()
+            return key, state
+        self.stats["starts"][key] += 1
+        if key == 0:
             return 0, None
         # Pool entries are (source_cp, bonus, state_bytes).
-        _src, _bonus, state = self.checkpoints[level].sample()
-        return level, state
+        _src, _bonus, state = self.checkpoints[key].sample()
+        return key, state
 
     def summary(self):
         sizes = [len(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)]
@@ -457,11 +504,18 @@ class CheckpointManager:
         rej = self.stats.get("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
         reach = "[" + ", ".join(f"{r:.2f}" for r in self.reset_reach_ema) + "]"
         gscore = "[" + ", ".join(f"{p.goal_score:.2f}" for p in self.checkpoints) + "]"
-        return (
+        base = (
             f"cp={sizes} saves={self.stats['saves']} "
             f"rejected={rej} success=[{', '.join(rates)}] "
             f"reset_reach={reach} gscore={gscore}"
         )
+        if self.waypoints:
+            # Compact per-WP view: id=poolsize@goal_score, deepest/lowest
+            # goal-score (= most-sampled) first.
+            items = sorted(self.waypoints.items(), key=lambda kv: kv[1].goal_score)
+            wp = " ".join(f"{w}={len(p)}@{p.goal_score:.2f}" for w, p in items)
+            base += f" | wp[{len(self.waypoints)}]: {wp}"
+        return base
 
     def save_to_disk(self, path):
         import pickle
@@ -471,6 +525,11 @@ class CheckpointManager:
                 list(self.checkpoints[i].states) for i in range(self.FRUITS_TOTAL + 1)
             ],
             "stats": self.stats,
+            # Waypoint pools: id -> (states, goal_score). Optional; absent in
+            # pre-WP checkpoint files (load tolerates that).
+            "waypoints": {
+                w: (list(p.states), p.goal_score) for w, p in self.waypoints.items()
+            },
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
@@ -497,6 +556,16 @@ class CheckpointManager:
                     entry = (i, 0, bytes(s))
                 if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
                     self.checkpoints[i].states.append(entry)
+        # Waypoint pools (optional; absent in pre-WP files).
+        for wp_id, payload in data.get("waypoints", {}).items():
+            states, goal_score = payload
+            pool = StartPool(self.max_states_per_checkpoint, self.reach_alpha)
+            for s in states:
+                if len(pool) >= self.max_states_per_checkpoint:
+                    break
+                pool.states.append((int(s[0]), int(s[1]), bytes(s[2])))
+            pool.goal_score = float(goal_score)
+            self.waypoints[wp_id] = pool
         loaded_stats = data.get("stats", self.stats)
         # Tolerate older checkpoint files that predate newer counters.
         loaded_stats.setdefault("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
@@ -596,6 +665,17 @@ class CheckpointCurriculumEnv(gym.Env):
             _level = 1
         self._use_death_flag = _level >= 2
 
+        # --- Waypoint curriculum (H-AI; off unless curriculum.waypoints) ---
+        # Optional, non-gating start-seeds at computed ladder top/bottom
+        # positions. Capture is grounded-only, once per waypoint per episode,
+        # and never re-captures the waypoint an episode was seeded from.
+        self._wp_enabled = bool(getattr(cur, "waypoints", False)) if cur else False
+        self._wp_tol = int(getattr(cur, "waypoint_tolerance", 2)) if cur else 2
+        # {wp_id: (x_ram, y_px, floor)} detection targets from the tilemap.
+        self._waypoints = yeti.waypoints(_level) if self._wp_enabled else {}
+        self._start_wp = None  # the WP this episode was seeded from (skip re-save)
+        self._captured_wps: set = set()  # WPs already captured this episode
+
         self.env_id = env_id
         self.episode_logger = episode_logger
 
@@ -675,6 +755,11 @@ class CheckpointCurriculumEnv(gym.Env):
             self._initialized = True
 
         level, state_bytes = _manager.pick_start()
+        # A waypoint start returns a str id; remember it so (a) episode-end
+        # record_episode credits the WP pool, and (b) we don't re-capture the
+        # waypoint we were seeded at.
+        self._start_wp = level if isinstance(level, str) else None
+        self._captured_wps = set()
 
         if state_bytes is None and self._start_state_bytes is not None:
             # CP0 for a level that boots from a save-state rather than a
@@ -800,6 +885,24 @@ class CheckpointCurriculumEnv(gym.Env):
             )
             self._grounded_snap_due = None
 
+        # Waypoint capture (H-AI): snapshot a GROUNDED state when the agent
+        # is within tolerance of a computed waypoint position, at most once
+        # per waypoint per episode, and never the waypoint the episode was
+        # seeded from. Real states only (grounded gate); these feed the
+        # optional, non-gating WP start-pools.
+        if self._wp_enabled and ctx.pose in SURFACE_POSES:
+            for wp_id, (wx, wy, _floor) in self._waypoints.items():
+                if wp_id == self._start_wp or wp_id in self._captured_wps:
+                    continue
+                if abs(x - wx) <= self._wp_tol and abs(y - wy) <= self._wp_tol:
+                    _manager.save_waypoint(
+                        wp_id,
+                        self.base._interface.save_state(),
+                        source_cp=0 if self._start_wp is None else self._fruits_total,
+                        bonus=bonus,
+                    )
+                    self._captured_wps.add(wp_id)
+
         # Princess touch ends the episode and counts as a success.
         if princess_touched:
             self._fruits_collected_this_ep += 1
@@ -861,11 +964,17 @@ class CheckpointCurriculumEnv(gym.Env):
                 if self._princess_touched_this_ep
                 else self._fruits_total - fruits
             )
-            _manager.record_episode(start_level, reached_level)
+            # Credit the goal-score to the actual start: a WP id (str) for
+            # a waypoint-seeded episode, else the CP start level (int).
+            start_key = self._start_wp if self._start_wp is not None else start_level
+            _manager.record_episode(start_key, reached_level)
             # Flush deferred checkpoint snapshots, scored by how the
             # rest of this episode actually played out. ``source_cp``
             # is the CP this episode started from — the retention key
             # that biases pools toward reset-origin states (approach 30).
+            # A WP-seeded episode's fruit snapshots are NOT reset-origin, so
+            # mark them maximally artificial (evict-first).
+            save_src = self._fruits_total if self._start_wp is not None else start_level
             for level, state_bytes, save_step, save_bonus in self._pending_saves:
                 survived_steps = self._step_count - save_step
                 reached_next = self._max_cp_this_ep > level
@@ -875,7 +984,7 @@ class CheckpointCurriculumEnv(gym.Env):
                     survived_steps,
                     reached_next,
                     save_bonus,
-                    source_cp=start_level,
+                    source_cp=save_src,
                 )
             self._pending_saves = []
             if end_reason is None:
