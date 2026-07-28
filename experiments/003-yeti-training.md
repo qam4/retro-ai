@@ -960,25 +960,37 @@ alone doesn't resolve the over-concentration.
   destructive updates and lock in the capability. reset_reach=[1,0.98,0.98,0]
   corroborated by the sweep. STABLE from-reset both-fruits is now the L2 baseline
   (v3-v6: 0 fruits; v7: oscillating; v8: stable ~100%).
-  PRINCESS (corrected — earlier "princess=0" was a LOG BUG, see below): the
-  princess IS reached — v8 has 780 princess touches (n_fruits_collected>=3 =
-  both fruits + the princess's +1), v7 had 33 — but 0 are from TRUE cold reset
-  (0/3527 hash-isolated); ALL are from WP-seeded episodes (which log
-  start_level=0 but load a waypoint near the princess). So the final leg
-  (fruit-2 -> L56 -> princess) IS being learned FROM WAYPOINT STARTS
-  (seg_success 2->3:19% from CP2 seeds is real), it just doesn't COMPOSE into
-  the cold-reset chain yet — the same seed-works / reset-doesn't pattern as
-  v7's both-fruits, one leg deeper. Remaining wall: compose "both fruits ->
-  survive fruit 2 -> L56 -> princess" from reset (levers: more anneal time,
-  continued WP-seeding of the princess leg, keep-best).
+  PRINCESS (corrected — earlier "princess=0" was a LOG BUG, see below; the
+  DEFINITIVE princess signal is end_reason=="princess_touched"): the princess
+  IS reached. Measured via end_reason: v8 = 2170 touches, v7 = 72 touches. But
+  0 are from a TRUE cold reset (both runs) — every touch starts from a SEED.
+  Breakdown by logged start_level (fruits still on map at start = level 0):
+    v8: start_level 0 = 780 (ALL from WP seeds, 0 cold reset), 1 = 34,
+        2 (both-fruits CP2 seed) = 1356.
+    v7: start_level 0 = 33 (WP seeds), 1 = 4, 2 = 35.
+  IMPORTANT measurement note: n_fruits_collected counts fruits collected DURING
+  the episode (+1 on princess), so n_fruits>=3 only catches princess touches
+  from starts where BOTH fruits were collected in-episode (cold-reset-like / WP
+  seeds with fruits present) — it MISSES princess from CP2 (both-fruits) seeds
+  (those collect 0 fruits in-episode -> n_fruits=1). That is why the earlier
+  n_fruits>=3 numbers (780 v8 / 33 v7) UNDERCOUNTED: they equal exactly the
+  start_level-0 subset. Use end_reason for totals.
+  So the final leg (fruit-2 -> L56 -> princess) IS learned FROM SEEDS — the
+  2->3:19% is CP2-seed (both-fruits) -> princess success, and it is REAL — it
+  just doesn't COMPOSE into a cold-reset chain yet. Same seed-works /
+  reset-doesn't pattern as v7's both-fruits, one leg deeper. The distinction
+  that matters: "final leg from a seed" (~19%, works) vs "whole level from cold
+  reset" (0, the remaining wall). Levers to compose it from reset: more anneal
+  time, continued WP-seeding of the princess leg, keep-best.
   LOG BUG (found here, breaks princess accounting): _log_episode writes
   reached_level = fruits_total - fruits, OMITTING the princess (+1), so
   episodes.csv reached_level caps at fruits_total and NEVER shows a princess
   touch. record_episode uses the correct value (fruits_total+1 on princess), so
-  seg_success is right but the CSV is not. This caused repeated "princess=0"
-  misreads. FIXED: _log_episode now mirrors record_episode (logs fruits_total+1
-  when _princess_touched_this_ep). For runs logged BEFORE the fix, use
-  n_fruits_collected>=3 as the princess signal.
+  seg_success / goal-score / seeding were always right; only the CSV column was
+  wrong. This caused repeated "princess=0" misreads. FIXED: _log_episode now
+  mirrors record_episode (logs fruits_total+1 when _princess_touched_this_ep).
+  For runs logged BEFORE the fix, use end_reason=="princess_touched" (totals)
+  or n_fruits_collected>=3 (fruits-collected-in-episode subset only).
   NEXT: (Q2) PHASE-2 ANNEAL to stabilize the oscillation (warm-start a good
   snapshot's weights, n_steps 16->512, target_kl=0.05) — the exact recipe that
   took L1 58%->99.7% (H-V); (Q3) self-regulating WP share (weight WPs by
