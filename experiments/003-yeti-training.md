@@ -929,6 +929,12 @@ alone doesn't resolve the over-concentration.
   destructive-update swing): late snapshots collapse (14.8M-15M -> floor-1/0),
   so the FINAL model is degraded and a single-snapshot eval is meaningless.
   Champion = a snapshot (13.5M/14.0M), captured by sweeping — same as L1 (H-U).
+  Full from-reset snapshot sweep (rollout_l2): 1M-12M top out at FLOOR 3 (never
+  past the goat from reset); the both-fruits capability emerged ONLY in a narrow
+  ~13.5-14.4M window that swings 17%<->100% (n_steps=16 oscillation); TWO
+  snapshots hit 100% both-fruits/30eps (13.5M and 14.0M), 14.1-14.2M and
+  14.8-15M collapse to floor 1. So there are exactly two co-equal champions
+  (13.5M, 14.0M) — either is an ideal phase-2 anneal warm-start.
   My first eval looked only at 15M and wrongly concluded "doesn't compose";
   reset_reach_ema=0.40 was a windowed avg over the 0<->100% swing.
   NOT YET: the PRINCESS (final goal, after both fruits) — 0 touches. Diagnosed
