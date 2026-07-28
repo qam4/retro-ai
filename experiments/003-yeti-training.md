@@ -941,6 +941,26 @@ alone doesn't resolve the over-concentration.
   above, so the mix must force enough from-reset (or from-above-the-goat)
   practice. Also: log WP-start episodes distinctly (they currently log
   start_level=0, muddying episodes.csv), and don't rely on reset_reach_ema.
+- [!] **CRITICAL — from-reset EVAL TOOLS are UNFAITHFUL (found chasing the v7
+  reset_reach discrepancy).** For the SAME policy (v7 final/15M) + SAME start
+  (level2_start): the TRAINING env reaches both fruits ~54% from true reset
+  (hash-isolated episodes.csv; and the reset_reach_ema=0.40 is CORRECT — a
+  simulated alpha=0.02 EMA over those episodes reproduces 0.401), but the
+  standalone eval tools (rollout_l2, eval_from_reset) report ~0 (0/30):
+  instrumented, the eval agent walks right and FALLS INTO THE FIRST GAP (x~10)
+  and dies, while training descends via the ladder. Ruled out: obs shape /
+  transpose (model wants (4,84,84); eval feeds transpose(2,0,1) of (84,84,4) =
+  correct), start-state (hash-identical), small-sample (0/30), cold-vs-warm env
+  (eps 2-30 also fail). Root cause NOT yet found — the standalone eval's obs
+  sequence after load_state+notify+settle differs from the training
+  CheckpointCurriculumEnv in some way that flips a frame-precise gap jump.
+  IMPLICATIONS: (1) v7 may be a genuine ~54% from-reset SUCCESS, not a mirage;
+  (2) prior eval-based conclusions (v5/v6 "sat at floor 1") are SUSPECT and must
+  be re-checked once eval is faithful. THIS BLOCKS everything: fix eval
+  faithfulness FIRST (make an eval that reuses the training env's exact
+  reset+step path, or find the preprocessing/frame-buffer divergence), before
+  v8 / phase-2 anneal (Q2, agreed) / self-regulating WP share (Q3: weight WPs by
+  1 - reach-from-reset so they fade as the agent reaches them unaided — no cap).
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
