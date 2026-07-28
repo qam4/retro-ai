@@ -932,13 +932,19 @@ alone doesn't resolve the over-concentration.
   My first eval looked only at 15M and wrongly concluded "doesn't compose";
   reset_reach_ema=0.40 was a windowed avg over the 0<->100% swing.
   NOT YET: the PRINCESS (final goal, after both fruits) — 0 touches. Diagnosed
-  (14M champion, 6/6 from reset, videos in output/mo5/yeti/videos/
-  l2_v7_champion_14M/): collects both fruits (floor 5), descends to floor 6
-  (y=150), moves right toward the princess to x~63 (px~256), then FALLS into a
-  gap and dies (pose 11 -> 0x2AFC) before reaching the princess (bottom-right
-  x~76/px~304). So the final leg is one more frame-precise gap-jump on floor 6 —
-  a fall, not a goat. A WP at L56_bot / floor 6 (already captured) can drill it;
-  phase-2 anneal should also help by stabilizing + refining.
+  from VIDEO (user, 14M champion; corrects my earlier RAM misread of "floor-6
+  approach gap"): FRUIT 2 sits on the EDGE OF A GAP (floor 5, agent x~64). The
+  agent jumps to collect it, grabs the fruit, but JUMPED TOO EARLY and falls
+  into the gap to its death (deaths cluster at x~63, pose 11 fall -> 0x2AFC;
+  y=150 is the fall-through to the bottom, NOT a controlled floor-6 arrival). So
+  it CAN reach both fruits but the fruit-2 jump itself is fatal — it never
+  survives past fruit 2, hence never reaches the princess. This is a precise
+  jump-TIMING problem (grab fruit 2 AND land safely). Chicken-and-egg: with
+  gamma=1 the agent has no gradient to SURVIVE the fruit-2 jump because it's
+  never reached the princess reward beyond it. Levers: phase-2 anneal (refine
+  timing + stabilize the oscillation), and a WP just past fruit 2 (floor-5-right
+  / L56) so it discovers the princess reward and backward-chains surviving the
+  fruit-2 jump.
   NEXT: (Q2) PHASE-2 ANNEAL to stabilize the oscillation (warm-start a good
   snapshot's weights, n_steps 16->512, target_kl=0.05) — the exact recipe that
   took L1 58%->99.7% (H-V); (Q3) self-regulating WP share (weight WPs by
