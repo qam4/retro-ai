@@ -1,5 +1,26 @@
 # TODO
 
+## BUGS (high priority)
+- [OPEN, CRITICAL] **From-reset EVAL tools are UNFAITHFUL to the training env.**
+  Same policy (v7 final/15M) + same start (level2_start): the TRAINING env
+  reaches both fruits ~54% from true reset (hash-isolated episodes.csv; and
+  reset_reach_ema=0.40 is CORRECT — an alpha=0.02 EMA over those episodes
+  reproduces 0.401), but standalone eval (scripts/mo5/yeti/rollout_l2.py and
+  eval_from_reset.py) report ~0 (0/30): the eval agent walks right and FALLS IN
+  THE FIRST GAP (dies at floor-2 line y=54) while training descends via the
+  ladder. RULED OUT: obs shape/transpose (model wants (4,84,84); eval feeds
+  transpose(2,0,1)=correct), start-state (hash-identical), sample size (0/30),
+  cold-vs-warm env (eps 2-30 fail), base.reset vs gym.reset (both fail).
+  ROOT CAUSE UNKNOWN — the standalone eval's obs sequence after
+  load_state+notify+settle differs from the training CheckpointCurriculumEnv in
+  a way that flips the frame-precise first-gap jump.
+  IMPACT: (1) v7 may be a genuine ~54% from-reset SUCCESS, not a mirage; (2)
+  prior eval-based conclusions (v5/v6 "sat at floor 1") are SUSPECT. BLOCKS v8 /
+  phase-2 anneal / WP-share work until we have a trustworthy from-reset eval.
+  PLAN: build a faithful eval that reuses the training env's EXACT reset+step
+  path (instantiate CheckpointCurriculumEnv as PPO wraps it, manager forced to
+  reset); if it reproduces ~54%, bisect the standalone path's obs pipeline.
+
 ## Tools
 - Generic RAM watcher tool: boot a game, take snapshots on user-triggered
   events (score change, death, level complete), auto-categorize addresses
