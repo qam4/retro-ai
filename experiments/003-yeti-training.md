@@ -931,7 +931,14 @@ alone doesn't resolve the over-concentration.
   Champion = a snapshot (13.5M/14.0M), captured by sweeping — same as L1 (H-U).
   My first eval looked only at 15M and wrongly concluded "doesn't compose";
   reset_reach_ema=0.40 was a windowed avg over the 0<->100% swing.
-  NOT YET: the PRINCESS (final goal, after both fruits) — 0 touches.
+  NOT YET: the PRINCESS (final goal, after both fruits) — 0 touches. Diagnosed
+  (14M champion, 6/6 from reset, videos in output/mo5/yeti/videos/
+  l2_v7_champion_14M/): collects both fruits (floor 5), descends to floor 6
+  (y=150), moves right toward the princess to x~63 (px~256), then FALLS into a
+  gap and dies (pose 11 -> 0x2AFC) before reaching the princess (bottom-right
+  x~76/px~304). So the final leg is one more frame-precise gap-jump on floor 6 —
+  a fall, not a goat. A WP at L56_bot / floor 6 (already captured) can drill it;
+  phase-2 anneal should also help by stabilizing + refining.
   NEXT: (Q2) PHASE-2 ANNEAL to stabilize the oscillation (warm-start a good
   snapshot's weights, n_steps 16->512, target_kl=0.05) — the exact recipe that
   took L1 58%->99.7% (H-V); (Q3) self-regulating WP share (weight WPs by
