@@ -1000,7 +1000,17 @@ class CheckpointCurriculumEnv(gym.Env):
             return
         final_xy = self._read_pos()
         start_level = self._fruits_total - self._start_fruits
-        reached_level = self._fruits_total - fruits
+        # Mirror record_episode's H-M value: a princess touch is
+        # CP(fruits_total+1). Computing reached_level as fruits_total-fruits
+        # here (the old code) capped it at fruits_total and NEVER logged a
+        # princess touch, so episodes.csv reached_level could not show the
+        # final leg even though record_episode / the EMAs counted it. Use
+        # the same princess-aware value so the log matches the curriculum.
+        reached_level = (
+            self._fruits_total + 1
+            if self._princess_touched_this_ep
+            else self._fruits_total - fruits
+        )
         self.episode_logger.log(
             global_step=_get_global_step(),
             env_id=self.env_id,

@@ -951,6 +951,34 @@ alone doesn't resolve the over-concentration.
   timing + stabilize the oscillation), and a WP just past fruit 2 (floor-5-right
   / L56) so it discovers the princess reward and backward-chains surviving the
   fruit-2 jump.
+  ** H-AJ RESULT (v8 = phase-2 anneal, warm-start v7-14M, n_steps 16->512,
+  target_kl 0.05, WP on, 10M): STABILIZED both-fruits-from-reset; princess still
+  unsolved.** Exit 0, 3h46m, 75,304 eps. From-reset snapshot sweep (rollout_l2):
+  EVERY snapshot 1M-10M reaches floor 5 + BOTH fruits 92-100% (final model
+  included) — the v7 oscillation (narrow 13.5-14.4M window, 17<->100%, collapsed
+  final) is GONE. Reproduces L1's H-V on L2: small KL-bounded steps stop the
+  destructive updates and lock in the capability. reset_reach=[1,0.98,0.98,0]
+  corroborated by the sweep. STABLE from-reset both-fruits is now the L2 baseline
+  (v3-v6: 0 fruits; v7: oscillating; v8: stable ~100%).
+  PRINCESS (corrected — earlier "princess=0" was a LOG BUG, see below): the
+  princess IS reached — v8 has 780 princess touches (n_fruits_collected>=3 =
+  both fruits + the princess's +1), v7 had 33 — but 0 are from TRUE cold reset
+  (0/3527 hash-isolated); ALL are from WP-seeded episodes (which log
+  start_level=0 but load a waypoint near the princess). So the final leg
+  (fruit-2 -> L56 -> princess) IS being learned FROM WAYPOINT STARTS
+  (seg_success 2->3:19% from CP2 seeds is real), it just doesn't COMPOSE into
+  the cold-reset chain yet — the same seed-works / reset-doesn't pattern as
+  v7's both-fruits, one leg deeper. Remaining wall: compose "both fruits ->
+  survive fruit 2 -> L56 -> princess" from reset (levers: more anneal time,
+  continued WP-seeding of the princess leg, keep-best).
+  LOG BUG (found here, breaks princess accounting): _log_episode writes
+  reached_level = fruits_total - fruits, OMITTING the princess (+1), so
+  episodes.csv reached_level caps at fruits_total and NEVER shows a princess
+  touch. record_episode uses the correct value (fruits_total+1 on princess), so
+  seg_success is right but the CSV is not. This caused repeated "princess=0"
+  misreads. FIXED: _log_episode now mirrors record_episode (logs fruits_total+1
+  when _princess_touched_this_ep). For runs logged BEFORE the fix, use
+  n_fruits_collected>=3 as the princess signal.
   NEXT: (Q2) PHASE-2 ANNEAL to stabilize the oscillation (warm-start a good
   snapshot's weights, n_steps 16->512, target_kl=0.05) — the exact recipe that
   took L1 58%->99.7% (H-V); (Q3) self-regulating WP share (weight WPs by

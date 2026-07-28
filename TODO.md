@@ -1,6 +1,16 @@
 # TODO
 
 ## BUGS (high priority)
+- [FIXED — commit pending] **`episodes.csv reached_level` omitted the princess.**
+  `CheckpointCurriculumEnv._log_episode` computed `reached_level =
+  fruits_total - fruits`, which caps at `fruits_total` and can NEVER show a
+  princess touch — even though `record_episode` uses the H-M value
+  (`fruits_total+1` on a princess touch) so `seg_success`/goal-score EMAs were
+  always correct. Consequence: reading princess reach from `episodes.csv
+  reached_level` always showed 0, causing repeated "princess=0" misreads (v8
+  actually had 780 princess touches, measurable via `n_fruits_collected>=3`).
+  FIX: `_log_episode` now mirrors `record_episode` (logs `fruits_total+1` when
+  `_princess_touched_this_ep`). Pure logging fix; no training-behavior change.
 - [RESOLVED — NOT a bug] "From-reset eval unfaithful" was POLICY OSCILLATION +
   evaluating the degraded FINAL snapshot. v7's policy swings (n_steps=16 / no
   target_kl = L1's H-V): a from-reset snapshot sweep shows 13.5M/14.0M reach
