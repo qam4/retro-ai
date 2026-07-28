@@ -912,6 +912,35 @@ alone doesn't resolve the over-concentration.
   From a WP start the agent plays normally with the grounded reward, success
   stays fruit-only; the PBRS potential from the WP position gives a short path to
   the fruit reward (discover + practice the deep segment).
+- [~] **H-AI RESULT (v7 = `yeti_curriculum_l2_v7_wp_15m`, 15M, WP curriculum):
+  progress + a composition wall + a metric caveat.** Exit 0, 7h10m, 166,782 eps.
+  WHAT WORKED: the WP curriculum captured ALL 16 waypoints incl. the deep ones
+  (L34/L45/L56 = floors 3-6), and from waypoint starts the agent learned to PASS
+  THE F3 GOAT and descend all the way, collecting both fruits (both CP pools
+  full; 37k eps got 2 fruits). So the goat is beatable and the deep descent is
+  learnable — the F3 wall is no longer a hard zero.
+  WHAT DID NOT: it does NOT compose to the cold reset. From level2_start,
+  eval_from_reset = 0/12 and rollout_l2 = 0/15 at 15M. Isolating TRUE resets by
+  start_state_hash: only 8.5% of episodes were true resets; their both-fruit
+  rate was 3.6% overall / ~16.7% last-20%, but the FINAL policy is ~0
+  (rollout_l2: from-reset descent peaked at 5M = F2 13%, then REGRESSED to
+  floor-1 by 15M). Classic composition/forgetting: 16 WP start-candidates
+  diluted the cold-reset share to ~8.5%, and WPs let the agent SKIP the hard
+  from-reset goat-descent, so it specialized on WP starts and regressed on the
+  cold start it rarely practiced.
+  METRIC CAVEAT: `reset_reach_ema` showed 0.40 (both fruits) — UNRELIABLE here
+  (noisy EMA over the sparse 8.5% reset episodes; true ~0-16%). Don't trust it
+  to drive decisions when WPs dilute the reset share; use hash-isolated
+  episodes.csv or a from-reset eval.
+  NEXT (candidates, not yet chosen): (a) protect the cold-reset share — a reset
+  floor / cap total WP share so the from-reset descent keeps getting practiced;
+  (b) ANNEAL the WP share down over training (bootstrap the deep segments early,
+  then shift budget to reset to compose) — a schedule, like the L1 phase-2
+  anneal; (c) weight reset higher than any single WP. The deeper insight: WPs
+  that start BELOW the goat let the policy avoid learning to get past it from
+  above, so the mix must force enough from-reset (or from-above-the-goat)
+  practice. Also: log WP-start episodes distinctly (they currently log
+  start_level=0, muddying episodes.csv), and don't rely on reset_reach_ema.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
