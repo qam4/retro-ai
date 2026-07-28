@@ -919,48 +919,39 @@ alone doesn't resolve the over-concentration.
   THE F3 GOAT and descend all the way, collecting both fruits (both CP pools
   full; 37k eps got 2 fruits). So the goat is beatable and the deep descent is
   learnable — the F3 wall is no longer a hard zero.
-  WHAT DID NOT: it does NOT compose to the cold reset. From level2_start,
-  eval_from_reset = 0/12 and rollout_l2 = 0/15 at 15M. Isolating TRUE resets by
-  start_state_hash: only 8.5% of episodes were true resets; their both-fruit
-  rate was 3.6% overall / ~16.7% last-20%, but the FINAL policy is ~0
-  (rollout_l2: from-reset descent peaked at 5M = F2 13%, then REGRESSED to
-  floor-1 by 15M). Classic composition/forgetting: 16 WP start-candidates
-  diluted the cold-reset share to ~8.5%, and WPs let the agent SKIP the hard
-  from-reset goat-descent, so it specialized on WP starts and regressed on the
-  cold start it rarely practiced.
-  METRIC CAVEAT: `reset_reach_ema` showed 0.40 (both fruits) — UNRELIABLE here
-  (noisy EMA over the sparse 8.5% reset episodes; true ~0-16%). Don't trust it
-  to drive decisions when WPs dilute the reset share; use hash-isolated
-  episodes.csv or a from-reset eval.
-  NEXT (candidates, not yet chosen): (a) protect the cold-reset share — a reset
-  floor / cap total WP share so the from-reset descent keeps getting practiced;
-  (b) ANNEAL the WP share down over training (bootstrap the deep segments early,
-  then shift budget to reset to compose) — a schedule, like the L1 phase-2
-  anneal; (c) weight reset higher than any single WP. The deeper insight: WPs
-  that start BELOW the goat let the policy avoid learning to get past it from
-  above, so the mix must force enough from-reset (or from-above-the-goat)
-  practice. Also: log WP-start episodes distinctly (they currently log
-  start_level=0, muddying episodes.csv), and don't rely on reset_reach_ema.
-- [!] **CRITICAL — from-reset EVAL TOOLS are UNFAITHFUL (found chasing the v7
-  reset_reach discrepancy).** For the SAME policy (v7 final/15M) + SAME start
-  (level2_start): the TRAINING env reaches both fruits ~54% from true reset
-  (hash-isolated episodes.csv; and the reset_reach_ema=0.40 is CORRECT — a
-  simulated alpha=0.02 EMA over those episodes reproduces 0.401), but the
-  standalone eval tools (rollout_l2, eval_from_reset) report ~0 (0/30):
-  instrumented, the eval agent walks right and FALLS INTO THE FIRST GAP (x~10)
-  and dies, while training descends via the ladder. Ruled out: obs shape /
-  transpose (model wants (4,84,84); eval feeds transpose(2,0,1) of (84,84,4) =
-  correct), start-state (hash-identical), small-sample (0/30), cold-vs-warm env
-  (eps 2-30 also fail). Root cause NOT yet found — the standalone eval's obs
-  sequence after load_state+notify+settle differs from the training
-  CheckpointCurriculumEnv in some way that flips a frame-precise gap jump.
-  IMPLICATIONS: (1) v7 may be a genuine ~54% from-reset SUCCESS, not a mirage;
-  (2) prior eval-based conclusions (v5/v6 "sat at floor 1") are SUSPECT and must
-  be re-checked once eval is faithful. THIS BLOCKS everything: fix eval
-  faithfulness FIRST (make an eval that reuses the training env's exact
-  reset+step path, or find the preprocessing/frame-buffer divergence), before
-  v8 / phase-2 anneal (Q2, agreed) / self-regulating WP share (Q3: weight WPs by
-  1 - reach-from-reset so they fade as the agent reaches them unaided — no cap).
+  IT COMPOSES TO COLD RESET (this is the real win — correcting an earlier
+  premature "mirage" read). A from-reset snapshot sweep (rollout_l2, 30 eps):
+  **13.5M and 14.0M reach floor 5 + BOTH fruits 100% from cold reset**
+  (level2_start). v3-v6 never collected a single fruit from reset; v7's best
+  snapshots collect both, 100%. So the waypoint curriculum broke the F3 goat
+  wall AND composed back to reset.
+  CAVEAT — the policy OSCILLATES (n_steps=16 / no target_kl = L1's H-V
+  destructive-update swing): late snapshots collapse (14.8M-15M -> floor-1/0),
+  so the FINAL model is degraded and a single-snapshot eval is meaningless.
+  Champion = a snapshot (13.5M/14.0M), captured by sweeping — same as L1 (H-U).
+  My first eval looked only at 15M and wrongly concluded "doesn't compose";
+  reset_reach_ema=0.40 was a windowed avg over the 0<->100% swing.
+  NOT YET: the PRINCESS (final goal, after both fruits) — 0 touches.
+  NEXT: (Q2) PHASE-2 ANNEAL to stabilize the oscillation (warm-start a good
+  snapshot's weights, n_steps 16->512, target_kl=0.05) — the exact recipe that
+  took L1 58%->99.7% (H-V); (Q3) self-regulating WP share (weight WPs by
+  1 - reach-from-reset so they fade as the agent reaches them unaided — no cap),
+  though composition already works, so this is secondary. Also capture the
+  13.5M/14M champion and log WP-starts distinctly.
+- [x] **RESOLVED (NOT a bug) — the "unfaithful eval" was POLICY OSCILLATION +
+  evaluating the degraded FINAL snapshot.** Chasing the v7 reset_reach
+  discrepancy, I first suspected the eval tools were unfaithful (v7 final/15M
+  eval'd 0 from reset while training showed ~54%). WRONG. A multi-snapshot
+  from-reset sweep (rollout_l2, per 100k) shows the policy OSCILLATES wildly:
+  13.5M and 14.0M reach floor 5 + BOTH fruits 100% (30/30) from cold reset, but
+  14.8M/14.9M/15.0M collapse to floor-1/0. v7 uses n_steps=16 / no target_kl =
+  the exact L1 destructive-update oscillation (H-V). So: the eval tools are
+  FAITHFUL; I just evaluated the final snapshot, which was in a "fall" phase.
+  The training reset_reach_ema=0.40 and "54% last-50 true resets" were WINDOWED
+  AVERAGES over the swing (snapshots range 0<->100%). LESSON (same as L1 H-U):
+  a single/final snapshot is meaningless on an oscillating policy — always SWEEP
+  snapshots from reset and keep the best. Prior v5/v6 evals are fine (they were
+  genuinely stuck), but should ideally have been snapshot sweeps too.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.
