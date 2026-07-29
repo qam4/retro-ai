@@ -848,6 +848,13 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     gamma = float(params.get("gamma", 0.99))
     fruit_scale = float(params.get("fruit_scale", params.get("scale", 0.01)))
     princess_scale = float(params.get("princess_scale", 0.05))
+    # (D4) When True, DEFER the sparse fruit credit to the next grounded-alive
+    # frame (mirroring the D2 shaping deferral) instead of paying it at the
+    # pickup step. A fruit grabbed mid-air that never lands alive (the L2
+    # fruit-2 grab-and-fall-to-death) is then never rewarded, so the fatal
+    # early jump stops being locally optimal. Default False = pay at pickup
+    # (byte-identical to the shipped reward; L1 unaffected).
+    defer_fruit = bool(params.get("defer_fruit_credit", False))
 
     class _GroundedPBRS:
         """PBRS path-progress shaping with an airborne freeze + death gate.
@@ -893,15 +900,34 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
              direction. A *survived* descent (alive on landing) IS credited
              (it is real progress and cannot be farmed -- climbing back up is
              grounded and charged symmetrically at gamma=1).
+
+        (D4) DEFERRED FRUIT CREDIT (opt-in via ``defer_fruit_credit``). The
+             SPARSE fruit reward was previously added at the pickup step and
+             returned even on an airborne/dying frame (measured: the L2 agent
+             grabs fruit 2 while already falling -> banks the reward -> dies,
+             so the fatal early jump is locally optimal). When enabled we
+             instead carry ``prev_fruits_grounded`` (the fruit count at the
+             last grounded-alive frame) and credit fruit progress only on
+             grounded-alive frames — never on a death frame. A fruit grabbed
+             mid-air pays out only once the agent lands alive; if it dies
+             first it pays 0. This is the SAME bounded "last grounded state"
+             memory class as ``prev_phi``/``last_floor`` (D1/D2), so it does
+             not add a new kind of non-Markovian dependence — it extends the
+             deferral scheme already shipped. A grounded grab is credited the
+             same step (equivalent to immediate).
         """
 
         def __init__(self) -> None:
             self._base = base
             self.prev_phi: float | None = None
+            # (D4) fruit count at the last grounded-alive frame; None until
+            # the first grounded-alive frame. Only used when defer_fruit.
+            self._prev_fruits_grounded: int | None = None
 
         def reset(self) -> None:
             self._base.reset()
             self.prev_phi = None
+            self._prev_fruits_grounded = None
 
         @property
         def last_floor(self):  # exposed for probes/tests
@@ -910,9 +936,12 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
         def __call__(self, ctx: RewardContext) -> float:
             reward = 0.0
 
-            # Sparse terms (identical to the base reward).
+            # Sparse terms. The fruit term is paid at pickup by default; when
+            # deferring (D4) it is instead paid on the next grounded-alive
+            # frame (below), so an airborne grab that dies before landing
+            # pays 0.
             picked = ctx.curr_fruits < ctx.prev_fruits
-            if picked:
+            if picked and not defer_fruit:
                 collected = ctx.prev_fruits - ctx.curr_fruits
                 reward += collected * ctx.curr_bonus * fruit_scale
             if ctx.princess_touched:
@@ -921,11 +950,29 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             pose = getattr(ctx, "pose", -1)
             airborne = pose is not None and pose >= 0 and pose not in SURFACE_POSES
 
-            # (D2) Airborne: no credit, HOLD prev_phi (don't sample/rebaseline).
+            # (D2) Airborne: no credit, HOLD prev_phi (don't sample/rebaseline)
+            # and HOLD the deferred-fruit baseline (don't sample it either).
             if airborne:
                 return reward
 
             phi = self._base._potential(ctx)  # grounded; also updates last_floor
+
+            # (D4) Deferred fruit credit: on a grounded-ALIVE frame, credit any
+            # fruit collected since the last grounded-alive frame. Never on a
+            # death frame (so a fatal airborne grab is never paid). fruit_disc
+            # marks the resulting discontinuity so shaping rebaselines (the
+            # potential's target set changed), exactly as `picked` does in the
+            # immediate case.
+            fruit_disc = False
+            if defer_fruit and not ctx.died:
+                if (
+                    self._prev_fruits_grounded is not None
+                    and ctx.curr_fruits < self._prev_fruits_grounded
+                ):
+                    collected = self._prev_fruits_grounded - ctx.curr_fruits
+                    reward += collected * ctx.curr_bonus * fruit_scale
+                    fruit_disc = True
+                self._prev_fruits_grounded = ctx.curr_fruits
 
             # (D3) death gate + standard PBRS rebaseline on discontinuities
             # (episode start: prev_phi None; unresolved floor: phi None;
@@ -934,6 +981,7 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             if (
                 ctx.died
                 or picked
+                or fruit_disc
                 or ctx.princess_touched
                 or self.prev_phi is None
                 or phi is None

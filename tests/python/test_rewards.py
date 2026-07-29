@@ -877,3 +877,98 @@ def test_grounded_reset_clears_state():
     assert fn.last_floor is None
     # After reset the next step is again a no-shaping baseline.
     assert fn(_g2(3, 30, 0)) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# (D4) defer_fruit_credit — the sparse fruit reward is paid on the next
+# grounded-ALIVE frame, so a fruit grabbed mid-air that falls to death pays 0
+# (the measured L2 fruit-2 grab-and-fall). Default off = credit at pickup.
+# Fixed position -> shaping is 0/rebaselined each step, isolating the fruit
+# term (1 fruit * curr_bonus 1000 * fruit_scale 0.01 = 10.0).
+# ---------------------------------------------------------------------------
+
+_L2_DEFER = {**_L2, "defer_fruit_credit": True}
+
+
+def _g2f(x, y, pose, pf, cf, died=False, bonus=1000):
+    """L2 grounded ctx allowing fruit-count control (pf=prev, cf=curr)."""
+    fp = {2: (True, True), 1: (True, False), 0: (False, False)}[cf]
+    return _ctx(
+        prev_fruits=pf,
+        curr_fruits=cf,
+        prev_bonus=bonus,
+        curr_bonus=bonus,
+        curr_x=x,
+        curr_y=y,
+        fruits_present=fp,
+        pose=pose,
+        died=died,
+    )
+
+
+def _run_params(params, traj):
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", params)
+    fn.reset()
+    return sum(fn(_g2f(*s)) for s in traj)
+
+
+# grab fruit 2 while falling (pose 11), then land DEAD -> fatal grab.
+_FATAL_GRAB = [
+    (7, 30, 0, 2, 2),  # grounded baseline
+    (7, 28, 9, 2, 2),  # jump
+    (7, 32, 11, 2, 1),  # grabbed fruit mid-fall
+    (7, 40, 11, 1, 1),  # still falling
+    (7, 54, 0, 1, 1, True),  # lands DEAD
+]
+# grab airborne (pose 9), then land ALIVE -> survivable grab.
+_SURV_GRAB = [
+    (7, 30, 0, 2, 2),
+    (7, 28, 9, 2, 2),
+    (7, 26, 9, 2, 1),  # grabbed airborne
+    (7, 30, 0, 1, 1),  # lands alive
+]
+
+
+def test_defer_fatal_airborne_grab_pays_zero():
+    assert _run_params(_L2_DEFER, _FATAL_GRAB) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_default_credits_fatal_grab():
+    # Documents the bug the flag fixes: default pays the fruit at the grab
+    # even though the agent dies in the ensuing fall.
+    assert _run_params(_L2, _FATAL_GRAB) == pytest.approx(10.0)
+
+
+def test_defer_survived_grab_credited_on_landing():
+    assert _run_params(_L2_DEFER, _SURV_GRAB) == pytest.approx(10.0)
+
+
+def test_survived_grab_credited_in_both_modes():
+    # Both credit a SURVIVED grab (defer just moves the fruit term to the
+    # grounded landing). They may differ by shaping bookkeeping — default
+    # credits an extra potential jump because an airborne pickup skips the
+    # rebaseline, whereas defer rebaselines on the deferred credit — but both
+    # pay at least the fruit value. The point is: only the FATAL grab differs
+    # (0 vs credited), not the survived one.
+    assert _run_params(_L2_DEFER, _SURV_GRAB) >= 10.0 - 1e-9
+    assert _run_params(_L2, _SURV_GRAB) >= 10.0 - 1e-9
+
+
+def test_defer_grounded_grab_credited_same_step():
+    # A grounded grab (never airborne) is credited immediately, like default.
+    assert _run_params(
+        _L2_DEFER, [(7, 30, 0, 2, 2), (7, 30, 0, 2, 1)]
+    ) == pytest.approx(10.0)
+
+
+def test_defer_preserves_shaping_roundtrip_zero():
+    # Shaping invariant intact with defer on (no fruit): grounded round trip
+    # telescopes to 0.
+    traj = [
+        (1, 30, 0, 2, 2),
+        (3, 30, 0, 2, 2),
+        (5, 30, 0, 2, 2),
+        (3, 30, 0, 2, 2),
+        (1, 30, 0, 2, 2),
+    ]
+    assert abs(_run_params(_L2_DEFER, traj)) < 1e-9
