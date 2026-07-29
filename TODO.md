@@ -1,6 +1,19 @@
 # TODO
 
 ## BUGS (high priority)
+- [ROOT-CAUSE FOUND + FIXED (H-AB)] **`L12a` pool pinned at `goal_score 0.00`
+  was the 5-NOOP load-settle, not a stale/bad pool.** Investigation (RAM diff +
+  settle sweep): `L12a` is the natural F1→F2 ladder the agent DOES use; its
+  seeds are fine. But `CheckpointCurriculumEnv.reset` did 5 NOOP settle steps
+  after `load_state` (a pre-`notify_state_loaded` frame-flush vestige), which
+  advance the game ~20 emulator frames. `L12a` has a goat that reaches the
+  standstill agent at ~frame 7, so the settle burned the survival window →
+  seeded episodes started already-doomed → `reached_level 0` → `goal_score 0`.
+  Verified: `L12a` survives 6/6 at settle=1, 0/6 at settle=5. FIX (H-AB): save
+  the frame stack WITH each seed and restore it on load (on-distribution,
+  settle 0); stack-less seeds fall back to reseed + settle **1** (was 5). See
+  experiments/003 H-AB. NOTE: the fallback settle 5→1 also changes L1's
+  CP-seeded starts (more on-distribution); guarded by the H-Z stale-frame test.
 - [FIXED — commit pending] **`episodes.csv reached_level` omitted the princess.**
   `CheckpointCurriculumEnv._log_episode` computed `reached_level =
   fruits_total - fruits`, which caps at `fruits_total` and can NEVER show a

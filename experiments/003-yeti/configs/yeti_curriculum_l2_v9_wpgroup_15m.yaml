@@ -1,0 +1,80 @@
+# yeti_curriculum L2 v9 — WAYPOINT-GROUP allocation (H-AK), warm-started from
+# the v8 anneal policy.
+#
+# v8 (phase-2 anneal) STABILIZED both-fruits-from-cold-reset (every snapshot
+# 1M-10M reaches floor 5 + both fruits 92-100%) and reaches the princess ~2170
+# times FROM SEEDS, but 0 times from a true cold reset. Root cause found by
+# measuring v8's actual start-allocation: with pick_start summing one
+# `1 - goal_score` vote PER pool, the 16 waypoints collectively took ~89% of
+# starts while RESET got only ~4.3% and the CP2 compose leg ~2.4%. The
+# from-reset chain was barely practiced — a prime suspect for why it never
+# composes.
+#
+# H-AK fix (now in train_checkpoint_curriculum.pick_start, no config knob):
+# waypoints compete as ONE GROUP whose weight is the MEAN of member weights
+# (count-invariant), drawn hierarchically {reset, each CP, WP-group}. On v8's
+# goal-scores this rebalances starts to reset ~26% / CP1 ~25% / CP2 ~15% /
+# WP-group ~34% (verified by replaying v8's goal-scores through the new draw).
+#
+# The bet: v8 already OWNS both-fruits-from-reset and the seeded final leg
+# (CP2->princess ~19%); giving reset ~6x more practice (4%->26%) while keeping
+# the stable anneal recipe should let the two compose into princess-from-cold-
+# reset. One variable vs v8: the allocation rule (H-AK). Recipe (n_steps=512,
+# target_kl=0.05), WP on, reward all identical to v8.
+#
+# Warm-start: weights-only from v8's final model (stable); CP+WP pools +
+# goal-scores load from v8's checkpoints.pkl (dir of `resume`). 15M (vs v8 10M)
+# to give composition room now that reset is practiced ~6x more per step.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v9_wpgroup_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l2_v8_anneal_10m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level2
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 2
+    gamma: 1.0
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950
+    2: 11975
+  start_state: output/mo5/yeti/level2/level2_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

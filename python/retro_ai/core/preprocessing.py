@@ -234,6 +234,85 @@ class PreprocessedEnv:
         self._prev_raw_frame = None
         self.preprocessing.mark_reseed()
 
+    # ------------------------------------------------------------------
+    # Frame-stack save / restore (on-distribution save-state starts)
+    # ------------------------------------------------------------------
+    # notify_state_loaded() RE-SEEDS the stack (fills it with copies of the
+    # single post-load frame), so a seeded episode's first observation shows
+    # a MOTIONLESS scene even if the agent was moving when captured — off
+    # distribution, and it forces settle noops that advance the game. The
+    # pair below instead snapshots the real frame stack at capture and
+    # restores it on load, so the seeded start is a faithful continuation of
+    # the live trajectory with NO stepping. See experiments/003 H-AB.
+
+    def _stack_signature(self) -> tuple:
+        """Config fingerprint guarding stack compatibility across runs.
+
+        A restored stack is only valid if the pipeline that consumes it
+        matches the one that produced it (same grayscale/resize/stack/crop,
+        hence same per-frame shape); otherwise fall back to reseed.
+        """
+        p = self.preprocessing
+        shape = None
+        if p.frame_buffer is not None and len(p.frame_buffer) > 0:
+            shape = tuple(p.frame_buffer[0].shape)
+        return (
+            bool(p.grayscale),
+            tuple(p.resize) if p.resize else None,
+            int(p.frame_stack),
+            tuple(p.crop) if p.crop else None,
+            shape,
+        )
+
+    def export_frame_stack(self) -> Optional[Dict[str, Any]]:
+        """Snapshot the current (processed) frame stack for save-stating.
+
+        Returns a picklable dict {sig, frames} or None when there is no
+        populated multi-frame stack to save (frame_stack <= 1, or not yet
+        filled). ``frames`` are copies of the processed frames currently in
+        the stack (the real motion history).
+        """
+        p = self.preprocessing
+        if p.frame_buffer is None or len(p.frame_buffer) == 0:
+            return None
+        return {
+            "sig": self._stack_signature(),
+            "frames": [f.copy() for f in p.frame_buffer],
+        }
+
+    def restore_frame_stack(self, blob: Optional[Dict[str, Any]]) -> bool:
+        """Restore a stack saved by :meth:`export_frame_stack`.
+
+        Returns True if the stack was restored (then :meth:`current_observation`
+        is valid with NO stepping). Returns False when the blob is missing,
+        malformed, or its signature does not match this pipeline — the caller
+        must then fall back to :meth:`notify_state_loaded` + a settle step.
+        """
+        p = self.preprocessing
+        if not blob or p.frame_buffer is None:
+            return False
+        if blob.get("sig") != self._stack_signature():
+            return False
+        frames = blob.get("frames")
+        if not frames or len(frames) != p.frame_stack:
+            return False
+        p.frame_buffer.clear()
+        for f in frames:
+            p.frame_buffer.append(f)
+        p._reseed_pending = False
+        # Skip maxpool carry-over for the first post-load step (would need the
+        # raw pre-load frame; the one-step skip is negligible).
+        self._prev_raw_frame = None
+        return True
+
+    def current_observation(self) -> np.ndarray:
+        """The current stacked observation WITHOUT stepping the env.
+
+        Valid after :meth:`restore_frame_stack`; lets a seeded episode start
+        at settle 0 with the faithful, on-distribution observation.
+        """
+        return self.preprocessing._stack_frames()
+
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute *action* with frame skipping and preprocessing.
 

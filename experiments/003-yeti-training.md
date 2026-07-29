@@ -577,6 +577,28 @@ alone doesn't resolve the over-concentration.
   stack blob; file-based starts (level2_start.sav) have no stack -> fall back
   to reseed (H-Z). Only matters once the curriculum bootstraps CP1+ snapshots
   (on L2 today every start is CP0 from a file), so deferred until then.
+
+  **DONE (H-AB implemented).** Promoted from "deferred" after the settle
+  turned out to be an active bug: the 5 NOOP settle-noops advance the game
+  ~20 frames past the snapshot, and at waypoints with a fast standstill
+  hazard (the `L12a` goat, ~frame 7) that burned the whole survival window
+  -> seeded episodes started already-doomed -> `goal_score` pinned at 0
+  (which then, under the old sum-weighting, made those pools hog the start
+  budget). Root-caused by RAM diff (a goat sprite marches into the standing
+  agent) + a settle sweep (`L12a` survives 6/6 at settle=1, 0/6 at settle=5).
+  Implementation: `PreprocessedEnv.export_frame_stack()` / `restore_frame_stack()`
+  / `current_observation()`; pool entries are now 4-tuples
+  `(source_cp, bonus, state_bytes, stack)`; capture grabs the stack at the
+  save-state moment (CP + WP); `reset` restores it and starts at **settle 0**
+  (on-distribution). Stack-less seeds (old checkpoints, offline seeds,
+  file-based CP0) fall back to reseed + settle **1** (was 5). Config
+  signature guards against preprocessing changes -> reseed fallback on
+  mismatch. Tests: tests/python/test_frame_stack_restore.py (restore ==
+  live continuation; signature/length guards) + 4-tuple round-trip in
+  test_checkpoint_manager.py. NOTE: the fallback 5->1 also affects L1's
+  CP-seeded starts (more on-distribution); correctness guarded by the H-Z
+  stale-frame test. So the "stale `L12a` pool" was a SYMPTOM of the settle,
+  not a bad pool; H-AK (waypoint-group allocation) still stands on its own.
 - [x] **H-AC — crayon HUD does not fully re-render after load_state.** (FIXED)
   Long-standing bug, reproduced deterministically
   (`tests/python/test_savestate_determinism.py`). Three distinct save/load
@@ -997,6 +1019,29 @@ alone doesn't resolve the over-concentration.
   1 - reach-from-reset so they fade as the agent reaches them unaided — no cap),
   though composition already works, so this is secondary. Also capture the
   13.5M/14M champion and log WP-starts distinctly.
+- [ ] **H-AK — waypoint-group allocation (fix start-mix DILUTION).** Measured
+  on v8's actual goal-scores: with `pick_start` normalizing `1 - goal_score`
+  over the *sum* of all pools, the 16 waypoints each cast a vote, so the WP set
+  collectively takes **89% of starts** while RESET gets only **4.3%** and the
+  CP2 compose leg **2.4%**. That reset-starvation is a prime suspect for why v8
+  never composes the princess from a cold reset (it's barely practiced). Root
+  cause: allocation is over stored POOLS, not over legs — N waypoints add N
+  votes, so adding a waypoint mechanically shrinks reset's share (the opposite
+  of self-regulating). Also stale pools sit at max weight: `L12a_bot/top` at
+  `goal_score 0.00` (weight 1.0) eat ~12.6% each — a floor-1 WP should average
+  ~0.6, so 0.0 means never-sampled or bad seeds (see TODO staleness bug).
+  FIX (agreed, keep simple): make `pick_start` HIERARCHICAL — draw among
+  sources {reset, each CP, waypoints-as-ONE-group}; the WP group's weight is the
+  MEAN of member `1 - goal_score` (count-invariant, so adding waypoints only
+  re-slices the group's own budget, never reset's); if the group is picked, a
+  second draw within it by `1 - goal_score`. Under this rule v8's reset share
+  goes 4.3% -> ~26%, WP group ~34%. L1 / WP-off is byte-identical (no WP
+  candidates -> the top-level draw is exactly the old CP-only draw).
+  **IMPLEMENTED** (pick_start hierarchical draw + `_WP_GROUP` sentinel; tests
+  in test_checkpoint_manager.py assert count-invariance + within-group split).
+  Running in v9 (`yeti_curriculum_l2_v9_wpgroup_15m`); result pending. Note:
+  H-AK reduces the *symptom* of the settle bug (stale WPs hogging budget); the
+  actual root cause of the `L12a` deadness is the settle (fixed by H-AB).
 - [x] **RESOLVED (NOT a bug) — the "unfaithful eval" was POLICY OSCILLATION +
   evaluating the degraded FINAL snapshot.** Chasing the v7 reset_reach
   discrepancy, I first suspected the eval tools were unfaithful (v7 final/15M

@@ -117,7 +117,7 @@ class StartPool:
     def __init__(self, capacity: int, reach_alpha: float = 0.02):
         self.capacity = int(capacity)
         self.reach_alpha = float(reach_alpha)
-        self.states: list = []  # (source_cp, bonus, state_bytes)
+        self.states: list = []  # (source_cp, bonus, state_bytes, stack|None)
         self.goal_score = 0.0
 
     def __len__(self) -> int:
@@ -132,10 +132,10 @@ class StartPool:
         return max(1.0 - self.goal_score, 1e-3)
 
     def sample(self):
-        """A uniformly random (source_cp, bonus, state_bytes) entry."""
+        """A uniformly random (source_cp, bonus, state_bytes, stack) entry."""
         return random.choice(self.states)
 
-    def insert(self, source_cp, bonus, state_bytes):
+    def insert(self, source_cp, bonus, state_bytes, stack=None):
         """Insert keeping the pool reset-origin AND diverse.
 
         Retention priority is source_cp (lower = closer to a reset
@@ -144,8 +144,14 @@ class StartPool:
         evicting a UNIFORMLY RANDOM member of that worst tier (diversity-
         preserving, recency-biased). Returns "appended" (pool grew),
         "replaced" (evict+insert), or None (rejected).
+
+        ``stack`` is the optional saved frame-stack blob (from
+        PreprocessedEnv.export_frame_stack) captured at the SAME moment as
+        ``state_bytes``; on load it restores the real motion history so the
+        seeded start is on-distribution (H-AB). None for stack-less sources
+        (offline seeds / file-based starts) which fall back to reseed.
         """
-        entry = (int(source_cp), int(bonus), bytes(state_bytes))
+        entry = (int(source_cp), int(bonus), bytes(state_bytes), stack)
         if len(self.states) < self.capacity:
             self.states.append(entry)
             return "appended"
@@ -155,6 +161,12 @@ class StartPool:
         worst_idxs = [i for i, e in enumerate(self.states) if e[0] == worst_cp]
         self.states[random.choice(worst_idxs)] = entry
         return "replaced"
+
+
+# Sentinel top-level candidate representing the ENTIRE waypoint collection
+# as one source in pick_start's draw (H-AK). Distinct object so it can't
+# collide with an int CP level or a str waypoint id.
+_WP_GROUP = object()
 
 
 class CheckpointManager:
@@ -340,22 +352,25 @@ class CheckpointManager:
                 hit = 1.0 if reached_level >= n else 0.0
                 self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
 
-    def _insert(self, level, source_cp, bonus, state_bytes):
+    def _insert(self, level, source_cp, bonus, state_bytes, stack=None):
         """Insert into CP ``level``'s pool (delegates retention/eviction to
         StartPool), then update save stats and advance the frontier only
         when the pool actually GREW (append), matching prior behavior.
         """
-        status = self.checkpoints[level].insert(source_cp, bonus, state_bytes)
+        status = self.checkpoints[level].insert(source_cp, bonus, state_bytes, stack)
         if status is None:
             return
         self.stats["saves"][level] += 1
         if status == "appended":
             self._maybe_advance_frontier()
 
-    def save_checkpoint(self, fruits_collected, state_bytes, source_cp=0, bonus=0):
-        # Used for offline seed_archive / preseed (no play-based score).
+    def save_checkpoint(
+        self, fruits_collected, state_bytes, source_cp=0, bonus=0, stack=None
+    ):
+        # Used for offline seed_archive / preseed (no play-based score, and
+        # no frame stack — those seeds fall back to reseed on load).
         if 0 <= fruits_collected <= self.FRUITS_TOTAL:
-            self._insert(fruits_collected, source_cp, bonus, state_bytes)
+            self._insert(fruits_collected, source_cp, bonus, state_bytes, stack)
 
     def save_scored(
         self,
@@ -365,6 +380,7 @@ class CheckpointManager:
         reached_next,
         bonus,
         source_cp,
+        stack=None,
     ):
         """Admit a checkpoint snapshot judged by *real play*, not a probe.
 
@@ -397,9 +413,9 @@ class CheckpointManager:
         else:
             self.stats["rejected_precarious"][fruits_collected] += 1
             return
-        self._insert(fruits_collected, source_cp, bonus, state_bytes)
+        self._insert(fruits_collected, source_cp, bonus, state_bytes, stack)
 
-    def save_waypoint(self, wp_id, state_bytes, source_cp=0, bonus=0):
+    def save_waypoint(self, wp_id, state_bytes, source_cp=0, bonus=0, stack=None):
         """Admit a WAYPOINT snapshot (captured when the agent was grounded
         at a computed waypoint position — see the env's capture logic).
 
@@ -407,12 +423,13 @@ class CheckpointManager:
         reached-next semantics: a waypoint is just a start-state. The pool
         is lazily created on first capture and shares StartPool's
         reset-origin retention. Grounded-ness is enforced by the caller.
+        ``stack`` is the frame-stack blob captured with the state (H-AB).
         """
         pool = self.waypoints.get(wp_id)
         if pool is None:
             pool = StartPool(self.max_states_per_checkpoint, self.reach_alpha)
             self.waypoints[wp_id] = pool
-        pool.insert(source_cp, bonus, state_bytes)
+        pool.insert(source_cp, bonus, state_bytes, stack)
 
     def _maybe_advance_frontier(self):
         while (
@@ -449,48 +466,65 @@ class CheckpointManager:
         as it improves. ``cp0_floor`` (reset_fraction) and
         ``segment_floor`` are retained as optional safety knobs; both
         default to 0 (pure weighting).
+
+        WAYPOINTS compete as ONE GROUP (H-AK), not one-vote-per-waypoint.
+        The group is a single top-level candidate whose weight is the
+        MEAN of its members' ``1 - goal_score``, so it is invariant to
+        the NUMBER of waypoints — adding a waypoint only re-slices the
+        group's own budget and never shrinks reset/CP shares. (Summing a
+        vote per waypoint let 16 of them crowd reset down to ~4% of
+        starts on v8; grouping keeps reset ~26%.) If the group is drawn,
+        a second draw within it picks a waypoint by ``1 - goal_score``,
+        so a freshly-captured deep WP (goal_score 0 -> weight 1.0) still
+        dominates the group and gets "more reps further down"
+        automatically. With no waypoints the top-level draw is exactly
+        the old CP-only draw (L1 / WP-off byte-identical).
         """
         # Optional hard reset floor (safety net only; 0 = pure weighting).
         if self.cp0_floor > 0.0 and random.random() < self.cp0_floor:
             self.stats["starts"][0] += 1
-            return 0, None
+            return 0, None, None
 
-        # Unified candidate set, all weighted by StartPool.weight()
-        # (= 1 - goal_score, the H-T rule):
+        # Top-level sources, weighted by StartPool.weight() (= 1 -
+        # goal_score, the H-T rule):
         #  - CP0 (reset) always; deeper CP levels once non-empty AND
         #    reset-reachable (reach gate);
-        #  - every WAYPOINT with a non-empty pool (NO reach gate — WPs are
-        #    non-gating). A freshly-captured deep WP inits at goal_score 0
-        #    -> weight 1.0 -> heavily sampled, giving "more reps further
-        #    down" automatically.
+        #  - ALL waypoints as ONE group (H-AK), weight = MEAN of members'
+        #    weights (count-invariant; see the docstring). Non-gating.
         cp_candidates = [0]
         for n in range(1, self.FRUITS_TOTAL + 1):
             if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold:
                 cp_candidates.append(n)
         wp_candidates = [w for w, pool in self.waypoints.items() if len(pool) > 0]
 
-        candidates = list(cp_candidates) + wp_candidates
-        pools = [self.checkpoints[n] for n in cp_candidates]
-        pools += [self.waypoints[w] for w in wp_candidates]
-        weights = [p.weight() for p in pools]
-        # Optional anti-starvation floor (default 0 -> pure weighting).
+        candidates = list(cp_candidates)
+        weights = [self.checkpoints[n].weight() for n in cp_candidates]
+        wp_weights = [self.waypoints[w].weight() for w in wp_candidates]
+        if wp_candidates:
+            # Mean, not sum: the group counts as one source regardless of
+            # how many waypoints it holds.
+            candidates.append(_WP_GROUP)
+            weights.append(sum(wp_weights) / len(wp_weights))
+        # Optional anti-starvation floor (default 0 -> pure weighting),
+        # applied across the top-level sources.
         if self.segment_floor > 0.0 and len(candidates) > 1:
             total = sum(weights)
             k = len(candidates)
             f = self.segment_floor
             weights = [(1.0 - f) * (w / total) + f / k for w in weights]
         key = random.choices(candidates, weights=weights, k=1)[0]
-        # Waypoint start (str id): non-gating, tracked separately.
-        if isinstance(key, str):
-            self.wp_start_counts[key] = self.wp_start_counts.get(key, 0) + 1
-            _src, _bonus, state = self.waypoints[key].sample()
-            return key, state
+        # Waypoint group: second-level draw within it by 1 - goal_score.
+        if key is _WP_GROUP:
+            wp_key = random.choices(wp_candidates, weights=wp_weights, k=1)[0]
+            self.wp_start_counts[wp_key] = self.wp_start_counts.get(wp_key, 0) + 1
+            _src, _bonus, state, stack = self.waypoints[wp_key].sample()
+            return wp_key, state, stack
         self.stats["starts"][key] += 1
         if key == 0:
-            return 0, None
-        # Pool entries are (source_cp, bonus, state_bytes).
-        _src, _bonus, state = self.checkpoints[key].sample()
-        return key, state
+            return 0, None, None
+        # Pool entries are (source_cp, bonus, state_bytes, stack).
+        _src, _bonus, state, stack = self.checkpoints[key].sample()
+        return key, state, stack
 
     def summary(self):
         sizes = [len(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)]
@@ -543,17 +577,20 @@ class CheckpointManager:
             data = pickle.load(f)
         for i, states in enumerate(data["checkpoints"]):
             for s in states:
-                # Normalize to the (source_cp, bonus, state) format.
+                # Normalize to the (source_cp, bonus, state, stack) format.
                 # Loaded/offline states have unknown origin; mark them
                 # source_cp = i (the level itself = maximally
                 # artificial for that level) so fresh reset-origin
-                # states evict them first.
-                if isinstance(s, tuple) and len(s) == 3:
-                    entry = (int(s[0]), int(s[1]), bytes(s[2]))
+                # states evict them first. Pre-H-AB files carry no frame
+                # stack -> None (falls back to reseed on load).
+                if isinstance(s, tuple) and len(s) == 4:
+                    entry = (int(s[0]), int(s[1]), bytes(s[2]), s[3])
+                elif isinstance(s, tuple) and len(s) == 3:
+                    entry = (int(s[0]), int(s[1]), bytes(s[2]), None)
                 elif isinstance(s, tuple) and len(s) == 2:
-                    entry = (i, int(s[0]), bytes(s[1]))
+                    entry = (i, int(s[0]), bytes(s[1]), None)
                 else:
-                    entry = (i, 0, bytes(s))
+                    entry = (i, 0, bytes(s), None)
                 if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
                     self.checkpoints[i].states.append(entry)
         # Waypoint pools (optional; absent in pre-WP files).
@@ -563,7 +600,8 @@ class CheckpointManager:
             for s in states:
                 if len(pool) >= self.max_states_per_checkpoint:
                     break
-                pool.states.append((int(s[0]), int(s[1]), bytes(s[2])))
+                stack = s[3] if len(s) >= 4 else None
+                pool.states.append((int(s[0]), int(s[1]), bytes(s[2]), stack))
             pool.goal_score = float(goal_score)
             self.waypoints[wp_id] = pool
         loaded_stats = data.get("stats", self.stats)
@@ -754,7 +792,7 @@ class CheckpointCurriculumEnv(gym.Env):
             self.gym_env.reset(seed=seed)
             self._initialized = True
 
-        level, state_bytes = _manager.pick_start()
+        level, state_bytes, start_stack = _manager.pick_start()
         # A waypoint start returns a str id; remember it so (a) episode-end
         # record_episode credits the WP pool, and (b) we don't re-capture the
         # waypoint we were seeded at.
@@ -763,18 +801,31 @@ class CheckpointCurriculumEnv(gym.Env):
 
         if state_bytes is None and self._start_state_bytes is not None:
             # CP0 for a level that boots from a save-state rather than a
-            # fresh game reset (level 2 starts from level2_start.sav).
+            # fresh game reset (level 2 starts from level2_start.sav). The
+            # file-based start carries no frame stack -> reseed fallback.
             state_bytes = self._start_state_bytes
 
         if state_bytes is not None:
             self.base._interface.load_state(state_bytes)
-            # Drop pre-load frames from the stack/maxpool buffers (load_state
-            # bypasses gym.reset). Without this, stale frames leak into the
-            # first observations unless >= frame_stack noops happen to flush
-            # them (H-Z).
-            self.preprocessed.notify_state_loaded()
-            for _ in range(5):
-                obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
+            # Preferred (H-AB): restore the frame stack captured WITH this
+            # seed, so the first observation is the real motion history the
+            # policy saw live — on-distribution, and NO settle steps (which
+            # otherwise advance the game ~20 frames past the snapshot and can
+            # doom time-sensitive seeds; see the L12a goat investigation).
+            restored = (
+                start_stack is not None
+                and self.preprocessed.restore_frame_stack(start_stack)
+            )
+            if restored:
+                obs = self.preprocessed.current_observation()
+            else:
+                # Fallback for stack-less seeds (pre-H-AB checkpoints, offline
+                # seeds, file-based CP0 starts): reseed the buffers (H-Z) and
+                # take ONE settle step. Was 5 — a pure vestige of the
+                # pre-notify_state_loaded flush that burned ~20 game frames.
+                self.preprocessed.notify_state_loaded()
+                for _ in range(1):
+                    obs, _, _, _, _ = self.gym_env.step([0, 0, 0])
             self._start_state_hash = hashlib.blake2b(
                 state_bytes, digest_size=8
             ).hexdigest()
@@ -881,6 +932,9 @@ class CheckpointCurriculumEnv(gym.Env):
                     self.base._interface.save_state(),
                     self._step_count,
                     bonus,
+                    # Frame stack at the SAME moment as the save-state, so the
+                    # seed restores the real motion history on load (H-AB).
+                    self.preprocessed.export_frame_stack(),
                 )
             )
             self._grounded_snap_due = None
@@ -900,6 +954,7 @@ class CheckpointCurriculumEnv(gym.Env):
                         self.base._interface.save_state(),
                         source_cp=0 if self._start_wp is None else self._fruits_total,
                         bonus=bonus,
+                        stack=self.preprocessed.export_frame_stack(),
                     )
                     self._captured_wps.add(wp_id)
 
@@ -975,7 +1030,13 @@ class CheckpointCurriculumEnv(gym.Env):
             # A WP-seeded episode's fruit snapshots are NOT reset-origin, so
             # mark them maximally artificial (evict-first).
             save_src = self._fruits_total if self._start_wp is not None else start_level
-            for level, state_bytes, save_step, save_bonus in self._pending_saves:
+            for (
+                level,
+                state_bytes,
+                save_step,
+                save_bonus,
+                save_stack,
+            ) in self._pending_saves:
                 survived_steps = self._step_count - save_step
                 reached_next = self._max_cp_this_ep > level
                 _manager.save_scored(
@@ -985,6 +1046,7 @@ class CheckpointCurriculumEnv(gym.Env):
                     reached_next,
                     save_bonus,
                     source_cp=save_src,
+                    stack=save_stack,
                 )
             self._pending_saves = []
             if end_reason is None:
