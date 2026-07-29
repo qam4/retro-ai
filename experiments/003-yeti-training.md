@@ -1039,9 +1039,26 @@ alone doesn't resolve the over-concentration.
   candidates -> the top-level draw is exactly the old CP-only draw).
   **IMPLEMENTED** (pick_start hierarchical draw + `_WP_GROUP` sentinel; tests
   in test_checkpoint_manager.py assert count-invariance + within-group split).
-  Running in v9 (`yeti_curriculum_l2_v9_wpgroup_15m`); result pending. Note:
-  H-AK reduces the *symptom* of the settle bug (stale WPs hogging budget); the
-  actual root cause of the `L12a` deadness is the settle (fixed by H-AB).
+  Note: H-AK reduces the *symptom* of the settle bug (stale WPs hogging
+  budget); the actual root cause of the `L12a` deadness is the settle (H-AB).
+
+  **RESULT (v9 = `yeti_curriculum_l2_v9_wpgroup_15m`, warm-start v8-final,
+  anneal recipe + H-AK, 15M).** From-reset sweep of all 150 snapshots
+  (keep_best_sweep, 30 ep each, GPU): **princess-from-reset = 0 on EVERY
+  snapshot** (max 0.000). both-fruits-from-reset recovers to ~1.0 in the last
+  third (10-15M) but shows a 4-9M COLLAPSE-then-recover dip that v8 (same
+  recipe, no H-AK) didn't have (81/150 snapshots hold both-fruits >=0.90).
+  Verdict: H-AK correctly fixes the start-mix DILUTION (reset 4%->26%, late
+  snapshots stable at both-fruits) but allocation ALONE does NOT compose the
+  final leg from a cold reset — the princess still only fires from seeds
+  (CP2->princess ~36% in training), never chained from reset. Same
+  "model-free PPO doesn't compose across start distributions" wall, now
+  isolated to one leg (both fruits -> survive fruit-2 jump -> L56 ->
+  princess). The 4-9M dip also hints the warm-start-from-final + new
+  allocation caused a mid-run readjustment. Kept H-AK (correct + keeps late
+  both-fruits stable); it is NOT sufficient for princess-from-reset. Next
+  levers: H-AB (seed fidelity; not in v9), reverse-curriculum seeding of the
+  L56/princess approach, or explicit distribution-matched chaining.
 - [x] **RESOLVED (NOT a bug) — the "unfaithful eval" was POLICY OSCILLATION +
   evaluating the degraded FINAL snapshot.** Chasing the v7 reset_reach
   discrepancy, I first suspected the eval tools were unfaithful (v7 final/15M
