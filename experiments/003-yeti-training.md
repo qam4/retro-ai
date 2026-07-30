@@ -1059,6 +1059,36 @@ alone doesn't resolve the over-concentration.
   both-fruits stable); it is NOT sufficient for princess-from-reset. Next
   levers: H-AB (seed fidelity; not in v9), reverse-curriculum seeding of the
   L56/princess approach, or explicit distribution-matched chaining.
+- [ ] **H-AL — defer fruit credit (v10, RUNNING).** Per-step trace of a v9-13M
+  reset episode: the agent jumps for fruit 2, is ALREADY FALLING (pose 11)
+  when it grabs it, and falls to death at (62,150) — yet banks the fruit
+  reward, because the sparse fruit term was paid at pickup regardless of the
+  ensuing death (the death gate only protected the shaping term). So the fatal
+  early jump is locally optimal; both-fruits "reach_top ~100%" was an illusion
+  (fruit 2 collected IN the death fall). CP2 seeds are clean/playable, so NOT a
+  seeding bug. Fix (one lever): reward param `defer_fruit_credit: true` — pay
+  the fruit on the next grounded-ALIVE frame (D4), so a fatal airborne grab
+  pays 0 and the agent is pushed toward the safe/later jump timing. v10 =
+  `yeti_curriculum_l2_v10_deferfruit_10m`: warm-start weights-only from v9-13M
+  (already navigates to both fruits; only the safe landing is new), inherit
+  v9's seed pools (the L12a "unplayable" seeds were a settle-5 artifact — now
+  playable at settle=1 via H-AB, so their goal_score should rise and un-hog
+  the WP budget), anneal recipe, H-AB on, 10M. Fallback if it plateaus on the
+  fatal-jump local optimum: phase-1 (n_steps=16) exploration then anneal.
+
+  **RESULT — L2 SOLVED.** From-reset sweep of all 100 v10 snapshots
+  (keep_best_sweep, 30 ep, GPU): princess-from-reset > 0 on 24 snapshots, peak
+  window 5.9M-7.3M (0.83-0.97). Best = **7.3M snapshot; precise 300-ep
+  stochastic eval from cold reset = 98.7% princess (296/300)** — vs 0 on all
+  150 v9 snapshots and 0 on every v3-v9 run. So `defer_fruit_credit` was the
+  blocker: once the fatal fruit-2 grab stops paying, the agent learns the safe
+  landing and composes the whole level from reset (matches the call that
+  both-fruits-ALIVE is the hard part; the princess follows). Champion saved to
+  `output/mo5/yeti/champions/l2_v10_7300k/` (model + seed pools + meta). The
+  peak is transient — the final model collapsed (7M+ -> ~0, capture-the-peak
+  pattern), so keep-best stayed essential. Optional v11: anneal FROM the 7.3M
+  champion to stabilize the peak / push toward L1-like 99.7%, but L2 is
+  effectively solved as-is.
 - [x] **RESOLVED (NOT a bug) — the "unfaithful eval" was POLICY OSCILLATION +
   evaluating the degraded FINAL snapshot.** Chasing the v7 reset_reach
   discrepancy, I first suspected the eval tools were unfaithful (v7 final/15M
