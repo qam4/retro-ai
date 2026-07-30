@@ -54,6 +54,10 @@ SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
 FRUIT_PRESENCE_BY_LEVEL: Mapping[int, Mapping[int, int]] = {
     1: {1: 0x2FAD, 2: 0x2F00, 3: 0x2E68, 4: 0x2DD8},
     2: {1: 11950, 2: 11975},  # 0x2EAE, 0x2EC7
+    # L3 has a single fruit, so the global fruits-remaining counter IS that
+    # fruit's presence (1 = on map, 0 = collected). Avoids needing a dedicated
+    # per-fruit presence byte.
+    3: {1: FRUITS_ADDR},  # 0x2B2F
 }
 
 
@@ -110,11 +114,17 @@ def waypoints(level: int) -> Mapping[str, Tuple[int, int, int]]:
     from retro_ai.training.yeti_map import get_level_map
 
     m = get_level_map(level)
+    # Optional per-ladder placement (L3): expose only the arrival end. Absent
+    # (L1/L2) or unlisted ladder -> "both" ends, as before.
+    ends = getattr(m, "waypoint_ends", None) or {}
     wps: dict[str, Tuple[int, int, int]] = {}
     for name, upper_floor, lower_floor, x_px in m.ladders:
         x_ram = (int(x_px) - 8) // 4
-        wps[f"{name}_top"] = (x_ram, m.floor_top_y[upper_floor], upper_floor)
-        wps[f"{name}_bot"] = (x_ram, m.floor_top_y[lower_floor], lower_floor)
+        which = ends.get(name, "both")
+        if which in ("top", "both"):
+            wps[f"{name}_top"] = (x_ram, m.floor_top_y[upper_floor], upper_floor)
+        if which in ("bot", "both"):
+            wps[f"{name}_bot"] = (x_ram, m.floor_top_y[lower_floor], lower_floor)
     return wps
 
 

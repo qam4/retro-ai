@@ -48,6 +48,12 @@ class LevelMap:
     ladders: List[Tuple[str, int, int, int]]  # (name, from_floor, to_floor, centre_x)
     princess_centre_px: Tuple[int, int]
     princess_floor: int
+    # Optional per-ladder waypoint placement: name -> "top" | "bot" | "both".
+    # Default (None / unspecified ladder) = "both" ends, matching L1/L2. Used
+    # to expose only the end the agent ARRIVES at on a level whose route
+    # direction is known (L3), so seeds start right before each hard segment
+    # instead of re-climbing.
+    waypoint_ends: Optional[Dict[str, str]] = None
 
 
 # Level 1 — original climb-up layout (floor 1 = bottom/spawn, 5 = princess).
@@ -93,7 +99,73 @@ LEVEL2 = LevelMap(
     princess_floor=6,
 )
 
-LEVELS: Dict[int, LevelMap] = {1: LEVEL1, 2: LEVEL2}
+# Level 3 — fragmented multi-platform layout, read from RAM (level3_start.sav)
+# with the route confirmed by play. 1 fruit (top-left area), princess top-left,
+# player starts bottom-left. Floors are keyed by their platform standing-y.
+#
+# CAVEATS (L3-specific):
+#  - Platforms are as close as 8px in y (e.g. 40/48, 72/80), so the ±8
+#    agent_floor_from_pixel_y mapping is ambiguous here -> the floor-based
+#    PATH-PROGRESS SHAPING is unreliable on L3 and needs a rethink (the
+#    escalator already forces that). The LADDER-ENDPOINT WAYPOINTS below are
+#    still valid (positions only).
+#  - The ESCALATOR (moving platforms circulating CCW around a wall), the
+#    COMPRESSOR (periodic crush on climb-platform #3), and SNOWBALLS are
+#    MOVING SPRITES — not in this static tilemap. They are curriculum-carried,
+#    not waypoint/graph-modelled.
+#
+# Ladder route roles (confirmed with the user): the two ladders up to the goat
+# platform (Lgoat_a left / Lgoat_b right), the post-escalator DOWN ladder
+# (Ldown), the snowball climb bottom->top (Lsc1 -> Lsc2 -> Lsc3 -> Lsc4), and
+# the final ladder up toward the princess (Lprincess).
+LEVEL3 = LevelMap(
+    floor_top_y={
+        0: 30,  # princess platform (top-left)
+        1: 40,
+        2: 48,
+        3: 72,
+        4: 80,
+        5: 104,
+        6: 128,
+        7: 152,
+        8: 168,
+        9: 176,
+        10: 184,
+    },
+    floor_height=24,  # nominal; the real layout is irregular
+    fruit_centre_px={1: (56, 64)},
+    fruit_floor={1: 3},  # grabbed from the upper-left climb (~y72); approx
+    ladders=[
+        # (name, upper_floor, lower_floor, centre_x_px). upper = smaller y.
+        ("Lgoat_a", 5, 7, 72),  # left of the two ladders up to the goat platform
+        ("Lgoat_b", 5, 7, 96),  # right of the two
+        ("Ldown", 9, 10, 168),  # post-escalator down ladder
+        ("Lsc1", 9, 10, 240),  # snowball climb, 1st (bottom)
+        ("Lsc2", 7, 8, 280),  # snowball climb, 2nd
+        ("Lsc3", 6, 7, 232),  # snowball climb, 3rd
+        ("Lsc4", 5, 6, 280),  # snowball climb, 4th (top)
+        ("Lprincess", 2, 3, 24),  # final ladder up toward the princess
+    ],
+    princess_centre_px=(16, 30),
+    princess_floor=0,
+    # One waypoint per ladder, at the end the agent ARRIVES at along the
+    # route: the down-ladder (Ldown) -> its BOTTOM; every climb-ladder -> its
+    # TOP. This seeds each episode just before the next hard segment (jump /
+    # dodge / escalator) rather than re-climbing. The escalator (no ladder) is
+    # then bracketed: Lgoat tops before it, Ldown bottom after it.
+    waypoint_ends={
+        "Lgoat_a": "top",
+        "Lgoat_b": "top",
+        "Ldown": "bot",
+        "Lsc1": "top",
+        "Lsc2": "top",
+        "Lsc3": "top",
+        "Lsc4": "top",
+        "Lprincess": "top",
+    },
+)
+
+LEVELS: Dict[int, LevelMap] = {1: LEVEL1, 2: LEVEL2, 3: LEVEL3}
 
 
 def get_level_map(level: int = 1) -> LevelMap:
