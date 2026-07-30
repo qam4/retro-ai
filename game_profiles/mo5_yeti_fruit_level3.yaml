@@ -1,0 +1,33 @@
+# Yeti — fruit-reward profile for LEVEL 3.
+#
+# Same game-global reward params + relaxed bonus-stall as level 2 (L3 also has
+# an input-frozen intro where the bonus is frozen at 1000 for ~15-20 frames,
+# so the level-1 bonus_stall_frames=10 would false-terminate). The L3 start
+# save-state (level3_start.sav) is loaded by the training env
+# (curriculum.start_state), not here. Death via the cause-agnostic 0x2AFC flag.
+
+name: yeti_fruit_level3
+display_name: "Yeti (fruit reward, level 3)"
+emulator_type: mo5
+rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/Yeti (1984) (Loriciels).k7"
+action_mode: joystick
+reward_mode: memory
+
+reward_params:
+  score_address_count: "0"
+  lives_addr: "11095"
+  bonus_addr_hi: "11010"
+  bonus_addr_lo: "11011"
+  bonus_stall_frames: "120"
+  fruits_remaining_addr: "11055"
+  death_flag_addr: "11004"
+  death_flag_value: "65"
+  basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
+  monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
+  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:100"
+
+grayscale: true
+resize: null
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true

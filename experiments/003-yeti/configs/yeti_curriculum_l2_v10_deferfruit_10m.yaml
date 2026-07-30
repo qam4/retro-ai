@@ -1,0 +1,85 @@
+# yeti_curriculum L2 v10 — DEFER FRUIT CREDIT (don't reward a fatal airborne
+# grab), warm-started from the v9 13M both-fruits snapshot.
+#
+# v9 diagnosis (measured, deterministic): from a cold reset the agent jumps for
+# fruit 2, is ALREADY FALLING (pose 11) when it grabs it, and falls to death at
+# (62,150). It banks the fruit reward anyway — the sparse fruit term was paid at
+# pickup regardless of the ensuing death — so the fatal early jump is locally
+# optimal and princess-from-reset = 0 on all 150 v9 snapshots (even though
+# both-fruits "reach_top" reads ~100%, an illusion: it collects fruit 2 in the
+# death fall). CP2 seeds are clean/playable (grounded, x~16, survive), so this
+# is NOT a bad-seed problem; it is a reward-incentive problem.
+#
+# v10 change (ONE lever): reward.params.defer_fruit_credit: true. The fruit
+# reward is now paid on the next grounded-ALIVE frame (D4, mirroring the D2
+# shaping deferral); a fruit grabbed mid-air pays out only if the agent lands
+# alive, so the fatal grab pays 0 and the agent is pushed to find the later /
+# safe jump timing. Everything else identical to v9's reward.
+#
+# Warm-start weights-only from v9-13M (a stable both-fruits snapshot): the
+# policy already navigates to both fruits; the only new skill is the safe
+# fruit-2 landing, a small refinement the stable anneal recipe should handle
+# now that the fatal grab stops paying. The critic weights transfer but are
+# stale under the new reward and re-fit early. Seed pools (CP + 16 WP) are
+# inherited from v9 (reward-agnostic start-states; stack-less -> settle=1
+# fallback until v10's own captures add frame stacks via H-AB).
+#
+# Recipe = v9's anneal (n_steps=512, target_kl=0.05). Fallback if it plateaus
+# on the fatal-jump local optimum: a phase-1 exploration variant (n_steps=16,
+# no target_kl) then anneal.
+
+training:
+  timesteps: 10_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v10_deferfruit_10m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/champions/l2_v9_13M/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level2
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 2
+    gamma: 1.0
+    # v10: the fix. Defer the sparse fruit reward to the next grounded-alive
+    # frame so a fatal airborne grab (fruit 2 mid-fall) is never rewarded.
+    defer_fruit_credit: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950
+    2: 11975
+  start_state: output/mo5/yeti/level2/level2_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

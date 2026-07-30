@@ -1,0 +1,78 @@
+# yeti_curriculum L3 v1 — FIRST exploratory run ("see how it goes").
+#
+# Level 3 is a long, fragmented route with NEW mechanics (escalator moving
+# platforms, compressor, snowballs) on top of goats; 1 fruit (top-left),
+# princess top-left, start bottom-left. See experiments/003-yeti/level3_notes.md.
+#
+# This is a from-SCRATCH PHASE-1 exploration run (n_steps=16, no target_kl) —
+# the recipe that DISCOVERS a route on a fresh level (anneal is for refining a
+# known-good policy; H-W showed cold-steady can't learn from scratch). Warm-
+# starting L2 weights is a later option (v2) but risks transferring L2-specific
+# habits + would drag in L2's seed pools; a clean from-scratch baseline is more
+# interpretable for a first look.
+#
+# Full v10 machinery carries over: WP curriculum (8 arrival-end L3 waypoints,
+# bracketing the escalator), H-AK group allocation, H-AB frame-stack seeds,
+# and the defer_fruit_credit reward fix.
+#
+# Goal of this run: SEE how far it gets — which waypoints get captured (does it
+# reach the goat platform / cross the escalator / climb the snowball side /
+# reach the fruit+princess), and populate seed pools for a v2. Not expected to
+# solve L3.
+#
+# CAVEAT (recorded): the path-progress SHAPING is unreliable on L3 (8px-apart
+# platforms confuse the floor model; the escalator isn't in the graph). It's
+# mostly neutral off-platform (phi=None) and only roughly-right on platforms;
+# if it actively misleads we'll switch to a sparse reward. We rely on the
+# waypoint curriculum + sparse fruit/princess + survival.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v1_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500          # L3's route is long (escalator ride etc.)
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16              # phase-1 exploration (destructive/exploratory)
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  # no target_kl (phase-1)
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
