@@ -118,13 +118,17 @@ def waypoints(level: int) -> Mapping[str, Tuple[int, int, int]]:
     # (L1/L2) or unlisted ladder -> "both" ends, as before.
     ends = getattr(m, "waypoint_ends", None) or {}
     wps: dict[str, Tuple[int, int, int]] = {}
-    for name, upper_floor, lower_floor, x_px in m.ladders:
+    # Ladder tuples are ordered (name, TOP_floor, BOT_floor, x) on every level
+    # (top = higher on screen = smaller y) — the same positional rule as
+    # yeti_map.build_fixed_nodes, so "<name>_top"/"_bot" agree between the
+    # seeder and the reward graph.
+    for name, top_floor, bot_floor, x_px in m.ladders:
         x_ram = (int(x_px) - 8) // 4
         which = ends.get(name, "both")
         if which in ("top", "both"):
-            wps[f"{name}_top"] = (x_ram, m.floor_top_y[upper_floor], upper_floor)
+            wps[f"{name}_top"] = (x_ram, m.floor_top_y[top_floor], top_floor)
         if which in ("bot", "both"):
-            wps[f"{name}_bot"] = (x_ram, m.floor_top_y[lower_floor], lower_floor)
+            wps[f"{name}_bot"] = (x_ram, m.floor_top_y[bot_floor], bot_floor)
     return wps
 
 

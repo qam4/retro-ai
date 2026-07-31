@@ -856,6 +856,39 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     # (byte-identical to the shipped reward; L1 unaffected).
     defer_fruit = bool(params.get("defer_fruit_credit", False))
 
+    # Mandatory-waypoint reward targets (LevelMap.reward_waypoints): the
+    # reward sums path-distance to these exactly like it sums distance to
+    # remaining fruits (unordered), min over an OR-group's members, dropping
+    # any that are currently unreachable (10^9 sentinel). Reaching any member
+    # of a group (within tol) marks it done. Empty on L1/L2 -> every WP branch
+    # below is skipped, so behavior is byte-identical to the shipped reward.
+    from retro_ai.training.yeti_map import (
+        agent_floor_from_pixel_y,
+        build_navigation_map,
+        get_level_map,
+    )
+
+    progress_scale = float(params.get("scale", 0.01))
+    level = int(params.get("level", 1))
+    wp_tol = int(params.get("waypoint_reward_tol", 2))
+    _WP_UNREACHABLE = 10**8  # path_distance sentinel is 10^9; treat >= as unreachable
+    _lvl_map = get_level_map(level)
+    _wp_nav = build_navigation_map(level)
+    # _wp_groups: list of OR-groups; each = list of (ident, x_ram, y).
+    _wp_groups: list = []
+    for _group in getattr(_lvl_map, "reward_waypoints", None) or []:
+        _members = []
+        for _ident in _group:
+            _idx = _wp_nav.node_by_ident.get(_ident)
+            if _idx is None:
+                continue
+            _node = _wp_nav.nodes[_idx]
+            _members.append(
+                (_ident, (_node.x - 8) // 4, _lvl_map.floor_top_y[_node.floor])
+            )
+        if _members:
+            _wp_groups.append(_members)
+
     class _GroundedPBRS:
         """PBRS path-progress shaping with an airborne freeze + death gate.
 
@@ -923,11 +956,18 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             # (D4) fruit count at the last grounded-alive frame; None until
             # the first grounded-alive frame. Only used when defer_fruit.
             self._prev_fruits_grounded: int | None = None
+            # Mandatory-WP targets: group indices reached this episode, and
+            # the set of currently-active (reachable & unreached) groups last
+            # step (a change => target set changed => rebaseline).
+            self._reached_wp: set = set()
+            self._prev_active_wp: frozenset = frozenset()
 
         def reset(self) -> None:
             self._base.reset()
             self.prev_phi = None
             self._prev_fruits_grounded = None
+            self._reached_wp = set()
+            self._prev_active_wp = frozenset()
 
         @property
         def last_floor(self):  # exposed for probes/tests
@@ -974,10 +1014,49 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                     fruit_disc = True
                 self._prev_fruits_grounded = ctx.curr_fruits
 
+            # Mandatory-waypoint targets: add their path-distance to the
+            # potential (summed, unordered, like fruits), min over an OR-group,
+            # dropping unreachable groups. Mark a group reached when the agent
+            # (grounded, alive) is within tol of any member. active_wp = the
+            # reachable-and-unreached groups; a change means the target set
+            # changed -> rebaseline (same discipline as a fruit pickup).
+            active_wp: frozenset = frozenset()
+            if _wp_groups and phi is not None and not ctx.died:
+                floor = (
+                    agent_floor_from_pixel_y(int(ctx.curr_y), level)
+                    or self._base.last_floor
+                )
+                agent_pix_x = int(ctx.curr_x) * 4 + 8
+                for gi, members in enumerate(_wp_groups):
+                    if gi in self._reached_wp:
+                        continue
+                    for _ident, wx, wy in members:
+                        if (
+                            abs(int(ctx.curr_x) - wx) <= wp_tol
+                            and abs(int(ctx.curr_y) - wy) <= wp_tol
+                        ):
+                            self._reached_wp.add(gi)
+                            break
+                wp_sum = 0
+                active = set()
+                for gi, members in enumerate(_wp_groups):
+                    if gi in self._reached_wp:
+                        continue
+                    dmin = min(
+                        _wp_nav.path_distance_from_agent(floor, agent_pix_x, ident)
+                        for ident, _wx, _wy in members
+                    )
+                    if dmin < _WP_UNREACHABLE:
+                        wp_sum += dmin
+                        active.add(gi)
+                phi = phi - progress_scale * wp_sum
+                active_wp = frozenset(active)
+
             # (D3) death gate + standard PBRS rebaseline on discontinuities
             # (episode start: prev_phi None; unresolved floor: phi None;
-            # fruit pickup / princess: target set changes -- sparse terms
-            # cover those). Shaping resumes on the next grounded, alive step.
+            # fruit pickup / princess / a WP target-set change: the summed
+            # target set changes -- sparse terms cover those). Shaping resumes
+            # on the next grounded, alive step.
             if (
                 ctx.died
                 or picked
@@ -985,12 +1064,15 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                 or ctx.princess_touched
                 or self.prev_phi is None
                 or phi is None
+                or active_wp != self._prev_active_wp
             ):
                 self.prev_phi = phi
+                self._prev_active_wp = active_wp
                 return reward
 
             reward += gamma * phi - self.prev_phi
             self.prev_phi = phi
+            self._prev_active_wp = active_wp
             return reward
 
     return _GroundedPBRS()

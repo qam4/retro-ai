@@ -972,3 +972,115 @@ def test_defer_preserves_shaping_roundtrip_zero():
         (1, 30, 0, 2, 2),
     ]
     assert abs(_run_params(_L2_DEFER, traj)) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# L3 mandatory-waypoint reward targets (LevelMap.reward_waypoints). The
+# path-progress potential sums distance to remaining fruits AND not-yet-reached
+# mandatory waypoint groups (unordered), min over an OR-group's members,
+# dropping any group currently unreachable in the nav graph (the escalator /
+# final-jump gaps). Reaching any member of a group (grounded, alive, within
+# tol) marks that group done. L1/L2 have no reward_waypoints, so all of this
+# is inert there (covered by the byte-identical grounded tests above).
+#
+# L3 WP-group member positions (ram_x, y), from the nav graph:
+#   group 0 goat (OR): Lgoat_a_top (16, 80), Lgoat_b_top (22, 80)
+#   group 1 Ldown_bot (40, 184)  [post-escalator; unreachable pre-escalator]
+#   ... climb tops ... group 6 Lprincess_top (4, 48)
+# ---------------------------------------------------------------------------
+
+_L3 = {
+    "scale": 0.01,
+    "fruit_scale": 0.01,
+    "princess_scale": 0.05,
+    "gamma": 1.0,
+    "level": 3,
+    "defer_fruit_credit": True,
+    "waypoint_reward_tol": 2,
+}
+
+
+def _g3(x, y, pose, died=False, pf=1, cf=1):
+    """Level-3 grounded-reward context at (x, y) with a sprite pose."""
+    return _ctx(
+        prev_fruits=pf,
+        curr_fruits=cf,
+        prev_bonus=1000,
+        curr_bonus=1000,
+        curr_x=x,
+        curr_y=y,
+        fruits_present=(True,),
+        pose=pose,
+        died=died,
+    )
+
+
+def test_l3_wp_orgroup_reached_via_either_member():
+    """The goat platform is one OR-group reached via EITHER ladder top."""
+    for x in (16, 22):  # Lgoat_a_top / Lgoat_b_top
+        fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+        fn.reset()
+        fn(_g3(x, 80, 0))
+        assert 0 in fn._reached_wp
+
+
+def test_l3_wp_not_marked_when_airborne():
+    """A WP target is only marked on a surface pose (grounded/ladder)."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    fn(_g3(22, 80, 11))  # pose 11 = fall (airborne)
+    assert 0 not in fn._reached_wp
+
+
+def test_l3_wp_not_marked_on_death():
+    """A death frame never marks a WP target (death gate)."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    fn(_g3(22, 80, 0, died=True))
+    assert 0 not in fn._reached_wp
+
+
+def test_l3_wp_reached_persists():
+    """Once a group is marked reached it stays reached (a chokepoint the
+    agent has passed drops out of the target sum for the rest of the ep)."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    fn(_g3(30, 80, 0))  # grounded, not near a WP
+    fn(_g3(22, 80, 0))  # step onto the goat WP
+    assert 0 in fn._reached_wp
+    fn(_g3(40, 80, 0))  # move away
+    assert 0 in fn._reached_wp  # stays reached
+
+
+def test_l3_wp_reached_when_active_rebaselines():
+    """When the reached group WAS in the active (reachable) set, reaching it
+    changes the active set and that step rebaselines (sparse-only reward).
+    y=81 resolves unambiguously to the goat floor (4), from which the goat
+    group is reachable, so it is active before being reached."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    fn(_g3(30, 81, 0))  # floor 4, goat group active, not yet at the WP
+    r_reach = fn(_g3(22, 81, 0))  # reach Lgoat_b_top -> active set changes
+    assert 0 in fn._reached_wp
+    assert abs(r_reach) < 1e-9  # rebaselined: no shaping charged this step
+
+
+def test_l3_unreachable_groups_dropped_reward_bounded():
+    """Groups unreachable in the nav graph (post-escalator, across the gap)
+    are dropped from the sum -- the 1e9 path sentinel never leaks into the
+    reward, so shaping between adjacent grounded steps stays small."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    fn(_g3(30, 80, 0))
+    r = fn(_g3(32, 80, 0))
+    # A leaked 1e9 sentinel * scale(0.01) would be ~1e7; a real move is O(1).
+    assert abs(r) < 1e3
+
+
+def test_l3_reset_clears_wp_state():
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn(_g3(22, 80, 0))
+    assert 0 in fn._reached_wp
+    fn.reset()
+    assert fn._reached_wp == set()
+    assert fn._prev_active_wp == frozenset()

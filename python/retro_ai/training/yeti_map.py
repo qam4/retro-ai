@@ -45,7 +45,11 @@ class LevelMap:
     floor_height: int  # pixels between adjacent floors
     fruit_centre_px: Dict[int, Tuple[int, int]]
     fruit_floor: Dict[int, int]
-    ladders: List[Tuple[str, int, int, int]]  # (name, from_floor, to_floor, centre_x)
+    # (name, top_floor, bot_floor, centre_x). ALWAYS ordered top-first, where
+    # "top" = higher on screen = smaller floor_top_y. This positional rule is
+    # shared with yeti.waypoints() so ladder node idents ("<name>_top"/"_bot")
+    # agree between the reward navigation graph and the waypoint seeder.
+    ladders: List[Tuple[str, int, int, int]]
     princess_centre_px: Tuple[int, int]
     princess_floor: int
     # Optional per-ladder waypoint placement: name -> "top" | "bot" | "both".
@@ -54,6 +58,15 @@ class LevelMap:
     # direction is known (L3), so seeds start right before each hard segment
     # instead of re-climbing.
     waypoint_ends: Optional[Dict[str, str]] = None
+    # Optional MANDATORY-waypoint reward targets: an (unordered) list of
+    # OR-groups, each a list of nav-node idents (e.g. ["Ldown_bot"] or
+    # ["Lgoat_a_top", "Lgoat_b_top"] for a branch reached either way). The
+    # path-progress reward sums distance to these (min over an OR-group's
+    # members), exactly like it sums distance to remaining fruits — so they
+    # are mandatory but unordered. Reaching any member of a group (within
+    # tol) marks that group done; unreachable groups drop out of the sum.
+    # None (L1/L2) => no WP reward targets => reward unchanged.
+    reward_waypoints: Optional[List[List[str]]] = None
 
 
 # Level 1 — original climb-up layout (floor 1 = bottom/spawn, 5 = princess).
@@ -62,12 +75,14 @@ LEVEL1 = LevelMap(
     floor_height=32,
     fruit_centre_px={1: (184, 184), 2: (80, 150), 3: (144, 120), 4: (272, 88)},
     fruit_floor={1: 1, 2: 2, 3: 3, 4: 4},
+    # Ordered (name, TOP_floor, BOT_floor, x): top = higher on screen (smaller
+    # y). L1 climbs up, so the top floor has the larger number here.
     ladders=[
-        ("L12a", 1, 2, 120),
-        ("L12b", 1, 2, 280),
-        ("L23", 2, 3, 240),
-        ("L34", 3, 4, 176),
-        ("L45", 4, 5, 208),
+        ("L12a", 2, 1, 120),
+        ("L12b", 2, 1, 280),
+        ("L23", 3, 2, 240),
+        ("L34", 4, 3, 176),
+        ("L45", 5, 4, 208),
     ],
     princess_centre_px=(312, 60),
     princess_floor=5,
@@ -119,35 +134,41 @@ LEVEL2 = LevelMap(
 # (Ldown), the snowball climb bottom->top (Lsc1 -> Lsc2 -> Lsc3 -> Lsc4), and
 # the final ladder up toward the princess (Lprincess).
 LEVEL3 = LevelMap(
+    # Floors keyed by platform standing-y. Ladder connections are by
+    # X-ALIGNMENT (a ladder joins the platform whose column-range spans its x,
+    # above and below) so the graph chains correctly. Verified: the snowball
+    # climb (Ldown_bot -> Lsc1 -> Lsc2 -> Lsc3 -> Lsc4) is graph-connected; the
+    # only graph GAPS are the true JUMP segments — the escalator (goat ->
+    # Ldown) and the final 5-platform climb (Lsc4 -> Lprincess) — which are
+    # sparse ("keep 0") by design.
     floor_top_y={
-        0: 30,  # princess platform (top-left)
-        1: 40,
-        2: 48,
-        3: 72,
-        4: 80,
-        5: 104,
-        6: 128,
-        7: 152,
-        8: 168,
-        9: 176,
-        10: 184,
+        2: 48,  # Lprincess top / princess platform (upper-left)
+        3: 72,  # Lprincess bottom / fruit platform
+        4: 80,  # goat platform (Lgoat tops)
+        5: 104,  # Lsc4 top
+        6: 128,  # Lsc4 bot / Lsc3 top
+        7: 152,  # Lsc3 bot / Lsc2 top
+        8: 168,  # Lgoat bottoms (2-ladder platform)
+        9: 176,  # Lsc2 bot / Lsc1 top / Ldown top (big platform, row22)
+        10: 184,  # Lsc1 bot / Ldown bot (bottom-right)
     },
     floor_height=24,  # nominal; the real layout is irregular
     fruit_centre_px={1: (56, 64)},
-    fruit_floor={1: 3},  # grabbed from the upper-left climb (~y72); approx
+    fruit_floor={1: 3},  # upper-left, on/near the Lprincess platform
     ladders=[
         # (name, upper_floor, lower_floor, centre_x_px). upper = smaller y.
-        ("Lgoat_a", 5, 7, 72),  # left of the two ladders up to the goat platform
-        ("Lgoat_b", 5, 7, 96),  # right of the two
+        # Connections are X-ALIGNED (platform col-range spans the ladder x).
+        ("Lprincess", 2, 3, 24),  # final ladder up toward the princess
+        ("Lgoat_a", 4, 8, 72),  # left of the two ladders to the goat platform
+        ("Lgoat_b", 4, 8, 96),  # right of the two
         ("Ldown", 9, 10, 168),  # post-escalator down ladder
         ("Lsc1", 9, 10, 240),  # snowball climb, 1st (bottom)
-        ("Lsc2", 7, 8, 280),  # snowball climb, 2nd
+        ("Lsc2", 7, 9, 280),  # snowball climb, 2nd
         ("Lsc3", 6, 7, 232),  # snowball climb, 3rd
         ("Lsc4", 5, 6, 280),  # snowball climb, 4th (top)
-        ("Lprincess", 2, 3, 24),  # final ladder up toward the princess
     ],
     princess_centre_px=(16, 30),
-    princess_floor=0,
+    princess_floor=2,  # on the Lprincess-top platform (so it's graph-connected)
     # One waypoint per ladder, at the end the agent ARRIVES at along the
     # route: the down-ladder (Ldown) -> its BOTTOM; every climb-ladder -> its
     # TOP. This seeds each episode just before the next hard segment (jump /
@@ -163,6 +184,19 @@ LEVEL3 = LevelMap(
         "Lsc4": "top",
         "Lprincess": "top",
     },
+    # Mandatory-waypoint reward targets (unordered, summed like fruits). The
+    # goat platform is one target reached via EITHER ladder (OR-group); the
+    # rest are single chokepoints. Across the escalator the post-escalator
+    # ones are unreachable and drop out until the agent crosses.
+    reward_waypoints=[
+        ["Lgoat_a_top", "Lgoat_b_top"],  # goat platform (branch: either ladder)
+        ["Ldown_bot"],  # post-escalator
+        ["Lsc1_top"],
+        ["Lsc2_top"],
+        ["Lsc3_top"],
+        ["Lsc4_top"],
+        ["Lprincess_top"],
+    ],
 )
 
 LEVELS: Dict[int, LevelMap] = {1: LEVEL1, 2: LEVEL2, 3: LEVEL3}
@@ -213,9 +247,13 @@ def build_fixed_nodes(lvl: LevelMap = LEVEL1) -> List[Node]:
         nodes.append(
             Node(floor=lvl.fruit_floor[f_id], x=x, kind="fruit", ident=f"F{f_id}")
         )
-    for name, fr, to, x in lvl.ladders:
-        nodes.append(Node(floor=fr, x=x, kind="ladder_bot", ident=f"{name}_bot"))
-        nodes.append(Node(floor=to, x=x, kind="ladder_top", ident=f"{name}_top"))
+    for name, top_floor, bot_floor, x in lvl.ladders:
+        # Ladder tuples are ordered (name, TOP_floor, BOT_floor, x) on every
+        # level (top = higher on screen = smaller floor_top_y). Same positional
+        # rule as yeti.waypoints(), so node idents agree between the reward
+        # graph and the waypoint seeder.
+        nodes.append(Node(floor=top_floor, x=x, kind="ladder_top", ident=f"{name}_top"))
+        nodes.append(Node(floor=bot_floor, x=x, kind="ladder_bot", ident=f"{name}_bot"))
     nodes.append(
         Node(
             floor=lvl.princess_floor,
@@ -249,12 +287,12 @@ def build_edges(
                 cost = abs(nodes[i].x - nodes[j].x)
                 edges.append((i, j, cost))
 
-    for name, fr, to, x in lvl.ladders:
+    for name, top_floor, bot_floor, x in lvl.ladders:
         bot_ident = f"{name}_bot"
         top_ident = f"{name}_top"
         bot_idx = next(i for i, nd in enumerate(nodes) if nd.ident == bot_ident)
         top_idx = next(i for i, nd in enumerate(nodes) if nd.ident == top_ident)
-        cost = lvl.floor_height * abs(to - fr)
+        cost = lvl.floor_height * abs(bot_floor - top_floor)
         edges.append((bot_idx, top_idx, cost))
         edges.append((top_idx, bot_idx, cost))
     return edges
