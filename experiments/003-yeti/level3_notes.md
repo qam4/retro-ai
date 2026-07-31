@@ -101,6 +101,28 @@ crossing the escalator to reach Ldown_bot (captured on success).
    seeding through the escalator/compressor gates.
 4. Expect MANY more waypoints (one per gate) and more compute than L2.
 
+## v1 result (yeti_curriculum_l3_v1_15m — from-scratch phase-1, 15M)
+Completed 6h44m, exit 0. Outcome: reaches segment 1 only, WALLED by the
+escalator.
+- Only 2 waypoints ever captured: Lgoat_a_top / Lgoat_b_top (100 each, but
+  goal_score 0.00 — even seeded at the goat platform it never gets further).
+  NO Ldown_bot / Lsc* / Lprincess ever captured -> the escalator was crossed
+  0 times in 15M. fruit collected 0 (success 0->1: 0%, reset_reach princess 0).
+- 234k episodes, ALL end in death, reached_level 0. Death clusters:
+  ~half near START (x~8-12,y~168-176) — segment 1 not solid from scratch;
+  ~1/3 at/above the GOAT platform (x~16-24,y~88-112) — dying on the jump
+  toward the escalator.
+- Takeaway: from-scratch phase-1 + curriculum DOES bootstrap segment 1, but
+  the escalator (moving-platform timing, no shaping signal) is a hard wall,
+  as predicted. To make progress on the LATER segments (segment-first plan)
+  we need post-escalator seeds, which we cannot reach by play. Candidate v2
+  levers: (a) warm-start L2-v10 skills to make segment 1 solid + maximise
+  escalator attempts; (b) obtain a post-escalator seed (human play-through
+  capture — clean/on-distribution; RAM-poke rejected) and train the L2-like
+  post-escalator segment (snowball climb + fruit + princess) in isolation;
+  (c) attack the escalator directly from the Lgoat_top seeds (hard — no
+  shaping guidance for the moving-platform timing).
+
 ## Open questions / risks
 - Escalator: can the agent's ride be made observable enough (4-frame stack)
   for reliable jump timing? This is the main research risk.
