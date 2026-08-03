@@ -101,3 +101,97 @@ def test_agent_floor_from_pixel_y_mid_air_returns_none():
     assert agent_floor_from_pixel_y(168) is None
     # Death animation region.
     assert agent_floor_from_pixel_y(16) is None
+
+
+# ---------------------------------------------------------------------------
+# X-aware floor resolution (agent_floor_from_pixel_xy). On L1/L2 (no platform
+# extents) it must be byte-identical to the y-only rule; on L3 it disambiguates
+# stacked/overlapping platforms and returns None on a tall ladder passing
+# between platforms (so shaping freezes rather than pulling to a wrong
+# same-height structure — the goat-ladder bug).
+# ---------------------------------------------------------------------------
+
+
+def test_xaware_is_yonly_on_l1_l2():
+    from retro_ai.training.yeti_map import (
+        agent_floor_from_pixel_xy,
+        agent_floor_from_pixel_y,
+    )
+
+    for level in (1, 2):
+        for y in range(0, 220):
+            for x in (0, 50, 150, 300):
+                assert agent_floor_from_pixel_xy(
+                    x, y, level
+                ) == agent_floor_from_pixel_y(y, level)
+
+
+def test_xaware_disambiguates_l3_y_collisions():
+    from retro_ai.training.yeti_map import agent_floor_from_pixel_xy as xy
+
+    # y=80 is within 8px of BOTH floor 3 (y72, fruit platform x0-48) and floor
+    # 4 (y80, goat platform x56-136). x decides which.
+    assert xy(72, 80, 3) == 4  # goat platform
+    assert xy(24, 72, 3) == 3  # fruit platform
+    # y=152 snowball platform (x208-312) vs the goat ladder passing through.
+    assert xy(280, 152, 3) == 7  # on the snowball platform
+    assert xy(72, 152, 3) is None  # on the goat ladder -> no platform -> freeze
+
+
+def test_xaware_goat_climb_never_resolves_to_snowball():
+    from retro_ai.training.yeti_map import agent_floor_from_pixel_xy as xy
+
+    # Climbing the goat ladder (x_px=72) from the 2-ladder platform (floor 8,
+    # y168) up to the goat platform (floor 4, y80): the mid-climb heights
+    # (152/128/104 = snowball floors 7/6/5) must NOT resolve to those floors.
+    assert xy(72, 168, 3) == 8
+    for y in (152, 128, 104):
+        assert xy(72, y, 3) is None
+    assert xy(72, 80, 3) == 4
+
+
+def test_l3_goat_climb_reward_not_penalised():
+    """Regression guard for the L3 v2 bug: climbing toward the goat platform
+    must not net negative (previously ~ -4.8 from the snowball mis-pull)."""
+    from retro_ai.training.rewards import RewardContext, create
+
+    def ctx(x, y, pose):
+        return RewardContext(
+            prev_fruits=1,
+            curr_fruits=1,
+            prev_bonus=1000,
+            curr_bonus=1000,
+            prev_score=0,
+            curr_score=0,
+            prev_lives=5,
+            curr_lives=5,
+            step_count=0,
+            curr_x=x,
+            curr_y=y,
+            fruits_present=(True,),
+            pose=pose,
+            died=False,
+        )
+
+    p = {
+        "scale": 0.01,
+        "fruit_scale": 0.01,
+        "princess_scale": 0.05,
+        "level": 3,
+        "gamma": 1.0,
+        "defer_fruit_credit": True,
+        "waypoint_reward_tol": 2,
+    }
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", p)
+    fn.reset()
+    traj = [
+        (16, 168, 0),
+        (16, 160, 8),
+        (16, 152, 8),
+        (16, 128, 8),
+        (16, 104, 8),
+        (16, 88, 8),
+        (16, 80, 0),
+    ]
+    total = sum(fn(ctx(x, y, pose)) for (x, y, pose) in traj)
+    assert total >= 0.0

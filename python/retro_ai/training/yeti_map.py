@@ -38,6 +38,26 @@ from typing import Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
+class Platform:
+    """A walkable segment: the floor it realises, its standing pixel-y, and
+    its horizontal pixel extent [x_min, x_max].
+
+    A platform is a LOGICAL walkable line and MAY contain jumpable gaps —
+    it is NOT a contiguous tile run. The whole extent uses |dx| distance, so
+    the shaping still pulls the agent across an internal gap (the behaviour
+    that taught L2 to jump gaps). Platforms exist to disambiguate levels
+    where several distinct structures share a pixel-y (L3): an (x, y) is
+    attributed to the platform whose extent contains x, so a point on a tall
+    ladder is NOT mistaken for a same-height platform elsewhere on screen.
+    """
+
+    floor: int
+    y: int
+    x_min: int
+    x_max: int
+
+
+@dataclass(frozen=True)
 class LevelMap:
     """All static geometry for one level (pixel coordinates)."""
 
@@ -67,6 +87,14 @@ class LevelMap:
     # tol) marks that group done; unreachable groups drop out of the sum.
     # None (L1/L2) => no WP reward targets => reward unchanged.
     reward_waypoints: Optional[List[List[str]]] = None
+    # Optional explicit walkable-segment extents. When set (L3), the agent's
+    # floor is resolved X-AWARELY: (x, y) resolves to a floor only if x lies
+    # within that floor's platform extent (and y within tol). This stops the
+    # y-only lookup from attributing a point on a tall ladder to a same-height
+    # platform elsewhere on screen (the L3 goat-ladder bug). When None (L1/L2)
+    # each floor is implicitly one full-width platform, so resolution is the
+    # pure y-only rule and behaviour is byte-identical.
+    platforms: Optional[List[Platform]] = None
 
 
 # Level 1 — original climb-up layout (floor 1 = bottom/spawn, 5 = princess).
@@ -196,6 +224,28 @@ LEVEL3 = LevelMap(
         ["Lsc3_top"],
         ["Lsc4_top"],
         ["Lprincess_top"],
+    ],
+    # Walkable-segment x-extents (pixels), read from the tilemap
+    # (output/mo5/yeti/level3/level3_map.json "floors"). These disambiguate
+    # L3's stacked/overlapping platforms so the agent's floor is resolved by
+    # x AND y — e.g. a point on the goat ladder (x~72, y~152) no longer
+    # resolves to the snowball platform that merely shares y=152 (x 208-312);
+    # x is out of every platform there, so it resolves to None (shaping
+    # frozen mid-climb) instead of being pulled to the wrong escalator side.
+    # NOTE (post-escalator TODO): floors 3 and 10's segments do not yet cover
+    # all their graph nodes (F1 at x56; Ldown/Lsc1 bottoms at x168/240) — a
+    # known inconsistency in the bottom-right hand-map to re-derive when we
+    # tackle the post-escalator climb. Pre-escalator (2, 4, 8, 9) is exact.
+    platforms=[
+        Platform(2, 48, 0, 72),
+        Platform(3, 72, 0, 48),
+        Platform(4, 80, 56, 136),  # goat platform
+        Platform(5, 104, 200, 312),
+        Platform(6, 128, 216, 320),
+        Platform(7, 152, 208, 312),
+        Platform(8, 168, 72, 112),  # 2-ladder platform (goat-ladder bottoms)
+        Platform(9, 176, 48, 320),  # big post-escalator platform
+        Platform(10, 184, 0, 40),
     ],
 )
 
@@ -383,7 +433,9 @@ def agent_floor_from_pixel_y(pixel_y: int, level: int = 1) -> Optional[int]:
     """Return the nearest floor the agent is "standing on", or None if
     the agent is mid-jump / off-floor / in the death-animation zone.
 
-    Uses a tolerance around each floor's standing-y.
+    Uses a tolerance around each floor's standing-y. Y-ONLY: valid on levels
+    where each floor is a single full-width surface (L1/L2). For levels with
+    stacked/short platforms (L3) use :func:`agent_floor_from_pixel_xy`.
     """
     for f_id, ftop in get_level_map(level).floor_top_y.items():
         if abs(pixel_y - ftop) <= 8:
@@ -391,8 +443,39 @@ def agent_floor_from_pixel_y(pixel_y: int, level: int = 1) -> Optional[int]:
     return None
 
 
+def agent_floor_from_pixel_xy(
+    pixel_x: int, pixel_y: int, level: int = 1
+) -> Optional[int]:
+    """X-aware floor resolution.
+
+    On a level WITHOUT explicit platforms (L1/L2) this is exactly
+    :func:`agent_floor_from_pixel_y` — the pixel_x is ignored and each floor
+    is treated as one full-width surface, so results are byte-identical.
+
+    On a level WITH platforms (L3) the agent resolves to a floor only if its
+    pixel_x lies within that floor's platform extent (and pixel_y within the
+    ±8 tolerance); the nearest-y match wins. If no platform contains (x, y)
+    — e.g. the agent is on a tall ladder passing between platforms, or in a
+    gap — this returns None (shaping is then frozen upstream, never pulled
+    toward a wrong same-height structure).
+    """
+    lvl = get_level_map(level)
+    if lvl.platforms is None:
+        return agent_floor_from_pixel_y(pixel_y, level)
+    best_floor: Optional[int] = None
+    best_dy = 9
+    for p in lvl.platforms:
+        if p.x_min <= pixel_x <= p.x_max and abs(pixel_y - p.y) <= 8:
+            dy = abs(pixel_y - p.y)
+            if dy < best_dy:
+                best_dy = dy
+                best_floor = p.floor
+    return best_floor
+
+
 __all__ = [
     "LevelMap",
+    "Platform",
     "LEVELS",
     "get_level_map",
     "FLOOR_TOP_Y",
@@ -409,4 +492,5 @@ __all__ = [
     "floyd_warshall",
     "build_navigation_map",
     "agent_floor_from_pixel_y",
+    "agent_floor_from_pixel_xy",
 ]

@@ -753,7 +753,7 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
     level = int(params.get("level", 1))
 
     from retro_ai.training.yeti_map import (
-        agent_floor_from_pixel_y,
+        agent_floor_from_pixel_xy,
         build_navigation_map,
     )
 
@@ -771,14 +771,14 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
         def _potential(self, ctx: RewardContext) -> float | None:
             """Phi(s) = -scale * sum of path distances to remaining
             targets, or None if the floor can't be resolved."""
-            floor = agent_floor_from_pixel_y(int(ctx.curr_y), level)
+            agent_pix_x = int(ctx.curr_x) * 4 + 8
+            floor = agent_floor_from_pixel_xy(agent_pix_x, int(ctx.curr_y), level)
             if floor is None:
                 floor = self.last_floor
             else:
                 self.last_floor = floor
             if floor is None:
                 return None
-            agent_pix_x = int(ctx.curr_x) * 4 + 8
             any_fruit = bool(ctx.fruits_present) and any(ctx.fruits_present)
             if any_fruit:
                 total = 0
@@ -863,7 +863,7 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     # of a group (within tol) marks it done. Empty on L1/L2 -> every WP branch
     # below is skipped, so behavior is byte-identical to the shipped reward.
     from retro_ai.training.yeti_map import (
-        agent_floor_from_pixel_y,
+        agent_floor_from_pixel_xy,
         build_navigation_map,
         get_level_map,
     )
@@ -1022,11 +1022,11 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             # changed -> rebaseline (same discipline as a fruit pickup).
             active_wp: frozenset = frozenset()
             if _wp_groups and phi is not None and not ctx.died:
+                agent_pix_x = int(ctx.curr_x) * 4 + 8
                 floor = (
-                    agent_floor_from_pixel_y(int(ctx.curr_y), level)
+                    agent_floor_from_pixel_xy(agent_pix_x, int(ctx.curr_y), level)
                     or self._base.last_floor
                 )
-                agent_pix_x = int(ctx.curr_x) * 4 + 8
                 for gi, members in enumerate(_wp_groups):
                     if gi in self._reached_wp:
                         continue
