@@ -184,8 +184,22 @@ LEVEL2 = LevelMap(
 #  16 PRIN  ( 30,  0-17)  princess platform
 LEVEL3 = LevelMap(
     floor_top_y={
-        1: 166, 2: 158, 3: 150, 4: 94, 5: 158, 6: 182, 7: 158, 8: 134,
-        9: 110, 10: 86, 11: 78, 12: 70, 13: 62, 14: 62, 15: 54, 16: 30,
+        1: 166,
+        2: 158,
+        3: 150,
+        4: 94,
+        5: 158,
+        6: 182,
+        7: 158,
+        8: 134,
+        9: 110,
+        10: 86,
+        11: 78,
+        12: 70,
+        13: 62,
+        14: 62,
+        15: 54,
+        16: 30,
     },
     floor_height=24,  # nominal; unused for L3 costs (ladder cost = |Δy|)
     fruit_centre_px={1: (64, 62)},  # on A4 (floor 14); x = ram14*4+8
@@ -193,32 +207,56 @@ LEVEL3 = LevelMap(
     # (name, TOP_floor, BOT_floor, centre_x_px); top = smaller standing-y.
     # centre_x_px = ladder_ram*4 + 8 (agent standing x at the ladder).
     ladders=[
-        ("Lgoat_a", 4, 3, 80),   # 2LAD <-> GOAT (left)
+        ("Lgoat_a", 4, 3, 80),  # 2LAD <-> GOAT (left)
         ("Lgoat_b", 4, 3, 104),  # 2LAD <-> GOAT (right)
-        ("Ldown", 5, 6, 176),    # ELAND <-> BOTTOM (post-escalator descent)
-        ("Lsc1", 7, 6, 248),     # BOTTOM <-> BR (snowball climb 1)
-        ("Lsc2", 8, 7, 288),     # BR <-> SN1 (2)
-        ("Lsc3", 9, 8, 240),     # SN1 <-> SN2 (3)
-        ("Lsc4", 10, 9, 288),    # SN2 <-> SN3 (4)
+        # ESCALATOR modelled as a ladder: the descent is vertical (moving
+        # platforms carry the agent from goat level y94 down to landing level
+        # y158 at the fixed column ram~33, just left of the wall). Treating it
+        # as a ladder gives the reward a FINITE goat->landing path (no INF
+        # gap) -> a gradient off the goat platform toward the jump-off point,
+        # and credit for landing across. The agent still learns the on/off
+        # JUMP TIMING visually (like jumping an L2 gap); a mistimed jump falls
+        # -> death gate -> no credit. Its top/bottom are capture+seed
+        # waypoints. Connects GOAT (floor 4, y94) <-> ELAND (floor 5, y158).
+        ("Lesc", 4, 5, 140),  # escalator descent (ram33)
+        ("Ldown", 5, 6, 176),  # ELAND <-> BOTTOM (post-escalator descent)
+        ("Lsc1", 7, 6, 248),  # BOTTOM <-> BR (snowball climb 1)
+        ("Lsc2", 8, 7, 288),  # BR <-> SN1 (2)
+        ("Lsc3", 9, 8, 240),  # SN1 <-> SN2 (3)
+        ("Lsc4", 10, 9, 288),  # SN2 <-> SN3 (4)
         ("Lprincess", 16, 15, 32),  # A5 <-> PRIN
     ],
     princess_centre_px=(16, 30),
     princess_floor=16,
     waypoint_ends={
-        "Lgoat_a": "top", "Lgoat_b": "top", "Ldown": "bot",
-        "Lsc1": "top", "Lsc2": "top", "Lsc3": "top", "Lsc4": "top",
+        "Lgoat_a": "top",
+        "Lgoat_b": "top",
+        "Lesc": "both",  # escalator: capture the jump-on (top) AND jump-off (bot)
+        "Ldown": "bot",
+        "Lsc1": "top",
+        "Lsc2": "top",
+        "Lsc3": "top",
+        "Lsc4": "top",
         "Lprincess": "top",
     },
     # Mandatory-waypoint reward targets (arrival ends; summed like fruits,
-    # min over an OR-group). Goat via either ladder. Post-escalator ones are
-    # INF (unreachable) until the escalator is crossed, then re-enter the sum.
+    # min over an OR-group). With the escalator modelled as a ladder the whole
+    # route is graph-connected, so every target has a finite path and the
+    # reward shapes the agent along it. The escalator top/bottom are
+    # DELIBERATELY NOT reward targets (only seed waypoints, see waypoint_ends):
+    # the ladder + the downstream Ldown_bot already give the directional pull
+    # across the escalator, so we don't add an explicit "be exactly here" bonus
+    # that could over-specify the jump-off. The frame-precise on/off timing is
+    # never in the reward regardless -- the policy learns it from the pixels
+    # (like dodging a snowball). Only INF gaps left: the final ascending jumps
+    # (SN3 -> A1..A5), sparse by design.
     reward_waypoints=[
         ["Lgoat_a_top", "Lgoat_b_top"],  # GOAT (either ladder)
-        ["Ldown_bot"],   # BOTTOM (post-escalator)
-        ["Lsc1_top"],    # BR
-        ["Lsc2_top"],    # SN1
-        ["Lsc3_top"],    # SN2
-        ["Lsc4_top"],    # SN3
+        ["Ldown_bot"],  # BOTTOM (post-escalator; reachable via the Lesc ladder)
+        ["Lsc1_top"],  # BR
+        ["Lsc2_top"],  # SN1
+        ["Lsc3_top"],  # SN2
+        ["Lsc4_top"],  # SN3
         ["Lprincess_top"],  # PRIN
     ],
     # Walkable-segment x-extents (PIXELS: [ram_min*4, (ram_max+1)*4]) for the

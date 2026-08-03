@@ -152,6 +152,29 @@ def test_xaware_goat_climb_never_resolves_to_snowball():
     assert xy(80, 94, 3) == 4  # goat platform
 
 
+def test_l3_escalator_ladder_connects_route():
+    """The escalator is modelled as a ladder (GOAT y94 <-> ELAND y158), so the
+    route is graph-connected across it (no INF gap) and the reward has a
+    gradient off the goat platform toward the jump-off point. The final
+    ascending-platform jumps stay INF (sparse by design)."""
+    from retro_ai.training.yeti_map import build_navigation_map
+
+    nav = build_navigation_map(3)
+    INF = 10**8
+
+    def d(a, b):
+        return nav.dist[nav.node_by_ident[a]][nav.node_by_ident[b]]
+
+    assert d("Lesc_top", "Lesc_bot") == 64  # the vertical descent (|94-158|)
+    assert d("Lgoat_a_top", "Ldown_bot") < INF  # goat -> across escalator -> bottom
+    assert d("Lgoat_a_top", "Lsc4_top") < INF  # goat -> snowball top, all finite
+    assert d("Lsc4_top", "Lprincess_top") >= INF  # final ascending jumps: sparse
+    # goat-platform gradient: distance to the escalator top decreases moving right
+    left = nav.path_distance_from_agent(4, 18 * 4 + 8, "Lesc_top")
+    right = nav.path_distance_from_agent(4, 27 * 4 + 8, "Lesc_top")
+    assert right < left
+
+
 def test_l3_goat_climb_reward_not_penalised():
     """Regression guard for the L3 v2 bug: climbing toward the goat platform
     must not net negative (previously ~ -4.8 from the snowball mis-pull)."""
