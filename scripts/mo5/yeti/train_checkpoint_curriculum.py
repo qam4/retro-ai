@@ -248,6 +248,16 @@ class CheckpointManager:
         # never enter the reported reach/success metrics (success = fruit).
         self.waypoints: dict = {}
         self.wp_start_counts: dict = {}
+        # WP diagnostics (display-only; not persisted). wp_closest[id] = the
+        # smallest grounded Chebyshev distance (px) the agent has come to that
+        # waypoint this run — surfaces "getting close but not capturing" and,
+        # critically, whether the agent reaches a waypoint's vicinity AT ALL
+        # (a pool stays absent until a within-tol grounded capture, so pools
+        # alone can't distinguish "never went there" from "went near, missed").
+        # wp_captures[id] = lifetime capture count (uncapped; pool size caps at
+        # max_states_per_checkpoint).
+        self.wp_closest: dict = {}
+        self.wp_captures: dict = {}
         self.frontier = 0
         self.stats = {
             "saves": [0] * (self.FRUITS_TOTAL + 1),
@@ -430,6 +440,20 @@ class CheckpointManager:
             pool = StartPool(self.max_states_per_checkpoint, self.reach_alpha)
             self.waypoints[wp_id] = pool
         pool.insert(source_cp, bonus, state_bytes, stack)
+        self.wp_captures[wp_id] = self.wp_captures.get(wp_id, 0) + 1
+
+    def note_wp_distance(self, wp_id, dist):
+        """Record the closest (grounded) approach to ``wp_id`` seen this run.
+
+        Display-only diagnostic; called every grounded step from the env for
+        EVERY configured waypoint (not just captured ones), so we can see the
+        agent nearing a waypoint even when it never lands within tol. Dict
+        min-update is atomic under the GIL, matching the lock-free pattern the
+        threaded envs already use for save_waypoint.
+        """
+        prev = self.wp_closest.get(wp_id)
+        if prev is None or dist < prev:
+            self.wp_closest[wp_id] = dist
 
     def _maybe_advance_frontier(self):
         while (
@@ -544,11 +568,21 @@ class CheckpointManager:
             f"reset_reach={reach} gscore={gscore}"
         )
         if self.waypoints:
-            # Compact per-WP view: id=poolsize@goal_score, deepest/lowest
+            # Captured pools: id=poolsize@goal_score, deepest/lowest
             # goal-score (= most-sampled) first.
             items = sorted(self.waypoints.items(), key=lambda kv: kv[1].goal_score)
             wp = " ".join(f"{w}={len(p)}@{p.goal_score:.2f}" for w, p in items)
             base += f" | wp[{len(self.waypoints)}]: {wp}"
+        if self.wp_closest:
+            # Approach view: closest grounded distance (px) reached per
+            # waypoint, nearest first, with lifetime capture count. Always
+            # shown once any waypoint vicinity is sampled — so "0 pools" no
+            # longer means "no visibility": we see how near the agent got.
+            items = sorted(self.wp_closest.items(), key=lambda kv: kv[1])
+            approach = " ".join(
+                f"{w}:d{d}x{self.wp_captures.get(w, 0)}" for w, d in items
+            )
+            base += f" | wp_near: {approach}"
         return base
 
     def save_to_disk(self, path):
@@ -946,6 +980,10 @@ class CheckpointCurriculumEnv(gym.Env):
         # optional, non-gating WP start-pools.
         if self._wp_enabled and ctx.pose in SURFACE_POSES:
             for wp_id, (wx, wy, _floor) in self._waypoints.items():
+                # Record closest grounded approach for EVERY waypoint (even the
+                # seed WP / already-captured ones) so the display shows whether
+                # the agent reaches each waypoint's vicinity at all.
+                _manager.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
                 if wp_id == self._start_wp or wp_id in self._captured_wps:
                     continue
                 if abs(x - wx) <= self._wp_tol and abs(y - wy) <= self._wp_tol:
