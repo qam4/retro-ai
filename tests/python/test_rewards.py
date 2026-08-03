@@ -1015,12 +1015,18 @@ def _g3(x, y, pose, died=False, pf=1, cf=1):
     )
 
 
+# L3 goat platform (GOAT, y94, ram 18-27) is the OR-group reached via either
+# goat-ladder top: Lgoat_a_top (ram18, y94) / Lgoat_b_top (ram24, y94). ram21
+# is on the goat platform but not within tol of either WP (a clean "on the
+# platform, not at the waypoint" spot).
+
+
 def test_l3_wp_orgroup_reached_via_either_member():
     """The goat platform is one OR-group reached via EITHER ladder top."""
-    for x in (16, 22):  # Lgoat_a_top / Lgoat_b_top
+    for x in (18, 24):  # Lgoat_a_top / Lgoat_b_top
         fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
         fn.reset()
-        fn(_g3(x, 80, 0))
+        fn(_g3(x, 94, 0))
         assert 0 in fn._reached_wp
 
 
@@ -1028,7 +1034,7 @@ def test_l3_wp_not_marked_when_airborne():
     """A WP target is only marked on a surface pose (grounded/ladder)."""
     fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
     fn.reset()
-    fn(_g3(22, 80, 11))  # pose 11 = fall (airborne)
+    fn(_g3(24, 94, 11))  # pose 11 = fall (airborne)
     assert 0 not in fn._reached_wp
 
 
@@ -1036,7 +1042,7 @@ def test_l3_wp_not_marked_on_death():
     """A death frame never marks a WP target (death gate)."""
     fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
     fn.reset()
-    fn(_g3(22, 80, 0, died=True))
+    fn(_g3(24, 94, 0, died=True))
     assert 0 not in fn._reached_wp
 
 
@@ -1045,22 +1051,22 @@ def test_l3_wp_reached_persists():
     agent has passed drops out of the target sum for the rest of the ep)."""
     fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
     fn.reset()
-    fn(_g3(30, 80, 0))  # grounded, not near a WP
-    fn(_g3(22, 80, 0))  # step onto the goat WP
+    fn(_g3(21, 94, 0))  # on goat platform, not at a WP
+    fn(_g3(24, 94, 0))  # step onto the goat WP
     assert 0 in fn._reached_wp
-    fn(_g3(40, 80, 0))  # move away
+    fn(_g3(21, 94, 0))  # move away (still on the platform)
     assert 0 in fn._reached_wp  # stays reached
 
 
 def test_l3_wp_reached_when_active_rebaselines():
     """When the reached group WAS in the active (reachable) set, reaching it
     changes the active set and that step rebaselines (sparse-only reward).
-    y=81 resolves unambiguously to the goat floor (4), from which the goat
-    group is reachable, so it is active before being reached."""
+    On the goat platform (floor 4) the goat group is reachable, so it is
+    active before being reached."""
     fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
     fn.reset()
-    fn(_g3(30, 81, 0))  # floor 4, goat group active, not yet at the WP
-    r_reach = fn(_g3(22, 81, 0))  # reach Lgoat_b_top -> active set changes
+    fn(_g3(21, 94, 0))  # on goat platform, goat group active, not at the WP
+    r_reach = fn(_g3(24, 94, 0))  # reach Lgoat_b_top -> active set changes
     assert 0 in fn._reached_wp
     assert abs(r_reach) < 1e-9  # rebaselined: no shaping charged this step
 
@@ -1071,15 +1077,15 @@ def test_l3_unreachable_groups_dropped_reward_bounded():
     reward, so shaping between adjacent grounded steps stays small."""
     fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
     fn.reset()
-    fn(_g3(30, 80, 0))
-    r = fn(_g3(32, 80, 0))
+    fn(_g3(21, 94, 0))
+    r = fn(_g3(27, 94, 0))  # both on the goat platform, neither at a WP
     # A leaked 1e9 sentinel * scale(0.01) would be ~1e7; a real move is O(1).
     assert abs(r) < 1e3
 
 
 def test_l3_reset_clears_wp_state():
     fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
-    fn(_g3(22, 80, 0))
+    fn(_g3(24, 94, 0))
     assert 0 in fn._reached_wp
     fn.reset()
     assert fn._reached_wp == set()

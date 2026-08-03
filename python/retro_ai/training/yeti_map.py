@@ -142,110 +142,104 @@ LEVEL2 = LevelMap(
     princess_floor=6,
 )
 
-# Level 3 — fragmented multi-platform layout, read from RAM (level3_start.sav)
-# with the route confirmed by play. 1 fruit (top-left area), princess top-left,
-# player starts bottom-left. Floors are keyed by their platform standing-y.
+# Level 3 — fragmented multi-platform layout, REBUILT from the raw tilemap
+# (output/mo5/yeti/level3/level3_map.json + per-cell RAM read) and verified
+# tile-by-tile with the user against a rendered frame (see
+# scripts/mo5/yeti/annotate_level3_map.py). 1 fruit, princess top-left, player
+# starts bottom-left.
 #
-# CAVEATS (L3-specific):
-#  - Platforms are as close as 8px in y (e.g. 40/48, 72/80), so the ±8
-#    agent_floor_from_pixel_y mapping is ambiguous here -> the floor-based
-#    PATH-PROGRESS SHAPING is unreliable on L3 and needs a rethink (the
-#    escalator already forces that). The LADDER-ENDPOINT WAYPOINTS below are
-#    still valid (positions only).
-#  - The ESCALATOR (moving platforms circulating CCW around a wall), the
-#    COMPRESSOR (periodic crush on climb-platform #3), and SNOWBALLS are
-#    MOVING SPRITES — not in this static tilemap. They are curriculum-carried,
-#    not waypoint/graph-modelled.
+# KEY CALIBRATION: agent standing-y = tile_row*8 - 18 (the 16px sprite stands
+# ~18px above the tile row; same offset as L2). The earlier L3 map omitted the
+# -18 and merged gappy tile rows, so its floors were ~18px off and its "goat
+# platform" was mid-ladder. Confirmed against ground truth: start=y166 (row23),
+# 2-ladder platform=y150 (row21), goat platform=y94 (row14, top of the goat
+# ladders — NOT the higher r10 tiles), princess=y30.
 #
-# Ladder route roles (confirmed with the user): the two ladders up to the goat
-# platform (Lgoat_a left / Lgoat_b right), the post-escalator DOWN ladder
-# (Ldown), the snowball climb bottom->top (Lsc1 -> Lsc2 -> Lsc3 -> Lsc4), and
-# the final ladder up toward the princess (Lprincess).
+# MODEL: each PLATFORM is its own floor-id (so the same-floor graph logic ==
+# same-PLATFORM walkability). Several platforms share a standing-y (e.g. STEP/
+# ELAND/BR at y158) — fine, because the agent's floor is resolved X-AWARELY
+# (agent_floor_from_pixel_xy + the `platforms` extents), never by y alone.
+# Ladders are graph edges (cost = |Δy|). The ESCALATOR (moving wall) and the
+# jump-only transitions (START->STEP->2LAD, and the ascending climb
+# SN3->A1->..->A5) are NOT edges -> INF in the graph -> sparse/"learned by
+# exploration", exactly as designed. COMPRESSOR / SNOWBALLS are moving sprites,
+# curriculum-carried, not modelled.
+#
+# floor-id : platform (standing_y, ram_x range) — role
+#   1 START (166,  0-9)   start ledge (raised, bottom-left)
+#   2 STEP  (158, 12-15)  step up from start
+#   3 2LAD  (150, 18-27)  2-ladder platform (goat-ladder bottoms)
+#   4 GOAT  ( 94, 18-27)  goat platform (goat-ladder tops)  -> escalator
+#   5 ELAND (158, 40-47)  escalator landing
+#   6 BOTTOM(182,  0-79)  bottom floor (full width, screen bottom)
+#   7 BR    (158, 56-79)  bottom-right
+#   8 SN1   (134, 52-77)  snowball climb 1
+#   9 SN2   (110, 54-79)  snowball climb 2
+#  10 SN3   ( 86, 50-77)  snowball climb 3 (top)
+#  11 A1    ( 78, 42-45)  ascending 1
+#  12 A2    ( 70, 36-39)  ascending 2
+#  13 A3    ( 62, 24-33)  ascending 3 (compressor)
+#  14 A4    ( 62, 14-19)  ascending 4 (FRUIT)
+#  15 A5    ( 54,  0-11)  ascending 5 -> Lprincess
+#  16 PRIN  ( 30,  0-17)  princess platform
 LEVEL3 = LevelMap(
-    # Floors keyed by platform standing-y. Ladder connections are by
-    # X-ALIGNMENT (a ladder joins the platform whose column-range spans its x,
-    # above and below) so the graph chains correctly. Verified: the snowball
-    # climb (Ldown_bot -> Lsc1 -> Lsc2 -> Lsc3 -> Lsc4) is graph-connected; the
-    # only graph GAPS are the true JUMP segments — the escalator (goat ->
-    # Ldown) and the final 5-platform climb (Lsc4 -> Lprincess) — which are
-    # sparse ("keep 0") by design.
     floor_top_y={
-        2: 48,  # Lprincess top / princess platform (upper-left)
-        3: 72,  # Lprincess bottom / fruit platform
-        4: 80,  # goat platform (Lgoat tops)
-        5: 104,  # Lsc4 top
-        6: 128,  # Lsc4 bot / Lsc3 top
-        7: 152,  # Lsc3 bot / Lsc2 top
-        8: 168,  # Lgoat bottoms (2-ladder platform)
-        9: 176,  # Lsc2 bot / Lsc1 top / Ldown top (big platform, row22)
-        10: 184,  # Lsc1 bot / Ldown bot (bottom-right)
+        1: 166, 2: 158, 3: 150, 4: 94, 5: 158, 6: 182, 7: 158, 8: 134,
+        9: 110, 10: 86, 11: 78, 12: 70, 13: 62, 14: 62, 15: 54, 16: 30,
     },
-    floor_height=24,  # nominal; the real layout is irregular
-    fruit_centre_px={1: (56, 64)},
-    fruit_floor={1: 3},  # upper-left, on/near the Lprincess platform
+    floor_height=24,  # nominal; unused for L3 costs (ladder cost = |Δy|)
+    fruit_centre_px={1: (64, 62)},  # on A4 (floor 14); x = ram14*4+8
+    fruit_floor={1: 14},
+    # (name, TOP_floor, BOT_floor, centre_x_px); top = smaller standing-y.
+    # centre_x_px = ladder_ram*4 + 8 (agent standing x at the ladder).
     ladders=[
-        # (name, upper_floor, lower_floor, centre_x_px). upper = smaller y.
-        # Connections are X-ALIGNED (platform col-range spans the ladder x).
-        ("Lprincess", 2, 3, 24),  # final ladder up toward the princess
-        ("Lgoat_a", 4, 8, 72),  # left of the two ladders to the goat platform
-        ("Lgoat_b", 4, 8, 96),  # right of the two
-        ("Ldown", 9, 10, 168),  # post-escalator down ladder
-        ("Lsc1", 9, 10, 240),  # snowball climb, 1st (bottom)
-        ("Lsc2", 7, 9, 280),  # snowball climb, 2nd
-        ("Lsc3", 6, 7, 232),  # snowball climb, 3rd
-        ("Lsc4", 5, 6, 280),  # snowball climb, 4th (top)
+        ("Lgoat_a", 4, 3, 80),   # 2LAD <-> GOAT (left)
+        ("Lgoat_b", 4, 3, 104),  # 2LAD <-> GOAT (right)
+        ("Ldown", 5, 6, 176),    # ELAND <-> BOTTOM (post-escalator descent)
+        ("Lsc1", 7, 6, 248),     # BOTTOM <-> BR (snowball climb 1)
+        ("Lsc2", 8, 7, 288),     # BR <-> SN1 (2)
+        ("Lsc3", 9, 8, 240),     # SN1 <-> SN2 (3)
+        ("Lsc4", 10, 9, 288),    # SN2 <-> SN3 (4)
+        ("Lprincess", 16, 15, 32),  # A5 <-> PRIN
     ],
     princess_centre_px=(16, 30),
-    princess_floor=2,  # on the Lprincess-top platform (so it's graph-connected)
-    # One waypoint per ladder, at the end the agent ARRIVES at along the
-    # route: the down-ladder (Ldown) -> its BOTTOM; every climb-ladder -> its
-    # TOP. This seeds each episode just before the next hard segment (jump /
-    # dodge / escalator) rather than re-climbing. The escalator (no ladder) is
-    # then bracketed: Lgoat tops before it, Ldown bottom after it.
+    princess_floor=16,
     waypoint_ends={
-        "Lgoat_a": "top",
-        "Lgoat_b": "top",
-        "Ldown": "bot",
-        "Lsc1": "top",
-        "Lsc2": "top",
-        "Lsc3": "top",
-        "Lsc4": "top",
+        "Lgoat_a": "top", "Lgoat_b": "top", "Ldown": "bot",
+        "Lsc1": "top", "Lsc2": "top", "Lsc3": "top", "Lsc4": "top",
         "Lprincess": "top",
     },
-    # Mandatory-waypoint reward targets (unordered, summed like fruits). The
-    # goat platform is one target reached via EITHER ladder (OR-group); the
-    # rest are single chokepoints. Across the escalator the post-escalator
-    # ones are unreachable and drop out until the agent crosses.
+    # Mandatory-waypoint reward targets (arrival ends; summed like fruits,
+    # min over an OR-group). Goat via either ladder. Post-escalator ones are
+    # INF (unreachable) until the escalator is crossed, then re-enter the sum.
     reward_waypoints=[
-        ["Lgoat_a_top", "Lgoat_b_top"],  # goat platform (branch: either ladder)
-        ["Ldown_bot"],  # post-escalator
-        ["Lsc1_top"],
-        ["Lsc2_top"],
-        ["Lsc3_top"],
-        ["Lsc4_top"],
-        ["Lprincess_top"],
+        ["Lgoat_a_top", "Lgoat_b_top"],  # GOAT (either ladder)
+        ["Ldown_bot"],   # BOTTOM (post-escalator)
+        ["Lsc1_top"],    # BR
+        ["Lsc2_top"],    # SN1
+        ["Lsc3_top"],    # SN2
+        ["Lsc4_top"],    # SN3
+        ["Lprincess_top"],  # PRIN
     ],
-    # Walkable-segment x-extents (pixels), read from the tilemap
-    # (output/mo5/yeti/level3/level3_map.json "floors"). These disambiguate
-    # L3's stacked/overlapping platforms so the agent's floor is resolved by
-    # x AND y — e.g. a point on the goat ladder (x~72, y~152) no longer
-    # resolves to the snowball platform that merely shares y=152 (x 208-312);
-    # x is out of every platform there, so it resolves to None (shaping
-    # frozen mid-climb) instead of being pulled to the wrong escalator side.
-    # NOTE (post-escalator TODO): floors 3 and 10's segments do not yet cover
-    # all their graph nodes (F1 at x56; Ldown/Lsc1 bottoms at x168/240) — a
-    # known inconsistency in the bottom-right hand-map to re-derive when we
-    # tackle the post-escalator climb. Pre-escalator (2, 4, 8, 9) is exact.
+    # Walkable-segment x-extents (PIXELS: [ram_min*4, (ram_max+1)*4]) for the
+    # x-aware floor resolver. One per floor-id above.
     platforms=[
-        Platform(2, 48, 0, 72),
-        Platform(3, 72, 0, 48),
-        Platform(4, 80, 56, 136),  # goat platform
-        Platform(5, 104, 200, 312),
-        Platform(6, 128, 216, 320),
-        Platform(7, 152, 208, 312),
-        Platform(8, 168, 72, 112),  # 2-ladder platform (goat-ladder bottoms)
-        Platform(9, 176, 48, 320),  # big post-escalator platform
-        Platform(10, 184, 0, 40),
+        Platform(1, 166, 0, 40),
+        Platform(2, 158, 48, 64),
+        Platform(3, 150, 72, 112),
+        Platform(4, 94, 72, 112),
+        Platform(5, 158, 160, 192),
+        Platform(6, 182, 0, 320),
+        Platform(7, 158, 224, 320),
+        Platform(8, 134, 208, 312),
+        Platform(9, 110, 216, 320),
+        Platform(10, 86, 200, 312),
+        Platform(11, 78, 168, 184),
+        Platform(12, 70, 144, 160),
+        Platform(13, 62, 96, 136),
+        Platform(14, 62, 56, 80),
+        Platform(15, 54, 0, 48),
+        Platform(16, 30, 0, 72),
     ],
 )
 
@@ -342,7 +336,11 @@ def build_edges(
         top_ident = f"{name}_top"
         bot_idx = next(i for i, nd in enumerate(nodes) if nd.ident == bot_ident)
         top_idx = next(i for i, nd in enumerate(nodes) if nd.ident == top_ident)
-        cost = lvl.floor_height * abs(bot_floor - top_floor)
+        # Ladder cost = actual vertical climb in px (|Δ standing_y|). For L1/L2
+        # (evenly spaced floors) this equals floor_height*|Δfloor_id| exactly,
+        # so distances are byte-identical; for L3 (irregular, non-y-ordered
+        # floor ids where several platforms share a y) it is the correct cost.
+        cost = abs(lvl.floor_top_y[bot_floor] - lvl.floor_top_y[top_floor])
         edges.append((bot_idx, top_idx, cost))
         edges.append((top_idx, bot_idx, cost))
     return edges

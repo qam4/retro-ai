@@ -129,25 +129,27 @@ def test_xaware_is_yonly_on_l1_l2():
 def test_xaware_disambiguates_l3_y_collisions():
     from retro_ai.training.yeti_map import agent_floor_from_pixel_xy as xy
 
-    # y=80 is within 8px of BOTH floor 3 (y72, fruit platform x0-48) and floor
-    # 4 (y80, goat platform x56-136). x decides which.
-    assert xy(72, 80, 3) == 4  # goat platform
-    assert xy(24, 72, 3) == 3  # fruit platform
-    # y=152 snowball platform (x208-312) vs the goat ladder passing through.
-    assert xy(280, 152, 3) == 7  # on the snowball platform
-    assert xy(72, 152, 3) is None  # on the goat ladder -> no platform -> freeze
+    # y=62 is shared by A3 (floor 13, px 96-136) and A4 (floor 14, px 56-80);
+    # x decides which.
+    assert xy(64, 62, 3) == 14  # A4 (fruit platform)
+    assert xy(100, 62, 3) == 13  # A3
+    # y=158 is shared by STEP (2, px48-64), ELAND (5, px160-192), BR (7, px224-320).
+    assert xy(56, 158, 3) == 2
+    assert xy(176, 158, 3) == 5
+    assert xy(280, 158, 3) == 7
 
 
 def test_xaware_goat_climb_never_resolves_to_snowball():
     from retro_ai.training.yeti_map import agent_floor_from_pixel_xy as xy
 
-    # Climbing the goat ladder (x_px=72) from the 2-ladder platform (floor 8,
-    # y168) up to the goat platform (floor 4, y80): the mid-climb heights
-    # (152/128/104 = snowball floors 7/6/5) must NOT resolve to those floors.
-    assert xy(72, 168, 3) == 8
-    for y in (152, 128, 104):
-        assert xy(72, y, 3) is None
-    assert xy(72, 80, 3) == 4
+    # Climbing the goat ladder (x_px=80) from the 2-ladder platform (floor 3,
+    # y150) up to the goat platform (floor 4, y94): mid-climb heights are on
+    # no platform (x=80 is far left of every snowball platform) -> None
+    # (frozen), never a snowball floor.
+    assert xy(80, 150, 3) == 3  # 2-ladder platform
+    for y in (140, 125, 110):  # >8px from both 2LAD(150) and GOAT(94)
+        assert xy(80, y, 3) is None
+    assert xy(80, 94, 3) == 4  # goat platform
 
 
 def test_l3_goat_climb_reward_not_penalised():
@@ -184,14 +186,14 @@ def test_l3_goat_climb_reward_not_penalised():
     }
     fn = create("fruit_bonus_path_progress_pbrs_grounded", p)
     fn.reset()
+    # walk on the 2-ladder platform toward the goat ladder (x_px=80 = ram18),
+    # climb it (mid-heights freeze), land on the goat platform (y94).
     traj = [
-        (16, 168, 0),
-        (16, 160, 8),
-        (16, 152, 8),
-        (16, 128, 8),
-        (16, 104, 8),
-        (16, 88, 8),
-        (16, 80, 0),
+        (18, 150, 0),  # 2-ladder platform (floor 3)
+        (18, 140, 8),  # climbing (frozen)
+        (18, 120, 8),
+        (18, 100, 8),
+        (18, 94, 0),  # goat platform (floor 4)
     ]
     total = sum(fn(ctx(x, y, pose)) for (x, y, pose) in traj)
     assert total >= 0.0
