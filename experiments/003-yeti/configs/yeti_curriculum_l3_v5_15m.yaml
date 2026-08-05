@@ -1,0 +1,85 @@
+# yeti_curriculum L3 v5 — segment-shaped escalator descent + pose-13 seeding.
+#
+# Builds on v4 (escalator as the Lesc ladder). v4 result: goat pools saturated,
+# but 0 clean escalator crossings and 0 pose-13 boards by the trained policy
+# (measured). Root cause (measured, this session):
+#   1. Riding the escalator is POSE 13 — not in the surface whitelist, so the
+#      reward FROZE the entire descent (0 credit) and the curriculum could
+#      never CAPTURE a ride state. Boarding was a reward cliff (long 0 stretch
+#      then death), so the policy never discovered it.
+#   2. Even unfrozen, the agent at the descent column (x~32) resolved to no
+#      floor, so the potential was floor-quantized and flat through the ride.
+#
+# What changed in v5 (all gated / backward-compatible):
+#   - reward: ladder_segment_shaping=true. A point on a vertical ladder/
+#     escalator edge now resolves to that edge and earns CONTINUOUS path
+#     progress as it descends (measured: ride credit 0.0 -> +4.4, boarding
+#     itself now pays +1.4). Total episode credit is unchanged (PBRS telescopes
+#     to the same endpoints; verified 7.800 == 7.800), so no farming and the
+#     optimal policy is unchanged. Pose 13 is treated as on-surface (un-frozen)
+#     only under this flag. Default off => byte-identical to v4 (L1/L2 guarded).
+#   - seeding: pose 13 is in the curriculum's SEED_POSES, and Lesc now captures
+#     only its TOP (Lesc_top @ ram33,y94 = the "just boarded" ride state) as a
+#     reverse-curriculum seed. WP capture is now survival-gated like fruit CPs.
+#
+# EXPECTATION: the descent gradient gives a signal to BOARD (discover the ride),
+# rides then survive >= min_survival so Lesc_top populates, and reverse-curric
+# from the board seed lets the forgiving exit jump (jump right at y~146-158 ->
+# ELAND) be learned. WATCH: pose-13 board rate, Lesc_top capture count, then
+# Ldown_bot distance shrinking + captures (post-escalator). MONITOR the H-AH-
+# class risk: board->ride->die-at-bottom banks ~+4.4 with no explicit death
+# penalty; crossing dominates, but if the policy plateaus at ride-to-death
+# without finding the exit, revisit (small death penalty / forfeit-on-death).
+# The final SN3->A1..A5 ascent stays sparse (see TODO "Yeti Level 3").
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v5_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

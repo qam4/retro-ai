@@ -751,9 +751,17 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
     princess_scale = float(params.get("princess_scale", 0.05))
     gamma = float(params.get("gamma", 0.99))
     level = int(params.get("level", 1))
+    # Segment-aware shaping (default OFF => byte-identical to the shipped
+    # reward). When ON, a point on a VERTICAL ladder/escalator edge resolves to
+    # that edge and earns continuous path-progress toward the target as it
+    # descends/climbs, instead of the floor-quantized "credit on arrival". This
+    # is what un-flattens the L3 escalator ride (see yeti_map segment helpers).
+    segment_shaping = bool(params.get("ladder_segment_shaping", False))
+    _UNREACHABLE = 10**8  # path_distance INF sentinel is 10^9; treat >= as INF
 
     from retro_ai.training.yeti_map import (
         agent_floor_from_pixel_xy,
+        agent_ladder_from_pixel_xy,
         build_navigation_map,
     )
 
@@ -763,32 +771,59 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
         def __init__(self) -> None:
             self.last_floor: int | None = None
             self.prev_phi: float | None = None
+            # (floor, ladder, agent_x, pixel_y) resolved on the last _potential
+            # call, so the grounded wrapper's waypoint-sum reuses the SAME
+            # segment resolution. ladder = (name, y_top, y_bot) or None.
+            self._seg = (None, None, 0, 0)
 
         def reset(self) -> None:
             self.last_floor = None
             self.prev_phi = None
+            self._seg = (None, None, 0, 0)
 
         def _potential(self, ctx: RewardContext) -> float | None:
             """Phi(s) = -scale * sum of path distances to remaining
-            targets, or None if the floor can't be resolved."""
+            targets, or None if the position can't be resolved."""
             agent_pix_x = int(ctx.curr_x) * 4 + 8
-            floor = agent_floor_from_pixel_xy(agent_pix_x, int(ctx.curr_y), level)
-            if floor is None:
-                floor = self.last_floor
-            else:
+            curr_y = int(ctx.curr_y)
+            floor = agent_floor_from_pixel_xy(agent_pix_x, curr_y, level)
+            ladder = None
+            if floor is not None:
                 self.last_floor = floor
-            if floor is None:
+            elif segment_shaping:
+                # Off a platform but possibly on a vertical edge (ladder /
+                # escalator): resolve it so the descent earns progress. Only
+                # fall back to last_floor when not on any edge.
+                ladder = agent_ladder_from_pixel_xy(agent_pix_x, curr_y, level)
+                if ladder is None:
+                    floor = self.last_floor
+            else:
+                floor = self.last_floor
+            self._seg = (floor, ladder, agent_pix_x, curr_y)
+            if floor is None and ladder is None:
                 return None
+            # Drop targets the graph can't reach (>= sentinel), exactly as the
+            # grounded wrapper's waypoint-sum does. On L1/L2 every fruit/princess
+            # is graph-reachable so nothing is ever dropped -> byte-identical;
+            # on L3 this removes the dead ~1e9 term for the fruit that sits past
+            # the un-modelled A1-A5 ascent (see TODO "Yeti Level 3"), which was
+            # a constant offset that only made phi unreadable.
             any_fruit = bool(ctx.fruits_present) and any(ctx.fruits_present)
+            total = 0
             if any_fruit:
-                total = 0
                 for fid, present in enumerate(ctx.fruits_present, start=1):
                     if present:
-                        total += nav.path_distance_from_agent(
-                            floor, agent_pix_x, f"F{fid}"
+                        d = nav.path_distance_from_pos(
+                            floor, ladder, agent_pix_x, curr_y, f"F{fid}"
                         )
+                        if d < _UNREACHABLE:
+                            total += d
             else:
-                total = nav.path_distance_from_agent(floor, agent_pix_x, "princess")
+                d = nav.path_distance_from_pos(
+                    floor, ladder, agent_pix_x, curr_y, "princess"
+                )
+                if d < _UNREACHABLE:
+                    total += d
             return -progress_scale * total
 
         def __call__(self, ctx: RewardContext) -> float:
@@ -862,15 +897,16 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     # any that are currently unreachable (10^9 sentinel). Reaching any member
     # of a group (within tol) marks it done. Empty on L1/L2 -> every WP branch
     # below is skipped, so behavior is byte-identical to the shipped reward.
-    from retro_ai.training.yeti_map import (
-        agent_floor_from_pixel_xy,
-        build_navigation_map,
-        get_level_map,
-    )
+    from retro_ai.training.yeti_map import build_navigation_map, get_level_map
 
     progress_scale = float(params.get("scale", 0.01))
     level = int(params.get("level", 1))
     wp_tol = int(params.get("waypoint_reward_tol", 2))
+    segment_shaping = bool(params.get("ladder_segment_shaping", False))
+    # When segment shaping is on, the escalator RIDE pose (13) is a controlled
+    # vertical traversal, not a fall, so it counts as on-surface (un-frozen) so
+    # the descent can be shaped. Off => shipped surface set (byte-identical).
+    _surf = (SURFACE_POSES | {13}) if segment_shaping else SURFACE_POSES
     _WP_UNREACHABLE = 10**8  # path_distance sentinel is 10^9; treat >= as unreachable
     _lvl_map = get_level_map(level)
     _wp_nav = build_navigation_map(level)
@@ -988,7 +1024,7 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                 reward += ctx.prev_bonus * princess_scale
 
             pose = getattr(ctx, "pose", -1)
-            airborne = pose is not None and pose >= 0 and pose not in SURFACE_POSES
+            airborne = pose is not None and pose >= 0 and pose not in _surf
 
             # (D2) Airborne: no credit, HOLD prev_phi (don't sample/rebaseline)
             # and HOLD the deferred-fruit baseline (don't sample it either).
@@ -1023,10 +1059,14 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             active_wp: frozenset = frozenset()
             if _wp_groups and phi is not None and not ctx.died:
                 agent_pix_x = int(ctx.curr_x) * 4 + 8
-                floor = (
-                    agent_floor_from_pixel_xy(agent_pix_x, int(ctx.curr_y), level)
-                    or self._base.last_floor
-                )
+                # Reuse the SAME segment the base _potential just resolved, so
+                # the waypoint-sum is shaped along the escalator descent too
+                # (not floor-quantized). ladder = None => floor-only, as today.
+                seg_floor, seg_ladder, _seg_x, seg_y = self._base._seg
+                floor = seg_floor
+                ladder = seg_ladder
+                if floor is None and ladder is None:
+                    floor = self._base.last_floor
                 for gi, members in enumerate(_wp_groups):
                     if gi in self._reached_wp:
                         continue
@@ -1043,7 +1083,9 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                     if gi in self._reached_wp:
                         continue
                     dmin = min(
-                        _wp_nav.path_distance_from_agent(floor, agent_pix_x, ident)
+                        _wp_nav.path_distance_from_pos(
+                            floor, ladder, agent_pix_x, seg_y, ident
+                        )
                         for ident, _wx, _wy in members
                     )
                     if dmin < _WP_UNREACHABLE:

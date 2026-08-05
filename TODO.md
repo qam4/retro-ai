@@ -182,6 +182,23 @@
   videos: scripts/mo5/yeti/rollout_l2.py draws the real RAM lives/bonus/score/fruits
   in a strip BELOW the frame (not over the game HUD).
 
+## Yeti Level 3 — reward graph
+
+- **Model the A1-A5 ascending climb as jump-edges (currently INF / sparse).**
+  The final snowball-escalation ascent (SN3 -> A1 -> ... -> A5 -> fruit F1 on
+  A4 / princess) is a staircase of platforms ~1 tile apart, climbed by DIAGONAL
+  jumps. These jumps are NOT modelled as nav-graph edges, so A1-A5 (and the
+  fruit + princess) are a disconnected component -> `path_distance` = INF ->
+  the path-progress reward gives zero shaping there (sparse, "learn from
+  pixels"). This is the same gap the ESCALATOR had before it was modelled as
+  the `Lesc` ladder (commit e08d138), and the reason `_potential` carries a
+  dead ~1e9 fruit term on L3 (harmless: constant, cancels in PBRS deltas).
+  Next generalization: add diagonal JUMP-EDGES (name, from_floor, to_floor,
+  x_from, x_to, cost) to the nav graph so the ascent gets a gradient too. NB:
+  the segment resolver added for the escalator handles horizontal floors and
+  vertical ladders only — a diagonal jump is a new edge shape, not a ladder
+  segment, so it needs its own resolution/cost, not a reuse of that code.
+
 ## Yeti Level 2 (see experiments/003-yeti-training.md "run 3" for full diagnosis)
 - L2 v3 (10M) failed: 0 fruits, agent stuck at the first gap on floor 1.
   Root causes are in the reward, not the training:

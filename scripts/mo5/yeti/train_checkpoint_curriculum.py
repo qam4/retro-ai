@@ -66,6 +66,17 @@ POSE_ADDR = 11092
 # curriculum with a mid-jump/airborne state that inherits a fall.
 # (Shared definition in retro_ai.games.yeti; re-exported here.)
 SURFACE_POSES = yeti.SURFACE_POSES
+# Pose 13 is the L3 ESCALATOR RIDE pose (measured): the agent stands on a
+# descending platform, pinned at the wall, riding y94->158 alive. It is NOT a
+# fall (that is pose 11) — reloading a pose-13 state resumes a survivable
+# descent that just needs a right-jump exit. So it is a legitimate state to
+# SEED from, even though it is not a static-floor pose. We therefore extend the
+# *seeding* allow-list with it (a general rule, not per-waypoint), while
+# deliberately leaving the reward's own airborne set unchanged (the ride stays
+# passively shaped there). The survival gate still rejects rides that lead
+# nowhere, so this only ever seeds on-escalator states the agent truly reaches.
+POSE_ESCALATOR_RIDE = 13
+SEED_POSES = frozenset(SURFACE_POSES | {POSE_ESCALATOR_RIDE})
 # Level-cleared flag. See scripts/mo5/yeti/train_segment.py for the empirical
 # justification (probe_princess_flag_long_baseline.py PASSes with zero
 # false positives across 26k frames). Detect princess touch via 0->1
@@ -274,6 +285,16 @@ class CheckpointManager:
             "admit_reached": [0] * (self.FRUITS_TOTAL + 1),
             "admit_survived": [0] * (self.FRUITS_TOTAL + 1),
         }
+        # WP admission breakdown, keyed by wp_id (waypoints have no fruit
+        # level so they can't share the per-CP arrays above). Waypoints now go
+        # through the SAME play-based survival gate as fruit checkpoints
+        # (see _admit_by_play): a grounded capture is only kept if the episode
+        # that produced it survived >= min_survival steps OR reached the next
+        # CP. This rejects doomed captures (e.g. a one-frame grounded clip on a
+        # departing escalator platform, or a surface pose read mid-fatal-fall).
+        self.wp_admit_reached: dict = {}
+        self.wp_admit_survived: dict = {}
+        self.wp_rejected_precarious: dict = {}
         self.segment_attempts = [0] * (self.FRUITS_TOTAL + 1)
         self.segment_successes = [0] * (self.FRUITS_TOTAL + 1)
 
@@ -416,25 +437,65 @@ class CheckpointManager:
         #   survived-only -> didn't reach next, but stayed alive >= min
         #   rejected      -> neither (the "collected fruit then died fast"
         #                    states the H-O fix started filtering out)
-        if reached_next:
+        verdict = self._admit_by_play(survived_steps, reached_next)
+        if verdict == "reached":
             self.stats["admit_reached"][fruits_collected] += 1
-        elif survived_steps >= self.min_survival_steps:
+        elif verdict == "survived":
             self.stats["admit_survived"][fruits_collected] += 1
         else:
             self.stats["rejected_precarious"][fruits_collected] += 1
             return
         self._insert(fruits_collected, source_cp, bonus, state_bytes, stack)
 
-    def save_waypoint(self, wp_id, state_bytes, source_cp=0, bonus=0, stack=None):
-        """Admit a WAYPOINT snapshot (captured when the agent was grounded
-        at a computed waypoint position — see the env's capture logic).
+    def _admit_by_play(self, survived_steps, reached_next):
+        """Shared play-based admission verdict for deferred snapshots.
 
-        Unlike ``save_scored`` (fruit checkpoints) this has no success/
-        reached-next semantics: a waypoint is just a start-state. The pool
-        is lazily created on first capture and shares StartPool's
-        reset-origin retention. Grounded-ness is enforced by the caller.
+        A single source of truth for BOTH fruit checkpoints (save_scored)
+        and waypoints (save_waypoint) so the survival gate can't silently
+        diverge between the two. Returns one of "reached" / "survived" /
+        "rejected". Admission is lenient (approach 30): keep the snapshot if
+        the producing episode either reached the next target OR stayed alive
+        at least ``min_survival_steps`` gym steps from it.
+        """
+        if reached_next:
+            return "reached"
+        if survived_steps >= self.min_survival_steps:
+            return "survived"
+        return "rejected"
+
+    def save_waypoint(
+        self,
+        wp_id,
+        state_bytes,
+        survived_steps,
+        reached_next,
+        source_cp=0,
+        bonus=0,
+        stack=None,
+    ):
+        """Admit a WAYPOINT snapshot, judged by *real play* — same gate as
+        ``save_scored`` (see _admit_by_play).
+
+        A waypoint is a start-state, but it is only useful if it is
+        SURVIVABLE: reloading a doomed grounded clip (e.g. a single frame on
+        a departing escalator platform, or a surface-pose read during a fatal
+        fall) poisons the pool with unrecoverable seeds. ``survived_steps`` is
+        how many gym steps the agent stayed alive after the capture in the
+        episode that produced it; ``reached_next`` is whether that episode went
+        on to make forward CP progress. The pool is lazily created on first
+        admitted capture and shares StartPool's reset-origin retention.
         ``stack`` is the frame-stack blob captured with the state (H-AB).
         """
+        verdict = self._admit_by_play(survived_steps, reached_next)
+        if verdict == "reached":
+            self.wp_admit_reached[wp_id] = self.wp_admit_reached.get(wp_id, 0) + 1
+        elif verdict == "survived":
+            self.wp_admit_survived[wp_id] = self.wp_admit_survived.get(wp_id, 0) + 1
+        else:
+            self.wp_rejected_precarious[wp_id] = (
+                self.wp_rejected_precarious.get(wp_id, 0) + 1
+            )
+            return
         pool = self.waypoints.get(wp_id)
         if pool is None:
             pool = StartPool(self.max_states_per_checkpoint, self.reach_alpha)
@@ -579,8 +640,13 @@ class CheckpointManager:
             # shown once any waypoint vicinity is sampled — so "0 pools" no
             # longer means "no visibility": we see how near the agent got.
             items = sorted(self.wp_closest.items(), key=lambda kv: kv[1])
+            # Per WP: d<closest px> x<admitted captures> r<rejected-precarious>.
+            # r>0 with x==0 means the agent reaches the WP but only in doomed
+            # states (e.g. dying falls) — the survival gate is filtering it out.
             approach = " ".join(
-                f"{w}:d{d}x{self.wp_captures.get(w, 0)}" for w, d in items
+                f"{w}:d{d}x{self.wp_captures.get(w, 0)}"
+                f"r{self.wp_rejected_precarious.get(w, 0)}"
+                for w, d in items
             )
             base += f" | wp_near: {approach}"
         return base
@@ -886,6 +952,14 @@ class CheckpointCurriculumEnv(gym.Env):
         # how the rest of the episode played out (real survival /
         # reached-next), not a passive probe.
         self._pending_saves = []
+        # Deferred WAYPOINT captures, scored at episode end by the same
+        # play-based survival gate as fruit checkpoints (H-AI + survival gate):
+        # each entry is (wp_id, state_bytes, save_step, bonus, stack). We no
+        # longer admit a WP the instant the agent is grounded within tol —
+        # that seeds doomed states (the 6 dying-fall Lesc_bot captures). We
+        # keep the capture here and judge it by how the rest of the episode
+        # actually unfolds.
+        self._pending_wp_saves = []
         # A checkpoint snapshot deferred to the next grounded frame:
         # (collected_total, save_step) or None. Avoids seeding the curriculum
         # with a mid-jump state (which inherits a fall on reload).
@@ -959,7 +1033,7 @@ class CheckpointCurriculumEnv(gym.Env):
             self._grounded_snap_due = collected_total
         # Take any deferred snapshot once the agent is on a surface. If the
         # agent dies before grounding (a fatal fall), no snapshot is taken.
-        if self._grounded_snap_due is not None and ctx.pose in SURFACE_POSES:
+        if self._grounded_snap_due is not None and ctx.pose in SEED_POSES:
             self._pending_saves.append(
                 (
                     self._grounded_snap_due,
@@ -978,7 +1052,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # per waypoint per episode, and never the waypoint the episode was
         # seeded from. Real states only (grounded gate); these feed the
         # optional, non-gating WP start-pools.
-        if self._wp_enabled and ctx.pose in SURFACE_POSES:
+        if self._wp_enabled and ctx.pose in SEED_POSES:
             for wp_id, (wx, wy, _floor) in self._waypoints.items():
                 # Record closest grounded approach for EVERY waypoint (even the
                 # seed WP / already-captured ones) so the display shows whether
@@ -987,12 +1061,18 @@ class CheckpointCurriculumEnv(gym.Env):
                 if wp_id == self._start_wp or wp_id in self._captured_wps:
                     continue
                 if abs(x - wx) <= self._wp_tol and abs(y - wy) <= self._wp_tol:
-                    _manager.save_waypoint(
-                        wp_id,
-                        self.base._interface.save_state(),
-                        source_cp=0 if self._start_wp is None else self._fruits_total,
-                        bonus=bonus,
-                        stack=self.preprocessed.export_frame_stack(),
+                    # Defer: capture the state + frame-stack now (the grounded
+                    # moment) but score/admit at episode end via the survival
+                    # gate (see the _pending_wp_saves flush). At most once per
+                    # waypoint per episode.
+                    self._pending_wp_saves.append(
+                        (
+                            wp_id,
+                            self.base._interface.save_state(),
+                            self._step_count,
+                            bonus,
+                            self.preprocessed.export_frame_stack(),
+                        )
                     )
                     self._captured_wps.add(wp_id)
 
@@ -1087,6 +1167,30 @@ class CheckpointCurriculumEnv(gym.Env):
                     stack=save_stack,
                 )
             self._pending_saves = []
+            # Flush deferred WAYPOINT captures through the SAME play-based
+            # survival gate. survived_steps = steps alive after the capture;
+            # reached_next = the episode made forward CP progress past its
+            # start. A doomed capture (agent died shortly after) is rejected as
+            # precarious, so dying-fall states never seed a WP pool.
+            for (
+                wp_id,
+                wp_state,
+                wp_step,
+                wp_bonus,
+                wp_stack,
+            ) in self._pending_wp_saves:
+                wp_survived = self._step_count - wp_step
+                wp_reached_next = self._max_cp_this_ep > start_level
+                _manager.save_waypoint(
+                    wp_id,
+                    wp_state,
+                    wp_survived,
+                    wp_reached_next,
+                    source_cp=save_src,
+                    bonus=wp_bonus,
+                    stack=wp_stack,
+                )
+            self._pending_wp_saves = []
             if end_reason is None:
                 end_reason = "env_done" if done else "env_truncated"
             self._log_episode(end_reason, fruits, bonus, score)

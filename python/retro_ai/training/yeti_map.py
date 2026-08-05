@@ -231,7 +231,13 @@ LEVEL3 = LevelMap(
     waypoint_ends={
         "Lgoat_a": "top",
         "Lgoat_b": "top",
-        "Lesc": "both",  # escalator: capture the jump-on (top) AND jump-off (bot)
+        # Escalator: capture only the BOARD point (Lesc_top, ram33/y94). With
+        # pose 13 (the ride) now in the seeding allow-list, this captures the
+        # on-escalator "just boarded" state as a reverse-curriculum seed. The
+        # bottom (Lesc_bot) is NOT captured: it can only be reached by already
+        # doing the exit jump (chicken-and-egg) and its grounded frame is a
+        # 1-frame clip before free-fall (the old doomed-seed source).
+        "Lesc": "top",
         "Ldown": "bot",
         "Lsc1": "top",
         "Lsc2": "top",
@@ -449,6 +455,41 @@ class NavigationMap:
                 best = via
         return best
 
+    def path_distance_from_ladder(
+        self, ladder_name: str, pixel_y: int, y_top: int, y_bot: int, target_ident: str
+    ) -> int:
+        """Shortest-path distance from a point at height ``pixel_y`` ON a
+        vertical ladder edge to the target.
+
+        The agent is a transient point on the edge: distance to each endpoint
+        is the vertical gap ``|pixel_y - endpoint_y|`` (the same |Δy| metric
+        the ladder edge cost uses), plus that endpoint's precomputed graph
+        distance to the target. This is what lets a ladder/escalator DESCENT
+        earn continuous progress instead of a lump on arrival.
+        """
+        ti = self.node_by_ident[target_ident]
+        top_i = self.node_by_ident[f"{ladder_name}_top"]
+        bot_i = self.node_by_ident[f"{ladder_name}_bot"]
+        return min(
+            abs(pixel_y - y_top) + self.dist[top_i][ti],
+            abs(pixel_y - y_bot) + self.dist[bot_i][ti],
+        )
+
+    def path_distance_from_pos(
+        self, floor, ladder, agent_x: int, pixel_y: int, target_ident: str
+    ) -> int:
+        """Segment-aware distance: from a horizontal ``floor`` (as today) or,
+        if ``floor`` is None and ``ladder`` = (name, y_top, y_bot) is given,
+        from a point on that vertical edge. Returns the INF sentinel if
+        neither resolves."""
+        if floor is not None:
+            return self.path_distance_from_agent(floor, agent_x, target_ident)
+        if ladder is not None:
+            return self.path_distance_from_ladder(
+                ladder[0], pixel_y, ladder[1], ladder[2], target_ident
+            )
+        return 10**9
+
 
 def build_navigation_map(level: int = 1) -> NavigationMap:
     """Assemble the NavigationMap for ``level``; cheap, so call per env."""
@@ -509,11 +550,39 @@ def agent_floor_from_pixel_xy(
     return best_floor
 
 
+def agent_ladder_from_pixel_xy(
+    pixel_x: int, pixel_y: int, level: int = 1, x_tol: int = 6
+) -> Optional[Tuple[str, int, int]]:
+    """Resolve the VERTICAL ladder edge the agent is on, or None.
+
+    Returns ``(ladder_name, y_top, y_bot)`` when ``pixel_x`` is within
+    ``x_tol`` of a ladder's centre AND ``pixel_y`` is STRICTLY between its
+    endpoints (endpoints belong to the floor, resolved by
+    :func:`agent_floor_from_pixel_xy` which callers try first). Nearest-x
+    ladder wins. Measured: a real climb sits at the ladder centre exactly
+    (offset 0); the escalator rides ~4px off the Lesc centre, so a small
+    ``x_tol`` suffices and keeps floor/ladder resolution unambiguous.
+    """
+    m = get_level_map(level)
+    best = None
+    best_dx = x_tol + 1
+    for name, top_floor, bot_floor, cx in m.ladders:
+        y_top = m.floor_top_y[top_floor]
+        y_bot = m.floor_top_y[bot_floor]
+        lo, hi = min(y_top, y_bot), max(y_top, y_bot)
+        dx = abs(pixel_x - cx)
+        if dx <= x_tol and lo < pixel_y < hi and dx < best_dx:
+            best_dx = dx
+            best = (name, y_top, y_bot)
+    return best
+
+
 __all__ = [
     "LevelMap",
     "Platform",
     "LEVELS",
     "get_level_map",
+    "agent_ladder_from_pixel_xy",
     "FLOOR_TOP_Y",
     "FLOOR_HEIGHT",
     "FRUIT_CENTRE_PX",

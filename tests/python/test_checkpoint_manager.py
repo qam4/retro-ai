@@ -370,16 +370,55 @@ def test_disk_roundtrip_preserves_stack(tmp_path):
 
 def test_waypoint_saved_creates_pool():
     mgr = _mgr(reset_fraction=0.0)
-    mgr.save_waypoint("L34_top", b"wp_state", source_cp=0, bonus=5)
+    mgr.save_waypoint("L34_top", b"wp_state", 100, True, source_cp=0, bonus=5)
     assert "L34_top" in mgr.waypoints
     assert len(mgr.waypoints["L34_top"]) == 1
     assert mgr.waypoints["L34_top"].states[0] == (0, 5, b"wp_state", None)
 
 
+def test_waypoint_rejected_when_doomed():
+    # Survival gate (parity with save_scored): a capture whose episode died
+    # too soon after it (didn't survive min_survival and made no CP progress)
+    # is NOT admitted. This is the fix for the dying-fall Lesc_bot seeds.
+    mgr = _mgr(reset_fraction=0.0)  # min_survival_steps=30
+    mgr.save_waypoint("Lesc_bot", b"doomed", survived_steps=7, reached_next=False)
+    assert "Lesc_bot" not in mgr.waypoints
+    assert mgr.wp_rejected_precarious["Lesc_bot"] == 1
+
+
+def test_waypoint_admitted_when_survived():
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_waypoint("Lesc_bot", b"ok", survived_steps=50, reached_next=False)
+    assert len(mgr.waypoints["Lesc_bot"]) == 1
+    assert mgr.wp_admit_survived["Lesc_bot"] == 1
+
+
+def test_waypoint_admitted_when_reached_next_even_if_short():
+    # Leniency parity: reaching the next target admits even a short survival
+    # (proves reachability), same as fruit checkpoints.
+    mgr = _mgr(reset_fraction=0.0)
+    mgr.save_waypoint("Lesc_bot", b"ok", survived_steps=3, reached_next=True)
+    assert len(mgr.waypoints["Lesc_bot"]) == 1
+    assert mgr.wp_admit_reached["Lesc_bot"] == 1
+
+
+def test_waypoint_gate_matches_save_scored():
+    # Same input -> same verdict for WP and CP: single source of truth
+    # (_admit_by_play), so the survival gate can't diverge between them.
+    for survived, reached in [(7, False), (50, False), (3, True)]:
+        cp = _mgr(reset_fraction=0.0)
+        wp = _mgr(reset_fraction=0.0)
+        cp.save_scored(1, b"s", survived, reached, bonus=0, source_cp=0)
+        wp.save_waypoint("W", b"s", survived, reached)
+        cp_admitted = len(cp.checkpoints[1]) == 1
+        wp_admitted = "W" in wp.waypoints
+        assert cp_admitted == wp_admitted
+
+
 def test_waypoint_stores_stack():
     mgr = _mgr(reset_fraction=0.0)
     blob = {"sig": ("g",), "frames": ["a"]}
-    mgr.save_waypoint("L34_top", b"wp", source_cp=0, bonus=5, stack=blob)
+    mgr.save_waypoint("L34_top", b"wp", 100, True, source_cp=0, bonus=5, stack=blob)
     assert mgr.waypoints["L34_top"].states[0][3] is blob
 
 
@@ -387,13 +426,13 @@ def test_fresh_waypoint_has_max_weight():
     # A newly-captured WP has goal_score 0 -> weight 1.0 -> heavily sampled
     # (this is what gives "more reps further down" automatically).
     mgr = _mgr(reset_fraction=0.0)
-    mgr.save_waypoint("L45a_bot", b"s")
+    mgr.save_waypoint("L45a_bot", b"s", 100, True)
     assert mgr.waypoints["L45a_bot"].weight() == pytest.approx(1.0)
 
 
 def test_pick_start_can_return_waypoint():
     mgr = _mgr(reset_fraction=0.0)
-    mgr.save_waypoint("L34_top", b"wp_state")
+    mgr.save_waypoint("L34_top", b"wp_state", 100, True)
     # Make reset unattractive (goal_score 1 -> weight ~0) so the WP wins.
     mgr.checkpoints[0].goal_score = 1.0
     import random
@@ -411,7 +450,7 @@ def test_pick_start_can_return_waypoint():
 
 def test_record_episode_waypoint_updates_only_wp_goal_score():
     mgr = _mgr(reset_fraction=0.0)
-    mgr.save_waypoint("L34_top", b"s")
+    mgr.save_waypoint("L34_top", b"s", 100, True)
     reach_before = list(mgr.reset_reach_ema)
     seg_before = list(mgr.seg_success_ema)
     w0 = mgr.waypoints["L34_top"].weight()
@@ -441,7 +480,7 @@ def test_waypoint_group_share_is_count_invariant():
         mgr = _mgr(reset_fraction=0.0, max_states_per_checkpoint=50)
         mgr.checkpoints[0].goal_score = 0.5  # reset weight 0.5
         for i in range(n_waypoints):
-            mgr.save_waypoint(f"W{i}", b"s")  # each fresh -> weight 1.0
+            mgr.save_waypoint(f"W{i}", b"s", 100, True)  # each fresh -> weight 1.0
         random.seed(0)
         c0 = 0
         for _ in range(trials):
@@ -467,9 +506,9 @@ def test_waypoint_group_internal_split_by_goal_score():
 
     mgr = _mgr(reset_fraction=0.0, max_states_per_checkpoint=50)
     mgr.checkpoints[0].goal_score = 1.0  # push reset out -> group almost always
-    mgr.save_waypoint("mastered", b"m")
+    mgr.save_waypoint("mastered", b"m", 100, True)
     mgr.waypoints["mastered"].goal_score = 0.9  # weight 0.1
-    mgr.save_waypoint("fresh", b"f")  # goal_score 0.0 -> weight 1.0
+    mgr.save_waypoint("fresh", b"f", 100, True)  # goal_score 0.0 -> weight 1.0
     random.seed(0)
     counts = {"mastered": 0, "fresh": 0}
     for _ in range(4000):
@@ -495,7 +534,7 @@ def test_no_waypoints_leaves_cp_selection_unchanged():
 
 def test_waypoint_disk_roundtrip(tmp_path):
     mgr = _mgr(reset_fraction=0.0)
-    mgr.save_waypoint("L34_top", b"wp_state", source_cp=0, bonus=7)
+    mgr.save_waypoint("L34_top", b"wp_state", 100, True, source_cp=0, bonus=7)
     mgr.waypoints["L34_top"].goal_score = 0.42
     p = tmp_path / "checkpoints.pkl"
     mgr.save_to_disk(str(p))
