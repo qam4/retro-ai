@@ -168,11 +168,21 @@ def test_l3_escalator_ladder_connects_route():
     assert d("Lesc_top", "Lesc_bot") == 64  # the vertical descent (|94-158|)
     assert d("Lgoat_a_top", "Ldown_bot") < INF  # goat -> across escalator -> bottom
     assert d("Lgoat_a_top", "Lsc4_top") < INF  # goat -> snowball top, all finite
-    assert d("Lsc4_top", "Lprincess_top") >= INF  # final ascending jumps: sparse
+    # The A1-A5 ascent is now modelled as jump_edges (was INF/sparse), so the
+    # whole route SN3 -> fruit -> princess is graph-connected and shaped.
+    assert d("Lsc4_top", "F1") < INF  # SN3 -> fruit (A4) via ascent jumps
+    assert d("Lsc4_top", "Lprincess_top") < INF  # SN3 -> princess, finite now
     # goat-platform gradient: distance to the escalator top decreases moving right
     left = nav.path_distance_from_agent(4, 18 * 4 + 8, "Lesc_top")
     right = nav.path_distance_from_agent(4, 27 * 4 + 8, "Lesc_top")
     assert right < left
+    # Ascent gradient: distance to the fruit (A4) decreases monotonically as the
+    # agent climbs SN3 -> A1 -> A2 -> A3 -> A4 (the jump_edges shaping).
+    ascent = [(10, 288), (11, 176), (12, 152), (13, 116), (14, 64)]
+    dists = [nav.path_distance_from_agent(fl, x, "F1") for fl, x in ascent]
+    assert dists == sorted(dists, reverse=True) and dists[-1] == 0
+    # START->2LAD is now graph-connected too (was INF; START/STEP had no nodes).
+    assert nav.path_distance_from_agent(1, 20, "Lgoat_a_top") < INF
 
 
 def test_l3_goat_climb_reward_not_penalised():

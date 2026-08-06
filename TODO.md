@@ -184,20 +184,26 @@
 
 ## Yeti Level 3 — reward graph
 
-- **Model the A1-A5 ascending climb as jump-edges (currently INF / sparse).**
-  The final snowball-escalation ascent (SN3 -> A1 -> ... -> A5 -> fruit F1 on
-  A4 / princess) is a staircase of platforms ~1 tile apart, climbed by DIAGONAL
-  jumps. These jumps are NOT modelled as nav-graph edges, so A1-A5 (and the
-  fruit + princess) are a disconnected component -> `path_distance` = INF ->
-  the path-progress reward gives zero shaping there (sparse, "learn from
-  pixels"). This is the same gap the ESCALATOR had before it was modelled as
-  the `Lesc` ladder (commit e08d138), and the reason `_potential` carries a
-  dead ~1e9 fruit term on L3 (harmless: constant, cancels in PBRS deltas).
-  Next generalization: add diagonal JUMP-EDGES (name, from_floor, to_floor,
-  x_from, x_to, cost) to the nav graph so the ascent gets a gradient too. NB:
-  the segment resolver added for the escalator handles horizontal floors and
-  vertical ladders only — a diagonal jump is a new edge shape, not a ladder
-  segment, so it needs its own resolution/cost, not a reuse of that code.
+- [DONE — commit pending] **Model the A1-A5 ascending climb as jump-edges.**
+  The SN3->A1->..->A5->fruit(A4)/princess staircase was a disconnected graph
+  component (INF -> no shaping, the dead ~1e9 fruit term). Implemented via a
+  `LevelMap.jump_edges` field (floor pairs), mirroring the verified
+  annotate_level3_map.JUMPS (START->STEP->2LAD + SN3->A1..A5). Endpoint nodes
+  are placed at the departing platform's EDGE nearest the landing (so the
+  gradient pulls toward the jump-off, not the centre), cost = |Δx|+|Δy|.
+  Verified: SN3->fruit and ->princess finite + monotonic; L1/L2 byte-identical.
+  The compressor on A3 stays an unmodelled visual hazard (like the snowballs).
+- **Drop the ±8px y-tolerance in the floor resolver; unify to a pose-gated
+  tolerance-free segment resolver.** `agent_floor_from_pixel_xy` matches a
+  platform when `|pixel_y - p.y| <= 8` (a geometry-only proxy for "grounded").
+  But the reward only calls it AFTER the pose gate has confirmed grounded, so
+  the tolerance is redundant: given the pose gate + x-disjoint platform extents
+  we could resolve exactly (nearest floor-by-y within the x-extent, or the
+  ladder edge). Provably safe as-is on L3 (verified: 0 platform pairs overlap in
+  x AND y±8), so this is architectural cleanup, not a bug. NOT free: the
+  resolver is shared with L1/L2 (y-only, ±8), so removing the cutoff changes
+  their floor-boundary shaping -> not byte-identical -> do it test-first when we
+  next consolidate the resolver, not mid-L3.
 
 ## Yeti Level 2 (see experiments/003-yeti-training.md "run 3" for full diagnosis)
 - L2 v3 (10M) failed: 0 fruits, agent stuck at the first gap on floor 1.

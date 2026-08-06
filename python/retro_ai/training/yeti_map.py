@@ -87,6 +87,19 @@ class LevelMap:
     # tol) marks that group done; unreachable groups drop out of the sum.
     # None (L1/L2) => no WP reward targets => reward unchanged.
     reward_waypoints: Optional[List[List[str]]] = None
+    # Optional JUMP edges: (floor_a, floor_b) platform pairs the agent
+    # traverses by JUMPING (not walking/climbing) — e.g. START->STEP->2LAD and
+    # the SN3->A1->..->A5 ascent on L3. Without them those platforms are graph-
+    # disconnected (INF), so the path-progress reward gives no gradient across
+    # them (they'd be learned by raw exploration only). Modelled as graph edges
+    # (like the escalator's Lesc ladder), they reconnect the route so the
+    # reward shapes across the jump and WP capture can seed the far side. Each
+    # endpoint node is placed at the departing platform's EDGE nearest the
+    # landing platform (so the gradient pulls toward the jump-off, not the
+    # platform centre); cost = |Δx| + |Δy|. Verified topology mirrors
+    # scripts/mo5/yeti/annotate_level3_map.py (JUMPS + _edge_pt). None (L1/L2)
+    # => no jump edges => graph/reward unchanged, byte-identical.
+    jump_edges: Optional[List[Tuple[int, int]]] = None
     # Optional explicit walkable-segment extents. When set (L3), the agent's
     # floor is resolved X-AWARELY: (x, y) resolves to a floor only if x lies
     # within that floor's platform extent (and y within tol). This stops the
@@ -228,6 +241,13 @@ LEVEL3 = LevelMap(
     ],
     princess_centre_px=(16, 30),
     princess_floor=16,
+    # Jump-traversed platform links (mirrors annotate_level3_map.JUMPS): the
+    # bottom START->STEP->2LAD hops and the SN3->A1->A2->A3->A4->A5 ascent.
+    # These reconnect the route so path-progress shaping spans them (A4 = the
+    # fruit, then Lprincess A5->PRIN). The escalator GOAT<->ELAND is already
+    # the Lesc ladder edge; the compressor on A3 stays an unmodelled visual
+    # hazard (like the snowballs).
+    jump_edges=[(1, 2), (2, 3), (10, 11), (11, 12), (12, 13), (13, 14), (14, 15)],
     waypoint_ends={
         "Lgoat_a": "top",
         "Lgoat_b": "top",
@@ -328,8 +348,47 @@ class Node:
 # ---------------------------------------------------------------------------
 
 
+def _edge_px(p: "Platform", toward_x: float) -> int:
+    """The x (px) on platform ``p``'s edge nearest ``toward_x`` — the jump-off /
+    landing point. Mirrors annotate_level3_map._edge_pt (platform extents here
+    are already pixels, so no ram->px scaling)."""
+    if toward_x <= p.x_min:
+        return p.x_min
+    if toward_x >= p.x_max:
+        return p.x_max
+    return int(toward_x)
+
+
+def _jump_graph(lvl: LevelMap):
+    """Nodes + edges contributed by ``lvl.jump_edges``.
+
+    Returns (nodes, edge_specs) where edge_specs are (identA, identB, cost).
+    Each jump-edge (fa, fb) gets an endpoint node on each platform placed at
+    that platform's edge nearest the other (so shaping pulls toward the
+    jump-off point on wide platforms), joined by a jump edge of cost
+    |Δx| + |Δy|. Empty unless the level defines both jump_edges and platforms.
+    """
+    if not lvl.jump_edges or not lvl.platforms:
+        return [], []
+    pf = {p.floor: p for p in lvl.platforms}
+    nodes: List[Node] = []
+    edge_specs: List[Tuple[str, str, int]] = []
+    for fa, fb in lvl.jump_edges:
+        pa, pb = pf[fa], pf[fb]
+        ca = (pa.x_min + pa.x_max) / 2.0
+        cb = (pb.x_min + pb.x_max) / 2.0
+        xa, xb = _edge_px(pa, cb), _edge_px(pb, ca)
+        ia, ib = f"J{fa}_{fb}_a", f"J{fa}_{fb}_b"
+        nodes.append(Node(floor=fa, x=xa, kind="jump", ident=ia))
+        nodes.append(Node(floor=fb, x=xb, kind="jump", ident=ib))
+        cost = abs(xa - xb) + abs(lvl.floor_top_y[fa] - lvl.floor_top_y[fb])
+        edge_specs.append((ia, ib, cost))
+    return nodes, edge_specs
+
+
 def build_fixed_nodes(lvl: LevelMap = LEVEL1) -> List[Node]:
-    """Build the list of fixed nodes (fruits + ladder endpoints + princess)."""
+    """Build the list of fixed nodes (fruits + ladder endpoints + princess,
+    plus jump-edge endpoints for levels that define them)."""
     nodes: List[Node] = []
     for f_id, (x, _y) in lvl.fruit_centre_px.items():
         nodes.append(
@@ -350,6 +409,7 @@ def build_fixed_nodes(lvl: LevelMap = LEVEL1) -> List[Node]:
             ident="princess",
         )
     )
+    nodes.extend(_jump_graph(lvl)[0])
     return nodes
 
 
@@ -387,6 +447,14 @@ def build_edges(
         cost = abs(lvl.floor_top_y[bot_floor] - lvl.floor_top_y[top_floor])
         edges.append((bot_idx, top_idx, cost))
         edges.append((top_idx, bot_idx, cost))
+
+    # Jump edges (bidirectional): reconnect platforms the agent reaches by
+    # jumping (START->STEP->2LAD, SN3->A1..A5). See LevelMap.jump_edges.
+    ident_to_idx = {nd.ident: i for i, nd in enumerate(nodes)}
+    for ia, ib, cost in _jump_graph(lvl)[1]:
+        a, b = ident_to_idx[ia], ident_to_idx[ib]
+        edges.append((a, b, cost))
+        edges.append((b, a, cost))
     return edges
 
 

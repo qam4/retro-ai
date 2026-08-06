@@ -1,0 +1,81 @@
+# yeti_curriculum L3 v6 — PHASE-2 ANNEAL of the v5 escalator policy.
+#
+# v5 (phase-1: n_steps=16, no target_kl) SOLVED the escalator (81% cross from
+# goat) and the snapshot sweep showed the first snowball ladder IS learnable —
+# BR reached ~62% at the 10.5M snapshot — but the recipe OSCILLATES hard
+# (BOTTOM swings 0<->90, full collapses at 8.5/9/12/12.5M) so the 15M-FINAL
+# model is a trough (BR 0%). This is exactly L1's H-V / L2's v7->v8 situation:
+# n_steps=16 + no target_kl = destructive-update swings.
+#
+# Fix (the proven two-phase recipe): warm-start the WEIGHTS of the best phase-1
+# snapshot (10.5M, BR 62%) and SHRINK THE STEP — n_steps 16->512, target_kl=0.05
+# — so updates are KL-bounded and stop destroying the policy. Should (a)
+# stabilize the oscillation and keep the escalator+BR capability, and (b) give
+# the snowball-climb chain (BR->SN1->...->SN3) room to compose, since the WP
+# reverse-curriculum pools (Lsc1-3 saturated, loaded from the champion's
+# checkpoints.pkl) seed each rung. `ladder_segment_shaping` stays on.
+#
+# Warm-start: weights-only from the 10.5M champion (keeps THIS run's n_steps=512
+# / target_kl=0.05); the CP+WP pools + goal-scores load from the champion dir's
+# checkpoints.pkl (= v5's end-of-run pools).
+#
+# WATCH (now legible in the log): `wp_reach` — Lsc1_top should stabilize high,
+# then Lsc2/Lsc3 rise if the chain composes. keep-best snapshot sweep at the end
+# (do NOT trust the final snapshot). EXPECT to then plateau at SN3 for the
+# reward reason documented in curriculum_cp_wp_model.md (no gradient past SN3
+# until the A1-A5 ascent is modelled as jump-edges).
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v6_anneal_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/champions/l3_v5_10p5M/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
