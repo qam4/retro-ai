@@ -328,6 +328,17 @@ class CheckpointManager:
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
         self.reset_reach_ema = [1.0] + [0.0] * (self.FRUITS_TOTAL + 1)
         self.seg_success_ema = [0.0] * (self.FRUITS_TOTAL + 1)
+        # Per-WP reach EMA from RESET-origin episodes (parity with
+        # reset_reach_ema for CPs): P(a from-reset episode reaches this WP).
+        # This is the CHAINING signal, complementary to WP pool size (the
+        # FRONTIER / local-reachability signal, which is inflated by the
+        # reverse curriculum seeding each pool from the ones below it). A WP
+        # with a full pool but a near-0 reach_ema is a chaining block the pool
+        # sizes hide (e.g. v5: Lsc1 pool 100 but from-goat reach ~1%). Keyed by
+        # WP id; only updated on reset-origin episodes. Display/diagnostic only,
+        # non-gating (curriculum decisions are unchanged; L1/L2 byte-identical).
+        # See experiments/003-yeti/curriculum_cp_wp_model.md.
+        self.wp_reach_ema: dict = {}
         # H-T: per-start EMA of the AGGREGATE goal score =
         # reached_level / total_goals (4 fruits + princess = 5). Unlike
         # seg_success_ema (boolean "advanced at least one CP"), this only
@@ -341,7 +352,9 @@ class CheckpointManager:
         # (self.checkpoints[level].goal_score) so it unifies with waypoint
         # pools; see StartPool.
 
-    def record_episode(self, start_level, reached_level):
+    def record_episode(
+        self, start_level, reached_level, reached_wps=None, all_wps=None
+    ):
         total_goals = self.FRUITS_TOTAL + 1
         # Waypoint start (id is a str, e.g. "L34_top"): update ONLY that
         # WP pool's goal-score (the self-regulating sampling weight). WPs
@@ -382,6 +395,16 @@ class CheckpointManager:
             for n in range(1, self.FRUITS_TOTAL + 2):
                 hit = 1.0 if reached_level >= n else 0.0
                 self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
+            # Same reset-origin evidence for every configured WP: did this
+            # from-reset episode reach it? all_wps is the full WP id universe
+            # so never-reached WPs stay at (and decay toward) 0.0 — that is the
+            # block signal we want visible in the log.
+            if all_wps:
+                reached_wps = reached_wps or set()
+                for wid in all_wps:
+                    prev = self.wp_reach_ema.get(wid, 0.0)
+                    hit = 1.0 if wid in reached_wps else 0.0
+                    self.wp_reach_ema[wid] = (1 - a) * prev + a * hit
 
     def _insert(self, level, source_cp, bonus, state_bytes, stack=None):
         """Insert into CP ``level``'s pool (delegates retention/eviction to
@@ -634,6 +657,14 @@ class CheckpointManager:
             items = sorted(self.waypoints.items(), key=lambda kv: kv[1].goal_score)
             wp = " ".join(f"{w}={len(p)}@{p.goal_score:.2f}" for w, p in items)
             base += f" | wp[{len(self.waypoints)}]: {wp}"
+        if self.wp_reach_ema:
+            # Reset-origin reach EMA per WP (the CHAINING signal, complementary
+            # to the pool sizes above). Highest first, so a low tail = the
+            # segment where the from-reset route falls off. A full pool with a
+            # near-0 reach here = a chaining block the pool size hides.
+            items = sorted(self.wp_reach_ema.items(), key=lambda kv: -kv[1])
+            rr = " ".join(f"{w}={e:.2f}" for w, e in items)
+            base += f" | wp_reach: {rr}"
         if self.wp_closest:
             # Approach view: closest grounded distance (px) reached per
             # waypoint, nearest first, with lifetime capture count. Always
@@ -898,6 +929,10 @@ class CheckpointCurriculumEnv(gym.Env):
         # waypoint we were seeded at.
         self._start_wp = level if isinstance(level, str) else None
         self._captured_wps = set()
+        # WPs the agent came within tol of this episode (grounded/ride pose),
+        # for the reset-origin wp_reach_ema. Distinct from _captured_wps (which
+        # excludes the seed WP + already-captured); here we want every reach.
+        self._reached_wps_this_ep: set = set()
 
         if state_bytes is None and self._start_state_bytes is not None:
             # CP0 for a level that boots from a save-state rather than a
@@ -1058,9 +1093,14 @@ class CheckpointCurriculumEnv(gym.Env):
                 # seed WP / already-captured ones) so the display shows whether
                 # the agent reaches each waypoint's vicinity at all.
                 _manager.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
+                within = abs(x - wx) <= self._wp_tol and abs(y - wy) <= self._wp_tol
+                # Record EVERY reach (incl. the seed WP / already-captured) for
+                # the reset-origin wp_reach_ema; capture below is more selective.
+                if within:
+                    self._reached_wps_this_ep.add(wp_id)
                 if wp_id == self._start_wp or wp_id in self._captured_wps:
                     continue
-                if abs(x - wx) <= self._wp_tol and abs(y - wy) <= self._wp_tol:
+                if within:
                     # Defer: capture the state + frame-stack now (the grounded
                     # moment) but score/admit at episode end via the survival
                     # gate (see the _pending_wp_saves flush). At most once per
@@ -1140,7 +1180,14 @@ class CheckpointCurriculumEnv(gym.Env):
             # Credit the goal-score to the actual start: a WP id (str) for
             # a waypoint-seeded episode, else the CP start level (int).
             start_key = self._start_wp if self._start_wp is not None else start_level
-            _manager.record_episode(start_key, reached_level)
+            # Pass the reached-WP set + the full WP universe so the manager can
+            # update the reset-origin wp_reach_ema (only used when start_key==0).
+            _manager.record_episode(
+                start_key,
+                reached_level,
+                reached_wps=self._reached_wps_this_ep,
+                all_wps=set(self._waypoints.keys()) if self._wp_enabled else None,
+            )
             # Flush deferred checkpoint snapshots, scored by how the
             # rest of this episode actually played out. ``source_cp``
             # is the CP this episode started from — the retention key
