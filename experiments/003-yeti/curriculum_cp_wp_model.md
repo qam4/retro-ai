@@ -128,6 +128,60 @@ the WP", which would just duplicate pool size).
   L3 specifically. Do NOT condition on "at/below the WP" (that duplicates pool
   size and re-introduces the self-seed inflation).
 
+## The model, restated: TARGETS, and two ways to index seeds
+
+This supersedes the CP-vs-WP framing above for everything except detection.
+Decision #1 ("no merge") was overturned by evidence: the same behaviour missing
+from one type twice produced real bugs (the retreat pull, and paying for a fatal
+arrival). See `training/targets.py`.
+
+**A TARGET is anything on the route that can be reached and pays credit once** —
+a fruit, a waypoint milestone, the princess. The five roles are data on it; the
+only type-specific part is the TRIGGER, and the trigger is what decides whether
+"reached" survives a save-state:
+
+* ``event`` (fruit) / ``flag`` (princess) — state lives in emulator RAM, so it
+  survives a save-state for free.
+* ``position`` (waypoint) — computed from x/y, so it does NOT survive; it must be
+  captured with the seed and restored on load.
+
+**Seeds are stored once and indexed two ways**, because two different questions
+get asked of them:
+
+* ``at[<target>]`` — "start me AT this spot." Keyed by target identity.
+* ``done[N]`` — "start me where N mandatory targets are done." Keyed by COUNT.
+
+### The progress ladder (``done[N]``)
+A rung is "one more mandatory target done". This replaces "one rung per fruit",
+which starved levels whose fruits are few and deep:
+
+* L1: 4 rungs, L2: 2 — UNCHANGED, because their mandatory targets are exactly
+  the fruits. Their champions are therefore untouched by construction, which is
+  what makes this reframing safe (asserted in `test_progress_rungs.py`).
+* L3: **1 rung -> 13**. With a single fruit at the summit the old ladder had one
+  step, so `cp=[0, 100]` / `success=[0->1]` carried no information through v5-v13
+  and "reached the next checkpoint" (used by seed admission) could never fire.
+
+Consequences that fall out rather than needing separate patches: seed admission
+credits progress again on L3; `reset_reach` / `seg_success` gain resolution; and
+pools stay fat (keyed by count, not identity, so no fragmentation).
+
+Working hypothesis for WHY this matters, from the L2 history: waypoints did not
+solve L2 by escaping the reach gate (waypoint pools are filled by
+capture-on-reach, so they only ever hold states the agent HAS touched — they were
+never unreachable, just rarely reached). They solved it by giving the curriculum
+many intermediate segments where it previously had two very deep ones. L3 had the
+same poverty; the ladder is how it gets the same granularity.
+
+### Known asymmetry, deliberately left alone
+``at[...]`` pools ignore the reach gate; ``done[N]`` pools honour it. The gate
+("don't start here until the agent reaches it from reset") is L1-era and fits a
+monotone fruit count; waypoints arrived later with a deliberately different rule.
+The unexamined middle option is a LOCAL gate: "is this reachable from the pool
+below it?" Not changed here — it is a behavioural experiment, not a refactor, and
+the route table now provides the measurement (`prog` says whether a pool leads
+anywhere; `reach` says whether it is reachable from reset).
+
 ## Route view: what goes in the LOG vs a FILE vs a TOOL
 
 Adopted after the log grew three parallel walls (`wp[..]`, `wp_reach:`,

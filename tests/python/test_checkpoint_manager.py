@@ -456,7 +456,7 @@ def test_record_episode_waypoint_updates_only_wp_goal_score():
     w0 = mgr.waypoints["L34_top"].weight()
     # A WP start that reaches the princess (max) raises its goal_score.
     for _ in range(200):
-        mgr.record_episode("L34_top", reached_level=mgr.FRUITS_TOTAL + 1)
+        mgr.record_episode("L34_top", reached_level=mgr.N_RUNGS + 1)
     # WP weight dropped (self-regulated), but the CP/reset metrics are
     # untouched — WPs are non-gating and out of the success stats.
     assert mgr.waypoints["L34_top"].weight() < w0

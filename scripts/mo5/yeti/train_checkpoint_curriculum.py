@@ -109,6 +109,44 @@ def _get_global_step() -> int:
         return _global_step
 
 
+def _normalize_seed(s, default_source_cp: int = 0):
+    """Coerce a stored seed to the current shape
+    ``(source_cp, bonus, state_bytes, frame_stack, reached_targets)``.
+
+    All legacy-format handling lives HERE, in one place, rather than being spread
+    through the loader. Older files are shorter because fields were appended over
+    time; a missing field takes its neutral value:
+
+    ==========  ===================================================
+    tuple len   missing field -> neutral value
+    ==========  ===================================================
+    5           (current shape)
+    4           reached_targets -> empty (pre milestone-restore)
+    3           frame_stack     -> None  (pre H-AB; reseeds on load)
+    2           source_cp       -> caller's default
+    other       treated as raw state bytes
+    ==========  ===================================================
+    """
+    if not isinstance(s, tuple):
+        return (default_source_cp, 0, bytes(s), None, frozenset())
+    source_cp, bonus, state, stack, reached = (
+        default_source_cp,
+        0,
+        None,
+        None,
+        frozenset(),
+    )
+    if len(s) >= 5:
+        reached = frozenset(s[4] or ())
+    if len(s) >= 4:
+        stack = s[3]
+    if len(s) >= 3:
+        source_cp, bonus, state = int(s[0]), int(s[1]), s[2]
+    elif len(s) == 2:
+        bonus, state = int(s[0]), s[1]
+    return (source_cp, bonus, bytes(state), stack, reached)
+
+
 class StartPool:
     """A pool of captured start-states with a self-regulating goal-score.
 
@@ -213,13 +251,32 @@ class CheckpointManager:
         min_survival_steps: int = 30,
         reach_threshold: float = 0.15,
         segment_floor: float = 0.0,
-        fruits_total: int = 4,
+        n_rungs: int = 4,
+        mandatory_ids=None,
     ):
-        # Number of collectible fruits in this level (level 1 = 4,
-        # level 2 = 2). Instance value (was a class constant); drives
-        # CP pool count (0..fruits_total), the princess goal index
-        # (fruits_total + 1), and all EMA array sizes.
-        self.FRUITS_TOTAL = int(fruits_total)
+        # PROGRESS LADDER SIZE. Historically this was the fruit count, so a pool
+        # meant "N fruits collected" and the ladder had one step per fruit. That
+        # starves a level whose fruits are few and deep: L3 has ONE fruit at the
+        # summit, so the ladder had a single step (0 -> 1) and `cp=[0, 100]` /
+        # `success=[0->1]` carried no information, while "reached the next
+        # checkpoint" (used by seed admission) could effectively never fire.
+        #
+        # A pool is now keyed by how many MANDATORY TARGETS are done — fruits,
+        # the princess, and (where a level defines them) waypoint milestones. On
+        # L1/L2 that is IDENTICAL to the fruit count, because those levels define
+        # no milestones, so their pools and champions are untouched; on L3 it
+        # turns 1 step into 12, which is the curriculum granularity that
+        # plausibly made waypoints work on L2 in the first place.
+        #
+        # ``mandatory_ids`` is the set of target ids (plus graph aliases, since a
+        # jump landing is "A1" to the curriculum and "J10_11_b" to the graph)
+        # that count toward a rung. None => fall back to fruit-count keying.
+        # Ladder steps, excluding the terminal princess. Passed explicitly rather
+        # than derived from ``mandatory_ids``, whose size would double-count: it
+        # holds BOTH names of an aliased target (the curriculum's "A1" and the
+        # graph's "J10_11_b") so a seed naming either form still counts.
+        self.N_RUNGS = int(n_rungs)
+        self.mandatory_ids = set(mandatory_ids or ())
         # frontier_fraction / earlier_fraction are retained for config
         # back-compat but no longer used by pick_start (approach 30).
         # reset_fraction is reinterpreted as the CP0 floor and only
@@ -264,8 +321,7 @@ class CheckpointManager:
         # them diverse.) So the pool drifts toward reset-origin states
         # the agent actually reaches from reset.
         self.checkpoints = [
-            StartPool(self.max_states_per_checkpoint)
-            for _ in range(self.FRUITS_TOTAL + 1)
+            StartPool(self.max_states_per_checkpoint) for _ in range(self.N_RUNGS + 1)
         ]
         # Waypoint start-pools, keyed by waypoint id (e.g. "L34_top").
         # Lazily created on first capture. Same StartPool as CP pools, so
@@ -296,19 +352,19 @@ class CheckpointManager:
         self.wp_captures: dict = {}
         self.frontier = 0
         self.stats = {
-            "saves": [0] * (self.FRUITS_TOTAL + 1),
-            "starts": [0] * (self.FRUITS_TOTAL + 1),
+            "saves": [0] * (self.N_RUNGS + 1),
+            "starts": [0] * (self.N_RUNGS + 1),
             # How many snapshots we rejected for being too precarious
             # (died too soon under the policy, didn't reach next CP).
-            "rejected_precarious": [0] * (self.FRUITS_TOTAL + 1),
+            "rejected_precarious": [0] * (self.N_RUNGS + 1),
             # Admission breakdown (H-R instrumentation): of the snapshots
             # offered to save_scored, how many were admitted because the
             # episode reached the next CP (reached_next) vs admitted only
             # because the agent survived >= min_survival frames. With
             # rejected_precarious (the third outcome) this shows what the
             # filter keeps vs throws away, per CP, over time.
-            "admit_reached": [0] * (self.FRUITS_TOTAL + 1),
-            "admit_survived": [0] * (self.FRUITS_TOTAL + 1),
+            "admit_reached": [0] * (self.N_RUNGS + 1),
+            "admit_survived": [0] * (self.N_RUNGS + 1),
         }
         # WP admission breakdown, keyed by wp_id (waypoints have no fruit
         # level so they can't share the per-CP arrays above). Waypoints now go
@@ -320,8 +376,8 @@ class CheckpointManager:
         self.wp_admit_reached: dict = {}
         self.wp_admit_survived: dict = {}
         self.wp_rejected_precarious: dict = {}
-        self.segment_attempts = [0] * (self.FRUITS_TOTAL + 1)
-        self.segment_successes = [0] * (self.FRUITS_TOTAL + 1)
+        self.segment_attempts = [0] * (self.N_RUNGS + 1)
+        self.segment_successes = [0] * (self.N_RUNGS + 1)
 
         # Approach 31: reach-gated frontier curriculum.
         #
@@ -351,8 +407,8 @@ class CheckpointManager:
         self.reach_alpha = 0.02
         # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
-        self.reset_reach_ema = [1.0] + [0.0] * (self.FRUITS_TOTAL + 1)
-        self.seg_success_ema = [0.0] * (self.FRUITS_TOTAL + 1)
+        self.reset_reach_ema = [1.0] + [0.0] * (self.N_RUNGS + 1)
+        self.seg_success_ema = [0.0] * (self.N_RUNGS + 1)
         # Per-WP reach EMA from RESET-origin episodes (parity with
         # reset_reach_ema for CPs): P(a from-reset episode reaches this WP).
         # This is the CHAINING signal, complementary to WP pool size (the
@@ -385,7 +441,7 @@ class CheckpointManager:
         all_wps=None,
         progressed=None,
     ):
-        total_goals = self.FRUITS_TOTAL + 1
+        total_goals = self.N_RUNGS + 1
         # Order-free segment health for EVERY start (CP level or WP id), updated
         # before the WP early-return so waypoints get it too. See progress_ema.
         if progressed is not None:
@@ -403,7 +459,7 @@ class CheckpointManager:
             if pool is not None:
                 pool.update_goal_score(reached_level / float(total_goals))
             return
-        if not (0 <= start_level <= self.FRUITS_TOTAL):
+        if not (0 <= start_level <= self.N_RUNGS):
             return
         # Cumulative counters (display only).
         self.segment_attempts[start_level] += 1
@@ -419,7 +475,7 @@ class CheckpointManager:
         # (4 fruits + princess) reached from this start. reached_level is
         # 0..5 (5 = princess via the H-M fix). This is what pick_start
         # weights by (1 - score).
-        total_goals = self.FRUITS_TOTAL + 1
+        total_goals = self.N_RUNGS + 1
         self.checkpoints[start_level].update_goal_score(
             reached_level / float(total_goals)
         )
@@ -430,7 +486,7 @@ class CheckpointManager:
             # n up to N+1 = princess (reached_level==N+1 on a touch, via
             # the H-M fix), so reset_reach_ema[-1] is the live princess-
             # from-reset rate — the actual goal.
-            for n in range(1, self.FRUITS_TOTAL + 2):
+            for n in range(1, self.N_RUNGS + 2):
                 hit = 1.0 if reached_level >= n else 0.0
                 self.reset_reach_ema[n] = (1 - a) * self.reset_reach_ema[n] + a * hit
             # Same reset-origin evidence for every configured WP: did this
@@ -469,7 +525,7 @@ class CheckpointManager:
     ):
         # Used for offline seed_archive / preseed (no play-based score, and
         # no frame stack — those seeds fall back to reseed on load).
-        if 0 <= fruits_collected <= self.FRUITS_TOTAL:
+        if 0 <= fruits_collected <= self.N_RUNGS:
             self._insert(
                 fruits_collected, source_cp, bonus, state_bytes, stack, reached
             )
@@ -502,7 +558,7 @@ class CheckpointManager:
         rare reaches at hard, sparse CPs; retention priority
         (source_cp) does the quality work on full, easy CPs.
         """
-        if not (0 <= fruits_collected <= self.FRUITS_TOTAL):
+        if not (0 <= fruits_collected <= self.N_RUNGS):
             return
         # Admission with a logged reason (H-R instrumentation):
         #   reached_next  -> episode went on to the next CP
@@ -589,16 +645,28 @@ class CheckpointManager:
         if prev is None or dist < prev:
             self.wp_closest[wp_id] = dist
 
+    def rung_of(self, reached) -> int:
+        """Which progress pool a state belongs to: how many MANDATORY targets it
+        has behind it.
+
+        The one keying rule, for every level. On levels without waypoint
+        milestones the mandatory targets are exactly the fruits, so this is the
+        fruit count — no special case. The reached-set is already stored on every
+        seed (added so a seeded episode stops re-targeting milestones behind it),
+        so nothing has to be recaptured.
+        """
+        return len({r for r in (reached or ()) if r in self.mandatory_ids})
+
     def _maybe_advance_frontier(self):
         while (
-            self.frontier < self.FRUITS_TOTAL
+            self.frontier < self.N_RUNGS
             and len(self.checkpoints[self.frontier]) >= self.min_states_to_advance
         ):
             self.frontier = max(
                 self.frontier,
                 max(
                     i
-                    for i in range(self.FRUITS_TOTAL + 1)
+                    for i in range(self.N_RUNGS + 1)
                     if len(self.checkpoints[i]) >= self.min_states_to_advance
                 ),
             )
@@ -650,7 +718,7 @@ class CheckpointManager:
         #  - ALL waypoints as ONE group (H-AK), weight = MEAN of members'
         #    weights (count-invariant; see the docstring). Non-gating.
         cp_candidates = [0]
-        for n in range(1, self.FRUITS_TOTAL + 1):
+        for n in range(1, self.N_RUNGS + 1):
             if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold:
                 cp_candidates.append(n)
         wp_candidates = [w for w, pool in self.waypoints.items() if len(pool) > 0]
@@ -687,15 +755,15 @@ class CheckpointManager:
         return key, state, stack, reached
 
     def summary(self):
-        sizes = [len(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)]
+        sizes = [len(self.checkpoints[i]) for i in range(self.N_RUNGS + 1)]
         rates = []
-        for i in range(self.FRUITS_TOTAL + 1):
+        for i in range(self.N_RUNGS + 1):
             if self.segment_attempts[i] > 0:
                 pct = 100 * self.segment_successes[i] / self.segment_attempts[i]
                 rates.append(f"{i}->{i+1}:{pct:.0f}%")
             else:
                 rates.append(f"{i}->{i+1}:N/A")
-        rej = self.stats.get("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
+        rej = self.stats.get("rejected_precarious", [0] * (self.N_RUNGS + 1))
         reach = "[" + ", ".join(f"{r:.2f}" for r in self.reset_reach_ema) + "]"
         gscore = "[" + ", ".join(f"{p.goal_score:.2f}" for p in self.checkpoints) + "]"
         base = (
@@ -769,7 +837,7 @@ class CheckpointManager:
 
         data = {
             "checkpoints": [
-                list(self.checkpoints[i].states) for i in range(self.FRUITS_TOTAL + 1)
+                list(self.checkpoints[i].states) for i in range(self.N_RUNGS + 1)
             ],
             "stats": self.stats,
             # Waypoint pools: id -> (states, goal_score). Optional; absent in
@@ -794,33 +862,27 @@ class CheckpointManager:
         with open(path, "rb") as f:
             data = pickle.load(f)
         for i, states in enumerate(data["checkpoints"]):
+            # Tolerate files written with a DIFFERENT ladder size: the progress
+            # ladder used to be one step per fruit, so an L3 file has 2 entries
+            # where the milestone ladder has 14. Extra trailing pools in the file
+            # are ignored rather than crashing (they cannot be attributed to a
+            # rung without the reached-set, which pre-fix files lack anyway).
+            if i >= len(self.checkpoints):
+                break
             for s in states:
                 # Normalize to the (source_cp, bonus, state, stack) format.
                 # Loaded/offline states have unknown origin; mark them
-                # source_cp = i (the level itself = maximally
-                # artificial for that level) so fresh reset-origin
-                # states evict them first. Pre-H-AB files carry no frame
-                # stack -> None (falls back to reseed on load).
-                # Pre-milestone-restore files have no reached-set (len 4) ->
-                # empty frozenset (same behaviour as before the fix).
-                if isinstance(s, tuple) and len(s) == 5:
-                    entry = (
-                        int(s[0]),
-                        int(s[1]),
-                        bytes(s[2]),
-                        s[3],
-                        frozenset(s[4] or ()),
-                    )
-                elif isinstance(s, tuple) and len(s) == 4:
-                    entry = (int(s[0]), int(s[1]), bytes(s[2]), s[3], frozenset())
-                elif isinstance(s, tuple) and len(s) == 3:
-                    entry = (int(s[0]), int(s[1]), bytes(s[2]), None, frozenset())
-                elif isinstance(s, tuple) and len(s) == 2:
-                    entry = (i, int(s[0]), bytes(s[1]), None, frozenset())
-                else:
-                    entry = (i, 0, bytes(s), None, frozenset())
-                if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
-                    self.checkpoints[i].states.append(entry)
+                entry = _normalize_seed(s, default_source_cp=i)
+                # KEY BY THE LADDER. Both sources are the ladder key under the
+                # writer that produced them: a stored reached-set gives the rung
+                # directly, while a file written before the set existed was keyed
+                # by fruit count -- which IS the rung on levels without
+                # milestones. So prefer the recorded truth, else the file index.
+                rung = self.rung_of(entry[4]) if entry[4] else i
+                if rung > self.N_RUNGS:
+                    continue  # from a level with a longer ladder; not ours
+                if len(self.checkpoints[rung]) < self.max_states_per_checkpoint:
+                    self.checkpoints[rung].states.append(entry)
         # Waypoint pools (optional; absent in pre-WP files).
         for wp_id, payload in data.get("waypoints", {}).items():
             states, goal_score = payload
@@ -828,17 +890,15 @@ class CheckpointManager:
             for s in states:
                 if len(pool) >= self.max_states_per_checkpoint:
                     break
-                stack = s[3] if len(s) >= 4 else None
-                reached = frozenset(s[4] or ()) if len(s) >= 5 else frozenset()
-                pool.states.append((int(s[0]), int(s[1]), bytes(s[2]), stack, reached))
+                pool.states.append(_normalize_seed(s))
             pool.goal_score = float(goal_score)
             self.waypoints[wp_id] = pool
-        loaded_stats = data.get("stats", self.stats)
-        # Tolerate older checkpoint files that predate newer counters.
-        loaded_stats.setdefault("rejected_precarious", [0] * (self.FRUITS_TOTAL + 1))
-        loaded_stats.setdefault("admit_reached", [0] * (self.FRUITS_TOTAL + 1))
-        loaded_stats.setdefault("admit_survived", [0] * (self.FRUITS_TOTAL + 1))
-        self.stats = loaded_stats
+        # Per-rung COUNTERS are deliberately not inherited. They are cumulative
+        # display stats indexed by rung, and a file may have been written under a
+        # different ladder, which makes its indices meaningless here. The pools
+        # are the durable artifact; the counters describe a run. Keeping this
+        # rule (rather than padding/truncating) means there is one array length
+        # in play and no reader can index off the end.
         print(f"  Loaded checkpoints from {path}: {self.summary()}", flush=True)
 
 
@@ -1109,7 +1169,12 @@ class CheckpointCurriculumEnv(gym.Env):
         # (H-O fix: was initialized to self._start_fruits — fruits
         # *remaining*, the wrong unit — which pinned reset episodes at the
         # top and over-admitted their seed snapshots via reached_next.)
-        self._max_cp_this_ep = self._fruits_total - self._start_fruits
+        # Progress rung this episode STARTS on (a seed carries its reached set,
+        # so a mid-route seed starts partway up the ladder). Cached because the
+        # start state cannot change mid-episode.
+        self._n_rungs = _manager.N_RUNGS
+        self._start_rung = self._current_rung()
+        self._max_cp_this_ep = self._start_rung
         # Clean per-episode princess-touch flag, credited to
         # record_episode for CP4->princess success.
         self._princess_touched_this_ep = False
@@ -1167,7 +1232,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # airborne state that inherits a fall on reload.
         if fruits < self._prev_fruits:
             self._fruits_collected_this_ep += self._prev_fruits - fruits
-            collected_total = self._fruits_total - fruits
+            collected_total = self._current_rung(ctx.fruits_present)
             self._max_cp_this_ep = max(self._max_cp_this_ep, collected_total)
             self._grounded_snap_due = collected_total
         # Take any deferred snapshot once the agent is on a surface. If the
@@ -1234,7 +1299,8 @@ class CheckpointCurriculumEnv(gym.Env):
             # Princess is the terminal "checkpoint" (level fruits_total+1);
             # any pending fruit snapshot in this episode therefore reached
             # the next checkpoint.
-            self._max_cp_this_ep = max(self._max_cp_this_ep, self._fruits_total + 1)
+            # Princess = the TERMINAL rung (top of the progress ladder).
+            self._max_cp_this_ep = max(self._max_cp_this_ep, self._n_rungs + 1)
             self._princess_touched_this_ep = True
 
         self._prev_fruits = fruits
@@ -1277,17 +1343,19 @@ class CheckpointCurriculumEnv(gym.Env):
                 end_reason = "princess_touched"
 
         if done or truncated:
-            start_level = self._fruits_total - self._start_fruits
-            # H-M fix: a princess touch is CP(fruits_total+1), so the
-            # last fruit -> princess registers as a segment success.
-            # Without this, reached_level = fruits_total - fruits caps at
-            # fruits_total and the last segment's success is never
-            # recorded, pinning its curriculum weight at the max (over-sampling CP4,
-            # starving CP3->CP4).
+            # Start/end are PROGRESS RUNGS (how many mandatory targets are
+            # done). On L1/L2 a rung is a collected fruit, so this is the old
+            # fruit-count value; on L3 the ladder is the milestone chain, which
+            # is what makes "reached the next rung" a usable signal there.
+            start_level = self._start_rung
+            # H-M fix: a princess touch is the terminal rung (N_RUNGS + 1), so
+            # the last step -> princess registers as a segment success. Without
+            # it reached_level caps at the top rung and the final segment's
+            # success is never recorded, pinning its curriculum weight at max.
             reached_level = (
-                self._fruits_total + 1
+                self._n_rungs + 1
                 if self._princess_touched_this_ep
-                else self._fruits_total - fruits
+                else max(self._current_rung(), self._start_rung)
             )
             # Credit the goal-score to the actual start: a WP id (str) for
             # a waypoint-seeded episode, else the CP start level (int).
@@ -1315,7 +1383,7 @@ class CheckpointCurriculumEnv(gym.Env):
             # that biases pools toward reset-origin states (approach 30).
             # A WP-seeded episode's fruit snapshots are NOT reset-origin, so
             # mark them maximally artificial (evict-first).
-            save_src = self._fruits_total if self._start_wp is not None else start_level
+            save_src = self._n_rungs if self._start_wp is not None else start_level
             for (
                 level,
                 state_bytes,
@@ -1369,23 +1437,44 @@ class CheckpointCurriculumEnv(gym.Env):
 
         return self._wrap_obs(obs), reward, done, truncated, info
 
+    def _reached_targets(self, fruits_present=None) -> set:
+        """Every target reached so far this episode, INCLUDING what the seed
+        already had banked.
+
+        Waypoints come from positional detection; fruits are derived from their
+        presence bytes (a collected fruit is gone from the level, so unlike a
+        waypoint this survives a save-state and needs no bookkeeping).
+        """
+        out = set(self._inherited_wps) | set(self._reached_wps_this_ep)
+        if fruits_present is not None:
+            out |= {
+                f"F{i}" for i, present in enumerate(fruits_present, 1) if not present
+            }
+        return out
+
+    def _current_rung(self, fruits_present=None) -> int:
+        """The progress rung: how many MANDATORY targets are done."""
+        if fruits_present is None:
+            fruits_present = tuple(
+                self.iface.read_ram_byte(self._fruit_addrs[i]) != 0
+                for i in self._fruit_ids
+            )
+        return _manager.rung_of(self._reached_targets(fruits_present))
+
     def _log_episode(
         self, end_reason: str, fruits: int, bonus: int, final_score: int
     ) -> None:
         if self.episode_logger is None:
             return
         final_xy = self._read_pos()
-        start_level = self._fruits_total - self._start_fruits
-        # Mirror record_episode's H-M value: a princess touch is
-        # CP(fruits_total+1). Computing reached_level as fruits_total-fruits
-        # here (the old code) capped it at fruits_total and NEVER logged a
-        # princess touch, so episodes.csv reached_level could not show the
-        # final leg even though record_episode / the EMAs counted it. Use
-        # the same princess-aware value so the log matches the curriculum.
+        # Same rung values record_episode uses, so episodes.csv and the
+        # curriculum agree (including the terminal princess rung, which the old
+        # fruit-count version could never log).
+        start_level = self._start_rung
         reached_level = (
-            self._fruits_total + 1
+            self._n_rungs + 1
             if self._princess_touched_this_ep
-            else self._fruits_total - fruits
+            else max(self._current_rung(), self._start_rung)
         )
         self.episode_logger.log(
             global_step=_get_global_step(),
@@ -1414,6 +1503,43 @@ class CheckpointCurriculumEnv(gym.Env):
             # every route point this episode reached.
             reached_points=";".join(sorted(self._reached_wps_this_ep)),
         )
+
+
+def _level_of(cfg) -> int:
+    """The level the reward (and therefore the target set) is configured for."""
+    if cfg.reward is not None and cfg.reward.params:
+        try:
+            return int(cfg.reward.params.get("level", 1))
+        except (TypeError, ValueError):
+            return 1
+    return 1
+
+
+def _progress_ladder(cfg):
+    """``(mandatory_ids, n_rungs)`` — the progress ladder for this level.
+
+    A rung is "one more MANDATORY target done": the fruits, plus the waypoint
+    milestones on levels that define them. The terminal princess is excluded (it
+    is the rung above the top). This is uniform across levels — on L1/L2 the
+    mandatory targets are exactly the fruits, so the ladder is the fruit count
+    it always was, with no special case.
+
+    ``mandatory_ids`` also carries graph aliases, because a jump landing has two
+    names for one point (the curriculum's "A1", the graph's "J10_11_b") and a
+    seed may record either; ``n_rungs`` counts DISTINCT targets, so it is passed
+    separately rather than derived from the id set.
+    """
+    from retro_ai.training.targets import build_targets
+
+    targets = [
+        t for t in build_targets(_level_of(cfg)) if t.mandatory and t.kind != "princess"
+    ]
+    ids = set()
+    for t in targets:
+        ids.add(t.id)
+        if t.node_ident:
+            ids.add(t.node_ident)
+    return ids, len(targets)
 
 
 def _route_order_for(cfg) -> list:
@@ -1470,7 +1596,7 @@ class CurriculumCallback(BaseCallback):
         total_timesteps: int,
         log_interval: int = 5000,
         diag_path=None,
-        fruits_total: int = 4,
+        n_rungs: int = 4,
         table_interval: int = 500_000,
         route_order=None,
     ):
@@ -1478,9 +1604,9 @@ class CurriculumCallback(BaseCallback):
         self._diag_path = diag_path
         self._diag_file = None
         self._adm_file = None
-        # Number of start levels = fruits_total + 1 (CP0..CP_fruits_total).
-        self._fruits_total = int(fruits_total)
-        n = self._fruits_total + 1
+        # One counter per progress rung, plus rung 0 (the game start).
+        self._n_rungs = int(n_rungs)
+        n = self._n_rungs + 1
         self._last_starts = [0] * n
         # H-R instrumentation: last cumulative admission counters, for
         # per-interval deltas.
@@ -1561,14 +1687,14 @@ class CurriculumCallback(BaseCallback):
             self._baseline_captured = True
         if self._diag_file is None:
             self._diag_file = open(self._diag_path, "w")
-            n = self._fruits_total
+            n = self._n_rungs
             reach_cols = [f"reach{i}" for i in range(1, n + 1)] + ["reach_princess"]
             succ_cols = [f"succ_ema{i}" for i in range(1, n + 1)]
             sfrac_cols = [f"start_frac{i}" for i in range(0, n + 1)]
             gscore_cols = [f"gscore{i}" for i in range(0, n + 1)]
             header = ["step"] + reach_cols + succ_cols + sfrac_cols + gscore_cols
             self._diag_file.write(",".join(header) + "\n")
-        n = self._fruits_total
+        n = self._n_rungs
         starts = _manager.stats["starts"]
         delta = [starts[i] - self._last_starts[i] for i in range(n + 1)]
         self._last_starts = list(starts)
@@ -1603,7 +1729,7 @@ class CurriculumCallback(BaseCallback):
             )
             self._adm_file = open(adm_path, "w")
             cols = ["step"]
-            for cp in range(1, _manager.FRUITS_TOTAL + 1):
+            for cp in range(1, _manager.N_RUNGS + 1):
                 cols += [
                     f"a_reach{cp}",
                     f"a_surv{cp}",
@@ -1616,7 +1742,7 @@ class CurriculumCallback(BaseCallback):
         asv = _manager.stats["admit_survived"]
         rj = _manager.stats["rejected_precarious"]
         row = [str(self.num_timesteps)]
-        for cp in range(1, _manager.FRUITS_TOTAL + 1):
+        for cp in range(1, _manager.N_RUNGS + 1):
             d_reach = ar[cp] - self._last_adm_reached[cp]
             d_surv = asv[cp] - self._last_adm_survived[cp]
             d_rej = rj[cp] - self._last_rejected[cp]
@@ -1647,6 +1773,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     seed = seed_everything(cfg.training.seed)
 
+    _ladder_ids, _ladder_rungs = _progress_ladder(cfg)
     _manager = CheckpointManager(
         max_states_per_checkpoint=cfg.curriculum.max_states_per_checkpoint,
         min_states_to_advance=cfg.curriculum.min_states_to_advance,
@@ -1656,7 +1783,9 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         min_survival_steps=cfg.curriculum.min_survival_steps,
         reach_threshold=cfg.curriculum.reach_threshold,
         segment_floor=cfg.curriculum.segment_floor,
-        fruits_total=cfg.curriculum.fruits_total,
+        # Progress ladder: pools keyed by how many MANDATORY targets are done.
+        mandatory_ids=_ladder_ids,
+        n_rungs=_ladder_rungs,
     )
 
     print("Checkpoint Curriculum Training", flush=True)
@@ -1813,7 +1942,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
                 CurriculumCallback(
                     cfg.training.timesteps,
                     diag_path=os.path.join(cfg.training.output, "curriculum_diag.csv"),
-                    fruits_total=cfg.curriculum.fruits_total,
+                    n_rungs=_ladder_rungs,
                     # Display-only ordering for the route table (no semantics).
                     route_order=_route_order_for(cfg),
                 ),
