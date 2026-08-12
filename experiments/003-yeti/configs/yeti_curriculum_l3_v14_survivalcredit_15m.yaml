@@ -1,0 +1,100 @@
+# yeti_curriculum L3 v14 — CREDIT ONLY FOR PROGRESS YOU SURVIVE.
+#
+# ONE lever vs v13: reward.params.credit_requires_survival. Everything else —
+# weights, pools, PPO, the mild re-heat — is v13's, so the comparison is clean.
+#
+# WHY (measured on v13, see experiments/003-yeti/level3_notes.md):
+#   climb -> touch SN3 -> DIE        +5.04
+#   wait at SN2 for a safe phase      0.00
+#   climb -> SN3 -> traverse onward  +10.32
+# The death gate only suppressed shaping ON the fatal step; progress banked
+# EARLIER was kept. Since an SN3 arrival is lethal ~99.8% of the time, the
+# expected value of arriving immediately dwarfed waiting — so the policy
+# correctly learned to arrive fast and die, and never learned the SN3 dodge (at
+# SN3 it measures no better than random: ~5-7% either way). Fruits already had
+# this protection via defer_fruit_credit; milestones and path-progress did not.
+#
+# THE FIX refunds the episode's accumulated shaping on death (PBRS with the
+# terminal potential at the episode baseline), applied identically to every
+# target type, and subsumes defer_fruit_credit. Verified: the reckless line goes
+# +5.04 -> 0.00 while the surviving line is unchanged, so patience is no longer
+# strictly dominated. Sparse achievements already earned are NOT clawed back.
+#
+# ALSO ACTIVE (landed with the target/ladder work, not a variable here): the
+# progress ladder now keys pools by how many MANDATORY targets are done, so L3
+# has 13 rungs instead of 1 — `cp=[...]`, `success=[N->N+1]` and "reached the
+# next rung" (used by seed admission) finally carry information on this level.
+# v13's pools re-key on load from their stored reached-sets.
+#
+# WARM-START: v13 final — the best from-reset chain of any run (Lgoat 1.00 /
+# Ldown 0.99 / Lsc1 0.99 / Lsc2 0.96 / Lsc3 0.95 / SN3 0.81) — plus v13's pools,
+# whose reached-sets were recorded live rather than backfilled.
+#
+# WATCH, in order:
+#   1. does the agent start LOITERING at SN2 instead of climbing immediately?
+#      (the behavioural prediction; visible as Lsc4_top cap/rej improving —
+#      arrivals chosen better, not just more numerous)
+#   2. Lsc4_top `prog` off 0.11, then A1_launch reached from reset
+#   3. reset_reach[1] off 0.00 and a fruit from a cold start
+# If SN3 `prog` rises but from-reset does not follow, the wall is composition,
+# not the incentive — and the SN3 dodge itself becomes the next target.
+#
+# NOTE this run is on the CURRENT native core (the one the L1/L2 champion figures
+# predate). v13 shares it, so v13-vs-v14 is a valid comparison; see
+# core_provenance_2b0a45d.md.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v14_survivalcredit_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v13_seedfix_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    # Subsumes defer_fruit_credit: one rule for every target type.
+    credit_requires_survival: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
