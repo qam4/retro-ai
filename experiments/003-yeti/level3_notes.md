@@ -472,6 +472,75 @@ WATCH: the JUMP links (A1_launch->A1 etc.) rising, then `reset_reach[1]` and
 from-reset A* wp_reach. Still-open risk: `Lsc4_top -> A1_launch` (0%, the SN3
 snowball traverse) may need its own treatment even with milestones.
 
+## v13 result (yeti_curriculum_l3_v13_seedfix_15m — seed-milestone fix, 15M)
+Completed 6h33m, exit 0. v12's recipe restarted on the reworked logs.
+
+**Best from-reset chain of any run.** Lgoat 1.00 / Ldown 0.99 / Lsc1 0.99 /
+Lsc2 0.96 / Lsc3 0.95 / **Lsc4 (SN3) 0.81** (previous best: v10's 0.67). Note the
+mid-run dip recovered on its own — at 8M the chain had eroded to Lsc3 0.63 /
+Lsc4 0.27 and I recommended cutting the run; it came back to its best numbers in
+the last third. These traces oscillate; do not act on a mid-run trend.
+
+**Seeded practice improved everywhere** (the seed-milestone fix paying off):
+`Lsc3_top` prog 0.02 -> 0.72, `A1_launch` 0.74, `A1` 0.79, `A3` 0.77,
+`Lprincess_top` 0.86 (pool 100). Pairwise jump links, same definition as the
+pre-fix probe: A1_launch->A1 5% -> 24%, A2_launch->A2 0% -> 32%,
+A3_launch->A3 5% -> 27.5%, A5_launch->A5 0% -> 28%.
+
+**But nothing above SN3 from reset** (`cp=0`, `reset_reach[1]=0.00`), and the gap
+is at ONE spot, quantified from episodes.csv (last 20%):
+```
+SN3 arrivals from a SEED  -> onward 5.81%   (30/516)
+SN3 arrivals from RESET   -> onward 0.03%   (2/7683)
+```
+A ~200x gap at the same location.
+
+### SN3 debugged properly (several of my hypotheses refuted)
+- **Save/restore is faithful.** Capturing a WP state live, reloading it and
+  replaying the IDENTICAL action list gives identical survival: 0/27 mismatches
+  (`debug/l3_capture_replay.py`). Seeding works as advertised.
+- **The seeds are survivable.** Random action search from `Lsc4_top` seeds
+  survives the full 30-step gate in 14-22 of 300 tries (~5-7%). So the admission
+  gate is HONEST and there is no seeding bug — the earlier "these seeds are
+  doomed" and "policy regression" stories were both wrong.
+- **Ruled out** along the way: the death byte 32 is the normal ALIVE value; SN3
+  seeds load at exactly (70,86) pose 8 (the reach moment, not later); no constant
+  action survives (RIGHT is best at median 19 steps).
+- **At SN3 the policy is no better than random** (~5-7% either way). It has
+  learned nothing there, despite thousands of arrivals.
+
+### ROOT CAUSE: the reward paid for ARRIVING, not for surviving
+Measured with the real reward from an SN2 seed:
+```
+climb -> touch SN3 -> DIE        +5.04
+wait at SN2 for a safe phase      0.00
+climb -> SN3 -> traverse onward  +10.32
+```
+The death gate only suppressed shaping ON the fatal step; progress banked EARLIER
+was kept. With an SN3 arrival lethal ~99.8% of the time, arriving immediately
+strictly dominated waiting, so the policy correctly learned to arrive and die —
+and never learned the dodge. `defer_fruit_credit` had protected FRUITS from
+exactly this since L2 (H-AL); milestones and path-progress never got it. Fixed by
+`credit_requires_survival` (one rule for every target type) -> the reckless line
+becomes 0.00 while the surviving line is unchanged.
+
+## v14 (RUNNING) — credit_requires_survival
+One lever vs v13; warm-start v13-final + v13 pools. Config:
+`configs/yeti_curriculum_l3_v14_survivalcredit_15m.yaml`. Also active (landed
+with the target/ladder work, not a variable): the progress ladder gives L3 13
+rungs instead of 1, so `success=[N->N+1]` finally carries information — it read
+88-95% for rung 0->1 within the first 200k steps, where the old single-rung
+version sat at 0% all run.
+WATCH: does the agent start LOITERING at SN2 rather than climbing immediately
+(the behavioural prediction), then `Lsc4_top` prog off 0.11, then
+`reset_reach[1]` off 0.
+EMULATOR: this run and v13 share the current core
+(`retro_ai_native...so` sha256 fdd7e006..., mtime 2026-07-02), so v13-vs-v14 is a
+valid comparison. v14's env.json predates the manifest `native` block (1bccba8);
+later runs record this automatically. Every L3 run post-dates the state-restore
+fix, so L3 hazard timing is LIVE — see core_provenance_2b0a45d.md, and note this
+is why L3 feels harsher than L1/L2 ever did.
+
 ## Open questions / risks
 - Escalator: can the agent's ride be made observable enough (4-frame stack)
   for reliable jump timing? This is the main research risk.
