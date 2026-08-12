@@ -258,3 +258,59 @@ def test_iter_inner_envs_returns_nothing_if_no_inner():
         pass
 
     assert list(iter_inner_envs(_Bare())) == []
+
+
+# --- native (emulator) provenance -------------------------------------------
+# The git SHA cannot identify which EMULATOR produced a run: the compiled module
+# is unversioned, so it may be stale or ahead of HEAD, and checking out an older
+# commit does not revert it. That gap cost a real investigation — an L1 champion
+# documented at 99.7% scored 0% because it had been trained against a core whose
+# state-restore was broken (experiments/003-yeti/core_provenance_2b0a45d.md).
+
+
+def test_native_info_has_expected_keys():
+    from retro_ai.training.run_manifest import _native_info
+
+    info = _native_info()
+    assert set(info) == {"path", "sha256", "size", "mtime"}
+
+
+def test_native_info_hashes_the_loaded_module_when_available():
+    """When the native module resolves, we must record a content hash — a path
+    and mtime alone do not pin the binary."""
+    import importlib.util
+
+    from retro_ai.training.run_manifest import _native_info
+
+    if importlib.util.find_spec("retro_ai_native") is None:
+        pytest.skip("native module not built in this environment")
+    info = _native_info()
+    assert info["path"] and info["path"].endswith((".so", ".pyd"))
+    assert info["sha256"] and len(info["sha256"]) == 64
+    assert isinstance(info["size"], int) and info["size"] > 0
+    assert info["mtime"]
+
+
+def test_native_info_never_raises(monkeypatch):
+    """Provenance is best-effort: a broken environment must not fail a run."""
+    import sys as _sys
+
+    from retro_ai.training import run_manifest as rm
+
+    monkeypatch.setitem(_sys.modules, "retro_ai_native", None)
+    monkeypatch.setattr(
+        rm.importlib.util,
+        "find_spec",
+        lambda name: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    assert rm._native_info()["sha256"] is None
+
+
+def test_manifest_records_native_alongside_git(tmp_path):
+    """The manifest must carry both, so a policy is traceable to its emulator."""
+    from retro_ai.training.run_manifest import RunManifest
+
+    RunManifest.capture(args={"config_path": "x.yaml"}, output_dir=str(tmp_path))
+    env = json.loads((tmp_path / "env.json").read_text())
+    assert "git" in env and "native" in env
+    assert set(env["native"]) == {"path", "sha256", "size", "mtime"}

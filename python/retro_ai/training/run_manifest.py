@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import collections
 import csv
+import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -33,6 +35,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional
 
 try:
@@ -79,6 +82,43 @@ EPISODE_COLUMNS = [
     # projections of this matrix (see CheckpointManager.route_table).
     "reached_points",
 ]
+
+
+def _native_info() -> Dict[str, Any]:
+    """Identify the NATIVE emulator module this run is using.
+
+    The git SHA alone cannot answer "which emulator produced these numbers": the
+    compiled module is not versioned, so it can be stale or ahead of HEAD, and
+    checking out an old commit does NOT revert it. That gap cost us a real
+    investigation — a champion documented at 99.7% scored 0% because it had been
+    trained against a core whose state-restore was broken (see
+    experiments/003-yeti/core_provenance_2b0a45d.md). The content hash makes a
+    policy traceable to the exact binary it was trained against.
+
+    Best-effort and never raises; resolves the path without importing the module
+    if it is not already loaded.
+    """
+    info: Dict[str, Any] = {"path": None, "sha256": None, "size": None, "mtime": None}
+    try:
+        mod = sys.modules.get("retro_ai_native")
+        path = getattr(mod, "__file__", None) if mod is not None else None
+        if path is None:
+            spec = importlib.util.find_spec("retro_ai_native")
+            path = getattr(spec, "origin", None) if spec is not None else None
+        if not path or not os.path.exists(path):
+            return info
+        info["path"] = path
+        st = os.stat(path)
+        info["size"] = st.st_size
+        info["mtime"] = datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()
+        digest = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                digest.update(chunk)
+        info["sha256"] = digest.hexdigest()
+    except Exception:
+        pass
+    return info
 
 
 def _git_info() -> Dict[str, Any]:
@@ -237,6 +277,10 @@ class RunManifest:
             "finished_at": None,
             "wall_clock_sec": None,
             "git": _git_info(),
+            # Which EMULATOR produced these numbers. The git SHA cannot answer
+            # that: the native module is unversioned and may be stale or ahead of
+            # HEAD. See _native_info.
+            "native": _native_info(),
             "versions": _library_versions(),
             "hostname": socket.gethostname(),
             "platform": platform.platform(),
