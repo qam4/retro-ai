@@ -28,6 +28,20 @@ about those runs come from old logs / prior conversations and are marked
 
 ---
 
+> **WARNING — the champion percentages below do not currently reproduce.**
+> `v15_phase2_4500k`, documented here at 99.7% princess-from-reset, now evaluates
+> **0/100** (it still collects all 4 fruits, then dies on the final leg). This is
+> NOT a Python regression: the same 0% is measured at `5b2d85f`, the commit that
+> recorded the 99.7%. The only uncontrolled variable is the native emulator
+> `.so`, which is not versioned — the champion was captured 2026-06-24 and the
+> current build post-dates two C++ core commits (`2b0a45d` save/load restore,
+> `aa587d9` fast death detect).
+>
+> Until that is resolved (recipe + next step in TODO.md, "BLOCKER — champion
+> evals are not reproducible"), treat every absolute figure in this document as
+> **unverified**, and prefer comparisons between runs that shared one emulator
+> build. Relative results within a single build (e.g. L3 v13 vs v14) remain valid.
+
 ## TL;DR / Current status (after approach 35)
 
 **Current champion: v15-4500k** (`yeti_curriculum_v15_phase2` snapshot at

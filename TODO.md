@@ -182,6 +182,47 @@
   videos: scripts/mo5/yeti/rollout_l2.py draws the real RAM lives/bonus/score/fruits
   in a strip BELOW the frame (not over the game HUD).
 
+## BLOCKER — champion evals are not reproducible (emulator provenance)
+
+**The L1 champion no longer completes the level, and the cause is NOT in the
+Python history.**
+
+Measured:
+- `v15_phase2_4500k` (md5-verified as the documented 4.5M snapshot) evaluates
+  **princess 0/100**, while reaching 4 fruits 99% — it plays the level, collects
+  everything, then dies on the final leg.
+- Same result at `HEAD~1` and at **`5b2d85f`, the very commit that recorded
+  99.7%**. So no Python change caused it.
+- The only uncontrolled variable is the NATIVE `.so`: it is not in git, so
+  checking out old commits does not revert it. Champion captured 2026-06-24;
+  `build/ci-linux/retro_ai_native*.so` built Jul 2 — after two core commits,
+  `2b0a45d` (complete save/load restore, incl. master clock / frame count) and
+  `aa587d9` (fast death detection).
+- Ruled out: princess-touch detection (the flag never rises, and the deaths are
+  real), `--stall-threshold`, wrong weights in the champion dir, and the C++ fast
+  death flag (L1's profile sets no `death_flag_addr`, so it is disabled there).
+
+NEXT STEP — confirm by building the core at the pre-change commit:
+```
+git worktree add /tmp/oldcore 2b0a45d~1
+cmake -S /tmp/oldcore -B /tmp/oldcore/build --preset <see CMakePresets.json>
+cmake --build /tmp/oldcore/build -j
+env PYTHONPATH=python:/tmp/oldcore/build RETRO_AI_ROM_DIR=roms \
+  python3 scripts/mo5/yeti/eval_from_reset.py \
+    --model output/mo5/yeti/champions/v15_phase2_4500k/final_model.zip \
+    --profile yeti_fruit --episodes 40 --stochastic
+```
+- princess ~99% => the core change altered the physics/timing our champions were
+  trained against. They must be re-validated (and possibly retrained) per core
+  change.
+- still 0 => the 99.7% was never reproducible, and the figure itself is suspect.
+
+FIX EITHER WAY: **record the native build's commit SHA in champion dirs and run
+manifests.** A policy is only meaningful against the emulator it trained on, and
+right now that link is unrecorded, which makes every historical number in
+experiments/003-yeti-training.md unverifiable. Cheap: the manifest already
+captures git info; add the built artifact's SHA/mtime alongside it.
+
 ## Yeti Level 3 — reward graph
 
 - [DONE — commit pending] **Model the A1-A5 ascending climb as jump-edges.**
