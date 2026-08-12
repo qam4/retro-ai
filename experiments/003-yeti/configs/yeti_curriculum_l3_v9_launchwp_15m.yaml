@@ -1,0 +1,100 @@
+# yeti_curriculum L3 v9 — LAUNCH-PAD waypoints (seed the SAFE jump-off side).
+#
+# v8 added A1..A5 ARRIVAL waypoints but they never captured (0 seeds): the agent
+# never LANDS on A1, so the reverse-curriculum couldn't bootstrap (chicken-and-
+# egg). Diagnosis + user's video read: the only SN3 waypoint (Lsc4_top) is on
+# SN3's RIGHT/ladder edge, which is the SNOWBALL side; the agent arrives there,
+# dies (x~68) or retreats down the ladder, and never reaches SN3's SAFE LEFT
+# edge — the actual jump-off toward A1 (A1 is a 2-tile platform, not tiny; the
+# left of SN3 is snowball-free).
+#
+# CHANGE vs v8 (one lever): jump_waypoints now also emits a LAUNCH pad on each
+# jump's DEPARTURE platform. The critical one is A1_launch = SN3 LEFT edge
+# (ram48, floor 10) — capturable (it's on SN3, which the agent reaches). Once a
+# rare dodge-to-left grounds there and captures it, the WP curriculum SEEDS
+# episodes at the safe launch, so the agent practises SN3->A1 directly (snowball-
+# free) instead of dying on the right. Landing A1 then captures A2_launch (on
+# A1), and so on up to the fruit on A4. Launch pads are SEED-ONLY (NOT reward
+# targets) so the reward stays byte-identical.
+#
+# Warm-start weights from v8 final + v8 pools (Lsc1-4 saturated; the new
+# A*_launch pools start empty and fill during this run).
+#
+# RE-HEAT (2nd, deliberate change — see below): v6->v7->v8 were ALL run in the
+# LOW-temperature anneal (n_steps=512, target_kl=0.05, ent 0.01) for ~45M steps.
+# That regime converges but explores little — fine for SEEDED skills (v7 learned
+# the 1px SN3 mount because Lsc4_top seeded it) but poor for the UNSEEDED first-
+# reach we need here: v9's bootstrap hinges on the agent making a rare
+# exploratory dodge to SN3's safe left edge to capture A1_launch AT LEAST ONCE.
+# A cold policy may never produce that. So we gently RE-HEAT to restore
+# exploration for the new frontier, while staying self-cooling via target_kl:
+#   ent_coef 0.01 -> 0.03   (more action entropy -> explores the dodge/jump)
+#   target_kl 0.05 -> 0.10  (looser KL cap -> larger, still-bounded updates)
+# This is the intended simulated-annealing SCHEDULE (re-heat to escape a new
+# plateau, then cool), NOT abandoning the anneal. Risk: a hotter policy can
+# transiently degrade the SN3 skill — mitigated by 100k snapshots + keep-best
+# sweep (never trust the final). If SN3 reach collapses, back off ent/target_kl.
+#
+# TWO changes this run (launch WPs + re-heat) is a deliberate exception to the
+# one-change rule: both target the SAME wall (unseeded SN3->A1), and running
+# pure-anneal first would likely burn 6h confirming the exploration gap.
+#
+# WATCH `wp_reach`/`wp_near`: A1_launch capturing (x>0) is the bootstrap
+# trigger; then A1 (landing), A2_launch, ... should light up in order, and
+# `cp`/success 0->1 flips on the first fruit grab. Also watch SN3 (Lsc4_top)
+# reach doesn't collapse from the re-heat.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v9_launchwp_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v8_jumpwp_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.03      # re-heat (was 0.01) — restore exploration for SN3->A1
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.10     # re-heat (was 0.05) — looser, still self-cooling KL cap
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

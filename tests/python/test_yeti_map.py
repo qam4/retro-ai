@@ -185,6 +185,62 @@ def test_l3_escalator_ladder_connects_route():
     assert nav.path_distance_from_agent(1, 20, "Lgoat_a_top") < INF
 
 
+def test_l3_jump_waypoints_on_ascent():
+    """v8: A1..A5 jump-edge landing waypoints exist on L3 (for curriculum
+    seed/reach), placed on each arrival platform's route-facing edge, and match
+    the reward graph's `_b` endpoint x. They are SEED-only (NOT reward targets),
+    so reward_waypoints is unchanged. L1/L2 emit none (byte-identical)."""
+    from retro_ai.games import yeti
+    from retro_ai.training.yeti_map import get_level_map, jump_waypoints
+
+    w3 = yeti.waypoints(3)
+    # One waypoint per named landing floor (A1..A5), on the expected floor.
+    expected_floor = {"A1": 11, "A2": 12, "A3": 13, "A4": 14, "A5": 15}
+    for name, floor in expected_floor.items():
+        assert name in w3, f"missing jump waypoint {name}"
+        x_ram, y_px, f = w3[name]
+        assert f == floor
+        assert y_px == get_level_map(3).floor_top_y[floor]
+    # Landing x matches the reward graph's `_b` (arrival) endpoint exactly, in
+    # RAM units — so the seeder and the shaping agree on the jump-off geometry.
+    from retro_ai.training.yeti_map import build_fixed_nodes
+
+    by_ident = {nd.ident: nd for nd in build_fixed_nodes(get_level_map(3))}
+    for fa, fb in [(10, 11), (11, 12), (12, 13), (13, 14), (14, 15)]:
+        name = {11: "A1", 12: "A2", 13: "A3", 14: "A4", 15: "A5"}[fb]
+        assert w3[name][0] == (by_ident[f"J{fa}_{fb}_b"].x - 8) // 4
+
+    # LAUNCH pads: one per named edge, on the DEPARTURE (lower) platform. The
+    # critical one is A1_launch = SN3's left edge (floor 10) — capturable, so it
+    # can seed the ascent. Each launch sits on the platform below its arrival.
+    launch_floor = {
+        "A1_launch": 10,
+        "A2_launch": 11,
+        "A3_launch": 12,
+        "A4_launch": 13,
+        "A5_launch": 14,
+    }
+    for name, floor in launch_floor.items():
+        assert name in w3, f"missing launch waypoint {name}"
+        assert w3[name][2] == floor
+        assert w3[name][1] == get_level_map(3).floor_top_y[floor]
+    # A1_launch is on the SN3 LEFT edge (smaller x than the Lsc4_top ladder WP
+    # on the right), i.e. the safe jump-off side.
+    assert w3["A1_launch"][0] < w3["Lsc4_top"][0]
+
+    # SEED-only: A-names / launches are NOT among the reward waypoint targets.
+    reward_targets = {
+        ident for grp in (get_level_map(3).reward_waypoints or []) for ident in grp
+    }
+    assert not ((set(expected_floor) | set(launch_floor)) & reward_targets)
+
+    # L1/L2 have no jump_waypoint_names -> no jump waypoints (byte-identical).
+    assert jump_waypoints(get_level_map(1)) == {}
+    assert jump_waypoints(get_level_map(2)) == {}
+    assert not any(k.startswith("A") for k in yeti.waypoints(1))
+    assert not any(k.startswith("A") for k in yeti.waypoints(2))
+
+
 def test_l3_goat_climb_reward_not_penalised():
     """Regression guard for the L3 v2 bug: climbing toward the goat platform
     must not net negative (previously ~ -4.8 from the snowball mis-pull)."""

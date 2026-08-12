@@ -193,6 +193,20 @@
   gradient pulls toward the jump-off, not the centre), cost = |Δx|+|Δy|.
   Verified: SN3->fruit and ->princess finite + monotonic; L1/L2 byte-identical.
   The compressor on A3 stays an unmodelled visual hazard (like the snowballs).
+- **Waypoint detection vs `frame_skip` — placement rule + unit asymmetry.**
+  (Measured, `debug/l3_lesc_boarding.py`; full write-up in
+  experiments/003-yeti/curriculum_cp_wp_model.md "DETECTION vs frame_skip".)
+  Detection runs once per gym STEP = 4 emulator frames, so the tol-box is
+  sampled in 4px jumps; and because WPs are `(x_ram, y_px)` with ONE `tol`, the
+  window is ±8px horizontal but only ±2px VERTICAL. Points where the agent RESTS
+  (all our arrival-end WPs) are therefore safe, but any WP passed vertically
+  without stopping silently under-detects — under-reporting reach AND
+  under-capturing seeds. Current example: `Lesc_top` (3 captures ever; also its
+  boarding y varies 94-106, so it is not even on the path every crossing).
+  NOT urgent (escalator is solved, nothing needs its seeds). When it matters,
+  detect the SEGMENT (pose-13 / `agent_ladder_from_pixel_xy`) rather than
+  widening tol — a bigger y-window risks false positives (crediting a milestone
+  while falling past it). Re-check this rule when adding WPs to a new level.
 - **Drop the ±8px y-tolerance in the floor resolver; unify to a pose-gated
   tolerance-free segment resolver.** `agent_floor_from_pixel_xy` matches a
   platform when `|pixel_y - p.y| <= 8` (a geometry-only proxy for "grounded").

@@ -108,6 +108,25 @@ class LevelMap:
     # each floor is implicitly one full-width platform, so resolution is the
     # pure y-only rule and behaviour is byte-identical.
     platforms: Optional[List[Platform]] = None
+    # Optional JUMP-EDGE waypoints: landing_floor -> waypoint name. For each
+    # jump_edge, the ARRIVAL platform (the higher route-order / larger floor id
+    # endpoint) can carry a curriculum waypoint at its landing edge, so the
+    # otherwise-unseedable jump ascent (L3 A1..A5) becomes capture/seed/reach-
+    # tracked — WITHOUT adding a reward target (these are NOT reward_waypoints,
+    # so shaping stays byte-identical; the jump_edges already give the
+    # gradient). OPT-IN per landing floor: only floors listed here get a WP, so
+    # the bottom hops (START->STEP->2LAD) stay WP-free unless named. None
+    # (L1/L2, no jump_edges) => no jump waypoints.
+    jump_waypoint_names: Optional[Dict[int, str]] = None
+    # Optional DISPLAY-ONLY route order: route-point ids bottom-of-route first.
+    # Carries NO semantics — the reward still sums over ALL not-yet-reached
+    # targets, unordered (settled decision #5 in curriculum_cp_wp_model.md), and
+    # nothing gates on this. It exists solely so the route TABLE in the training
+    # log reads top-to-bottom in travel order instead of being sorted three
+    # different ways by three different metrics. Levels that branch (L2 has two
+    # ladders per floor) can list any one representative order, or omit it —
+    # rendering falls back to a stable arbitrary order.
+    route_order: Optional[List[str]] = None
 
 
 # Level 1 — original climb-up layout (floor 1 = bottom/spawn, 5 = princess).
@@ -248,6 +267,34 @@ LEVEL3 = LevelMap(
     # the Lesc ladder edge; the compressor on A3 stays an unmodelled visual
     # hazard (like the snowballs).
     jump_edges=[(1, 2), (2, 3), (10, 11), (11, 12), (12, 13), (13, 14), (14, 15)],
+    # Jump-edge waypoints on the A1..A5 ascent (landing floor -> name). Gives
+    # the unseedable SN3->A1->..->A5 climb capture/seed/reach tracking (v8).
+    # A3 (floor 13) carries the compressor; A4 (floor 14) the fruit. The bottom
+    # hops (landing floors 2/3) are intentionally omitted (reliably reached
+    # from reset already).
+    jump_waypoint_names={11: "A1", 12: "A2", 13: "A3", 14: "A4", 15: "A5"},
+    # DISPLAY-ONLY travel order (see LevelMap.route_order): start -> princess.
+    route_order=[
+        "Lgoat_a_top",
+        "Lgoat_b_top",
+        "Lesc_top",
+        "Ldown_bot",
+        "Lsc1_top",
+        "Lsc2_top",
+        "Lsc3_top",
+        "Lsc4_top",
+        "A1_launch",
+        "A1",
+        "A2_launch",
+        "A2",
+        "A3_launch",
+        "A3",
+        "A4_launch",
+        "A4",
+        "A5_launch",
+        "A5",
+        "Lprincess_top",
+    ],
     waypoint_ends={
         "Lgoat_a": "top",
         "Lgoat_b": "top",
@@ -283,6 +330,20 @@ LEVEL3 = LevelMap(
         ["Lsc2_top"],  # SN1
         ["Lsc3_top"],  # SN2
         ["Lsc4_top"],  # SN3
+        # ASCENT milestones (v11). The lower chain had a mandatory waypoint per
+        # rung and got mastered; the A1..A5 jump ascent had NONE (the reward
+        # jumped straight from SN3 to Lprincess_top), leaving only the diffuse
+        # fruit/princess distance — and it was never learned (measured: the
+        # A1_launch->A1 jump is 10/10 EXECUTABLE by a scripted jump-left, yet
+        # the policy only managed 5-20%). These are the jump-edge LANDING nodes
+        # (same positions as the A1..A5 seed waypoints), so each completed jump
+        # now banks an explicit milestone. A4 is deliberately OMITTED: the FRUIT
+        # (F1) already sits on that platform and is a mandatory target, so a
+        # milestone there would double-count the same rung.
+        ["J10_11_b"],  # A1
+        ["J11_12_b"],  # A2
+        ["J12_13_b"],  # A3 (compressor)
+        ["J14_15_b"],  # A5
         ["Lprincess_top"],  # PRIN
     ],
     # Walkable-segment x-extents (PIXELS: [ram_min*4, (ram_max+1)*4]) for the
@@ -384,6 +445,52 @@ def _jump_graph(lvl: LevelMap):
         cost = abs(xa - xb) + abs(lvl.floor_top_y[fa] - lvl.floor_top_y[fb])
         edge_specs.append((ia, ib, cost))
     return nodes, edge_specs
+
+
+def jump_waypoints(lvl: LevelMap) -> Dict[str, Tuple[int, int, int]]:
+    """Curriculum waypoints for the jump-edge ascent, keyed by name, as
+    ``{name: (x_ram, y_px, floor)}``.
+
+    Two waypoints per NAMED edge (opt-in via ``lvl.jump_waypoint_names``, keyed
+    by landing floor):
+      - ARRIVAL (``name``): on the landing platform (larger route-order / floor
+        id) at its edge nearest the departure platform — identical to the
+        ``_b`` endpoint x that ``_jump_graph`` puts in the reward graph.
+      - LAUNCH (``f"{name}_launch"``): on the DEPARTURE platform at its edge
+        nearest the landing platform — the jump-off pad.
+    Both use the agent's X RAM units (``(px-8)//4``, same rule as ladder
+    waypoints). The launch pad matters because it sits on the LOWER platform
+    (which the agent already reaches), so it is capturable and can SEED the
+    otherwise-unbootstrappable jump — e.g. A1's launch is SN3's SAFE left edge,
+    away from the ladder-side snowball, so seeding there lets the agent practise
+    SN3->A1 directly instead of dying on SN3's right side. Empty unless the
+    level defines ``jump_edges``, ``platforms`` AND ``jump_waypoint_names`` (so
+    L1/L2 => {}).
+    """
+    names = lvl.jump_waypoint_names
+    if not (lvl.jump_edges and lvl.platforms and names):
+        return {}
+    pf = {p.floor: p for p in lvl.platforms}
+    out: Dict[str, Tuple[int, int, int]] = {}
+
+    def _wp(p, toward_centre, floor):
+        return (
+            (int(_edge_px(p, toward_centre)) - 8) // 4,
+            lvl.floor_top_y[floor],
+            floor,
+        )
+
+    for fa, fb in lvl.jump_edges:
+        land, other = max(fa, fb), min(fa, fb)
+        name = names.get(land)
+        if name is None:
+            continue
+        p_land, p_other = pf[land], pf[other]
+        c_land = (p_land.x_min + p_land.x_max) / 2.0
+        c_other = (p_other.x_min + p_other.x_max) / 2.0
+        out[name] = _wp(p_land, c_other, land)  # arrival (landing edge)
+        out[f"{name}_launch"] = _wp(p_other, c_land, other)  # jump-off pad
+    return out
 
 
 def build_fixed_nodes(lvl: LevelMap = LEVEL1) -> List[Node]:
@@ -650,6 +757,7 @@ __all__ = [
     "Platform",
     "LEVELS",
     "get_level_map",
+    "jump_waypoints",
     "agent_ladder_from_pixel_xy",
     "FLOOR_TOP_Y",
     "FLOOR_HEIGHT",

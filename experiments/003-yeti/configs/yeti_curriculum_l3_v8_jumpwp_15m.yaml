@@ -1,0 +1,81 @@
+# yeti_curriculum L3 v8 — A1..A5 JUMP-EDGE WAYPOINTS (seed + observe the ascent).
+#
+# v7 SOLVED the SN2->SN3 1px Lsc4 mount (SN3 reset-reach 0.00 -> 0.77) but got
+# 0 fruit in 15M: the A1->A5 ascent (compressor on A3, fruit on A4) is the wall.
+# Root cause (level3_notes.md): A1..A5 are jump-edges with NO waypoints, so the
+# segment is UNSEEDABLE — the agent can only practice it by surviving the whole
+# chain to SN3 first, and mostly dies there (Lsc4 reject ratio ~330:1). The
+# reward gradient up the ascent is already correct (verified); the missing piece
+# is reverse-curriculum SEEDS + observability on A1..A5.
+#
+# CHANGE vs v7 (one lever): the LEVEL3 map now defines jump_waypoint_names for
+# A1..A5, so yeti.waypoints(3) emits landing waypoints on each ascent platform.
+# These flow through the existing capture / seed / reach-EMA machinery
+# automatically (self._waypoints). They are SEED-ONLY (NOT reward_waypoints), so
+# the reward is byte-identical to v7 — this run only adds where the curriculum
+# can START episodes and what it reports. As the agent reaches A1/A2 from SN3,
+# those pools fill and back-chain the harder A3(compressor)/A4(fruit) jumps.
+#
+# Warm-start weights from v7's best-SN3 snapshot (+ v7 CP/WP pools; the new
+# A1..A5 pools start empty and fill during this run). Same anneal recipe.
+#
+# WATCH `wp_reach`: the NEW A1..A5 signals should rise in order (A1 first), and
+# `cp` / success 0->1 flips once the fruit (A4) is grabbed. keep-best sweep at
+# the end.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v8_jumpwp_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  # Finalized after the v7 keep-best sweep (best-SN3 snapshot). Its dir must
+  # contain final_model.zip + checkpoints.pkl (pools load from here).
+  resume: output/mo5/yeti/champions/l3_v7_bestSN3/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

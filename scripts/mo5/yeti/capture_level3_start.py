@@ -46,11 +46,15 @@ PRINCESS_FLAG_ADDR = yeti.PRINCESS_FLAG_ADDR
 
 
 def _load_seed_pool(pkl_path: str, pool: str):
-    """Return a list of raw state-byte blobs from a checkpoints.pkl pool.
+    """Return a list of ``(state_bytes, frame_stack_blob)`` from a
+    checkpoints.pkl pool.
 
-    ``pool`` is either a waypoint id (e.g. "L56_bot") or "cpN" for the
-    fruit-checkpoint pool N (e.g. "cp2" = both-fruits states on L2).
-    Entries are (source_cp, bonus, state_bytes); we keep the bytes.
+    ``pool`` is either a waypoint id (e.g. "L56_bot", "Lprincess_top") or "cpN"
+    for the fruit-checkpoint pool N (e.g. "cp2" = both-fruits states on L2).
+    Entries are (source_cp, bonus, state_bytes, stack); we keep the bytes AND
+    the frame-stack blob so the load can be faithful (H-AB: restore the real
+    motion history and take NO settle steps, which otherwise advance the game
+    ~20 frames and can doom time-sensitive seeds).
     """
     with open(pkl_path, "rb") as f:
         data = pickle.load(f)
@@ -59,7 +63,7 @@ def _load_seed_pool(pkl_path: str, pool: str):
         states = data["checkpoints"][idx]
     else:
         states = data.get("waypoints", {})[pool][0]
-    blobs = [bytes(s[2]) for s in states]
+    blobs = [(bytes(s[2]), s[3] if len(s) >= 4 else None) for s in states]
     if not blobs:
         raise ValueError(f"seed pool {pool!r} is empty in {pkl_path}")
     return blobs
@@ -127,6 +131,12 @@ def main() -> None:
     p.add_argument("--settle-window", type=int, default=300)
     p.add_argument("--settle-stride", type=int, default=4)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--label",
+        default="level3",
+        help="output basename + log label for the NEXT level captured "
+        "(e.g. 'level4' -> level4_start.sav / level4_start.png)",
+    )
     args = p.parse_args()
 
     random.seed(args.seed)
@@ -163,13 +173,22 @@ def main() -> None:
     gym_env.reset()
 
     for attempt in range(args.attempts):
-        state = random.choice(seeds)
+        state, stack_blob = random.choice(seeds)
         iface.load_state(state)
-        if pre is not None and hasattr(pre, "notify_state_loaded"):
-            pre.notify_state_loaded()
         obs = None
-        for _ in range(args.settle):
-            obs, _, _, _, _ = gym_env.step([0, 0, 0])
+        # Preferred (H-AB): restore the frame stack captured WITH this seed, so
+        # the first observation is the real motion history and we take NO settle
+        # steps (settle advances the game and can doom hazard-timed seeds).
+        restored = False
+        if pre is not None and stack_blob is not None:
+            if pre.restore_frame_stack(stack_blob):
+                obs = pre.current_observation()
+                restored = True
+        if not restored:
+            if pre is not None and hasattr(pre, "notify_state_loaded"):
+                pre.notify_state_loaded()
+            for _ in range(args.settle):
+                obs, _, _, _, _ = gym_env.step([0, 0, 0])
 
         prev_pr = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         frames = []
@@ -237,7 +256,7 @@ def main() -> None:
                             )
                         )
                 print(
-                    f"attempt{attempt}: level 3 loaded; validating "
+                    f"attempt{attempt}: {args.label} loaded; validating "
                     f"{len(candidates)} candidates for live control...",
                     flush=True,
                 )
@@ -245,24 +264,31 @@ def main() -> None:
                 # Always save the transition video so level 3 can be eyeballed
                 # even if no controllable candidate is found.
                 imageio.mimsave(
-                    os.path.join(args.out, "transition.mp4"), frames, fps=50
+                    os.path.join(args.out, f"{args.label}_transition.mp4"),
+                    frames,
+                    fps=50,
                 )
                 if chosen is None:
                     print(
                         f"attempt{attempt}: no controllable candidate in "
-                        f"{args.settle_window}-frame window; transition.mp4 saved; "
+                        f"{args.settle_window}-frame window; "
+                        f"{args.label}_transition.mp4 saved; "
                         f"retrying for a clean seed",
                         flush=True,
                     )
                     break
                 cf, cstate, cb, cx, cy, clv, craw = chosen
-                with open(os.path.join(args.out, "level3_start.sav"), "wb") as fh:
+                sav = os.path.join(args.out, f"{args.label}_start.sav")
+                with open(sav, "wb") as fh:
                     fh.write(cstate)
                 if craw is not None:
-                    imageio.imwrite(os.path.join(args.out, "level3_start.png"), craw)
+                    imageio.imwrite(
+                        os.path.join(args.out, f"{args.label}_start.png"), craw
+                    )
                 print(
-                    f"attempt{attempt}: LEVEL 3 captured. chosen=+{cf} bonus={cb} "
-                    f"x={cx} y={cy} lives={clv} ({len(cstate)} bytes) -> {args.out}",
+                    f"attempt{attempt}: {args.label.upper()} captured. chosen=+{cf} "
+                    f"bonus={cb} x={cx} y={cy} lives={clv} ({len(cstate)} bytes) "
+                    f"-> {args.out}",
                     flush=True,
                 )
                 captured = True
@@ -281,7 +307,7 @@ def main() -> None:
             flush=True,
         )
 
-    print("Failed to capture level-3 start within the attempt budget.")
+    print(f"Failed to capture {args.label} start within the attempt budget.")
 
 
 if __name__ == "__main__":

@@ -1090,3 +1090,200 @@ def test_l3_reset_clears_wp_state():
     fn.reset()
     assert fn._reached_wp == set()
     assert fn._prev_active_wp == frozenset()
+
+
+# --- Seeded-start milestone restore (the "paid to retreat" bug) -------------
+# Milestone "reached" state is POSITIONAL, so unlike CP progress (fruit bytes in
+# RAM) it does NOT survive a load_state: it lived only in the reward object and
+# was wiped by reset(). A seeded episode therefore treated every milestone
+# BEHIND it as pending and the potential paid it to RETREAT (measured on L3: the
+# milestone-sum bottomed out at SN3, so a seed above SN3 gained ~+3.7 by
+# climbing back down and a seed AT SN3 lost reward for leaving -> the SN3->A1
+# hand-off measured 0%). restore_reached_waypoints() re-marks what the seed had
+# already banked.
+
+
+def test_restore_reached_waypoints_marks_groups():
+    """Restoring a seed's ids marks the matching milestone groups reached."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    assert fn._reached_wp == set()
+    rewards.restore_reached_waypoints(fn, {"Lgoat_a_top"})
+    assert 0 in fn._reached_wp  # group 0 = the goat OR-group
+
+
+def test_restore_reached_waypoints_is_noop_for_empty_and_unknown():
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    rewards.restore_reached_waypoints(fn, set())
+    assert fn._reached_wp == set()
+    rewards.restore_reached_waypoints(fn, {"not_a_waypoint"})
+    assert fn._reached_wp == set()
+
+
+def test_restore_reached_waypoints_noop_on_rewards_without_milestones():
+    """Helper must be safe on formulas that have no milestones (all L1/L2)."""
+    fn = create("fruit_bonus_path_progress_pbrs", dict(_L3, level=1))
+    rewards.restore_reached_waypoints(fn, {"Lgoat_a_top"})  # must not raise
+
+
+def test_restored_milestone_removes_backward_pull():
+    """THE REGRESSION GUARD. Standing on the goat platform, moving AWAY from
+    an unreached goat WP is charged (its distance grows). With that milestone
+    restored as already-reached it drops out of the sum, so the same move is
+    no longer penalised for the milestone term."""
+    # Unrestored: the goat group is pending, so stepping away from it costs.
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn.reset()
+    fn(_g3(24, 94, 0))  # AT Lgoat_b_top -> marks group 0 reached
+    assert 0 in fn._reached_wp
+
+    # A fresh episode seeded here WITHOUT the restore: group 0 pending again.
+    fn2 = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn2.reset()
+    fn2(_g3(21, 94, 0))  # on the platform, not at the WP
+    r_pending = fn2(_g3(18, 94, 0))  # move onto Lgoat_a_top (reaches group 0)
+
+    # Same seeded start WITH the restore: group 0 already banked.
+    fn3 = create("fruit_bonus_path_progress_pbrs_grounded", _L3)
+    fn3.reset()
+    rewards.restore_reached_waypoints(fn3, {"Lgoat_a_top", "Lgoat_b_top"})
+    fn3(_g3(21, 94, 0))
+    r_restored = fn3(_g3(18, 94, 0))
+
+    # The restored run must NOT re-mark the group (it is already reached) and
+    # must not produce the reach-rebaseline the pending run does.
+    assert 0 in fn3._reached_wp
+    assert r_pending != r_restored
+
+
+# --- (D5) unified credit rule: credit only for progress you SURVIVE ---------
+# One rule for every target type. Previously only FRUITS were protected
+# (defer_fruit_credit held the sparse grab until grounded-alive); milestones and
+# path-progress banked credit for an arrival the agent died from. Measured on L3:
+# "touch SN3 then die" paid +5.04 vs 0.00 for waiting, so arriving recklessly
+# strictly dominated waiting for a safe phase — and the policy never learned to
+# survive SN3 (it is no better than random there).
+
+_L3_SURV = dict(
+    scale=0.01,
+    fruit_scale=0.01,
+    princess_scale=0.05,
+    level=3,
+    gamma=1.0,
+    credit_requires_survival=True,
+    waypoint_reward_tol=2,
+    ladder_segment_shaping=True,
+)
+
+
+def _seq(fn, steps):
+    """Run (x, y[, pose, died]) steps, returning the summed reward."""
+    return sum(fn(_g3(*s)) for s in steps)
+
+
+def test_progress_then_death_pays_nothing():
+    """A milestone arrival the agent dies from must net ~0 (was +5.04)."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3_SURV)
+    fn.reset()
+    fn(_g3(58, 110, 8))  # baseline at SN2
+    total = _seq(
+        fn,
+        [
+            (62, 110, 0),
+            (66, 110, 0),
+            (70, 110, 0),
+            (70, 102, 8),
+            (70, 94, 8),
+            (70, 86, 8),  # reaches the SN3 milestone
+            (70, 86, 0, True),  # ...and dies
+        ],
+    )
+    assert abs(total) < 1e-6, f"reckless arrival still pays {total:+.3f}"
+
+
+def test_progress_then_survival_still_pays():
+    """The fix must not flatten genuine progress: surviving the same climb and
+    continuing must pay clearly MORE than dying on arrival (which nets ~0).
+    Asserted comparatively — the absolute value depends on pose/segment detail."""
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3_SURV)
+    fn.reset()
+    fn(_g3(58, 110, 8))
+    total = _seq(
+        fn,
+        [
+            (62, 110, 0),
+            (66, 110, 0),
+            (70, 110, 0),
+            (70, 102, 8),
+            (70, 94, 8),
+            (70, 86, 8),
+            (64, 86, 0),
+            (56, 86, 0),
+            (48, 86, 0),  # traverse on toward A1
+        ],
+    )
+    assert total > 1.0, f"surviving progress should still pay, got {total:+.3f}"
+
+
+def test_waiting_is_not_dominated_by_dying():
+    """The behavioural point: patience must be at least as good as arrive-and-die."""
+
+    def run(steps):
+        fn = create("fruit_bonus_path_progress_pbrs_grounded", _L3_SURV)
+        fn.reset()
+        fn(_g3(58, 110, 8))
+        return _seq(fn, steps)
+
+    die = run(
+        [
+            (62, 110, 0),
+            (66, 110, 0),
+            (70, 110, 0),
+            (70, 102, 8),
+            (70, 94, 8),
+            (70, 86, 8),
+            (70, 86, 0, True),
+        ]
+    )
+    wait = run([(58, 110, 8)] * 7)
+    assert wait >= die - 1e-9, f"dying ({die:+.3f}) must not beat waiting ({wait:+.3f})"
+
+
+def test_credit_rule_implies_fruit_deferral():
+    """The flag subsumes defer_fruit_credit — they were the same idea applied to
+    one target type, so a fatal airborne grab must not pay under the new flag
+    either (regression guard for the L2 fix)."""
+    params = dict(_L3_SURV)
+    params.pop("credit_requires_survival")
+    params["credit_requires_survival"] = True
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", params)
+    fn.reset()
+    fn(_g3(18, 62, 0, pf=1, cf=1))
+    # grab the fruit while FALLING (pose 11) and die: must not bank the fruit
+    r = fn(_g3(18, 62, 11, pf=1, cf=0))
+    r += fn(_g3(18, 90, 11, pf=0, cf=0, died=True))
+    assert r < 1.0, f"fatal airborne grab paid {r:+.3f}"
+
+
+def test_death_refund_is_opt_in():
+    """Default path is unchanged (golden tests also cover this)."""
+    params = dict(_L3_SURV)
+    params["credit_requires_survival"] = False
+    params["defer_fruit_credit"] = True
+    fn = create("fruit_bonus_path_progress_pbrs_grounded", params)
+    fn.reset()
+    fn(_g3(58, 110, 8))
+    total = _seq(
+        fn,
+        [
+            (62, 110, 0),
+            (66, 110, 0),
+            (70, 110, 0),
+            (70, 102, 8),
+            (70, 94, 8),
+            (70, 86, 8),
+            (70, 86, 0, True),
+        ],
+    )
+    assert total > 1.0, "with the flag off, the old (banked) behaviour must remain"

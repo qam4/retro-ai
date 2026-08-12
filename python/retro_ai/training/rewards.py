@@ -118,6 +118,30 @@ def reset_reward(fn: RewardFn) -> None:
         reset()
 
 
+def restore_reached_waypoints(fn: RewardFn, idents) -> None:
+    """Mark mandatory-waypoint MILESTONES as already reached on a seeded start.
+
+    Why this exists: milestone "reached" state is POSITIONAL — it is computed by
+    walking within a tol-box — so unlike CP progress (fruit presence / princess
+    flag, which live in the emulator RAM and therefore survive a ``load_state``)
+    it lives only in the reward object and is wiped by the per-episode reset. An
+    episode seeded high on the route then treats every milestone BELOW it as
+    still pending, so the potential sums path-distance to targets BEHIND the
+    agent and the shaping pays it to RETREAT. Measured on L3: the milestone-sum
+    was globally minimised at SN3, so seeds above SN3 were paid ~+3.7 to climb
+    back down and a seed AT SN3 lost reward for leaving — which is why the
+    SN3->A1 hand-off measured 0%.
+
+    ``idents`` is the set of route-point ids the seed had already reached when it
+    was captured (accumulated transitively along the reverse-curriculum chain).
+    No-op for rewards without milestones (all L1/L2 formulas), so behaviour
+    there is unchanged.
+    """
+    restore = getattr(fn, "restore_reached_waypoints", None)
+    if callable(restore) and idents:
+        restore(idents)
+
+
 _REGISTRY: Dict[str, RewardFactory] = {}
 
 
@@ -890,6 +914,13 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     # early jump stops being locally optimal. Default False = pay at pickup
     # (byte-identical to the shipped reward; L1 unaffected).
     defer_fruit = bool(params.get("defer_fruit_credit", False))
+    # (D5) One rule for every target type: credit only for progress you SURVIVE.
+    # Implies the fruit deferral (a fruit grabbed mid-fatal-fall must not pay
+    # either), so enabling this turns that on regardless of the legacy flag —
+    # they were the same idea applied to only one target type.
+    credit_requires_survival = bool(params.get("credit_requires_survival", False))
+    if credit_requires_survival:
+        defer_fruit = True
 
     # Mandatory-waypoint reward targets (LevelMap.reward_waypoints): the
     # reward sums path-distance to these exactly like it sums distance to
@@ -924,6 +955,29 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             )
         if _members:
             _wp_groups.append(_members)
+
+    # _wp_group_names[gi]: every NAME that refers to group gi — its graph idents
+    # PLUS any curriculum waypoint id at the same position. The two naming
+    # schemes coexist: the ascent milestones are graph nodes (``J10_11_b``) while
+    # the seeder/curriculum calls the same point ``A1``. Resolving both here lets
+    # ``restore_reached_waypoints`` accept whichever the caller has, instead of
+    # silently failing to match (which would leave the backward pull in place).
+    _wp_group_names: list = []
+    try:
+        from retro_ai.training.yeti_map import jump_waypoints as _jump_wps
+
+        _pos_to_name = {
+            (x, y): name for name, (x, y, _f) in _jump_wps(_lvl_map).items()
+        }
+    except Exception:  # pragma: no cover - level without jump waypoints
+        _pos_to_name = {}
+    for _members in _wp_groups:
+        _names = {ident for ident, _wx, _wy in _members}
+        for _ident, _wx, _wy in _members:
+            _alias = _pos_to_name.get((_wx, _wy))
+            if _alias:
+                _names.add(_alias)
+        _wp_group_names.append(_names)
 
     class _GroundedPBRS:
         """PBRS path-progress shaping with an airborne freeze + death gate.
@@ -997,6 +1051,9 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             # step (a change => target set changed => rebaseline).
             self._reached_wp: set = set()
             self._prev_active_wp: frozenset = frozenset()
+            # (D5) shaping paid so far this episode, refunded on death when
+            # ``credit_requires_survival`` is on.
+            self._shaping_acc: float = 0.0
 
         def reset(self) -> None:
             self._base.reset()
@@ -1004,6 +1061,21 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             self._prev_fruits_grounded = None
             self._reached_wp = set()
             self._prev_active_wp = frozenset()
+            self._shaping_acc = 0.0
+
+        def restore_reached_waypoints(self, idents) -> None:
+            """Mark milestone groups containing any of ``idents`` as reached.
+
+            Called right after ``reset()`` on a SEEDED start so milestones the
+            seed already banked stop being summed as pending targets (otherwise
+            the potential pulls the agent BACKWARD; see the module-level
+            ``restore_reached_waypoints``). Call order matters: reset() first,
+            then this — the group set must be re-derived, not accumulated.
+            """
+            wanted = set(idents)
+            for gi, names in enumerate(_wp_group_names):
+                if names & wanted:
+                    self._reached_wp.add(gi)
 
         @property
         def last_floor(self):  # exposed for probes/tests
@@ -1108,11 +1180,35 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                 or phi is None
                 or active_wp != self._prev_active_wp
             ):
+                # (D5) UNIFIED CREDIT RULE (opt-in via
+                # ``credit_requires_survival``): credit only for progress you
+                # SURVIVE — applied identically to every target type.
+                #
+                # The death gate above only suppresses shaping ON the fatal
+                # step; progress banked EARLIER was kept. That made arriving
+                # recklessly strictly better than waiting: measured on L3,
+                # "touch SN3 then die" paid +5.04 while waiting for a safe phase
+                # paid 0.00, so the policy learned to arrive and die and never
+                # learned to survive there (at SN3 it is no better than random).
+                # Fruits already had this protection (``defer_fruit_credit``
+                # holds the sparse grab until a grounded-alive frame); milestones
+                # and path-progress did not. Refunding the episode's accumulated
+                # shaping on death is the same idea for the SHAPING term: it is
+                # PBRS with the terminal potential set to the episode baseline,
+                # so progress-then-die nets ~0 while progress-then-survive keeps
+                # paying. Sparse target bonuses already earned (a fruit banked
+                # while grounded-alive) are NOT clawed back — those are real
+                # achievements, not approach credit.
+                if credit_requires_survival and ctx.died:
+                    reward -= self._shaping_acc
+                    self._shaping_acc = 0.0
                 self.prev_phi = phi
                 self._prev_active_wp = active_wp
                 return reward
 
-            reward += gamma * phi - self.prev_phi
+            shaped = gamma * phi - self.prev_phi
+            reward += shaped
+            self._shaping_acc += shaped
             self.prev_phi = phi
             self._prev_active_wp = active_wp
             return reward

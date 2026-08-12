@@ -1,0 +1,90 @@
+# yeti_curriculum L3 v11 — ASCENT REWARD MILESTONES (the missing credit).
+#
+# WHY (measured, see experiments/003-yeti/level3_notes.md "CORRECTION"):
+# L3's reward_waypoints had a mandatory milestone for every LOWER-chain rung
+# (Lgoat, Ldown_bot, Lsc1..Lsc4) — and that part of the route IS mastered — then
+# jumped straight to Lprincess_top. The A1..A5 jump ascent had NO milestones, so
+# its only signal was the diffuse fruit/princess path-distance, and it was never
+# learned. Per-link measurements: WALKING links 60-95% but JUMP links
+# (X_launch -> X) only 0-20%, and Lsc4_top -> A1_launch 0%.
+# Crucially the jumps are NOT hard to execute: from an A1_launch seed a scripted
+# immediate jump-left lands A1 10/10 for every hold length (9/10 even after a
+# 5-step wait). So this is a CREDIT + EXPLORATION problem, not mechanics.
+#
+# CHANGE 1 (code, L3-only): added the jump-edge LANDING nodes as mandatory
+# reward waypoints — J10_11_b (A1), J11_12_b (A2), J12_13_b (A3), J14_15_b (A5).
+# Each resolves to exactly its A-waypoint position. A4 omitted (the FRUIT is
+# already a mandatory target on that platform). L1/L2 unaffected (reward_
+# waypoints None => byte-identical). So every completed ascent jump now banks an
+# explicit milestone — the same mechanism that made the lower chain work.
+#
+# CHANGE 2 (recipe): MILD re-heat, ent 0.01->0.02 and target_kl 0.05->0.07.
+# Enough exploration to DISCOVER jump-left at each launch pad, but deliberately
+# gentler than v9's 0.03/0.10, which wrecked the lower chain. The milestones
+# should do most of the work now that landing is explicitly paid.
+#
+# Warm-start: v10-final WEIGHTS (best lower chain of any run: from reset
+# Lgoat 1.00 / Lsc3 0.96 / SN3 0.67) + v10 POOLS (all 19 waypoints full, incl.
+# A1..A5 + launches, fruit pool, Lprincess_top). NOTE: the reward CHANGED, so the
+# warm-started critic is partly stale (reward-shaping pitfall #4) — expect an
+# early dip before it re-fits; judge by snapshots, not the first few M steps.
+#
+# WATCH: the JUMP links rising (A1_launch->A1 etc. via debug/l3_link_matrix.py),
+# then reset_reach[1] off 0 and from-reset A* wp_reach. Known remaining risk:
+# Lsc4_top -> A1_launch (0%, the SN3 right->left traverse under the snowball) may
+# still need its own treatment even with milestones in place.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v11_ascentwp_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v10_compose_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02      # mild re-heat (v10 0.01, v9 0.03)
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07     # mild re-heat (v10 0.05, v9 0.10)
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

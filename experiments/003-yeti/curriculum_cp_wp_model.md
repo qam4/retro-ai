@@ -127,3 +127,120 @@ the WP", which would just duplicate pool size).
   either guarantee a small reset fraction for measurement, or use goat-origin for
   L3 specifically. Do NOT condition on "at/below the WP" (that duplicates pool
   size and re-introduces the self-seed inflation).
+
+## Route view: what goes in the LOG vs a FILE vs a TOOL
+
+Adopted after the log grew three parallel walls (`wp[..]`, `wp_reach:`,
+`wp_near:`) that each rendered a DIFFERENT role of the SAME points in a
+DIFFERENT sort order, and after we kept answering pairwise questions with
+throwaway emulator probes. The rule:
+
+**The start x reached data is a MATRIX (~N^2). It never goes in a log line.**
+For L3, N ~ 20 route points = ~400 cells. Every attempt to squeeze a slice of it
+into stdout produced another wall. So split by where data lives:
+
+1. **FILE — the matrix (raw, complete).** `episodes.csv` carries two columns:
+   - `start_key` — the TRUE start ("0" = real game reset, else a CP level or a
+     waypoint id). `start_level` CANNOT serve this: it is derived from
+     fruits-remaining, so a WP-seeded episode reports 0, identical to a reset.
+     (That bug silently corrupted from-reset analysis, and the TB `reach/from_0`
+     tags with it.)
+   - `reached_points` — ';'-joined route points reached that episode.
+   Together these make ANY pair/window derivable offline, from the real training
+   distribution — no new log field, no emulator probe.
+2. **LOG — two fixed-size 1-D projections** (they do not grow as points are
+   added), rendered as a route-ordered table (`CheckpointManager.route_table`)
+   at a LOW cadence, plus a compact per-interval line:
+   - `reach` — reset-origin reach EMA -> does the chain COMPOSE end-to-end?
+   - `prog` — ORDER-FREE progress EMA -> is this hand-off HEALTHY?
+   ...alongside `pool` (frontier), `near` (got close but never landed) and
+   `cap/rej` (survival-gate filtering). The per-interval line carries only the
+   scalar `route[N]: k/N reached>=0.5 from reset`.
+3. **TOOL — `scripts/mo5/yeti/route_report.py`.** Renders the full matrix or any
+   slice from `episodes.csv` (no emulator, no run). This replaces the ad-hoc
+   link probes.
+
+### Why `prog` is order-free (and there is no "next point")
+An earlier draft used `link = P(reach the NEXT route point)`. That is
+ill-defined: waypoints are UNORDERED (decision #5), levels BRANCH (L2 has two
+ladders per floor), and L2's route goes DOWN to the fruits before going UP, so
+"next" cannot even be derived from distance-to-goal. Instead:
+
+> **prog = P(an episode started here reaches at least one NEW route point it did
+> not start from or inherit from its seed)**
+
+This is `seg_success` generalised to every route point: branch-safe, needs no
+ordering, and still flags every real pathology (SN3 seeded -> reaches nothing
+new -> prog ~0). Pairwise numbers stay a DIAGNOSTIC (the tool), not a metric.
+
+`LevelMap.route_order` exists ONLY to sort the table rows top-to-bottom in
+travel order. It carries no semantics, nothing gates on it, and levels may omit
+it (rendering falls back to a stable order so no point is hidden).
+
+## DETECTION vs frame_skip: why WP placement must be "where the agent RESTS"
+
+Measured on L3 (`debug/l3_lesc_boarding.py`), and the reason `Lesc_top` reads
+reach 0.4% while the point just PAST it (`Ldown_bot`) reads 78% from reset — the
+agent obviously crosses it, we just don't see it.
+
+**The mechanics.** Detection is `abs(x - wx) <= tol and abs(y - wy) <= tol` on
+grounded/ride poses, evaluated ONCE PER GYM STEP — and a step advances
+`frame_skip = 4` emulator frames. So the tol-box is sampled in 4-frame jumps:
+
+- **Unit asymmetry (easy to miss):** waypoints are `(x_ram, y_px)` and the SAME
+  `tol` is applied to both, so with `tol=2` the window is **±8 px horizontal but
+  only ±2 px vertical** (x is in 4px RAM units).
+- Horizontal walking covers ~4 px/step -> comfortably inside the ±8 px window.
+- Vertical motion is ~4 px/step riding (measured: y deltas of exactly 4) and
+  faster falling -> LARGER than the ±2 px window, so a vertical pass can step
+  clean over the box and never register.
+
+**Why the system is nonetheless sound:** every WP is placed where the agent
+COMES TO REST (the arrival end of a ladder, a jump landing). Standing still, y is
+constant for many steps, so the box is always sampled no matter the frame skip.
+The capture counts show it: platform/ladder points fire thousands of times
+(`Lsc1_top` 1600+, `A1` 300+); only `Lesc_top` starves (3 captures).
+
+**The exposure to remember:** a waypoint the agent passes VERTICALLY WITHOUT
+STOPPING will silently under-detect — under-reporting `reach` AND under-capturing
+seeds (so it can never be a usable seed source). `Lesc_top` is the current
+example, and it has a second, independent problem: its position is not on the
+path every time — measured BOARDING y was 94 (6x), 98 (9x), 102 (2x), 106 (1x),
+so only 6/18 crossings even pass within ±2 px of its y=94.
+
+**Rules that follow (check these when adding waypoints to a new level):**
+1. Place WPs where the agent RESTS, not mid-trajectory. This is already the
+   `waypoint_ends` "arrival end" rule — this is WHY.
+2. If a point must be on a moving trajectory, don't fix it by widening `tol`
+   (a larger y-window risks FALSE positives, e.g. crediting a milestone while
+   falling past it). Detect the SEGMENT instead — "on the Lesc edge" via
+   `agent_ladder_from_pixel_xy` / pose 13 is dwell-independent and true for the
+   whole ride (role 5 = pose trigger, machinery we already have).
+3. Remember the unit asymmetry above before reasoning about any tolerance.
+
+Not fixed today on purpose: the escalator is solved (`prog` from `Lesc_top`
+0.83, and `Lesc_top -> Ldown_bot` = 82.7%) and nothing needs escalator seeds.
+
+## INVARIANT: route progress must survive a seed load
+
+Learned from the L3 "paid to retreat" bug (see level3_notes.md):
+
+> Any reward state representing ROUTE PROGRESS must either be derivable from the
+> EMULATOR state, or be captured with the seed and restored on load.
+
+- **CPs satisfy this for free**: fruit presence / the princess flag are RAM, so a
+  collected fruit IS gone in the save-state.
+- **Milestones did NOT**: "reached" is POSITIONAL, held in the reward's
+  `_reached_wp`, and wiped by the per-episode reset. Seeded episodes therefore
+  re-targeted milestones BEHIND them, and the potential paid them to RETREAT
+  (the milestone-sum was globally minimised at SN3: seeds above gained ~+3.7 by
+  descending; a seed AT SN3 lost reward for leaving -> SN3->A1 measured 0%).
+- **Fix**: seeds carry the reached set (accumulated TRANSITIVELY along the
+  reverse-curriculum chain), restored via `rewards.restore_reached_waypoints()`,
+  which accepts either naming scheme for the same point (the curriculum's `A1`
+  or the graph's `J10_11_b`). Pre-fix pool files are migrated by
+  `scripts/mo5/yeti/backfill_seed_milestones.py`.
+- Guarded by tests in `test_rewards.py` (see the "Seeded-start milestone
+  restore" block). L1/L2 have no `reward_waypoints`, which is why this bug was
+  L3-only and went unnoticed for so long — a new level adding milestones MUST
+  re-check this invariant.

@@ -61,6 +61,23 @@ EPISODE_COLUMNS = [
     "final_score",
     "final_bonus",
     "start_state_hash",
+    # The TRUE start source: a waypoint id (e.g. "A1_launch") for a
+    # waypoint-seeded episode, else the integer CP level ("0" = game reset).
+    # ``start_level`` alone cannot distinguish these — it is derived from fruits
+    # remaining, so a WP-seeded episode on a level with no fruits collected
+    # reports start_level=0, identical to a true reset. That made from-reset
+    # analysis of episodes.csv silently wrong (WP-seeded episodes counted as
+    # reset). Appended last so existing readers/column-prefix tests are
+    # unaffected.
+    "start_key",
+    # Route points this episode reached, ';'-joined (e.g. "Lsc1_top;Lsc2_top").
+    # With ``start_key`` (the row) this makes the full start x reached MATRIX
+    # derivable OFFLINE for any pair/window, from the real training
+    # distribution — so pairwise "does X->Y work?" questions are a query
+    # (scripts/mo5/yeti/route_report.py) instead of a new log field or an
+    # emulator-booting probe. The log itself only carries fixed-size 1-D
+    # projections of this matrix (see CheckpointManager.route_table).
+    "reached_points",
 ]
 
 

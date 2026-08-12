@@ -123,6 +123,355 @@ escalator.
   (c) attack the escalator directly from the Lgoat_top seeds (hard — no
   shaping guidance for the moving-platform timing).
 
+## v5 result (yeti_curriculum_l3_v5_phase1_15m — from-scratch phase-1, 15M)
+Completed, exit 0. **SOLVED THE ESCALATOR** (the v1 hard wall) after pose-13
+seeding + the escalator crossing discovery (run right + jump into wall at
+x32 -> pose 13 ride down y94->158 -> jump right at ride_y~146-158 -> land
+ELAND; verified in `debug/escalator_crossing.mp4`). From the goat platform
+the agent crossed the escalator ~81%. BUT the policy OSCILLATED (n_steps=16,
+no target_kl = the L1/L2 destructive-update pattern): a from-reset snapshot
+sweep showed BR/Lsc1 reachable ~62% at the 10.5M snapshot but ~1% at the
+final step (a trough). Kept the **10.5M snapshot** as the champion
+(`output/mo5/yeti/champions/l3_v5_10p5M/`, 10.5M weights + v5 seed pools) to
+warm-start the anneal. Best captured chain from reset: escalator crossed,
+descends to BR/Lsc1.
+
+## v6 result (yeti_curriculum_l3_v6_anneal_15m — phase-2 anneal, 15M)
+Completed 5h48m, exit 0. Warm-start (weights-only) from the v5 10.5M
+champion; n_steps 16->512, target_kl=0.05, `ladder_segment_shaping: true`.
+Trained on the OLD map (no jump-edges), so no upward gradient past the
+snowball climb (fruit/princess unreachable by design this run).
+
+**The anneal worked — the oscillation collapsed and the climb chained from
+reset all the way up the snowball staircase to its second-from-top rung.**
+Final training `wp_reach` (P(reset-origin episode reaches WP), decaying EMA):
+Lgoat_a 0.97 / Lgoat_b 0.96 / Ldown_bot 0.89 / Lsc1 0.89 / Lsc2 0.89 /
+Lsc3 **0.74** / Lsc4 **0.00** / Lprincess 0.00. (Lesc_top reads 0.00 — it is
+a board point ridden THROUGH via pose 13, not a discrete reached WP.) Vs
+v5-final's ~1% BR, this is real chaining from a cold reset.
+
+**Keep-best snapshot sweep** (`climb_snapshot_sweep.py`, 30 snapshots stride
+500k, 40 eps each, max 500 steps, from reset — floor labels BOTTOM/BR/SN1/
+SN2/SN3 map onto the Ldown/Lsc1..Lsc4 staircase):
+
+```
+  step     BOTTOM  BR   SN1  SN2  SN3
+   500000   100   65    2    0    0    early: bottom only, no climb
+  5500000   100   95    2    0    0    BR peak, SN1 still noise
+  9500000    32   30    0    0    0    mid-run trough
+ 12000000    68   42   32    0    0    SN1 emerges
+ 12500000    58   45   38   15    0    SN2 first appears
+ 13000000    60   55   48   12    0
+ 13500000    38   38   35   20    0
+ 15000000    55   50   45   38    0    FINAL = deepest chain
+```
+
+Findings:
+- **The final (15M) snapshot is the best this time** — unlike v5 (final
+  trough), the anneal held to the end. Clean monotone funnel from reset:
+  BOTTOM 55 -> BR 50 -> SN1 45 -> SN2 38. SN1/SN2 chaining simply did not
+  exist before ~12M. n_steps=512 + target_kl=0.05 fixed the oscillation
+  (same recipe that solved L1 H-V / L2 H-AL). Champion = **v6 15M**.
+- **New wall = SN2->SN3** (top of the snowball climb, Lsc4 top, y86): SN3 is
+  0% across EVERY snapshot, matching the final `wp_reach` Lsc4=0.00. Nothing
+  gets past the second-from-top rung.
+- fruit/princess 0% everywhere as expected (old map, no jump-edges -> no
+  gradient past the climb).
+
+Takeaway: escalator SOLVED and the snowball climb learned up to Lsc3 from a
+cold reset — a large jump over v1 (walled at the escalator) and v5
+(oscillated, ~1% BR at final). Next wall is the single Lsc3->Lsc4 rung.
+
+## SN2->SN3 stall — ROOT CAUSE (diagnosed on the v6 15M champion)
+The 0% SN3 is a **1-pixel ladder-mount window on Lsc4** (same game mechanic
+as L2's L34, notes section 22.1). Verified end-to-end:
+
+- Geometry: `Lsc3` deposits the agent at the LEFT end of SN2 (ram x58, y110);
+  the `Lsc4` ladder up to SN3 is at ram **x70** (centre_px 288); SN2 extent is
+  ram 54-80. So the agent must traverse 12px right along SN2 and mount at x70.
+- Reward gradient is CORRECT (not a bug): graph path-distance to princess
+  decreases monotonically SN1 448 -> SN2-left 400 -> SN2-at-ladder(x70) 352 ->
+  SN3 328 -> A1 216. Shaping pulls right-then-up; going back down `Lsc3`
+  is against the gradient. (`debug/l3_sn2_gradient.py`.)
+- Snowball is DODGEABLE, not the wall (user confirmed from the video: the
+  agent jumps the snowball, survives, then walks PAST the ladder and even
+  climbs back down `Lsc3`).
+- **The wall is the mount mechanic.** Driving the model to the ladder alive
+  then forcing UP (`debug/l3_lsc4_mount.py`, exact-x match, 150 eps each):
+  x68 0/19, x69 0/4, **x70 4/4 (3 straight to SN3 y86)**, x71 0/3, x72 0/6.
+  So the ladder mounts ONLY at exactly ram x=70; one pixel off, UP is a
+  no-op. While dodging the snowball the agent almost never stops on that
+  exact column, so from the policy's view the ladder "usually doesn't work."
+
+Method caveats found & fixed during this dig (both invalidated only the
+scripted probes, never the model rollouts): (1) probe used 5 settle-noops
+(the L2 H-AB doom bug) — training uses `restore_frame_stack` + 0 settle;
+(2) joystick action axis order is `[vertical(1=up,2=down), horizontal
+(1=right,2=left), fire]`, not `[horiz,vert,fire]`.
+
+Implication: this is a known-HARD-but-LEARNABLE motor skill (L2 cracked the
+L34 1px window via waypoint seeding + compute), NOT a reward or
+unavoidable-hazard problem. More compute alone is weak unless the agent gets
+many reps of "stop at x70, press up." The committed jump-edges (SN3->A1..A5)
+do NOT help the mount itself — they only add downstream pull ONCE SN3 is
+reached, which would reinforce the rare successful mounts.
+
+## v7 plan (revised after the SN2->SN3 diagnosis)
+The bottleneck is the 1px `Lsc4` mount at x70 under snowball pressure. Levers,
+in priority order:
+1. **Reverse-curriculum the mount**: make sure `Lsc4_top` (SN3) and A1+ seeds
+   accumulate (they were only 7/100 at v6 start) so the agent practices the
+   downstream ascent from just ABOVE the wall and the fruit/princess reward
+   compounds back — the same bootstrap that broke L2's L34. Warm-start v6 15M
+   + committed jump-edges (so SN3->A1..A5 has gradient) + real compute.
+2. Consider whether frame_skip (4) makes hitting the exact x70 column
+   effectively impossible from a walking approach (the agent steps ~N px per
+   action) — if so, the mount may need a finer approach, not just more reps.
+3. Do NOT widen tolerances to "fix" this — the 1px window is the GAME's, not
+   our resolver's; the agent must learn the precise positioning.
+Use `training.output` for the kiro-monitor dir (not `debug/`).
+
+## v7 result (yeti_curriculum_l3_v7_jumpedges_15m — warm-start v6 + jump-edges, 15M)
+Completed 6h28m, exit 0. Warm-start weights from the v6 15M champion + v6 seed
+pools; LEVEL3 jump-edges map active (SN3->A1..A5 connected).
+
+**SN2->SN3 wall SOLVED.** The 1-pixel `Lsc4` mount got learned: `Lsc4_top`
+(SN3) reset-origin wp_reach 0.00 (all of v6) -> **0.77**, and its seed pool
+filled 7 -> **100**. The whole climb tightened (Lsc3 0.96, Lsc2 0.97, Lsc1
+0.99). Confirms the user's call: reward map correct + more training composes
+the mount, same as L1. Progressed steadily (Lsc4 reach 0.69 @7.5M -> 0.79
+@11M -> 0.77 final).
+
+**But NO fruit grab in 15M** (`cp=[0,0]`, success 0->1 = 0%, reset_reach[1]
+= 0.00). The new wall is the **A1->A5 ascent** (SN3 -> compressor on A3 ->
+fruit on A4 -> A5). Evidence:
+- `Lsc4_top:d0x116r38596` — SN3 reached constantly but a ~330:1 reject ratio:
+  almost every SN3 arrival is a doomed state (dies within the survival window
+  before progressing). So the SN3 perch is hazardous AND the A1 jump off it
+  mostly kills.
+- `Lprincess_top:d48x0r0` — closest the agent EVER came to the final ladder is
+  48px; it crept 64->48px over the run then plateaued. So it gets partway up
+  A1..A5 but never near the top, and never grabs the fruit.
+
+Incentive is NOT the problem (verified `debug/l3_ascent_gradient.py`): graph
+path-distance to princess decreases monotonically every rung SN3 304 -> A1
+212 -> A2 180 -> A3 144 -> A4/fruit 92 -> A5 44. Each successful step up pays
+positive PBRS. The blocker is that A1-A5 are tiny platforms (A1 = 4px wide)
+requiring precise jumps + compressor timing, the shaped reward only lands on
+COMPLETED jumps (airborne freeze; a near-miss falls -> death gate -> 0), and
+**A1-A5 have NO waypoints** so the segment is unseedable — the agent can only
+practice it by surviving the whole chain to SN3 first, which mostly ends in
+death (the 38k rejects). Pure on-distribution, hence slow/stalled.
+
+## v8 plan (next) — jump-edge waypoints for A1..A5
+Add jump-WP support so the A1..A5 platform landings become capture/seed/reach-
+tracked waypoints (the graph already has the J-node endpoints J10_11..J14_15).
+Benefits: (1) observability — per-platform wp_reach up the ascent; (2)
+seedability — reverse-curriculum reps of the compressor/jump timing instead of
+requiring survival of the whole chain first (the bootstrap that broke L2's F3
+goat + L34). Default-off so L1/L2 stay byte-identical. Then warm-start from the
+v7 best-SN3 snapshot + these WPs. This is the clearest lever; more compute
+alone on v7's recipe is weak (A1-A5 stays unseeded).
+
+## v8 result (yeti_curriculum_l3_v8_jumpwp_15m — A1..A5 jump-WPs, 15M)
+Completed 6h20m, exit 0. Warm-start v7 bestSN3 (12M) + jump-WP code live
+(A1..A5 now in `yeti.waypoints(3)`, seed/reach-tracked, NOT reward targets).
+
+**NEGATIVE — the jump-WP reverse-curriculum could not bootstrap.** A1..A5 were
+NEVER captured (0 seeds each) because the agent never LANDS on A1 even once in
+15M. Final: `cp=[0,0]` (no fruit), SN3 (`Lsc4_top`) reset-reach 0.67, A1..A5
+wp_reach all 0.00. `wp_near` closest grounded approaches: A1:d8 A2:d16 A3:d24
+A4:d30 A5:d38 — i.e. it gets within 8px of A1 but never on it (tol 2), so the
+capture-on-reach seed pool stays empty -> no reverse-curriculum. Chicken-and-egg
+exactly as flagged for `Lesc_bot`: can't seed A1 until the agent reaches A1,
+and it can't.
+
+Root-cause dig (v8 champion, seed from `Lsc4_top`/SN3, faithful restore):
+- 0/30 reach A1; best GROUNDED y stuck at 86 (SN3; A1 is y78) — never ascends.
+- Deaths cluster at **(x68, y84, walking)** — killed mid-traverse on SN3 while
+  heading LEFT toward the A1 jump-off (SN3 has its own snowball; `Lsc4_top`
+  reject count r46943 corroborates: most SN3 arrivals die fast). A few fall off.
+- Scripted brute-force (walk to SN3 left edge ram48-56 then jump-left, several
+  delays; `debug/l3_sn3_a1_feasible.py`): 0/25 land A1 under EVERY plan
+  (best_y stays 86). Crude scripts failed on the SN2 snowball too (where the
+  model COULD dodge), so this isn't proof of impossibility — but neither 15M of
+  training nor brute-force has landed a single A1.
+- Geometry: SN3 floor10 ram50-77 y86; A1 floor11 ram42-45 (4px) y78; jump edge
+  is a small up-LEFT hop from SN3's left edge (~ram48) to A1's right edge
+  (~ram44), Δ~16px left + 8px up, onto a 4px platform, past an SN3 snowball.
+- Video for eyeballing: `debug/l3_sn3_a1_best.mp4` (longest SN3 survivor).
+
+Takeaway: SN3->A1 is the wall — a precise up-left jump onto a 4px platform
+while dodging an SN3 snowball, AND unseedable (can't capture A1 without first
+landing it). v9 options (needs a decision, see below).
+
+## v9 (DECIDED + LAUNCHED) — launch-pad WPs + gentle re-heat
+Two coordinated changes, both aimed at the unseeded SN3->A1 wall:
+1. **Launch-pad waypoints** (`jump_waypoints` now emits `<name>_launch` on each
+   jump's DEPARTURE platform). The key one, `A1_launch` = SN3's SAFE LEFT edge
+   (ram48, floor10), is capturable (on SN3, which the agent reaches), so once
+   captured it SEEDS the safe jump-off and the agent practises SN3->A1 directly
+   (snowball-free) instead of dying on SN3's right / retreating down the ladder.
+   Landing A1 then captures `A2_launch`, etc., up to the fruit on A4. Launch pads
+   are SEED-ONLY (not reward targets); L1/L2 emit none (byte-identical).
+2. **Gentle re-heat** (ent_coef 0.01->0.03, target_kl 0.05->0.10). Rationale
+   (user's concern): v6->v7->v8 were ALL low-temperature anneal for ~45M steps,
+   which converges but under-explores. That's fine for SEEDED skills (v7 learned
+   the 1px SN3 mount from the Lsc4_top seed) but the A1_launch bootstrap needs a
+   rare EXPLORATORY dodge to SN3-left to capture it the first time — a cold
+   policy may never produce that. Re-heat restores exploration while staying
+   self-cooling via target_kl (the intended anneal SCHEDULE: re-heat to escape a
+   new plateau, then cool). NOT a dead local min — warm-start keeps the SN3
+   skill; this just re-enables escaping to the next one. Risk: hotter policy can
+   transiently degrade SN3 -> mitigated by 100k snapshots + keep-best sweep.
+Warm-start from v8 final. Config:
+`experiments/003-yeti/configs/yeti_curriculum_l3_v9_launchwp_15m.yaml`.
+
+### v9 interim (BREAKTHROUGH on the ascent; lower chain collapsed)
+By 50% (7.5M): the reverse-curriculum bootstrapped the ENTIRE upper level.
+- `A1_launch` captured -> seeded the SAFE SN3-left jump-off -> the whole ascent
+  chained. All 19 WP pools populated; `cp=[0,100]` (fruit grabbed reliably);
+  `Lprincess_top` goal_score ~0.96 => the PRINCESS is touched ~96% from its seed.
+  First fruit grabs + princess touches ever on L3.
+- COST (expected, from the re-heat): the from-COLD-RESET lower chain collapsed
+  (Lsc3 0.82@10% -> 0.04@50%, Ldown 0.9 -> 0.05). reset_reach still [1,0,0].
+  NOT under-practice: `pick_start` weights CP0 by 1-goal_score and the fruit-CP
+  is reach-gated out, so reset (CP0) was already ~60% of episodes; the collapse
+  is the HOT updates (target_kl 0.10, ent 0.03), not starvation.
+So v9 = "acquire the ascent" (done). Next = COOL to compose (v10).
+
+IMPORTANT (pools persistence): `checkpoints.pkl` was historically saved ONLY on
+normal completion, so v9 must FINISH to persist its (invaluable) ascent pools —
+killing it mid-run would lose them. FIXED for future runs: added
+`PoolSaveCallback` (saves pools every 1M steps, atomic temp+replace) +
+`save_to_disk` now writes atomically. (Edit applied AFTER v9 launched, so it
+does NOT affect the running v9 — v9 still only saves at the end.)
+
+### v10 (COMPOSE phase) — cool the re-heat
+One lever: cool ent_coef 0.03->0.01, target_kl 0.10->0.05 (back to the anneal),
+so the hot updates stop breaking the lower chain and the now-seeded full route
+composes from reset. Warm-start WEIGHTS from the best combined-reach v9 snapshot
+(from-reset sweep picks it; lower chain intact + upper skill — likely early-ish
+v9, else v8-final) + POOLS from v9 FINAL. Build champion dir
+`output/mo5/yeti/champions/l3_v10_base/` = {chosen weights final_model.zip, v9
+final checkpoints.pkl}. Config:
+`experiments/003-yeti/configs/yeti_curriculum_l3_v10_compose_15m.yaml`.
+Watch reset_reach[1] off 0, from-reset chain (Lsc4 -> A1..A5 -> Lprincess_top),
+success 0->1, and a princess-from-reset touch.
+
+## v9 options (SN3->A1 is the wall; jump-WP seeding can't bootstrap it)
+1. VERIFY the route with the user (video) — confirm SN3->A1 is the intended
+   path and the jump is as modelled (the user knows L3; the agent can't see it).
+2. Human-demo seed for A1 (record a played state ON the A1 platform -> seed the
+   pool -> reverse-curriculum from there). This is the honest unblock for the
+   chicken-and-egg; needs the "record a session" tooling and revisiting the
+   no-offline-injection stance (a real PLAYED state is on-distribution, unlike a
+   RAM-poke).
+3. Boost exploration specifically at SN3 (entropy schedule / longer at SN3
+   seeds / strengthen the near-A1 shaping) to get a FIRST A1 landing by luck,
+   then let capture bootstrap. Weak given 15M got 0.
+4. Re-examine the SN3 snowball dodge as its own sub-skill (like SN2) — if the
+   agent can't survive SN3 long enough to set up the jump, fix survival first.
+
+## v10 result (compose phase — cooled; 15M, exit 0, 6h06m)
+Warm-start DECOUPLED: v8-final weights + v9-final pools (champion dir
+`l3_v10_base`), cooled to ent 0.01 / target_kl 0.05.
+
+**Cooling restored the lower chain (best ever from reset) but did NOT compose
+the ascent.**
+- From RESET: Lgoat 1.00 / Ldown 0.97 / Lsc1 0.97 / Lsc2 0.96 / Lsc3 0.96 /
+  **Lsc4 (SN3) 0.67** — the best lower chain of any run (v9's re-heat damage
+  fully repaired, confirming the cool-to-compose half of the anneal schedule).
+- But EVERY A-waypoint reads 0.00 from reset; `reset_reach[1]=0.00`,
+  `success 0->1: 0%`. No fruit and no princess from a cold start.
+- The SKILL is intact and MAINTAINED (from seeds): pools all full and GROWING
+  (A3 43->92, A1_launch 77->99, Lprincess_top 13->25; A1 captured 2142x during
+  v10), `Lprincess_top` goal_score 0.95, A4/A5 0.50 => fruit + princess still
+  reliably done FROM SEEDS.
+
+**ROOT CAUSE of the composition gap: surviving SN3 on arrival from reset.**
+`Lsc4_top: x2916 admitted vs r46867 rejected` (~16:1). Reset episodes DO reach
+SN3 (0.67) but almost all die within the survival window — before they can
+traverse SN3 to `A1_launch` and start the ascent. Seeded episodes start ON SN3
+already stable and proceed fine, which is exactly why the seeded skill looks
+solved while the cold-start chain stops dead at SN3. Late-run SN3-from-reset
+also oscillates 0.29-0.67 (ended 0.67).
+
+So the remaining wall is a SURVIVAL/hand-off problem at exactly one spot (arrive
+at SN3 -> stay alive -> cross to the safe left edge), not a missing skill.
+Candidate v11 levers (undecided):
+- (a) Make the SN3 hand-off practicable: seed from `Lsc4_top` states that are
+  ARRIVAL-like (as a reset episode arrives, mid-climb/hot) rather than the
+  stable grounded ones, so the agent practises surviving the hot arrival.
+- (b) Attack the SN3 snowball dodge as its own sub-skill (the SN2 pattern) —
+  the 16:1 reject ratio says arrival is near-doomed; find whether a dodge exists
+  from the arrival state and whether the timing is learnable.
+- (c) More compute at the cooled recipe (SN3 0.29->0.67 was still trending up;
+  the chain may extend if SN3 survival keeps improving).
+- (d) Revisit whether the WP survival gate (`min_survival_steps=30`) is
+  filtering out precisely the hot-arrival states we need to learn from (the 46867
+  rejects) — the H-R leniency question, now with a concrete case.
+
+## CORRECTION + real diagnosis (post-v10 link measurements)
+Two earlier claims in this file were WRONG; the per-link measurements
+(`debug/l3_link_matrix.py`, `debug/l3_link_over_snapshots.py`) correct them:
+
+1. **"v9 acquired the ENTIRE upper level" — WRONG.** That read pool sizes +
+   goal_scores. In truth the goal_scores (A4 0.45 / A5 0.50 / Lprincess 0.95)
+   come from seeds ABOVE the hard jumps and were INHERITED (stale) by v10 via
+   checkpoints.pkl — they decay only when that pool is sampled. Only the TOP
+   segment (A3/A4 -> A5 -> princess) is solid.
+2. **"The upper skill is carried by the SEEDS" — WRONG.** Seeds supply the START
+   STATE; the policy still must know how to execute. v10 (v8 weights + v9 pools,
+   cooled) never re-learned the ascent: best snapshot only 5% on A1_launch->A1.
+
+**Measured per-link reach (v9-final / v10-final, 20 eps, faithful restore):**
+```
+  Lsc4_top  -> A1_launch    0% / 0%    (100% death)  <- BROKEN: SN3 traverse
+  A1_launch -> A1           5% / 0%                  <- weak JUMP
+  A1        -> A2_launch   60% / 20%                 (walking: ok)
+  A2_launch -> A2           0% / 0%                  <- weak JUMP
+  A2        -> A3_launch   80% / 95%                 (walking: ok)
+  A3_launch -> A3           5% / 0%                  <- weak JUMP
+  A4_launch -> A4          65% / 25%
+  A5_launch -> A5           0% / 15%                 <- weak JUMP
+```
+Pattern: WALKING links are fine (60-95%); the JUMP links (`X_launch -> X`) are
+0-20%; and `Lsc4_top -> A1_launch` (walk across SN3 under the snowball) is 0%.
+
+**KEY MEASUREMENT — the jumps are trivially EXECUTABLE, so this is a
+credit/exploration problem, not a mechanics problem.**
+`debug/l3_a1_jump_bruteforce.py`: from A1_launch seeds, an immediate jump-left
+lands A1 **10/10** for EVERY hold length (2/4/6/8), and 9/10 even after a 5-step
+wait. So no precise timing is required — yet the policy only manages 5-20%.
+
+**ROOT CAUSE FOUND: the ascent had NO mandatory reward milestones.** L3's
+`reward_waypoints` covered the whole lower chain (Lgoat, Ldown_bot, Lsc1..Lsc4)
+— which IS mastered — and then jumped straight to `Lprincess_top`. A1..A5 had
+none, so the ascent's only signal was the diffuse fruit/princess path-distance.
+The mastered part of the route is exactly the part with milestones.
+
+## v11 — add ASCENT milestones (A1, A2, A3, A5) to the reward
+FIX (code, L3-only): added the jump-edge LANDING nodes to
+`LEVEL3.reward_waypoints`: `J10_11_b` (A1), `J11_12_b` (A2), `J12_13_b` (A3),
+`J14_15_b` (A5). Verified each resolves to EXACTLY its A-waypoint position
+(A1 (44,78), A2 (38,70), A3 (32,62), A5 (10,54)). A4 deliberately omitted (the
+FRUIT F1 is already a mandatory target on that platform — no double-count).
+L1/L2 keep `reward_waypoints=None` => byte-identical. 328 tests pass (the one
+failure, test_no_shared_reward_fn, is pre-existing: it looks for
+`scripts/train_segment.py`, which lives at `scripts/mo5/yeti/`).
+Now each completed ascent jump banks an explicit milestone, the same mechanism
+that made the lower chain work.
+Recipe: warm-start v10-final weights (BEST lower chain: SN3 0.67 from reset) +
+v10 pools (all 19 full), MILD re-heat (ent 0.02, target_kl 0.07) — enough
+exploration to discover jump-left at each launch pad, less destructive than v9's
+0.03/0.10 which wrecked the lower chain. NOTE the reward changed, so the
+warm-started critic is partly stale (pitfall #4) — expect an early dip.
+Config: `experiments/003-yeti/configs/yeti_curriculum_l3_v11_ascentwp_15m.yaml`.
+WATCH: the JUMP links (A1_launch->A1 etc.) rising, then `reset_reach[1]` and
+from-reset A* wp_reach. Still-open risk: `Lsc4_top -> A1_launch` (0%, the SN3
+snowball traverse) may need its own treatment even with milestones.
+
 ## Open questions / risks
 - Escalator: can the agent's ride be made observable enough (4-frame stack)
   for reliable jump timing? This is the main research risk.

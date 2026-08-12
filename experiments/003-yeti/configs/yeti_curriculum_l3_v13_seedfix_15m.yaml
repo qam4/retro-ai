@@ -1,0 +1,104 @@
+# yeti_curriculum L3 v12 — SEEDED-START MILESTONE RESTORE (the retreat bug).
+#
+# THE BUG (found by the user's read of the v11 video: the agent climbed back DOWN
+# a ladder "as if collecting a milestone it should already have"). Milestone
+# "reached" state is POSITIONAL, so unlike CP progress (fruit bytes in RAM, which
+# survive a load_state) it lived only in the reward object and was wiped by the
+# per-episode reset. Every SEEDED episode therefore treated milestones BEHIND it
+# as pending, and the PBRS potential summed path-distance to targets behind the
+# agent. Measured milestone-sum on L3 (lower = stronger pull):
+#   Lgoat 5168  Ldown 3576  BR 2904  SN1 2472  SN2 2280  SN3 2208(MIN)
+#   A1 2320  A2 2416  A3 2576  A4/fruit 2968  A5 3248
+# SN3 was the GLOBAL MINIMUM: seeds above it gained ~+3.7 by climbing back down,
+# and a seed AT SN3 LOST reward for leaving — which is exactly why the SN3->A1
+# hand-off measured 0% and why the launch-pad/jump links stalled at 0-20% despite
+# the jump being 10/10 executable by a scripted jump-left. Seeded episodes are
+# ~40% of training and are precisely the ones meant to teach the ascent.
+#
+# THE FIX (code): seeds now carry the reached-milestone set (accumulated
+# TRANSITIVELY along the reverse-curriculum chain: inherited-at-start UNION
+# reached-since), restored into the reward on load via
+# rewards.restore_reached_waypoints(). The reward resolves either naming scheme
+# (curriculum "A1" or graph "J10_11_b") for the same point. Verified: climb
+# A3->A4 = +1.68, retreat A3->A1 = -1.92 (pre-fix that retreat cost 0.000).
+# L1/L2 have no reward_waypoints => no milestones => byte-identical.
+#
+# POOLS: v11's pools were captured pre-fix (empty sets) so they still carried the
+# bug; they are BACKFILLED by scripts/mo5/yeti/backfill_seed_milestones.py, which
+# reconstructs each seed's set from its route position. Champion dir
+# output/mo5/yeti/champions/l3_v12_base/ = v10-final WEIGHTS (best from-reset
+# lower chain: SN3 0.67) + backfilled v11 pools (full ascent bootstrap).
+#
+# Keeps v11's ascent reward milestones (A1/A2/A3/A5) and the mild re-heat
+# (ent 0.02, target_kl 0.07).
+#
+# v13 = v12's recipe (identical reward/PPO/pools) RESTARTED on the reworked logs.
+# v12 was stopped at 450k steps to pick them up; nothing else changed.
+#
+# LOGS (new): the three parallel per-waypoint walls are gone. Per interval the
+# line carries one scalar (`route[N]: k/N reached>=0.5 from reset`); every
+# ~500k steps a route-ORDERED table prints reach (from reset) / prog (order-free
+# progress) / pool / near / cap-rej. The start x reached MATRIX is not in the log
+# at all — episodes.csv now carries `start_key` + `reached_points`, so any
+# pairwise question is a query via scripts/mo5/yeti/route_report.py (no
+# emulator). See curriculum_cp_wp_model.md "Route view".
+#
+# WATCH: in the route table, `prog` for Lsc4_top / A*_launch (0.00 and 5-20%
+# pre-fix — the retreat bug) should climb, then `reach` should extend up the
+# ascent and reset_reach[1] lift off 0. Early signal from a 60k probe on this
+# exact base: A1_launch progress 84.6% (was ~5%).
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v13_seedfix_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/champions/l3_v12_base/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02      # mild re-heat (v10 0.01, v9 0.03)
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07     # mild re-heat (v10 0.05, v9 0.10)
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

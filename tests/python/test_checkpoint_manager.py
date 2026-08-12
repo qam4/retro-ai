@@ -200,7 +200,7 @@ def test_pick_start_reset_returns_none_at_full_floor():
     mgr = _mgr(reset_fraction=1.0)  # cp0_floor = 1.0
     mgr.save_scored(2, b"cp2_state", 100, True, bonus=10, source_cp=0)
     for _ in range(20):
-        level, state, stack = mgr.pick_start()
+        level, state, stack, _ = mgr.pick_start()
         assert level == 0
         assert state is None
         assert stack is None
@@ -214,7 +214,7 @@ def test_pick_start_picks_only_nonempty_level():
     # H-T: reset (CP0) always competes; only EMPTY levels (1, 3, 4) are
     # never picked. So a pick is either reset (0, None) or CP2 (2, state).
     for _ in range(50):
-        level, state, _ = mgr.pick_start()
+        level, state, _, _ = mgr.pick_start()
         assert level in (0, 2)
         if level == 2:
             assert state == b"cp2_state"
@@ -229,7 +229,7 @@ def test_pick_start_gated_out_returns_reset():
     mgr.save_scored(3, b"cp3_state", 100, True, bonus=10, source_cp=0)
     mgr.reset_reach_ema[3] = 0.05  # below the gate
     for _ in range(20):
-        level, state, _ = mgr.pick_start()
+        level, state, _, _ = mgr.pick_start()
         assert level == 0
         assert state is None
 
@@ -252,7 +252,7 @@ def test_pick_start_weights_toward_failing_segment():
 
     random.seed(0)
     for _ in range(2000):
-        level, _, _ = mgr.pick_start()
+        level, _, _, _ = mgr.pick_start()
         counts[level] += 1
     # The failing segment (CP2) should be sampled far more often.
     assert counts[2] > counts[1] * 3
@@ -278,7 +278,7 @@ def test_pick_start_floor_prevents_starvation():
     random.seed(0)
     counts = {0: 0, 1: 0, 2: 0}
     for _ in range(4000):
-        level, _, _ = mgr.pick_start()
+        level, _, _, _ = mgr.pick_start()
         counts[level] += 1
     frac1 = counts[1] / 4000
     # Pure weighting would give CP1 ~5%; the 0.5 floor lifts it toward
@@ -297,7 +297,7 @@ def test_save_checkpoint_seed_archive_defaults():
     mgr = _mgr()
     mgr.save_checkpoint(1, b"seed")  # defaults source_cp=0, bonus=0, stack=None
     assert len(mgr.checkpoints[1]) == 1
-    assert mgr.checkpoints[1].states[0] == (0, 0, b"seed", None)
+    assert mgr.checkpoints[1].states[0] == (0, 0, b"seed", None, frozenset())
 
 
 def test_disk_roundtrip_preserves_entry(tmp_path):
@@ -309,7 +309,7 @@ def test_disk_roundtrip_preserves_entry(tmp_path):
     mgr2 = _mgr()
     mgr2.load_from_disk(str(p))
     # Stack-less play snapshot -> 4-tuple with stack None.
-    assert mgr2.checkpoints[1].states[0] == (0, 42, b"new_state", None)
+    assert mgr2.checkpoints[1].states[0] == (0, 42, b"new_state", None, frozenset())
 
 
 def test_disk_roundtrip_normalizes_legacy_2tuple(tmp_path):
@@ -327,7 +327,7 @@ def test_disk_roundtrip_normalizes_legacy_2tuple(tmp_path):
     mgr = _mgr()
     mgr.load_from_disk(str(p))
     # Legacy entry gets source_cp = level (1), original bonus, stack None.
-    assert mgr.checkpoints[1].states[0] == (1, 55, b"old1", None)
+    assert mgr.checkpoints[1].states[0] == (1, 55, b"old1", None, frozenset())
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +373,7 @@ def test_waypoint_saved_creates_pool():
     mgr.save_waypoint("L34_top", b"wp_state", 100, True, source_cp=0, bonus=5)
     assert "L34_top" in mgr.waypoints
     assert len(mgr.waypoints["L34_top"]) == 1
-    assert mgr.waypoints["L34_top"].states[0] == (0, 5, b"wp_state", None)
+    assert mgr.waypoints["L34_top"].states[0] == (0, 5, b"wp_state", None, frozenset())
 
 
 def test_waypoint_rejected_when_doomed():
@@ -440,7 +440,7 @@ def test_pick_start_can_return_waypoint():
     random.seed(0)
     seen_wp = False
     for _ in range(50):
-        key, state, _ = mgr.pick_start()
+        key, state, _, _ = mgr.pick_start()
         if isinstance(key, str):
             seen_wp = True
             assert key == "L34_top"
@@ -484,7 +484,7 @@ def test_waypoint_group_share_is_count_invariant():
         random.seed(0)
         c0 = 0
         for _ in range(trials):
-            key, _, _ = mgr.pick_start()
+            key, _, _, _ = mgr.pick_start()
             if key == 0:
                 c0 += 1
         return c0 / trials
@@ -512,7 +512,7 @@ def test_waypoint_group_internal_split_by_goal_score():
     random.seed(0)
     counts = {"mastered": 0, "fresh": 0}
     for _ in range(4000):
-        key, _, _ = mgr.pick_start()
+        key, _, _, _ = mgr.pick_start()
         if isinstance(key, str):
             counts[key] += 1
     assert counts["fresh"] > counts["mastered"] * 3
@@ -528,7 +528,7 @@ def test_no_waypoints_leaves_cp_selection_unchanged():
 
     random.seed(0)
     for _ in range(50):
-        key, _, _ = mgr.pick_start()
+        key, _, _, _ = mgr.pick_start()
         assert isinstance(key, int)
 
 
@@ -542,7 +542,7 @@ def test_waypoint_disk_roundtrip(tmp_path):
     mgr2 = _mgr(reset_fraction=0.0)
     mgr2.load_from_disk(str(p))
     assert "L34_top" in mgr2.waypoints
-    assert mgr2.waypoints["L34_top"].states[0] == (0, 7, b"wp_state", None)
+    assert mgr2.waypoints["L34_top"].states[0] == (0, 7, b"wp_state", None, frozenset())
     assert mgr2.waypoints["L34_top"].goal_score == pytest.approx(0.42)
 
 

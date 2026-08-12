@@ -33,7 +33,7 @@ from retro_ai.training.callbacks import EpisodeMetricsCallback
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.rewards import RewardContext, RewardFn
 from retro_ai.training.rewards import create as create_reward
-from retro_ai.training.rewards import reset_reward
+from retro_ai.training.rewards import reset_reward, restore_reached_waypoints
 from retro_ai.training.run_config import RunConfig
 from retro_ai.training.run_manifest import (
     EpisodeLogger,
@@ -143,10 +143,10 @@ class StartPool:
         return max(1.0 - self.goal_score, 1e-3)
 
     def sample(self):
-        """A uniformly random (source_cp, bonus, state_bytes, stack) entry."""
+        """A random (source_cp, bonus, state_bytes, stack, reached) entry."""
         return random.choice(self.states)
 
-    def insert(self, source_cp, bonus, state_bytes, stack=None):
+    def insert(self, source_cp, bonus, state_bytes, stack=None, reached=None):
         """Insert keeping the pool reset-origin AND diverse.
 
         Retention priority is source_cp (lower = closer to a reset
@@ -161,8 +161,23 @@ class StartPool:
         ``state_bytes``; on load it restores the real motion history so the
         seeded start is on-distribution (H-AB). None for stack-less sources
         (offline seeds / file-based starts) which fall back to reseed.
+
+        ``reached`` is the set of route-point ids this seed had ALREADY reached
+        when captured (accumulated transitively: the producing episode's own
+        inherited set UNION what it reached). It is restored into the reward on
+        load so milestones behind the seed stop being summed as pending targets
+        — without it the potential pays a seeded episode to RETREAT (measured on
+        L3: the milestone-sum bottomed out at SN3, so seeds above it were paid
+        to climb back down). Milestone progress is POSITIONAL, so unlike CP
+        progress (fruit bytes in RAM) it does NOT survive a load_state.
         """
-        entry = (int(source_cp), int(bonus), bytes(state_bytes), stack)
+        entry = (
+            int(source_cp),
+            int(bonus),
+            bytes(state_bytes),
+            stack,
+            frozenset(reached or ()),
+        )
         if len(self.states) < self.capacity:
             self.states.append(entry)
             return "appended"
@@ -267,6 +282,16 @@ class CheckpointManager:
         # alone can't distinguish "never went there" from "went near, missed").
         # wp_captures[id] = lifetime capture count (uncapped; pool size caps at
         # max_states_per_checkpoint).
+        # ORDER-FREE segment health, keyed by start (int CP level or WP id):
+        # P(an episode started here reaches at least one NEW route point it did
+        # not start from / inherit). This is `seg_success` generalised to every
+        # route point. It deliberately does NOT name a "next" point: waypoints
+        # are unordered (decision #5) and levels branch, so a pairwise
+        # start->next metric is ill-defined. Pairwise links stay a DIAGNOSTIC
+        # (scripts/mo5/yeti/route_report.py over episodes.csv), which is where
+        # they belong. A start whose progress is ~0 is a stuck hand-off — that is
+        # what caught SN3 (seeded there, never reached anything new).
+        self.progress_ema: dict = {}
         self.wp_closest: dict = {}
         self.wp_captures: dict = {}
         self.frontier = 0
@@ -353,9 +378,22 @@ class CheckpointManager:
         # pools; see StartPool.
 
     def record_episode(
-        self, start_level, reached_level, reached_wps=None, all_wps=None
+        self,
+        start_level,
+        reached_level,
+        reached_wps=None,
+        all_wps=None,
+        progressed=None,
     ):
         total_goals = self.FRUITS_TOTAL + 1
+        # Order-free segment health for EVERY start (CP level or WP id), updated
+        # before the WP early-return so waypoints get it too. See progress_ema.
+        if progressed is not None:
+            a = self.reach_alpha
+            prev = self.progress_ema.get(start_level, 0.0)
+            self.progress_ema[start_level] = (1 - a) * prev + a * (
+                1.0 if progressed else 0.0
+            )
         # Waypoint start (id is a str, e.g. "L34_top"): update ONLY that
         # WP pool's goal-score (the self-regulating sampling weight). WPs
         # are non-gating, so they never touch seg_success / reset_reach /
@@ -406,12 +444,14 @@ class CheckpointManager:
                     hit = 1.0 if wid in reached_wps else 0.0
                     self.wp_reach_ema[wid] = (1 - a) * prev + a * hit
 
-    def _insert(self, level, source_cp, bonus, state_bytes, stack=None):
+    def _insert(self, level, source_cp, bonus, state_bytes, stack=None, reached=None):
         """Insert into CP ``level``'s pool (delegates retention/eviction to
         StartPool), then update save stats and advance the frontier only
         when the pool actually GREW (append), matching prior behavior.
         """
-        status = self.checkpoints[level].insert(source_cp, bonus, state_bytes, stack)
+        status = self.checkpoints[level].insert(
+            source_cp, bonus, state_bytes, stack, reached
+        )
         if status is None:
             return
         self.stats["saves"][level] += 1
@@ -419,12 +459,20 @@ class CheckpointManager:
             self._maybe_advance_frontier()
 
     def save_checkpoint(
-        self, fruits_collected, state_bytes, source_cp=0, bonus=0, stack=None
+        self,
+        fruits_collected,
+        state_bytes,
+        source_cp=0,
+        bonus=0,
+        stack=None,
+        reached=None,
     ):
         # Used for offline seed_archive / preseed (no play-based score, and
         # no frame stack — those seeds fall back to reseed on load).
         if 0 <= fruits_collected <= self.FRUITS_TOTAL:
-            self._insert(fruits_collected, source_cp, bonus, state_bytes, stack)
+            self._insert(
+                fruits_collected, source_cp, bonus, state_bytes, stack, reached
+            )
 
     def save_scored(
         self,
@@ -435,6 +483,7 @@ class CheckpointManager:
         bonus,
         source_cp,
         stack=None,
+        reached=None,
     ):
         """Admit a checkpoint snapshot judged by *real play*, not a probe.
 
@@ -468,7 +517,7 @@ class CheckpointManager:
         else:
             self.stats["rejected_precarious"][fruits_collected] += 1
             return
-        self._insert(fruits_collected, source_cp, bonus, state_bytes, stack)
+        self._insert(fruits_collected, source_cp, bonus, state_bytes, stack, reached)
 
     def _admit_by_play(self, survived_steps, reached_next):
         """Shared play-based admission verdict for deferred snapshots.
@@ -495,6 +544,7 @@ class CheckpointManager:
         source_cp=0,
         bonus=0,
         stack=None,
+        reached=None,
     ):
         """Admit a WAYPOINT snapshot, judged by *real play* — same gate as
         ``save_scored`` (see _admit_by_play).
@@ -523,7 +573,7 @@ class CheckpointManager:
         if pool is None:
             pool = StartPool(self.max_states_per_checkpoint, self.reach_alpha)
             self.waypoints[wp_id] = pool
-        pool.insert(source_cp, bonus, state_bytes, stack)
+        pool.insert(source_cp, bonus, state_bytes, stack, reached)
         self.wp_captures[wp_id] = self.wp_captures.get(wp_id, 0) + 1
 
     def note_wp_distance(self, wp_id, dist):
@@ -591,7 +641,7 @@ class CheckpointManager:
         # Optional hard reset floor (safety net only; 0 = pure weighting).
         if self.cp0_floor > 0.0 and random.random() < self.cp0_floor:
             self.stats["starts"][0] += 1
-            return 0, None, None
+            return 0, None, None, frozenset()
 
         # Top-level sources, weighted by StartPool.weight() (= 1 -
         # goal_score, the H-T rule):
@@ -625,14 +675,16 @@ class CheckpointManager:
         if key is _WP_GROUP:
             wp_key = random.choices(wp_candidates, weights=wp_weights, k=1)[0]
             self.wp_start_counts[wp_key] = self.wp_start_counts.get(wp_key, 0) + 1
-            _src, _bonus, state, stack = self.waypoints[wp_key].sample()
-            return wp_key, state, stack
+            _src, _bonus, state, stack, reached = self.waypoints[wp_key].sample()
+            return wp_key, state, stack, reached
         self.stats["starts"][key] += 1
         if key == 0:
-            return 0, None, None
-        # Pool entries are (source_cp, bonus, state_bytes, stack).
-        _src, _bonus, state, stack = self.checkpoints[key].sample()
-        return key, state, stack
+            # A real game reset: nothing reached yet (and CP progress lives in
+            # the emulator anyway), so the milestone set is empty.
+            return 0, None, None, frozenset()
+        # Pool entries are (source_cp, bonus, state_bytes, stack, reached).
+        _src, _bonus, state, stack, reached = self.checkpoints[key].sample()
+        return key, state, stack, reached
 
     def summary(self):
         sizes = [len(self.checkpoints[i]) for i in range(self.FRUITS_TOTAL + 1)]
@@ -651,36 +703,66 @@ class CheckpointManager:
             f"rejected={rej} success=[{', '.join(rates)}] "
             f"reset_reach={reach} gscore={gscore}"
         )
+        # The per-waypoint detail (pool size, reset-reach, approach distance,
+        # capture/reject counts) used to be appended here as THREE parallel
+        # walls, each sorted differently. It now lives in route_table(), printed
+        # route-ordered at a lower frequency. This line stays fixed-size as
+        # route points are added.
         if self.waypoints:
-            # Captured pools: id=poolsize@goal_score, deepest/lowest
-            # goal-score (= most-sampled) first.
-            items = sorted(self.waypoints.items(), key=lambda kv: kv[1].goal_score)
-            wp = " ".join(f"{w}={len(p)}@{p.goal_score:.2f}" for w, p in items)
-            base += f" | wp[{len(self.waypoints)}]: {wp}"
-        if self.wp_reach_ema:
-            # Reset-origin reach EMA per WP (the CHAINING signal, complementary
-            # to the pool sizes above). Highest first, so a low tail = the
-            # segment where the from-reset route falls off. A full pool with a
-            # near-0 reach here = a chaining block the pool size hides.
-            items = sorted(self.wp_reach_ema.items(), key=lambda kv: -kv[1])
-            rr = " ".join(f"{w}={e:.2f}" for w, e in items)
-            base += f" | wp_reach: {rr}"
-        if self.wp_closest:
-            # Approach view: closest grounded distance (px) reached per
-            # waypoint, nearest first, with lifetime capture count. Always
-            # shown once any waypoint vicinity is sampled — so "0 pools" no
-            # longer means "no visibility": we see how near the agent got.
-            items = sorted(self.wp_closest.items(), key=lambda kv: kv[1])
-            # Per WP: d<closest px> x<admitted captures> r<rejected-precarious>.
-            # r>0 with x==0 means the agent reaches the WP but only in doomed
-            # states (e.g. dying falls) — the survival gate is filtering it out.
-            approach = " ".join(
-                f"{w}:d{d}x{self.wp_captures.get(w, 0)}"
-                f"r{self.wp_rejected_precarious.get(w, 0)}"
-                for w, d in items
-            )
-            base += f" | wp_near: {approach}"
+            base += f" | route[{len(self.waypoints)}]: {self.milestone_progress()}"
         return base
+
+    def milestone_progress(self) -> str:
+        """Compact scalar: how much of the route is RELIABLY reached from reset.
+
+        Counts route points whose reset-origin reach EMA >= 0.5, so it answers
+        "how many milestones are effectively done, and how far does the chain
+        get" without listing every point. Detail lives in route_table().
+        """
+        if not self.wp_reach_ema:
+            return "n/a"
+        done = sum(1 for v in self.wp_reach_ema.values() if v >= 0.5)
+        return f"{done}/{len(self.wp_reach_ema)} reached>=0.5 from reset"
+
+    def route_table(self, route_order=None) -> str:
+        """The canonical route view: one row per route point, route-ordered.
+
+        Columns are the four signals that actually drive a decision, and they are
+        1-D PROJECTIONS of the start x reached MATRIX (which is ~N^2 and belongs
+        in episodes.csv, not a log — render it with route_report.py):
+          reach     reset-origin reach EMA        -> does the chain compose?
+          prog      order-free progress EMA       -> is this hand-off healthy?
+          pool      seed pool size                -> exploration frontier
+          near      closest grounded approach px  -> got near but never landed?
+          cap/rej   admitted vs precarious-rejected captures
+        ``route_order`` is display-only (LevelMap.route_order); unlisted points
+        are appended in a stable order so nothing is ever hidden.
+        """
+        ids = list(route_order or [])
+        rest = sorted(set(self.waypoints) | set(self.wp_reach_ema) - set(ids))
+        ids += [w for w in rest if w not in ids]
+        if not ids:
+            return ""
+        lines = [
+            "  route                reach   prog   pool   near   cap/rej",
+        ]
+        for wid in ids:
+            pool = self.waypoints.get(wid)
+            reach = self.wp_reach_ema.get(wid)
+            prog = self.progress_ema.get(wid)
+            near = self.wp_closest.get(wid)
+            lines.append(
+                "  {:<18s} {:>6s} {:>6s} {:>6s} {:>6s}   {}/{}".format(
+                    wid,
+                    "—" if reach is None else f"{reach:.2f}",
+                    "—" if prog is None else f"{prog:.2f}",
+                    "—" if pool is None else str(len(pool)),
+                    "—" if near is None else str(near),
+                    self.wp_captures.get(wid, 0),
+                    self.wp_rejected_precarious.get(wid, 0),
+                )
+            )
+        return "\n".join(lines)
 
     def save_to_disk(self, path):
         import pickle
@@ -696,8 +778,13 @@ class CheckpointManager:
                 w: (list(p.states), p.goal_score) for w, p in self.waypoints.items()
             },
         }
-        with open(path, "wb") as f:
+        # Atomic write: pickle to a temp file then os.replace, so a crash or
+        # interrupt mid-write can never corrupt an existing pool file (matters
+        # now that pools are also saved PERIODICALLY, see PoolSaveCallback).
+        tmp = f"{path}.tmp"
+        with open(tmp, "wb") as f:
             pickle.dump(data, f)
+        os.replace(tmp, path)
 
     def load_from_disk(self, path):
         import pickle
@@ -714,14 +801,24 @@ class CheckpointManager:
                 # artificial for that level) so fresh reset-origin
                 # states evict them first. Pre-H-AB files carry no frame
                 # stack -> None (falls back to reseed on load).
-                if isinstance(s, tuple) and len(s) == 4:
-                    entry = (int(s[0]), int(s[1]), bytes(s[2]), s[3])
+                # Pre-milestone-restore files have no reached-set (len 4) ->
+                # empty frozenset (same behaviour as before the fix).
+                if isinstance(s, tuple) and len(s) == 5:
+                    entry = (
+                        int(s[0]),
+                        int(s[1]),
+                        bytes(s[2]),
+                        s[3],
+                        frozenset(s[4] or ()),
+                    )
+                elif isinstance(s, tuple) and len(s) == 4:
+                    entry = (int(s[0]), int(s[1]), bytes(s[2]), s[3], frozenset())
                 elif isinstance(s, tuple) and len(s) == 3:
-                    entry = (int(s[0]), int(s[1]), bytes(s[2]), None)
+                    entry = (int(s[0]), int(s[1]), bytes(s[2]), None, frozenset())
                 elif isinstance(s, tuple) and len(s) == 2:
-                    entry = (i, int(s[0]), bytes(s[1]), None)
+                    entry = (i, int(s[0]), bytes(s[1]), None, frozenset())
                 else:
-                    entry = (i, 0, bytes(s), None)
+                    entry = (i, 0, bytes(s), None, frozenset())
                 if len(self.checkpoints[i]) < self.max_states_per_checkpoint:
                     self.checkpoints[i].states.append(entry)
         # Waypoint pools (optional; absent in pre-WP files).
@@ -732,7 +829,8 @@ class CheckpointManager:
                 if len(pool) >= self.max_states_per_checkpoint:
                     break
                 stack = s[3] if len(s) >= 4 else None
-                pool.states.append((int(s[0]), int(s[1]), bytes(s[2]), stack))
+                reached = frozenset(s[4] or ()) if len(s) >= 5 else frozenset()
+                pool.states.append((int(s[0]), int(s[1]), bytes(s[2]), stack, reached))
             pool.goal_score = float(goal_score)
             self.waypoints[wp_id] = pool
         loaded_stats = data.get("stats", self.stats)
@@ -923,12 +1021,18 @@ class CheckpointCurriculumEnv(gym.Env):
             self.gym_env.reset(seed=seed)
             self._initialized = True
 
-        level, state_bytes, start_stack = _manager.pick_start()
+        level, state_bytes, start_stack, inherited_wps = _manager.pick_start()
         # A waypoint start returns a str id; remember it so (a) episode-end
         # record_episode credits the WP pool, and (b) we don't re-capture the
         # waypoint we were seeded at.
         self._start_wp = level if isinstance(level, str) else None
         self._captured_wps = set()
+        # Milestones this seed had ALREADY banked when captured. Restored into
+        # the reward below so they stop being summed as pending targets — else
+        # the potential pulls a seeded episode BACKWARD (it is minimised behind
+        # the seed). Kept for the transitive union on any capture this episode.
+        self._inherited_wps: frozenset = frozenset(inherited_wps or ())
+        restore_reached_waypoints(self._reward_fn, self._inherited_wps)
         # WPs the agent came within tol of this episode (grounded/ride pose),
         # for the reset-origin wp_reach_ema. Distinct from _captured_wps (which
         # excludes the seed WP + already-captured); here we want every reach.
@@ -1078,6 +1182,10 @@ class CheckpointCurriculumEnv(gym.Env):
                     # Frame stack at the SAME moment as the save-state, so the
                     # seed restores the real motion history on load (H-AB).
                     self.preprocessed.export_frame_stack(),
+                    # Milestones banked AS OF THIS MOMENT (inherited from this
+                    # episode's own seed + reached since) — transitive, so the
+                    # set stays complete along a reverse-curriculum chain.
+                    self._inherited_wps | self._reached_wps_this_ep,
                 )
             )
             self._grounded_snap_due = None
@@ -1112,6 +1220,10 @@ class CheckpointCurriculumEnv(gym.Env):
                             self._step_count,
                             bonus,
                             self.preprocessed.export_frame_stack(),
+                            # Milestones banked as of this capture (see the CP
+                            # snapshot above) — includes this WP itself, since
+                            # `_reached_wps_this_ep` was updated just above.
+                            self._inherited_wps | self._reached_wps_this_ep,
                         )
                     )
                     self._captured_wps.add(wp_id)
@@ -1182,11 +1294,20 @@ class CheckpointCurriculumEnv(gym.Env):
             start_key = self._start_wp if self._start_wp is not None else start_level
             # Pass the reached-WP set + the full WP universe so the manager can
             # update the reset-origin wp_reach_ema (only used when start_key==0).
+            # Order-free segment health: did this episode reach any route point
+            # it did NOT start from or inherit from its seed? (Inherited points
+            # are subtracted so re-touching a milestone the seed already banked
+            # does not count as progress.)
+            new_points = self._reached_wps_this_ep - self._inherited_wps
+            if self._start_wp is not None:
+                new_points = new_points - {self._start_wp}
+            progressed = bool(new_points) or reached_level > start_level
             _manager.record_episode(
                 start_key,
                 reached_level,
                 reached_wps=self._reached_wps_this_ep,
                 all_wps=set(self._waypoints.keys()) if self._wp_enabled else None,
+                progressed=progressed,
             )
             # Flush deferred checkpoint snapshots, scored by how the
             # rest of this episode actually played out. ``source_cp``
@@ -1201,6 +1322,7 @@ class CheckpointCurriculumEnv(gym.Env):
                 save_step,
                 save_bonus,
                 save_stack,
+                save_reached,
             ) in self._pending_saves:
                 survived_steps = self._step_count - save_step
                 reached_next = self._max_cp_this_ep > level
@@ -1212,6 +1334,7 @@ class CheckpointCurriculumEnv(gym.Env):
                     save_bonus,
                     source_cp=save_src,
                     stack=save_stack,
+                    reached=save_reached,
                 )
             self._pending_saves = []
             # Flush deferred WAYPOINT captures through the SAME play-based
@@ -1225,6 +1348,7 @@ class CheckpointCurriculumEnv(gym.Env):
                 wp_step,
                 wp_bonus,
                 wp_stack,
+                wp_reached,
             ) in self._pending_wp_saves:
                 wp_survived = self._step_count - wp_step
                 wp_reached_next = self._max_cp_this_ep > start_level
@@ -1236,6 +1360,7 @@ class CheckpointCurriculumEnv(gym.Env):
                     source_cp=save_src,
                     bonus=wp_bonus,
                     stack=wp_stack,
+                    reached=wp_reached,
                 )
             self._pending_wp_saves = []
             if end_reason is None:
@@ -1281,7 +1406,60 @@ class CheckpointCurriculumEnv(gym.Env):
             final_score=final_score,
             final_bonus=bonus,
             start_state_hash=self._start_state_hash,
+            # TRUE start source, so from-reset analysis of episodes.csv is
+            # possible: a WP id for waypoint-seeded episodes, else the CP level
+            # ("0" = real game reset). start_level cannot distinguish them.
+            start_key=(self._start_wp if self._start_wp is not None else start_level),
+            # Column index of the start x reached matrix (see EPISODE_COLUMNS):
+            # every route point this episode reached.
+            reached_points=";".join(sorted(self._reached_wps_this_ep)),
         )
+
+
+def _route_order_for(cfg) -> list:
+    """The level's DISPLAY-ONLY route order for the log table (never semantics).
+
+    Empty when the level defines none (L1/L2) — route_table() then falls back to
+    a stable arbitrary order, so no point is ever hidden.
+    """
+    from retro_ai.training.yeti_map import get_level_map
+
+    level = 1
+    if cfg.reward is not None and cfg.reward.params:
+        try:
+            level = int(cfg.reward.params.get("level", 1))
+        except (TypeError, ValueError):
+            level = 1
+    try:
+        return list(getattr(get_level_map(level), "route_order", None) or [])
+    except ValueError:
+        return []
+
+
+class PoolSaveCallback(BaseCallback):
+    """Persist the curriculum seed pools (checkpoints.pkl) PERIODICALLY.
+
+    Previously the pools were only written when training completed normally
+    (not on interrupt/kill), so stopping a long run early — even to warm-start
+    the next phase — threw away every captured seed (e.g. the L3 A1..A5 ascent
+    pools). This saves them every ``save_freq`` env-steps (atomic via
+    save_to_disk's temp+replace), so a run can be cut at any time and the next
+    phase can reuse the latest pools. Pure I/O; does not affect training.
+    """
+
+    def __init__(self, path: str, save_freq: int):
+        super().__init__()
+        self._path = path
+        self._save_freq = max(1, int(save_freq))
+        self._last_save = 0
+
+    def _on_step(self) -> bool:
+        if _manager is None:
+            return True
+        if self.num_timesteps - self._last_save >= self._save_freq:
+            self._last_save = self.num_timesteps
+            _manager.save_to_disk(self._path)
+        return True
 
 
 class CurriculumCallback(BaseCallback):
@@ -1293,6 +1471,8 @@ class CurriculumCallback(BaseCallback):
         log_interval: int = 5000,
         diag_path=None,
         fruits_total: int = 4,
+        table_interval: int = 500_000,
+        route_order=None,
     ):
         super().__init__()
         self._diag_path = diag_path
@@ -1315,6 +1495,11 @@ class CurriculumCallback(BaseCallback):
         self._log_interval = log_interval
         self._last_log = 0
         self._start = time.monotonic()
+        # Route TABLE cadence: the per-step line stays compact/fixed-size; the
+        # full route-ordered table (one row per point) prints far less often.
+        self._table_interval = table_interval
+        self._last_table = 0
+        self._route_order = route_order or []
 
     def _on_step(self) -> bool:
         _set_global_step(self.num_timesteps)
@@ -1342,6 +1527,20 @@ class CurriculumCallback(BaseCallback):
             )
             self._write_diag()
             self._last_log = self.num_timesteps
+
+        # Route table: low frequency, route-ordered, one row per point.
+        if (
+            _manager is not None
+            and self.num_timesteps - self._last_table >= self._table_interval
+        ):
+            table = _manager.route_table(self._route_order)
+            if table:
+                print(
+                    f"\nROUTE @ step {self.num_timesteps} "
+                    f"(reach=from-reset, prog=order-free progress)\n{table}\n",
+                    flush=True,
+                )
+            self._last_table = self.num_timesteps
         return True
 
     def _write_diag(self) -> None:
@@ -1615,9 +1814,17 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
                     cfg.training.timesteps,
                     diag_path=os.path.join(cfg.training.output, "curriculum_diag.csv"),
                     fruits_total=cfg.curriculum.fruits_total,
+                    # Display-only ordering for the route table (no semantics).
+                    route_order=_route_order_for(cfg),
                 ),
                 EpisodeMetricsCallback(episode_logger, log_interval=10_000),
                 snapshot_cb,
+                # Persist pools periodically so an early stop keeps captured
+                # seeds (pools were previously saved only on normal completion).
+                PoolSaveCallback(
+                    os.path.join(cfg.training.output, "checkpoints.pkl"),
+                    save_freq=1_000_000,
+                ),
             ],
         )
         model.save(os.path.join(cfg.training.output, "final_model"))

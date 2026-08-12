@@ -1,0 +1,84 @@
+# yeti_curriculum L3 v7 — warm-start v6 15M + JUMP-EDGES map, continue anneal.
+#
+# v6 (phase-2 anneal) SOLVED the escalator and chained the snowball climb from
+# reset up to SN2 (final sweep: BOTTOM 55 / BR 50 / SN1 45 / SN2 38), but 0%
+# SN3. Diagnosed root cause (experiments/003-yeti/level3_notes.md): the SN2->SN3
+# rung is a 1-PIXEL `Lsc4` ladder-mount window at ram x=70 under snowball
+# pressure — a hard-but-learnable motor skill (same mechanic as L2's L34 1px
+# descent). The reward gradient is CORRECT (pulls right-to-x70 then up); the
+# snowball is dodgeable. So the fix is REPS of the mount + a downstream pull
+# that reinforces the rare successful mounts.
+#
+# TWO differences vs v6 (both point at the SN3 wall):
+#  1. Warm-start weights from the v6 15M champion (deepest reset chain so far)
+#     + inherit v6's end-of-run CP/WP pools (Lsc1-3 saturated; Lsc4_top only
+#     ~7 — the reverse-curriculum frontier we want to grow).
+#  2. The LEVEL3 map now has jump_edges (SN3->A1..A5 + START->STEP->2LAD;
+#     committed 819f536). v6 trained WITHOUT them, so fruit/princess were
+#     graph-unreachable past SN3 (no gradient). Now the whole route is
+#     connected: ONCE the agent mounts Lsc4 to SN3, the fruit/princess
+#     path-progress reward pulls it onward — reinforcing the mount it just did.
+#
+# Same proven anneal recipe otherwise (n_steps=512, target_kl=0.05,
+# ladder_segment_shaping, gamma=1, defer_fruit_credit). Snapshots every 100k;
+# keep-best snapshot sweep at the end (do NOT trust the final snapshot).
+#
+# WATCH `wp_reach`: Lsc3 (SN2) should stay high; the new signal is Lsc4_top
+# (SN3) rising above 0 and then Lprincess. If SN3 stays ~0 after several M
+# steps, the 1px mount needs a dedicated drill (seed at/just-left of x70), not
+# just compute.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v7_jumpedges_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/champions/l3_v6_15M/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

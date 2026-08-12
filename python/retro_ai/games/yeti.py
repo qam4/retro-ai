@@ -129,6 +129,13 @@ def waypoints(level: int) -> Mapping[str, Tuple[int, int, int]]:
             wps[f"{name}_top"] = (x_ram, m.floor_top_y[top_floor], top_floor)
         if which in ("bot", "both"):
             wps[f"{name}_bot"] = (x_ram, m.floor_top_y[bot_floor], bot_floor)
+    # Jump-edge landing waypoints (L3 A1..A5 ascent): seed/reach targets on the
+    # otherwise-unseedable jump platforms. NOT reward targets (reward
+    # unchanged). Empty on L1/L2 (no jump_waypoint_names). Ladder/jump names are
+    # disjoint by construction, so this never clobbers a ladder waypoint.
+    from retro_ai.training.yeti_map import jump_waypoints
+
+    wps.update(jump_waypoints(m))
     return wps
 
 
