@@ -52,8 +52,15 @@ def build_training_env(profile_name: str, env_cfg: EnvConfig) -> TrainingEnvStac
         Profile identifier (resolved by :class:`GameProfileRegistry`).
     env_cfg : EnvConfig
         Per-run overrides. ``action_mode`` and ``resize`` always apply;
-        ``frame_skip`` / ``frame_stack`` / ``frame_maxpool`` / ``grayscale``
-        only apply when they are not ``None``.
+        ``frame_skip`` / ``frame_stack`` / ``frame_maxpool`` / ``grayscale`` /
+        ``crop`` only apply when they are not ``None``.
+
+    Notes
+    -----
+    ``crop`` used to be dropped here, so a profile that declared one was
+    silently ignored on this path (the curriculum trainer and every eval
+    script) while ``training/pipeline.py`` honoured it. No shipped profile
+    sets ``crop``, so wiring it up is a no-op until one opts in.
     """
     registry = GameProfileRegistry()
     profile = registry.load(profile_name)
@@ -76,6 +83,7 @@ def build_training_env(profile_name: str, env_cfg: EnvConfig) -> TrainingEnvStac
             env_cfg.grayscale if env_cfg.grayscale is not None else profile.grayscale
         ),
         resize=env_cfg.resize,
+        crop=(env_cfg.crop if env_cfg.crop is not None else profile.crop),
         frame_stack=(
             env_cfg.frame_stack
             if env_cfg.frame_stack is not None

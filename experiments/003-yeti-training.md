@@ -28,19 +28,39 @@ about those runs come from old logs / prior conversations and are marked
 
 ---
 
-> **WARNING — the champion percentages below do not currently reproduce.**
-> `v15_phase2_4500k`, documented here at 99.7% princess-from-reset, now evaluates
-> **0/100** (it still collects all 4 fruits, then dies on the final leg). This is
-> NOT a Python regression: the same 0% is measured at `5b2d85f`, the commit that
-> recorded the 99.7%. The only uncontrolled variable is the native emulator
-> `.so`, which is not versioned — the champion was captured 2026-06-24 and the
-> current build post-dates two C++ core commits (`2b0a45d` save/load restore,
-> `aa587d9` fast death detect).
+> **WARNING — every L1 champion percentage below was measured against a BROKEN
+> emulator state-restore, and does not reproduce on the current core.**
+> RESOLVED 2026-08-12 — full entry: **H-AM** below; recipe + follow-ups in
+> TODO.md, "BLOCKER [CONFIRMED]". Summary:
 >
-> Until that is resolved (recipe + next step in TODO.md, "BLOCKER — champion
-> evals are not reproducible"), treat every absolute figure in this document as
-> **unverified**, and prefer comparisons between runs that shared one emulator
-> build. Relative results within a single build (e.g. L3 v13 vs v14) remain valid.
+> `v15_phase2_4500k`, documented here at 99.7% princess-from-reset, evaluates
+> **0/40** on the current core and **39/40 (97.5%)** on a core built at
+> `2b0a45d~1`. `2b0a45d` is the exact commit that changed it; a freshly built
+> HEAD reproduces the stale `.so` exactly, so nothing was hiding in the
+> unversioned binary. Every build still reaches 4 fruits 39/40 — only the final
+> princess leg collapses.
+>
+> Cause: `MO5RLInterface::reset()` boots the emulator only on the FIRST reset;
+> every later episode is restored from a cached `startup_state_`, so the
+> save/load path is on the critical path of ALL training and eval episodes.
+> Before `2b0a45d` that restore was broken, in two ways the policy could see:
+> (1) ~57 RAM addresses drifted from a true boot, including the hazard object
+> table at `0x2B60/68/70/78/80` — byte `0x2B24` was FROZEN (148) where a real
+> boot has it live (13..251), so snowball timing was quieter and more
+> predictable; (2) the monitor ROM (character font) was wiped, so HUD glyphs
+> rendered BLANK (105 pixels, rows `y=1..14`).
+>
+> Proven with a policy-free, fixed-action, full-RAM comparison: old vs new core
+> are **identical for 150 steps on a real boot** (physics never changed), and on
+> the new core **restore == boot bit-exactly** (the fix is correct). It was the
+> old restore that was wrong.
+>
+> Consequence for this document: the L1 navigation results are real (reach-4
+> holds in every build), but **every absolute princess figure for L1 was earned
+> against partly-frozen hazards and must be re-measured on the current core
+> before being quoted.** Relative results within a single emulator build (e.g.
+> L3 v13 vs v14) remain valid. There is no pixel-level workaround — the main
+> component is game state, not the frame.
 
 ## TL;DR / Current status (after approach 35)
 
@@ -50,6 +70,12 @@ eval (300 stochastic): **princess 99.7% from reset** (299/300) — Yeti is
 essentially SOLVED from a cold start. Completion is also tightly speed-
 optimized: ~259 steps, leftover bonus ~787 (median within 0.1% of the
 best ever seen, 98% of wins within 2% of best).
+
+> **[OBSOLETE — pre-`2b0a45d` emulator]** Every figure in this paragraph was
+> measured against the broken state-restore (see the warning above). Re-measured
+> 2026-08-12: **0/40 princess on the current core**, 39/40 at `2b0a45d~1`. L1 is
+> NOT solved on the emulator we ship today; the policy needs re-validating or
+> retraining against live hazards.
 
 **How we got here (the arc): 11.2% -> 58% -> 99.7%.**
 1. *Allocation (H-T, v14).* Aggregate-goal-score weighting (one weight per
@@ -670,6 +696,60 @@ alone doesn't resolve the over-concentration.
   keeps the earliest one where holding RIGHT actually moves the agent (control
   verified), with bonus still 1000. Regenerated `level2_start.sav` is a v4 save
   validated controllable.
+- [x] **H-AM — the L1 champion was trained against the SAME broken restore, so
+  every pre-`2b0a45d` L1 princess figure is invalid** (CONFIRMED 2026-08-12;
+  the level-1 twin of H-AE, caused by the H-AC fix landing).
+  **Full write-up: `experiments/003-yeti/core_provenance_2b0a45d.md`** —
+  mechanism, reproduction recipe, and tracked eval data under
+  `experiments/003-yeti/data/champion_repro_2b0a45d/`. Tool:
+  `scripts/mo5/yeti/core_determinism_probe.py` (`selfcheck` = ~30s standing
+  guard on one build; `capture` + `compare` = the full A/B). Symptom:
+  `champions/v15_phase2_4500k`, documented at 99.7% princess-from-reset,
+  evaluates 0/40 today. Bisected by building the core at four points and
+  re-running the documented eval (`eval_from_reset.py --profile yeti_fruit
+  --episodes 40 --stochastic`):
+
+  | core build | princess | >= 4 fruits |
+  |---|---|---|
+  | `2b0a45d~1` (7f8d8c7) | **39/40 (97.5%)** | 39/40 |
+  | `2b0a45d` | 0/40 | 39/40 |
+  | `HEAD` (f542839) | 0/40 | 39/40 |
+  | stale Jul-2 `.so` | 0/40 | 39/40 |
+
+  `2b0a45d` is the exact commit; a freshly built HEAD matches the unversioned
+  `.so` exactly, so the binary hid nothing. **Why a load_state-only commit moved
+  a from-RESET eval:** `MO5RLInterface::reset()` boots the emulator only on the
+  FIRST reset — every later episode is restored from a cached `startup_state_`,
+  so the save/load path is on the critical path of ALL training and eval
+  episodes, not just explicit `load_state` calls. That single fact is what made
+  this look impossible to explain from the Python history.
+  **The old restore was broken in two policy-visible ways** (both fixed by
+  H-AC): (1) DYNAMICS — ~57 RAM addresses drifted from a true boot, including
+  the 8-byte-strided hazard object table at `0x2B60/68/70/78/80`; signature byte
+  `0x2B24` was FROZEN at 148 where a real boot has it live (13..251), i.e. a
+  counter/RNG driver was inert and snowball timing was quieter and more
+  predictable. Player `x`/`y` (`0x2B52`/`0x2B51`) were unaffected, so this is
+  the hazards, not the avatar. (2) RENDERING — the wiped monitor ROM blanked the
+  HUD glyphs (exactly 105 pixels, rows `y=1..14`).
+  **Proof that the NEW core is the correct one** (policy-free: fixed no-op
+  action sequence, full 48K RAM snapshot per step, 150 steps): old vs new core
+  are byte-identical on a real boot (physics never changed), and on the new core
+  restore == boot bit-exactly, while on the old core restore diverges from boot
+  at step 44. So H-AD's "residual wobble is benign" holds for the FIXED core,
+  but the PRE-fix restore was not merely wobbly — it was wrong.
+  In a deterministic champion episode the first play-area difference is a
+  falling snowball at step 76 (drifting down-right), while the player's RAM is
+  still identical through step 84 and the actions match for 100 steps.
+  Consequence: L1 navigation is real (reach-4 = 39/40 in EVERY build) but the
+  hazard-sensitive final leg was tuned to frozen hazards. No pixel-level
+  workaround exists — verified that cropping the HUD does NOT restore the old
+  behaviour, because the dominant component is game state, not the frame.
+  **Lessons.** (a) Record the native build's SHA in champion dirs and run
+  manifests; a policy is only meaningful against the emulator it trained on.
+  (b) A "save/load only" core change is NOT eval-neutral while `reset()` is
+  implemented as a state restore. (c) H-AE's rule generalises: validate the
+  start state against a real boot, not just against itself — bit-exact
+  restore-vs-boot is now the guard.
 - **H-AF — first VALID level-2 run (`yeti_curriculum_l2_v3_10m`), raw data.**
   First L2 training on the fixed, control-verified start save (config = the
   latest L2 config, `fruit_bonus_path_progress_pbrs` level 2, phase-1

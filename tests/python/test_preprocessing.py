@@ -140,6 +140,44 @@ class TestResize:
         assert out.shape == (60, 80, 3)
 
 
+class TestCrop:
+    """Crop a region of interest out of the raw frame, before everything else.
+
+    Used to hide chrome the agent should not learn from (a HUD strip), so a
+    change in how the emulator renders it cannot shift the observation.
+    """
+
+    def test_crop_selects_region(self):
+        frame = _random_rgb_frame(200, 320)
+        pipe = PreprocessingPipeline(crop=(16, 0, 184, 320), resize=None)
+        out = pipe.reset(frame)
+        assert out.shape == (184, 320, 3)
+        np.testing.assert_array_equal(out, frame[16:200, 0:320])
+
+    def test_crop_removes_the_hud_strip(self):
+        """Whatever is drawn in the cropped rows cannot reach the policy."""
+        frame = np.zeros((200, 320, 3), dtype=np.uint8)
+        pipe = PreprocessingPipeline(crop=(16, 0, 184, 320), resize=None)
+        clean = pipe.reset(frame)
+
+        frame[0:16] = 255  # repaint the HUD, e.g. a renderer fix
+        assert np.array_equal(pipe.reset(frame), clean)
+
+    def test_crop_applied_before_resize(self):
+        """Crop then resize — the resize must see only the cropped region."""
+        frame = np.zeros((200, 320, 3), dtype=np.uint8)
+        frame[0:16] = 255
+        pipe = PreprocessingPipeline(crop=(16, 0, 184, 320), resize=(84, 84))
+        out = pipe.reset(frame)
+        assert out.shape == (84, 84, 3)
+        assert out.max() == 0, "cropped-out rows must not survive the resize"
+
+    def test_noop_when_none(self):
+        frame = _random_rgb_frame(60, 80)
+        pipe = PreprocessingPipeline(crop=None, resize=None)
+        np.testing.assert_array_equal(pipe.reset(frame), frame)
+
+
 class TestFrameStacking:
     """Requirement 18.3 — frame stacking."""
 

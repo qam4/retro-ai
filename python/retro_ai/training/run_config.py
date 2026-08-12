@@ -83,6 +83,14 @@ class EnvConfig:
     frame_stack: Optional[int] = None
     frame_maxpool: Optional[bool] = None
     grayscale: Optional[bool] = None
+    # (y, x, height, width), applied to the raw frame BEFORE grayscale/resize.
+    # ``None`` = use the game profile's ``crop`` (itself usually None = no crop).
+    # Use it to drop chrome the agent should not see, e.g. a HUD strip: pixels
+    # that carry no navigational information but DO change when the emulator's
+    # renderer changes, which silently invalidates trained policies (see the
+    # `2b0a45d` blocker in TODO.md). Cropping changes the observation geometry,
+    # so a policy trained with one crop cannot be evaluated with another.
+    crop: Optional[Tuple[int, int, int, int]] = None
 
 
 @dataclass(frozen=True)

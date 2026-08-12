@@ -182,46 +182,79 @@
   videos: scripts/mo5/yeti/rollout_l2.py draws the real RAM lives/bonus/score/fruits
   in a strip BELOW the frame (not over the game HUD).
 
-## BLOCKER — champion evals are not reproducible (emulator provenance)
+## BLOCKER [RESOLVED] — champion evals are not reproducible
+
+**Full write-up: `experiments/003-yeti/core_provenance_2b0a45d.md`** (evidence,
+reproduction recipe, tracked data). Run-history entry: H-AM in
+`experiments/003-yeti-training.md`. Standing guard, ~30s, needs one build:
+
+```
+env PYTHONPATH=python:build/ci-linux RETRO_AI_ROM_DIR=roms \
+  python3 scripts/mo5/yeti/core_determinism_probe.py selfcheck --out debug/ram_head.npz
+```
 
 **The L1 champion no longer completes the level, and the cause is NOT in the
-Python history.**
+Python history. Root cause: the pre-`2b0a45d` state-restore did not reproduce a
+real boot, and `reset()` IS a state restore — so the champion was trained
+against a broken emulator state. Physics never changed. The current core is the
+correct one; the old champion figures are void.**
 
-Measured:
-- `v15_phase2_4500k` (md5-verified as the documented 4.5M snapshot) evaluates
-  **princess 0/100**, while reaching 4 fruits 99% — it plays the level, collects
-  everything, then dies on the final leg.
-- Same result at `HEAD~1` and at **`5b2d85f`, the very commit that recorded
-  99.7%**. So no Python change caused it.
-- The only uncontrolled variable is the NATIVE `.so`: it is not in git, so
-  checking out old commits does not revert it. Champion captured 2026-06-24;
-  `build/ci-linux/retro_ai_native*.so` built Jul 2 — after two core commits,
-  `2b0a45d` (complete save/load restore, incl. master clock / frame count) and
-  `aa587d9` (fast death detection).
-- Ruled out: princess-touch detection (the flag never rises, and the deaths are
-  real), `--stall-threshold`, wrong weights in the champion dir, and the C++ fast
-  death flag (L1's profile sets no `death_flag_addr`, so it is disabled there).
+Bisected the native core over four builds, same documented eval
+(`eval_from_reset.py --profile yeti_fruit --episodes 40 --stochastic`):
+`2b0a45d~1` = **39/40 princess (97.5%)**, `2b0a45d` = 0/40, `HEAD` = 0/40,
+stale Jul-2 `.so` = 0/40. Every build reaches 4 fruits 39/40, so only the final
+leg changed. The 97.5% was real; `2b0a45d` is the exact commit; HEAD reproduces
+the stale binary, so nothing hid in the unversioned `.so`.
 
-NEXT STEP — confirm by building the core at the pre-change commit:
-```
-git worktree add /tmp/oldcore 2b0a45d~1
-cmake -S /tmp/oldcore -B /tmp/oldcore/build --preset <see CMakePresets.json>
-cmake --build /tmp/oldcore/build -j
-env PYTHONPATH=python:/tmp/oldcore/build RETRO_AI_ROM_DIR=roms \
-  python3 scripts/mo5/yeti/eval_from_reset.py \
-    --model output/mo5/yeti/champions/v15_phase2_4500k/final_model.zip \
-    --profile yeti_fruit --episodes 40 --stochastic
-```
-- princess ~99% => the core change altered the physics/timing our champions were
-  trained against. They must be re-validated (and possibly retrained) per core
-  change.
-- still 0 => the 99.7% was never reproducible, and the figure itself is suspect.
+Root cause in one paragraph: `MO5RLInterface::reset()` boots the emulator only on
+the FIRST reset and restores a cached `startup_state_` thereafter, so the
+save/load path is on the critical path of every training and eval episode. The
+pre-`2b0a45d` restore did not reproduce a real boot — ~57 RAM addresses drifted,
+notably `0x2B24` FROZEN where a real boot has it live, leaving hazard timing
+quieter than the real game, plus a wiped monitor ROM that blanked the HUD font.
+Proven policy-free: on a real boot the two cores are byte-identical for 150 steps
+(physics unchanged), and on the fixed core restore == boot bit-exactly. The
+champion is overfit to the old bug; there is no pixel-level workaround (verified:
+cropping the HUD still diverges, at step 76, via a snowball).
 
-FIX EITHER WAY: **record the native build's commit SHA in champion dirs and run
-manifests.** A policy is only meaningful against the emulator it trained on, and
-right now that link is unrecorded, which makes every historical number in
-experiments/003-yeti-training.md unverifiable. Cheap: the manifest already
-captures git info; add the built artifact's SHA/mtime alongside it.
+Numbers, mechanism, reproduction recipe and tracked data: see the write-up.
+
+FOLLOW-UPS
+- [ ] **Re-measure or retrain L1 on the current core.** Every L1 princess figure
+  in experiments/003-yeti-training.md predates `2b0a45d` and is void. Navigation
+  transfers (reach-4 = 39/40 on every build); only the hazard-sensitive final leg
+  must relearn. Warm-starting from the champion's weights is the obvious first
+  attempt.
+- [ ] **Run `core_determinism_probe.py selfcheck` after any change to save/load,
+  the crayon submodule, or the startup sequence.** ~30s, one build, no champion
+  needed; exits non-zero when `reset()` stops reproducing a real boot. Worth
+  promoting to a pytest guard (needs a ROM, so skip-if-missing).
+- [DONE, opt-in not yet enabled] **Observation hygiene: crop the HUD.** The
+  pipeline already had `crop=(y, x, h, w)` and `GameProfile`/`TrainingConfig`
+  already parsed it, but `build_training_env` DROPPED it — so a profile
+  declaring a crop was silently ignored on the curriculum-training and eval
+  paths while `training/pipeline.py` honoured it. Now plumbed through, plus an
+  `EnvConfig.crop` override; no shipped profile sets it, so it is a no-op until
+  one opts in (verified: `yeti_fruit` -> `pipeline.crop = None`, eval numbers
+  unchanged). Tests: `test_env_builder_crop.py`, `TestCrop` in
+  `test_preprocessing.py`, `test_crop_coerced_to_tuple_and_defaults_none`.
+  Measured crop for Yeti: **`crop: [16, 0, 184, 320]`**. HUD is rows 0..15
+  (4-6 colours/row, text; blank separator at y=7); from y=16 down every row has
+  only 2 colours (scenery). Safe for all three levels, but only just — the
+  topmost platform is `y=30` on L2/L3 and the player sprite reaches ~12px above
+  a platform, so ~18 is the real ceiling. Do NOT crop lower than 16.
+  Caveats before enabling: (a) it changes observation geometry, so it starts a
+  fresh comparison generation — existing checkpoints cannot be evaluated under
+  it; (b) it removes the bonus/time display from view (the reward reads bonus
+  from RAM, so shaping is unaffected, but the agent loses the only visual time
+  cue); (c) it does NOT protect against the bug above, whose main component is
+  game state, not pixels.
+
+- [ ] **Record the native build's commit SHA in champion dirs and run
+  manifests.** THE fix that would have made this a one-command diagnosis instead
+  of a day's bisect. A policy is only meaningful against the emulator it trained
+  on, and that link is still unrecorded. Cheap: the manifest already captures git
+  info; add the built artifact's SHA/mtime alongside it.
 
 ## Yeti Level 3 — reward graph
 

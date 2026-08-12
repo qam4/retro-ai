@@ -1,0 +1,254 @@
+{
+  "model": "output/mo5/yeti/champions/v15_phase2_4500k/final_model.zip",
+  "episodes": 40,
+  "deterministic": false,
+  "fruits_total": 4,
+  "start_state": null,
+  "max_cp_counts": {
+    "3": 1,
+    "5": 39
+  },
+  "princess_touches": 39,
+  "rows": [
+    {
+      "ep": 0,
+      "max_cp": 3,
+      "steps": 249,
+      "end_reason": "death"
+    },
+    {
+      "ep": 1,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 2,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 3,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 4,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 5,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 6,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 7,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 8,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 9,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 10,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 11,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 12,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 13,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 14,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 15,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 16,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 17,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 18,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 19,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 20,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 21,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 22,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 23,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 24,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 25,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 26,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 27,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 28,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 29,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 30,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 31,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 32,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 33,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 34,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 35,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 36,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 37,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 38,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    },
+    {
+      "ep": 39,
+      "max_cp": 5,
+      "steps": 259,
+      "end_reason": "princess"
+    }
+  ]
+}

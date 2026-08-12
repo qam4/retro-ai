@@ -149,6 +149,22 @@ def test_resize_coerced_to_tuple(tmp_path):
     assert isinstance(cfg.env.resize, tuple)
 
 
+def test_crop_coerced_to_tuple_and_defaults_none(tmp_path):
+    """``crop`` drops chrome (e.g. a HUD strip) from the observation."""
+    base = {
+        "training": {"timesteps": 1000, "output": "/tmp/x"},
+        "reward": {"name": "fruit_flat"},
+    }
+    plain = {**base, "env": {"profile": "yeti_fruit"}}
+    cfg = RunConfig.from_yaml(_write(tmp_path, plain))
+    assert cfg.env.crop is None, "no crop unless a config/profile asks for one"
+
+    data = {**base, "env": {"profile": "yeti_fruit", "crop": [16, 0, 184, 320]}}
+    cfg = RunConfig.from_yaml(_write(tmp_path, data))
+    assert cfg.env.crop == (16, 0, 184, 320)
+    assert isinstance(cfg.env.crop, tuple)
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------

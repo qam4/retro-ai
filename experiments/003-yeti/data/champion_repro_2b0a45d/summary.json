@@ -1,0 +1,84 @@
+{
+  "investigation": "L1 champion no longer completes the level; bisect the native core",
+  "date": "2026-08-12",
+  "writeup": "experiments/003-yeti/core_provenance_2b0a45d.md",
+  "runbook_entry": "experiments/003-yeti-training.md H-AM",
+  "conclusion": "The pre-2b0a45d state-restore did not reproduce a real boot. reset() is implemented as a state restore, so every training/eval episode after the first used the broken state. The champion is overfit to that bug (frozen hazard counter 0x2B24 + blank HUD font). Cold-boot emulator dynamics are unchanged. The current core is correct: restore == boot, bit-exact.",
+  "eval": {
+    "model": "output/mo5/yeti/champions/v15_phase2_4500k/final_model.zip",
+    "command": "scripts/mo5/yeti/eval_from_reset.py --profile yeti_fruit --episodes 40 --stochastic",
+    "documented_figure": "99.7% princess from reset (300 stochastic episodes, pre-2b0a45d core)",
+    "results": [
+      {
+        "core": "2b0a45d~1",
+        "core_sha": "7f8d8c7",
+        "princess": "39/40",
+        "princess_pct": 97.5,
+        "reach_4_fruits": "39/40",
+        "file": "eval_core_2b0a45d-parent_7f8d8c7.json",
+        "note": "reproduces the documented result"
+      },
+      {
+        "core": "2b0a45d",
+        "core_sha": "2b0a45d",
+        "princess": "0/40",
+        "princess_pct": 0.0,
+        "reach_4_fruits": "39/40",
+        "file": "eval_core_2b0a45d.json",
+        "note": "the exact commit that changed the outcome"
+      },
+      {
+        "core": "HEAD",
+        "core_sha": "f542839",
+        "princess": "0/40",
+        "princess_pct": 0.0,
+        "reach_4_fruits": "39/40",
+        "file": "eval_core_head_f542839.json",
+        "note": "current source reproduces the stale binary exactly"
+      },
+      {
+        "core": "stale prebuilt .so in build/ci-linux",
+        "core_sha": "unrecorded (built 2026-07-02)",
+        "princess": "0/40",
+        "princess_pct": 0.0,
+        "reach_4_fruits": "39/40",
+        "file": "eval_core_stale_jul2_so.json",
+        "note": "the provenance gap that started the investigation"
+      }
+    ]
+  },
+  "ram_determinism": {
+    "method": "fixed no-op action sequence, full 48K RAM snapshot per step, 150 steps, policy removed from the loop",
+    "tool": "scripts/mo5/yeti/core_determinism_probe.py",
+    "old_vs_new_episode1_real_boot": "identical for all 150 steps (physics unchanged)",
+    "old_vs_new_episode2_restore": "diverges at step 44",
+    "new_core_boot_vs_restore": "identical (restore is faithful)",
+    "old_core_boot_vs_restore": "diverges at step 44, 10 bytes by step 149",
+    "addresses_ever_differing": 57,
+    "signature_byte": {
+      "addr": "0x2B24",
+      "old_core": "frozen at 148 for all 150 steps",
+      "new_core": "live, range 13..251",
+      "reading": "a counter/RNG driver was left inert by the broken restore, so hazard timing was quieter and more predictable than the real game"
+    },
+    "hazard_object_table": "0x2B60/68/70/78/80 (8-byte stride) among the drifting addresses",
+    "player_position_unaffected": ["0x2B52", "0x2B51"]
+  },
+  "rendering": {
+    "cause": "MemorySystem::set_state wiped the monitor ROM, which holds the MO5 character font, so HUD glyphs drew blank from episode 2 onward",
+    "differing_pixels": 105,
+    "region": "rows y=1..14 (HUD strip occupies y=0..15; play area starts at y=16)",
+    "first_differing_step": 2,
+    "reset_frame": "byte-identical between cores; the difference appears on the first HUD repaint"
+  },
+  "hud_crop_does_not_help": {
+    "test": "re-ran the deterministic episode with rows 0..15 cropped from the observation",
+    "result": "the two cores still diverge, at step 76, via a falling snowball (bbox y=[96,107] x=[168,179])",
+    "reading": "the dominant difference is game state, not pixels, so no observation-level workaround recovers the champion"
+  },
+  "actions": [
+    "Every L1 princess figure recorded before 2b0a45d is void; re-measure or retrain on the current core.",
+    "Record the native build SHA in champion dirs and run manifests.",
+    "Run core_determinism_probe.py selfcheck after any save/load, crayon-submodule or startup-sequence change."
+  ]
+}
