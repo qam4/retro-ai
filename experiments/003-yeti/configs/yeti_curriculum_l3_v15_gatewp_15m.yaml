@@ -1,0 +1,102 @@
+# v15 — CONTROL C EXTENDED TO 15M. Lever: gate_waypoints.
+#
+# This is deliberately NOT a new experiment. It is ctrl-C's exact config with
+# timesteps raised, resumed from ctrl-C's own weights and pools, so v15 reads as
+# one continuous 15.6M run of a single configuration. Every PPO and reward value
+# below is byte-identical to yeti_ctrlC_gatewp_600k.yaml.
+#
+# WHAT CTRL-C ESTABLISHED (600k, exit 0, vs ctrl-A at the same step):
+#   route[19]        7/19  ->  11/19   reached >=0.5 from reset
+#   Lsc4_top (SN3)   0.74  ->   0.83
+#   A1_launch        0.00  ->   0.74   } the ascent entry, 0.00 in every run v7-v14
+#   A1               0.00  ->   0.74   }
+#   A2_launch        0.00  ->   0.72   }
+#   A3_launch        0.00  ->   0.67   }
+#   SN3 captures        0  ->    652   <- the headline
+#
+# A capture needs 30 steps of survival past the point, so 0 -> 652 at SN3 says
+# SN3 was never a reflex problem. The agent can act from an SN3 arrival it
+# reached itself and cannot from one a seed teleported it into. That is the
+# composition gap (5.81% from a seed, 0.03% from reset) explained.
+#
+# WHAT THIS RUN IS FOR. 600k answers PRESERVATION, never IMPROVEMENT. Two
+# specific questions:
+#   1. Does 11/19 hold, or was it a transient of the reallocation? v13's own SN3
+#      progress did not arrive until ~8-12M, so 600k is far inside the noise
+#      window for a claim about the ceiling.
+#   2. Does the A3/A4 wall behave like SN3 did? A4_launch and above are still
+#      0.00 and the princess is untouched, so the wall MOVED, it did not fall.
+#      If gating is the right mechanism, A4 should open the same way A1 did once
+#      A3 clears 0.15 from reset. If it does not, the ascent needs something
+#      other than budget.
+#
+# READ IT EARLY. Do not wait 6h to find out:
+#   python3 scripts/mo5/yeti/smoke_train.py \
+#     --check-log output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m/output.log \
+#     --min-chain 11
+# 11 is what ctrl-C achieved; anything below it means the warm start lost ground.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  # Continues ctrl-C. Pools are read from the resume directory's
+  # checkpoints.pkl, so this inherits ctrl-C's reset-earned deep captures too.
+  resume: output/mo5/yeti/training/yeti_ctrlC_gatewp_600k/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    # v13 semantics. credit_requires_survival stays OFF: with gamma=1 the
+    # episode's shaping telescopes to Phi(end)-Phi(start), so refunding it on
+    # death zeroes the whole shaping term for every episode that dies -- 17,024
+    # of 17,033 on L3. That is what killed v14.
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  # THE LEVER. Waypoint pools honour the same 0.15 from-reset reach gate the
+  # progress rungs do, so the budget goes to the reachable frontier instead of
+  # to states the agent cannot get to on its own.
+  gate_waypoints: true
