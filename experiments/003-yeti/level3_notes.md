@@ -713,3 +713,55 @@ rather than plateaus, and to see whether the A3/A4 wall behaves like SN3 did.
 - Locate escalator platforms / compressor / snowball spawns in RAM (entity
   table ~0x2B00-0x2B74) if we need signals beyond the pixels.
 - Confirm the fruit's logic presence byte (vs deriving from fruits_remaining).
+
+## v15 INTERIM at 1.9M — L3 BREAKS OPEN (princess 0.71 from reset)
+`yeti_curriculum_l3_v15_gatewp_15m`, still running. Control C extended to 15M,
+byte-identical config, resumed from ctrl-C's weights and pools. At step 1.91M
+(13% of the run):
+
+```
+                     v13 @15M   ctrl-C @600k   v15 @1.9M
+route[19]              7/19        11/19         15/19
+Lsc4_top (SN3)         0.81         0.83          0.87
+princess, from reset   0.00         0.00          0.71
+```
+
+The full from-reset ladder, which had been zero above rung 7 in every run from
+v7 to v14:
+```
+v13   [1.00 ... 0.81 0.00 0.00 0.00 0.00 0.00 0.00 0.00]
+v15   [1.00 1.00 0.98 0.95 0.93 0.92 0.90 0.87 0.86 0.81 0.76 0.71 0.71 0.71 0.71]
+                                    SN3^                              princess^
+```
+Segment rates `10->11: 82%`, `11->12: 71%`. From `episodes.csv`, reset-origin
+episodes in the recent tail end `princess_touched` 67% / `death` 33%, reaching
+rung 14. (The route table's `Lprincess_top reach 0.22` at step 1.5M is the
+alpha-0.02 EMA still catching up; the instantaneous rate is much higher.)
+
+**So L3's ceiling was never SN3, and never the ascent.** It was the curriculum
+spending ~40% of episodes starting from states the agent could not reach on its
+own. Every mechanism we proposed for SN3 — jump waypoints, launch pads, reward
+re-heats, deferred credit, milestone shaping — was aimed at the wrong thing. The
+one change that moved it was refusing to train on unreachable starts, which is
+the rule that was already applied to progress rungs and had simply never been
+applied to waypoints. Cost: one boolean.
+
+**Corollary for the SN3 debugging (TASK 2).** The conclusion "the trained policy
+is no better than random at SN3, ~5-7% either way" was a correct measurement of a
+policy trained on teleported arrivals. It was not a property of SN3. Once the
+agent practises the approach, SN3 stops being a reaction problem — reach 0.87 and
+it passes straight through.
+
+**Open anomaly, worth a look but not blocking.** At the 1.5M route table
+`A4_launch` was 0.28 and `A5_launch` 0.27 while `A4` was 0.01 and `A5` 0.02, and
+`Lprincess_top` was 0.22 — i.e. the agent apparently gets to the princess without
+the A4/A5 POSITION waypoints registering. Meanwhile the mandatory-target ladder
+has rungs 12/13/14 all equal at 0.71, so the ladder's targets ARE being hit. That
+points at the recorded A4/A5 coordinates (or their tolerance) rather than at the
+agent. It only affects waypoint pools and the display, not the ladder.
+`Lesc_top` also remains 0.00: the escalator is not on the critical path.
+
+**Do not conclude yet.** This is 13% of the run. The trend is monotone and
+climbing rather than spiky, which is the opposite of a transient, but the claim
+"L3 is solved" needs the run to finish and then a from-reset eval of the final
+weights on fresh seeds.
