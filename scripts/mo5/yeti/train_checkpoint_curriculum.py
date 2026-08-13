@@ -253,6 +253,7 @@ class CheckpointManager:
         segment_floor: float = 0.0,
         n_rungs: int = 4,
         mandatory_ids=None,
+        gate_waypoints: bool = False,
     ):
         # PROGRESS LADDER SIZE. Historically this was the fruit count, so a pool
         # meant "N fruits collected" and the ladder had one step per fruit. That
@@ -404,6 +405,9 @@ class CheckpointManager:
         # now solved should stop pulling budget, and a newly-reachable
         # deep CP should become eligible promptly.
         self.reach_threshold = reach_threshold
+        # Apply the reach gate to WAYPOINT pools too (default False = the
+        # historical asymmetry). See pick_start for the evidence both ways.
+        self.gate_waypoints = bool(gate_waypoints)
         self.reach_alpha = 0.02
         # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
@@ -721,7 +725,29 @@ class CheckpointManager:
         for n in range(1, self.N_RUNGS + 1):
             if self.checkpoints[n] and self.reset_reach_ema[n] >= self.reach_threshold:
                 cp_candidates.append(n)
-        wp_candidates = [w for w, pool in self.waypoints.items() if len(pool) > 0]
+        # Waypoint pools are UNGATED by default: that asymmetry is deliberate and
+        # is how the reverse curriculum bootstrapped L2. ``gate_waypoints`` makes
+        # them honour the same reach gate the progress rungs do, using each
+        # waypoint's own from-reset reach EMA -- the direct analogue of
+        # ``reset_reach_ema`` for a position target.
+        #
+        # The case for it (L3 evidence): we drilled SN3 and the ascent heavily
+        # from ungated pools, seeded skill improved measurably (A1_launch -> A1
+        # went 5% -> 24-32%), and it composed to reset at 0.03%. Practising states
+        # the agent cannot reach produced skill that did not transfer, and spent
+        # ~40% of episodes doing it. The case against: L2's breakthrough came
+        # through ungated drilling past the F3 goat, and we cannot tell from those
+        # logs whether those waypoints were above 0.15 at the time (wp_reach did
+        # not exist yet), so this may block exactly that kind of win.
+        wp_candidates = [
+            w
+            for w, pool in self.waypoints.items()
+            if len(pool) > 0
+            and (
+                not self.gate_waypoints
+                or self.wp_reach_ema.get(w, 0.0) >= self.reach_threshold
+            )
+        ]
 
         candidates = list(cp_candidates)
         weights = [self.checkpoints[n].weight() for n in cp_candidates]
@@ -1786,6 +1812,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         # Progress ladder: pools keyed by how many MANDATORY targets are done.
         mandatory_ids=_ladder_ids,
         n_rungs=_ladder_rungs,
+        gate_waypoints=cfg.curriculum.gate_waypoints,
     )
 
     print("Checkpoint Curriculum Training", flush=True)

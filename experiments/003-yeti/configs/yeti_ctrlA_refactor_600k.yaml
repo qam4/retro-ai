@@ -1,0 +1,77 @@
+# CONTROL A — is the refactor behaviour-preserving on L3?
+#
+# v14 was labelled "one lever vs v13" and it was NOT: v13 ran 2026-08-11, BEFORE
+# the Target/credit work (17f10b7, 08-12 15:25) and the progress ladder (71d5d70,
+# 08-12 18:15); v14 ran after both. So v14's collapse (from-reset Lsc1_top
+# 0.99 -> 0.00) cannot be attributed to credit_requires_survival: the refactor
+# rode along with it.
+#
+# This run isolates the refactor: v13's EXACT reward semantics (credit flag OFF,
+# defer_fruit_credit as v13 had it), v13's weights and pools, on the CURRENT code.
+#
+#   Lsc1_top reach ~0.9  => refactor is clean; the credit rule caused v14.
+#   Lsc1_top reach ~0.1  => the refactor is the regression; bisect it
+#                           (ladder keying, the reached_next admission
+#                           loosening, save_src retention).
+#
+# WHY 600k IS ENOUGH: the v13-vs-v14 signal separated at the FIRST route table
+# and never recovered -- v13 Lsc1 0.97 @500k, v14 Lsc1 0.10 @500k. Preservation
+# questions ("did we break the chain?") are answerable in ~20 min. NOTE this
+# cannot judge IMPROVEMENT: v13's own SN3 progress took until ~8-12M, so any
+# "does it help" claim still needs a long run.
+
+training:
+  timesteps: 600_000
+  output: output/mo5/yeti/training/yeti_ctrlA_refactor_600k
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v13_seedfix_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    # Subsumes defer_fruit_credit: one rule for every target type.
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

@@ -542,9 +542,15 @@ fix, so L3 hazard timing is LIVE — see core_provenance_2b0a45d.md, and note th
 is why L3 feels harsher than L1/L2 ever did.
 
 ## v14 result (credit_requires_survival — NEGATIVE, and why)
-`yeti_curriculum_l3_v14_survivalcredit_15m`, 15M, exit 0, 6h08m. One lever vs
-v13: `credit_requires_survival`. Warm-started from v13 final (the best from-reset
-chain of any run) + v13 pools.
+`yeti_curriculum_l3_v14_survivalcredit_15m`, 15M, exit 0, 6h08m. Warm-started
+from v13 final (the best from-reset chain of any run) + v13 pools.
+
+**This was written up as "one lever vs v13" and that was WRONG.** v13 ran
+2026-08-11, BEFORE the Target/credit refactor (`17f10b7`, 08-12 15:25) and the
+progress ladder (`71d5d70`, 08-12 18:15); v14 ran after both. Two things moved,
+so nothing below could be attributed until control A ran it back — see
+"Controlled attribution" at the end of this section. Check commit dates against
+run dates before claiming a single lever.
 
 **The from-reset chain collapsed.**
 ```
@@ -587,15 +593,119 @@ flag-OFF path, so nothing compared flag-on shaping against the baseline. Add
 that test before retrying: for a surviving trajectory, flag-on total must equal
 flag-off total.
 
-**The correct generalisation (for v15).** Give each target an ARRIVAL payment
-that is deferred exactly like the fruit's: hold that target's credit until the
-agent has survived a short window past it, and leave all other shaping alone.
-That kills the +5.04 "touch SN3 then die" incentive without touching the other
-99% of the signal. Implement per-target, not per-episode.
+**The "per-target deferral" fix first proposed here is ALSO INVALID.** It said:
+give each target an arrival payment and defer it like the fruit's. But milestone
+reward is CONTINUOUS — there is no arrival bonus to defer. The agent is paid
+during the climb, as the distance to the target shrinks; nothing is banked at the
+touch. (An earlier note here claiming "+5.04 banked at touch" was wrong for the
+same reason.) So that design would have to INVENT a sparse payment, which is a
+new reward term, not a generalisation of `defer_fruit_credit`. It is off the
+table.
+
+Remaining options for the reckless-arrival problem, none yet chosen:
+leave v13's behaviour alone; refund only the last K steps of shaping (a bounded
+version of v14 — the user's read is that this is a slippery slope); or add an
+explicit death penalty, which is a new term but at least an honest one.
 
 **Still standing from the same work** (do not throw these out with v14): the
 Target model, the progress ladder (L3 1 -> 13 rungs), the alias resolution, and
-the seed-milestone RESTORE that fixed the measured retreat bug.
+the seed-milestone RESTORE that fixed the measured retreat bug. Control A below
+confirms all of it is behaviour-preserving.
+
+## Controlled attribution — control A (refactor is clean)
+`yeti_ctrlA_refactor_600k`, 600k, exit 0, 15m31s. v13's EXACT reward semantics
+(`defer_fruit_credit: true`, `credit_requires_survival` OFF), v13 weights and
+pools, on the CURRENT post-refactor code. This isolates the refactor from the
+credit rule.
+
+**The chain is intact.** At 600k: `route[19]: 7/19 reached>=0.5 from reset`,
+same as v13's 7/19, with `reset_reach=[1.00, 1.00, 1.00, 0.94, 0.94, 0.94, 0.92,
+0.78]` — rung 7 is SN3, matching v13's Lsc4_top 0.81 within noise. v14 at the
+same point was 3/19 with everything above rung 3 at zero.
+
+=> **`credit_requires_survival` caused v14's collapse. The Target refactor and
+the progress ladder are behaviour-preserving.** The mechanism above stands.
+
+**Side finding — the progress ladder's SAMPLING is currently inert on L3.** v14
+logged `start_frac0 = 1.000` with every other rung at 0: the 225 seeds sitting in
+`done[9..11]` were never sampled, because the 0.15 reach gate blocks a rung whose
+`reset_reach` is 0. That is the gate doing exactly what it is meant to do (do not
+drill B until B is reached from reset sometimes). The ladder's value on L3 is
+therefore not its seeds but its per-rung `reset_reach` RESOLUTION — which is what
+made this attribution readable in the first place.
+
+**Why 600k was enough.** The v13/v14 difference separated at the FIRST route
+table and never recovered. Preservation questions are answerable in ~20 minutes;
+IMPROVEMENT questions are not (v13's own SN3 progress took until ~8-12M).
+
+## Control C (gate_waypoints) — the SN3 ceiling was a BUDGET problem
+`yeti_ctrlC_gatewp_600k`, 600k, exit 0, 17m11s. One lever vs control A:
+`gate_waypoints: true`, i.e. hold waypoint pools to the same 0.15 reach gate the
+progress rungs obey. Baseline is ctrl-A, not v13, so the refactor is common to
+both. Both tables below are at step 500000.
+
+```
+route            ctrl-A   ctrl-C       cap/rej at that point
+Lgoat_a_top       0.98     1.00
+Lgoat_b_top       0.94     0.95
+Lesc_top          0.00     0.01
+Ldown_bot         0.88     0.93
+Lsc1_top          0.85     0.93
+Lsc2_top          0.83     0.87
+Lsc3_top          0.83     0.87        31/1784  ->  652/1108
+Lsc4_top (SN3)    0.74     0.83         0/1677  ->  652/1063
+A1_launch         0.00     0.74
+A1                0.00     0.74
+A2_launch         0.00     0.72
+A2                0.00     0.19
+A3_launch         0.00     0.67
+A3                0.00     0.17
+A4_launch         0.00     0.00
+A4                0.00     0.00
+A5_launch         0.00     0.00
+A5                0.00     0.00
+Lprincess_top     0.00     0.00
+
+route[19]:        7/19     11/19
+```
+
+**The SN3 capture count is the headline: ctrl-A saved 0 states at Lsc4_top,
+ctrl-C saved 652.** A capture requires surviving `min_survival_steps` (30) past
+the point, so this directly contradicts the reading that the policy is
+permanently "no better than random" at SN3. It is not a reflex problem. The agent
+arrives at SN3 in a state it can act from when it got there ITSELF; it could not
+when it was teleported there by a seed. That is the composition gap
+(seeded arrivals went onward 5.81%, reset arrivals 0.03%) explained: the seeded
+arrival pose is reachable but not RECOVERABLE by a policy that never practised
+the approach.
+
+Four new route points cross 0.5, and rungs 8-10 go 0.00 -> 0.76/0.31/0.09 from
+reset. **The wall moved from SN3 (rung 7) to A3/A4 (rungs ~11-13). Moved, not
+solved** — A4_launch upward is still 0.00 and the princess is untouched.
+
+**Honest reading of the comparison.** Gating makes ~100% of episodes reset-origin
+where ctrl-A was ~40% waypoint-origin, so ctrl-C got ~1.7x more reset-trajectory
+training at equal step count. That is not a measurement artifact — the
+reallocation IS the intervention — but the claim is "spending the budget on the
+reachable frontier beats spending it on unreachable states", not "same budget,
+better result".
+
+**Counter-evidence, weighed and rejected.** ctrl-A built a far richer deep pool
+(83 states at rung 11 vs ctrl-C's 6), and one could argue those pay off after
+600k. v13 had 15M steps to convert exactly that kind of pool and never did, so
+this does not carry much weight.
+
+**The user's rule was right, and for a stronger reason than first argued.** The
+original case for the gate was that drilling unreachable states wastes budget.
+The measured mechanism is sharper: the reachable frontier is where composition
+gets learned at all, because only there does the agent practise the approach that
+makes an arrival survivable. The "chicken-and-egg" objection to gating (that we
+would never reach B without drilling B) is refuted here — capture-on-reach fills
+B's pool as a side effect of improving at A, and B's reach rose from 0.00 to 0.74
+with B's pool never once used as a start.
+
+=> Carry `gate_waypoints: true` into v15. Needs a 15M run to show 11/19 holds
+rather than plateaus, and to see whether the A3/A4 wall behaves like SN3 did.
 
 ## Open questions / risks
 - Escalator: can the agent's ride be made observable enough (4-frame stack)

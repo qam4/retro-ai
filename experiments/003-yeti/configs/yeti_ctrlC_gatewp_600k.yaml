@@ -1,0 +1,84 @@
+# CONTROL C — does the reach gate belong on WAYPOINT pools too?
+#
+# Today the 0.15 reach gate applies only to progress rungs. Waypoint pools are
+# ungated, so L3 drills identity pools the agent never reaches from a reset:
+# ctrl-A's route table shows A1..A5 and Lprincess_top all at reach 0.00 while
+# still holding 100 states each and being sampled. That bought seeded skill
+# (A1_launch -> A1 rose to 24-32%) which composed to reset at 0.03%.
+#
+# The single lever here is `gate_waypoints: true` — hold waypoint pools to the
+# same rule as rungs: don't drill B until B is reached from reset >=15% of the
+# time. Everything else is ctrl-A (v13 reward semantics, v13 weights and pools).
+#
+# BASELINE is ctrl-A, not v13, so the refactor is common to both:
+#   ctrl-A @600k: route[19] 7/19, reset_reach rung7 (SN3) 0.78, Lsc4_top 0.74.
+#
+#   chain holds and effort shifts down the route => gating waypoints is right,
+#                                                  carry it into v15.
+#   chain degrades                               => the ungated drilling was
+#                                                  load-bearing; leave it.
+#
+# CAVEAT: 600k answers PRESERVATION only. L2's breakthrough came through
+# ungated waypoint drilling, and we cannot tell retrospectively whether those
+# waypoints were above 0.15 (wp_reach did not exist then). A "does it help"
+# verdict still needs a long run.
+#
+# WHY 600k IS ENOUGH for preservation: the v13-vs-v14 signal separated at the
+# FIRST route table and never recovered (v13 Lsc1 0.97 @500k, v14 0.10 @500k).
+
+training:
+  timesteps: 600_000
+  output: output/mo5/yeti/training/yeti_ctrlC_gatewp_600k
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v13_seedfix_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    # Subsumes defer_fruit_credit: one rule for every target type.
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true

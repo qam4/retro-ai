@@ -562,3 +562,47 @@ def test_pre_wp_checkpoint_file_loads_without_waypoints(tmp_path):
     mgr2.load_from_disk(str(p))  # must not crash
     assert mgr2.waypoints == {}
     assert len(mgr2.checkpoints[1]) == 1
+
+
+# --- gate_waypoints: the reach gate applied to waypoint pools ---------------
+# Waypoint pools are ungated by default (the asymmetry that bootstrapped L2).
+# gate_waypoints makes them honour the same reach gate the progress rungs do,
+# judged by each waypoint's own from-reset reach EMA.
+
+
+def _wp_mgr(**overrides):
+    mgr = _mgr(reset_fraction=0.0, reach_threshold=0.15, **overrides)
+    mgr.save_waypoint("far_wp", b"s1", survived_steps=99, reached_next=False)
+    return mgr
+
+
+def test_waypoints_ungated_by_default():
+    """Default behaviour: a waypoint never reached from reset is still usable."""
+    mgr = _wp_mgr()
+    mgr.wp_reach_ema["far_wp"] = 0.0
+    keys = {mgr.pick_start()[0] for _ in range(40)}
+    assert "far_wp" in keys, "ungated pools must remain selectable"
+
+
+def test_gate_waypoints_blocks_unreachable_pool():
+    """With the gate on, a waypoint below threshold is not offered as a start."""
+    mgr = _wp_mgr(gate_waypoints=True)
+    mgr.wp_reach_ema["far_wp"] = 0.0
+    keys = {mgr.pick_start()[0] for _ in range(40)}
+    assert keys == {0}, f"expected reset-only starts, got {keys}"
+
+
+def test_gate_waypoints_allows_reachable_pool():
+    """...and admits it once the agent reaches it often enough from reset."""
+    mgr = _wp_mgr(gate_waypoints=True)
+    mgr.wp_reach_ema["far_wp"] = 0.5
+    keys = {mgr.pick_start()[0] for _ in range(40)}
+    assert "far_wp" in keys, "a reachable waypoint must be selectable"
+
+
+def test_gate_waypoints_missing_ema_treated_as_unreached():
+    """No EMA recorded yet => treated as 0, i.e. gated out (fail safe)."""
+    mgr = _wp_mgr(gate_waypoints=True)
+    mgr.wp_reach_ema.pop("far_wp", None)
+    keys = {mgr.pick_start()[0] for _ in range(40)}
+    assert keys == {0}

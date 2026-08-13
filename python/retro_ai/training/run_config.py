@@ -199,6 +199,19 @@ class CurriculumConfig:
     # per-axis RAM-x/pixel-y window for "reached a waypoint".
     waypoints: bool = False
     waypoint_tolerance: int = 2
+    # Apply the reach gate to WAYPOINT pools as well as the progress rungs, so a
+    # waypoint is only used as a start once the agent reaches it from reset at
+    # least ``reach_threshold`` of the time. Off by default = the historical
+    # asymmetry (rungs gated, waypoints not), which is what bootstrapped L2.
+    # Experimental: on L3, ungated drilling of unreachable states produced skill
+    # that did not compose to reset (0.03%), so gating may spend the budget
+    # better -- at the risk of blocking the kind of breakthrough L2 needed.
+    #
+    # Cold start: the reach EMA is run-local (never inherited), so on a warm
+    # start EVERY waypoint is gated out until reset episodes refill it. That
+    # cannot deadlock -- the reset rung is always a start candidate -- and at
+    # alpha 0.02 a reliably-reached waypoint clears 0.15 in ~8 reset episodes.
+    gate_waypoints: bool = False
 
 
 @dataclass(frozen=True)
