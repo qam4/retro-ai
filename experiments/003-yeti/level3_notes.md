@@ -541,6 +541,62 @@ later runs record this automatically. Every L3 run post-dates the state-restore
 fix, so L3 hazard timing is LIVE — see core_provenance_2b0a45d.md, and note this
 is why L3 feels harsher than L1/L2 ever did.
 
+## v14 result (credit_requires_survival — NEGATIVE, and why)
+`yeti_curriculum_l3_v14_survivalcredit_15m`, 15M, exit 0, 6h08m. One lever vs
+v13: `credit_requires_survival`. Warm-started from v13 final (the best from-reset
+chain of any run) + v13 pools.
+
+**The from-reset chain collapsed.**
+```
+                v13 final   v14 final
+Lgoat_a_top        1.00        0.99
+Ldown_bot          0.99        0.96
+Lsc1_top           0.99        0.00   <- lost the whole snowball climb
+Lsc2_top           0.96        0.00
+Lsc3_top           0.95        0.00
+Lsc4_top (SN3)     0.81        0.00
+```
+Mean episode reward 38.4 -> 21.2; princess touches (last 20% of episodes)
+89 -> 9. So v13 REMAINS the champion; v14's weights are worse (its pools are
+fine, and richer).
+
+**Mechanism.** With gamma=1 the episode's shaping TELESCOPES to
+Phi(end) - Phi(start), so refunding it on death makes the whole shaping term
+exactly zero for any episode that dies — and on L3 that was 17,024 of 17,033
+episodes. Only the sparse terms survived. The agent therefore lost the
+directional signal that taught the route and forgot the climb, while keeping what
+sparse reward it could reach. The intervention removed the reckless-arrival bonus
+by removing progress credit altogether, on a level where dying is the NORMAL
+ending.
+
+**Why the implementation was wrong (the substitution).** The stated goal was to
+give milestones what `defer_fruit_credit` gives fruits. But those defer a SPARSE
+payment: a fruit has a discrete reward at pickup, so "hold it until a
+grounded-alive frame, else never pay" is well defined. A milestone has NO sparse
+payment — its credit is implicit in the shaping (reaching it drops it from the
+potential's sum, and the payment was the distance-reduction on the way). So the
+mechanism we meant to reuse did not structurally exist for milestones, and
+instead of building it, an episode-wide shaping refund was substituted and
+described as the same idea generalised. Deferring one payment is narrow;
+refunding all shaping is global.
+
+**Why tests passed.** They asserted the intended property (arrival-then-death
+pays ~0) but never the CONSERVATION property — that everything the agent
+SURVIVED still pays what it used to. The golden sequences only lock the
+flag-OFF path, so nothing compared flag-on shaping against the baseline. Add
+that test before retrying: for a surviving trajectory, flag-on total must equal
+flag-off total.
+
+**The correct generalisation (for v15).** Give each target an ARRIVAL payment
+that is deferred exactly like the fruit's: hold that target's credit until the
+agent has survived a short window past it, and leave all other shaping alone.
+That kills the +5.04 "touch SN3 then die" incentive without touching the other
+99% of the signal. Implement per-target, not per-episode.
+
+**Still standing from the same work** (do not throw these out with v14): the
+Target model, the progress ladder (L3 1 -> 13 rungs), the alias resolution, and
+the seed-milestone RESTORE that fixed the measured retreat bug.
+
 ## Open questions / risks
 - Escalator: can the agent's ride be made observable enough (4-frame stack)
   for reliable jump timing? This is the main research risk.
