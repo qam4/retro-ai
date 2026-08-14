@@ -48,21 +48,29 @@ DEATH_FLAG_VALUE = 65
 # not single values. See experiments/003-yeti-training.md "run 3".
 SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
 
-# Per-level fruit-presence bytes (non-zero = on map, zero = collected). L1 has
-# 4 fruits, L2 has 2. These are POSITIONAL presence flags, distinct from the
-# FRUITS_ADDR remaining-counter.
+# Per-fruit "is this fruit still on the map" addresses: NON-ZERO means present,
+# zero means collected. That predicate is the whole contract — the table does not
+# promise any particular KIND of byte.
+#
+# Why per-fruit at all: FRUITS_ADDR counts how many remain but not WHICH, and the
+# path-progress reward shapes toward each remaining fruit individually. On a
+# multi-fruit level the count alone would keep pulling the agent toward fruit it
+# already ate, so those levels need a positional flag per fruit.
+#
+# On a SINGLE-fruit level the count and the predicate coincide exactly (1 = the
+# one fruit is there, 0 = collected), so FRUITS_ADDR satisfies the contract
+# directly. That is the general case collapsing, not a per-level workaround, and
+# it is why L3/L4 need no dedicated byte.
 FRUIT_PRESENCE_BY_LEVEL: Mapping[int, Mapping[int, int]] = {
     1: {1: 0x2FAD, 2: 0x2F00, 3: 0x2E68, 4: 0x2DD8},
     2: {1: 11950, 2: 11975},  # 0x2EAE, 0x2EC7
-    # L3 has a single fruit, so the global fruits-remaining counter IS that
-    # fruit's presence (1 = on map, 0 = collected). Avoids needing a dedicated
-    # per-fruit presence byte.
-    3: {1: FRUITS_ADDR},  # 0x2B2F
+    3: {1: FRUITS_ADDR},  # single fruit -> the counter IS the predicate
+    4: {1: FRUITS_ADDR},  # single fruit, same reason
 }
 
 
 def fruit_presence_addrs(level: int) -> Mapping[int, int]:
-    """Per-fruit presence RAM addresses for ``level`` (1 or 2)."""
+    """Addresses whose non-zero value means that fruit is still on the map."""
     return FRUIT_PRESENCE_BY_LEVEL[level]
 
 

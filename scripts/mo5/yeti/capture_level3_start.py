@@ -83,18 +83,32 @@ def _load_start_state(sav_path: str):
 
 
 def _pick_controllable(candidates, gym_env, iface, pre, probe_steps=10):
-    """Pick the earliest candidate where player control is actually live.
+    """Pick the earliest candidate that is controllable AND actually in-level.
 
-    The level-intro animation is input-frozen: a state saved during it is
-    "wedged" (loading it yields an uncontrollable agent that just animates and
-    dies on a timer). We validate each candidate by loading it and checking
-    that holding RIGHT changes the player's x, keeping the EARLIEST responsive
-    one -- the moment control is handed over. (Same logic as
-    capture_level2_start._pick_controllable.)
+    Two separate conditions, and control alone is not enough:
+
+    * The level-intro animation is input-frozen, so a state saved during it is
+      "wedged" -- loading it yields an uncontrollable agent that animates and
+      dies on a timer. Checked by holding RIGHT and seeing x move.
+    * The previous level's CLEARED flag stays set for ~44 frames into the new
+      level, during which the bonus clock is frozen at 1000. Control is already
+      live in that window, so the control probe alone happily selects it -- and
+      the resulting state is poison for training: ``stall_threshold`` fires on an
+      unchanging bonus, so at the default 40 every episode would end as "stall"
+      at step 40, ~6 frames before the level begins. Measured on the L4 capture:
+      flag clears at step 44, bonus first ticks at 46, identical for idle/right/
+      jump. So require the flag to be CLEAR as well.
     """
     for cand in candidates:
         f, state, b, x, y, lv, _raw = cand
         iface.load_state(state)
+        if iface.read_ram_byte(PRINCESS_FLAG_ADDR) != 0:
+            print(
+                f"   candidate +{f:3d}: skipped — previous level's cleared flag "
+                "still set (clock frozen)",
+                flush=True,
+            )
+            continue
         if pre is not None and hasattr(pre, "notify_state_loaded"):
             pre.notify_state_loaded()
         for _ in range(5):
