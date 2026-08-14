@@ -87,6 +87,27 @@ class LevelMap:
     # tol) marks that group done; unreachable groups drop out of the sum.
     # None (L1/L2) => no WP reward targets => reward unchanged.
     reward_waypoints: Optional[List[List[str]]] = None
+    # Optional PHASE GATE for reward_waypoints: idents whose group only enters
+    # the potential once EVERY fruit is collected. Any member ident names its
+    # group; unlisted groups are always active (L1/L2/L3 behaviour unchanged).
+    #
+    # Why this exists. The base potential is already phase-aware: it sums
+    # distance to REMAINING FRUITS, and only switches to the princess once none
+    # are left. The waypoint sum never inherited that rule, and on L4 it cost a
+    # whole run. L4's fruit is at the opposite end of the map from the princess,
+    # so with all 12 groups active from step 0 the sum is minimised by walking
+    # AWAY from the fruit: 9 of the terms shrink going left while only 3 grow.
+    # Measured on yeti_curriculum_l4_v1: Lfruit_top reached 0.1%, Lascent_top
+    # 99%, and 0 fruits collected in 3000 reset-origin episodes — the level was
+    # unwinnable by construction.
+    #
+    # A sum of distances cannot express "do A, then B" when A and B lie in
+    # opposite directions; the terms simply fight. L1-L3 never exposed that
+    # because their targets are roughly co-directional, an assumption we had
+    # relied on without stating it. Trimming the mandatory set does NOT fix it
+    # (with only F1 + princess the potential is flat toward the fruit, then
+    # adverse) — the missing notion is ORDER.
+    waypoints_after_fruit: Optional[List[str]] = None
     # Optional JUMP edges: (floor_a, floor_b) platform pairs the agent
     # traverses by JUMPING (not walking/climbing) — e.g. START->STEP->2LAD and
     # the SN3->A1->..->A5 ascent on L3. Without them those platforms are graph-
@@ -563,6 +584,21 @@ LEVEL4 = LevelMap(
         # with the other `mandatory`-overloading issues.
         ["J12_13_b", "Lhi_down_bot"],
         ["Lprincess_top"],  # P7
+    ],
+    # Everything from the ascent onward waits for the fruit. Only Lfruit_top and
+    # J2_3_b (P22, P23) stay active from step 0, because they ARE the way to the
+    # fruit. Without this the run is unwinnable — see waypoints_after_fruit.
+    waypoints_after_fruit=[
+        "Lascent_top",
+        "Lclimb1_top",
+        "J6_7_b",
+        "Lclimb2_top",
+        "J8_9_b",
+        "J9_10_b",
+        "Lclimb3_top",
+        "J12_13_b",
+        "Lhi_down_bot",
+        "Lprincess_top",
     ],
     # Walkable extents in PIXELS, [col0*8, (col1+1)*8]. One per floor id above.
     platforms=[

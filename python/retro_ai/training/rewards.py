@@ -956,6 +956,17 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
         if _members:
             _wp_groups.append(_members)
 
+    # _wp_after_fruit[gi]: this group only enters the potential once every fruit
+    # is collected (LevelMap.waypoints_after_fruit). Mirrors the phase rule the
+    # BASE potential already applies to fruits-then-princess; the waypoint sum
+    # never inherited it, which on L4 made the level unwinnable (see the field's
+    # docstring). Empty on L1/L2/L3 -> every group always active -> byte-identical.
+    _after_fruit_idents = set(getattr(_lvl_map, "waypoints_after_fruit", None) or ())
+    _wp_after_fruit: list = [
+        any(ident in _after_fruit_idents for ident, _wx, _wy in _members)
+        for _members in _wp_groups
+    ]
+
     # _wp_group_names[gi]: every NAME that refers to group gi — its graph idents
     # PLUS any curriculum waypoint id at the same position. The two naming
     # schemes coexist: the ascent milestones are graph nodes (``J10_11_b``) while
@@ -1149,11 +1160,17 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                         ):
                             self._reached_wp.add(gi)
                             break
+                # Reach-marking above is UNGATED on purpose: a group the agent
+                # genuinely stood on stays done, whatever phase it happened in.
+                # Only the SUM is phase-gated.
+                fruits_left = bool(ctx.fruits_present) and any(ctx.fruits_present)
                 wp_sum = 0
                 active = set()
                 for gi, members in enumerate(_wp_groups):
                     if gi in self._reached_wp:
                         continue
+                    if _wp_after_fruit[gi] and fruits_left:
+                        continue  # not this phase yet
                     dmin = min(
                         _wp_nav.path_distance_from_pos(
                             floor, ladder, agent_pix_x, seg_y, ident
