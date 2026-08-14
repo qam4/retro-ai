@@ -765,3 +765,95 @@ agent. It only affects waypoint pools and the display, not the ladder.
 climbing rather than spiky, which is the opposite of a transient, but the claim
 "L3 is solved" needs the run to finish and then a from-reset eval of the final
 weights on fresh seeds.
+
+## v15 FINAL — 80.7% princess from reset, NOT solved, and unstable
+15M, exit 0, 6h18m, 150 snapshots. **Supersedes the interim note above, which was
+wrong on one point: I called the trend "monotone and climbing, the opposite of a
+transient" after reading a peak. It is strongly OSCILLATORY.**
+
+### Eval (the only number that counts)
+`eval_from_reset.py`, final weights, L3 profile + `level3_start.sav`, 300
+episodes, stochastic, no curriculum, no seeding:
+
+```
+princess touches   242/300 = 80.7%   (95% CI ~76-85%)
+fruit F1           244/300 = 81.3%
+```
+Matches the training figure for a healthy phase (last 250 reset-origin episodes
+80.4%), so the training signal was honest — for the phase it sampled.
+
+**Deterministic eval is worthless here and must not be quoted.** Fixed start
+state + deterministic policy = ONE trajectory replayed N times (the same
+determinism proved in the SN3 replay work, 0/27 mismatches). A 5-episode
+deterministic smoke returned 5/5; reporting that as 100% would have repeated the
+L1 99.7% mistake exactly. Amend the solved criteria accordingly: the claim rests
+on the STOCHASTIC rate; the deterministic run is only an existence proof that a
+clean trajectory exists.
+
+### Failure classification: distributed attrition, not a wall
+```
+success  242   steps: median 398, min 398, max 428   <- one canonical route
+failure   58   all death, steps 30 -> 743
+               p10 = 17% of the route, p50 = 69%, p75 = 86%
+```
+Deaths are spread along the WHOLE climb with no cluster. Implied per-segment
+survival ~0.807^(1/13) = 98.4%, i.e. ~1.6% attrition per segment, compounding.
+Going 81% -> 95% therefore needs that 1.6% cut to ~0.4% UNIFORMLY; there is no
+single spot to fix. Whether the residual is irreducible (snowball RNG on forced
+crossings) is still unknown, because `eval_from_reset.py` records only
+`(max_cp, steps, end_reason)` and no death POSITION. Add final x/y to its rows
+before the next attempt — without it, condition 3 cannot be answered.
+
+### The gate oscillation (the biggest known loss)
+The from-reset princess rate never settled. Per-500-reset-episode windows:
+```
+2.0M-3.5M   76-83%      3.56M-4.35M   0-11%    (~800k steps at zero)
+4.6M-6.0M   70-81%      6.0M-6.2M      2%
+6.4M-7.4M   76-79%      7.4M-7.65M    0-9%
+7.9M-10.3M  72-84%     10.34M-11.09M  0-0.6%  (~750k steps at zero)
+11.1M-12.8M 30-72%     13.0M-14.9M   65-78%
+```
+14 of 39 back-half windows below 20%. The healthy-phase ceiling was already ~80%
+at 2M and never rose, so 13M of the 15M bought confirmation and snapshots, not
+progress.
+
+**Mechanism.** `rung>0%` (share of starts drawn from progress-rung pools) tracks
+the princess rate almost exactly:
+```
+healthy:    rung>0 = 42-81%   princess|reset = 76-92%
+collapsed:  rung>0 =  0-11%   princess|reset =  0-6%
+```
+During every collapse, rung sampling goes to ZERO and waypoint starts rise to
+fill the gap. That is the PRE-EXISTING rung reach gate
+(`reset_reach_ema[n] >= 0.15`) shutting on all 13 rungs at once, because they
+share one hard threshold over highly correlated EMAs. Lose the from-reset rate,
+lose every deep pool simultaneously, lose the deep practice, stay collapsed until
+reset-only play rebuilds reach past 0.15, then snap back.
+
+`gate_waypoints` did NOT cause this. It created the regime where deep rungs are
+reachable at all, so the gate finally has something to toggle; in v13 rungs above
+7 were never open and nothing could oscillate. Direction of causation is not
+established — collapse and gate-closure appear within the same 1500-episode
+window — but the hard threshold is what makes it bang-bang rather than graceful.
+
+### Verdict against the solved criteria
+```
+1. clean from-reset eval, 300 eps        MET
+2. >= 90% stochastic                     FAILED (80.7%)
+3. failures classified                   PARTIAL (distributed; no death positions)
+4. second seed + fresh-build re-eval     NOT DONE
+```
+**L3 is not solved. It went from 0.00 to 0.81 from reset, which is the real
+advance, and it is capped by two separate things: a ~1.6%-per-segment attrition
+with no single cause, and a curriculum instability that wasted most of the run.**
+
+### Next, in order
+1. **v16 = v15 + gate hysteresis, one lever.** Open a rung at 0.15, do not close
+   it until well below (or keep the deepest-achieved rung permanently open, or
+   replace the cutoff with a decaying weight). Baseline is v15. Expect a higher
+   TRAINING average; do not expect the 80% ceiling to move.
+2. **Add death position to `eval_from_reset.py`** so condition 3 is answerable.
+3. The three `mandatory` follow-ups (see the section on the flag doing three
+   jobs): route table cannot show event/flag targets so F1 and the princess flag
+   are invisible; `mandatory` conflates game-required with route-hypothesis;
+   bypassable A2/A5 keep a live distance term in the potential.
