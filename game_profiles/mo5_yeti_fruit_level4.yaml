@@ -1,0 +1,42 @@
+# Yeti — fruit-reward profile for LEVEL 4.
+#
+# Identical game-global reward params to level 3; only the name changes. The L4
+# start save-state (level4_start.sav) is loaded by the training env
+# (curriculum.start_state), not here. Death via the cause-agnostic 0x2AFC flag.
+#
+# bonus_stall_frames stays at 120 for the same reason as L3: the level-load tail
+# freezes the bonus clock, and the level-1 value of 10 would false-terminate.
+# Note the L4 entry state is now captured AFTER the clock starts (the previous
+# level's cleared flag must read 0 — see capture_level3_start._pick_controllable),
+# so the frozen window is no longer in the episode at all. 120 is kept as
+# headroom, not as a workaround.
+#
+# fruits_remaining_addr doubles as L4's single-fruit presence byte: with one
+# fruit the counter IS the "is it still on the map" predicate. See
+# yeti.FRUIT_PRESENCE_BY_LEVEL.
+
+name: yeti_fruit_level4
+display_name: "Yeti (fruit reward, level 4)"
+emulator_type: mo5
+rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/Yeti (1984) (Loriciels).k7"
+action_mode: joystick
+reward_mode: memory
+
+reward_params:
+  score_address_count: "0"
+  lives_addr: "11095"
+  bonus_addr_hi: "11010"
+  bonus_addr_lo: "11011"
+  bonus_stall_frames: "120"
+  fruits_remaining_addr: "11055"
+  death_flag_addr: "11004"
+  death_flag_value: "65"
+  basic_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/basic5.rom"
+  monitor_rom_path: "$RETRO_AI_ROM_DIR/mo5/roms/mo5.rom"
+  startup_sequence: "wait:100|type:LOAD\"\"\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:100"
+
+grayscale: true
+resize: null
+frame_stack: 4
+frame_skip: 4
+frame_maxpool: true

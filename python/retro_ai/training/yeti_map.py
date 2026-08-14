@@ -368,7 +368,232 @@ LEVEL3 = LevelMap(
     ],
 )
 
-LEVELS: Dict[int, LevelMap] = {1: LEVEL1, 2: LEVEL2, 3: LEVEL3}
+# ---------------------------------------------------------------------------
+# LEVEL 4 — kangaroos, two oscillating ropes, a spring, and a branching route
+# ---------------------------------------------------------------------------
+# Geometry extracted from the RAM tilemap (base 0x2C27) by
+# scripts/mo5/yeti/map_builder.py and cross-checked against LEVEL3: 23 tile
+# platforms plus an IMPLICIT GROUND at the screen bottom (row 25) that carries no
+# tiles but is walkable and is where the agent starts.
+#
+# Standing y is NOT row*8. Y_ADDR is the SPRITE TOP, and the measured rule is
+#   standing_y = tile_row * 8 - 18
+# verified two ways: it maps all 16 of LEVEL3's hand-authored floor_top_y values
+# onto integer tile rows, and climbing L4's first ladder lands on the row-22
+# platform at exactly y=158 = 22*8-18.
+#
+# Floor ids are assigned in ROUTE ORDER (1 = ground, ascending toward the
+# princess) so that every jump_edge has its LANDING as the larger id, which is
+# what jump_waypoints() assumes.
+#
+# HAZARDS (measured with debug/l4_motion_map.py, agrees with play observation):
+#   cols >= 29  kangaroos. They spawn on P5 (top right), jump left and fall
+#               platform to platform, then drop the rest of the way; spawns are
+#               periodic so several are on screen. The FRUIT sits inside this
+#               zone, so the fruit trip is a forced timed crossing.
+#   cols 0-15   snowballs, thrown by the yeti at cols 2-3 / rows 2-4 (the
+#               strongest motion on screen). They run along P7 and P10 — the
+#               final princess approach.
+# Neither is modelled in the graph, exactly like L3's snowballs and compressor:
+# they are visual hazards the policy must read from pixels.
+#
+# ROPES AND SPRING are plain jump_edges for now, with NO intermediate node. A
+# rope carries the agent and needs a grab AND a release, and a spring is a
+# bounce, so both probably need their own pose handling the way L3's escalator
+# needed pose 13 — but we do not yet know those poses, and inventing nodes before
+# measuring is how the escalator ended up looking free. Revisit when training
+# demonstrably stalls on them.
+LEVEL4 = LevelMap(
+    floor_top_y={
+        1: 182,  # GROUND (implicit, row 25) — start
+        2: 158,  # P22, row 22
+        3: 158,  # P23, row 22
+        4: 150,  # P21, row 21 — FRUIT
+        5: 150,  # P20, row 21
+        6: 118,  # P16, row 17
+        7: 118,  # P17, row 17
+        8: 94,  # P13, row 14
+        9: 94,  # P14, row 14
+        10: 102,  # P15, row 15
+        11: 78,  # P12, row 12
+        12: 70,  # P11, row 11 (low route)
+        13: 70,  # P10, row 11 — both routes converge here
+        14: 54,  # P9,  row 9  (high route)
+        15: 46,  # P8,  row 8
+        16: 38,  # P6,  row 7
+        17: 30,  # P4,  row 6
+        18: 22,  # P2,  row 5
+        19: 30,  # P3,  row 6
+        20: 46,  # P7,  row 8  — PRINCESS
+        21: 22,  # P1,  row 5  (off route, above the princess)
+        22: 30,  # P5,  row 6  (off route, kangaroo spawn)
+        23: 118,  # P18, row 17 (off route)
+        24: 142,  # P19, row 20 (off route; the spring sits above it)
+    },
+    floor_height=24,  # nominal; ladder cost is |dy|
+    # Sprite block at rows 19-20 cols 38-39 sits on P21 (row 21), so the target
+    # is P21's standing y, matching how L3's fruit is placed on its platform.
+    fruit_centre_px={1: (312, 150)},
+    fruit_floor={1: 4},
+    # (name, top_floor, bot_floor, centre_x_px), ALWAYS top-first (smaller y).
+    # centre_x_px = col0*8 + 8 for a 2-column ladder; the agent must be at
+    # x_ram = centre_x_px//4 - 2 to engage it (verified: ladder Lfruit only
+    # climbs at x_ram exactly 50, not 49 or 51).
+    ladders=[
+        ("Lfruit", 2, 1, 208),  # GROUND <-> P22, the fruit trip
+        ("Lascent", 5, 1, 72),  # GROUND <-> P20, start of the climb
+        ("Lclimb1", 6, 5, 32),  # P20 <-> P16
+        ("Lclimb2", 8, 7, 144),  # P17 <-> P13
+        ("Lclimb3", 11, 10, 272),  # P15 <-> P12
+        ("Lhi_up", 14, 11, 296),  # P12 <-> P9   (high route)
+        ("Lhi_down", 19, 13, 104),  # P3  <-> P10  (high route descent)
+        ("Lprincess", 20, 13, 40),  # P10 <-> P7   (final)
+    ],
+    princess_centre_px=(8, 46),
+    princess_floor=20,
+    # Every non-walk traversal. Landing is always the larger floor id.
+    jump_edges=[
+        (2, 3),  # P22 -> P23   jump  (tiles 131->132)
+        (3, 4),  # P23 -> P21   jump  (tiles 135->123), fruit platform
+        (6, 7),  # P16 -> P17   ROPE  (tiles 92->93)
+        (8, 9),  # P13 -> P14   SPRING (tiles 74->75)
+        (9, 10),  # P14 -> P15  jump  (tiles 78->79)
+        (11, 12),  # P12 -> P11 jump  (tiles 60->59)   low route
+        (12, 13),  # P11 -> P10 ROPE  (tiles 54->53)   low route
+        (14, 15),  # P9 -> P8   jump  (tiles 32->31)   high route
+        (15, 16),  # P8 -> P6   jump  (tiles 30->21)
+        (16, 17),  # P6 -> P4   jump  (tiles 20->16)
+        (17, 18),  # P4 -> P2   jump  (tiles 15->8)
+        (18, 19),  # P2 -> P3   jump  (tiles 7->14)
+    ],
+    # Curriculum waypoints on jump landings (landing floor -> name). Each also
+    # gets a "<name>_launch" pad on the departure platform.
+    jump_waypoint_names={
+        3: "Fr1",  # P23, fruit trip step 1
+        4: "Fr2",  # P21, the fruit platform
+        7: "Rope1",  # P17, across the first rope
+        9: "Spring",  # P14, off the spring
+        10: "Step",  # P15
+        12: "Low1",  # P11, low route
+        13: "Low2",  # P10, low route rope landing / convergence
+        15: "Hi1",  # P8, high route
+        16: "Hi2",  # P6
+        17: "Hi3",  # P4
+        18: "Hi4",  # P2
+        19: "Hi5",  # P3
+    },
+    # DISPLAY-ONLY order (see route_order): out to the fruit, back, up the left
+    # side, then either branch, then the princess.
+    route_order=[
+        "Lfruit_top",
+        "Fr1_launch",
+        "Fr1",
+        "Fr2_launch",
+        "Fr2",
+        "Lfruit_bot",
+        "Lascent_top",
+        "Lclimb1_top",
+        "Rope1_launch",
+        "Rope1",
+        "Lclimb2_top",
+        "Spring_launch",
+        "Spring",
+        "Step_launch",
+        "Step",
+        "Lclimb3_top",
+        "Low1_launch",
+        "Low1",
+        "Low2_launch",
+        "Low2",
+        "Lhi_up_top",
+        "Hi1_launch",
+        "Hi1",
+        "Hi2_launch",
+        "Hi2",
+        "Hi3_launch",
+        "Hi3",
+        "Hi4_launch",
+        "Hi4",
+        "Hi5_launch",
+        "Hi5",
+        "Lhi_down_bot",
+        "Lprincess_top",
+    ],
+    # Arrival ends only, except Lfruit which is genuinely used both ways (up on
+    # the way out, down on the way back).
+    waypoint_ends={
+        "Lfruit": "both",
+        "Lascent": "top",
+        "Lclimb1": "top",
+        "Lclimb2": "top",
+        "Lclimb3": "top",
+        "Lhi_up": "top",
+        "Lhi_down": "bot",
+        "Lprincess": "top",
+    },
+    # MANDATORY reward targets: the FORCED route only. Neither branch is
+    # required, so no low- or high-route landing appears here — they are
+    # seedable and tracked waypoints without a reward term. This is the first
+    # level where that distinction is real, and putting reward on a path the
+    # agent will not take is what made v14 expensive.
+    #
+    # Fr2 (the fruit platform) is deliberately omitted: F1 sits on it and is
+    # already mandatory as a fruit, so a milestone there would double-count the
+    # same rung — the same reason L3 omits A4.
+    reward_waypoints=[
+        ["Lfruit_top"],  # P22
+        ["J2_3_b"],  # P23
+        ["Lascent_top"],  # P20
+        ["Lclimb1_top"],  # P16
+        ["J6_7_b"],  # P17, across the rope
+        ["Lclimb2_top"],  # P13
+        ["J8_9_b"],  # P14, off the spring
+        ["J9_10_b"],  # P15
+        ["Lclimb3_top"],  # P12
+        # P10 is forced but reachable EITHER way: low route lands via the second
+        # rope, high route arrives down Lhi_down. An OR-group is exactly the
+        # construct for that (as L3 uses for the two goat ladders).
+        #
+        # KNOWN WART, shared with L3: build_targets flags BOTH members mandatory,
+        # and rung_of counts mandatory IDS rather than satisfied GROUPS, so with
+        # n_rungs=13 the top rung needs both members and an episode reaches only
+        # one. Effect is cosmetic — one pool that never fills and one reach entry
+        # pinned at 0, while the princess sentinel (n_rungs+1) still fires — but
+        # the honest fix is for rung_of to count groups. Tracked as a follow-up
+        # with the other `mandatory`-overloading issues.
+        ["J12_13_b", "Lhi_down_bot"],
+        ["Lprincess_top"],  # P7
+    ],
+    # Walkable extents in PIXELS, [col0*8, (col1+1)*8]. One per floor id above.
+    platforms=[
+        Platform(1, 182, 0, 320),  # GROUND, full width
+        Platform(2, 158, 184, 232),  # P22
+        Platform(3, 158, 248, 280),  # P23
+        Platform(4, 150, 296, 320),  # P21, fruit
+        Platform(5, 150, 8, 120),  # P20
+        Platform(6, 118, 0, 56),  # P16
+        Platform(7, 118, 104, 168),  # P17
+        Platform(8, 94, 120, 168),  # P13
+        Platform(9, 94, 200, 232),  # P14
+        Platform(10, 102, 248, 304),  # P15
+        Platform(11, 78, 248, 320),  # P12
+        Platform(12, 70, 184, 232),  # P11
+        Platform(13, 70, 0, 128),  # P10
+        Platform(14, 54, 272, 320),  # P9
+        Platform(15, 46, 240, 256),  # P8
+        Platform(16, 38, 208, 224),  # P6
+        Platform(17, 30, 176, 192),  # P4
+        Platform(18, 22, 144, 160),  # P2
+        Platform(19, 30, 80, 128),  # P3
+        Platform(20, 46, 0, 64),  # P7, princess
+        Platform(21, 22, 0, 48),  # P1
+        Platform(22, 30, 296, 320),  # P5, kangaroo spawn
+        Platform(23, 118, 200, 232),  # P18
+        Platform(24, 142, 168, 200),  # P19, spring above
+    ],
+)
+
+LEVELS: Dict[int, LevelMap] = {1: LEVEL1, 2: LEVEL2, 3: LEVEL3, 4: LEVEL4}
 
 
 def get_level_map(level: int = 1) -> LevelMap:
