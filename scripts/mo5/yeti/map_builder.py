@@ -175,50 +175,123 @@ def find_sprite_blocks(grid) -> dict:
     return out
 
 
-def annotate(frame_path, out_path, platforms, ladders, blocks, scale=4):
-    from PIL import Image, ImageDraw
+def number_surface(grid, platforms) -> list:
+    """Number the tiles worth pointing at: FLOOR surface and LADDER TOPS.
+
+    Only these get numbers, because these are the places a waypoint can live —
+    the agent stands on a floor tile, and a ladder top is where a climb hands
+    over to a floor. Empty cells and ladder bodies are deliberately unnumbered so
+    the overlay stays readable.
+
+    Numbering is row-major (top-left first), so numbers run left-to-right along
+    each floor and increase downward. ``ladder_top`` tiles (ids 3,4) sit INSIDE a
+    floor row, so they are part of the same sequence rather than a separate one.
+    """
+    by_pos = {}
+    for p in platforms:
+        for c in range(p["col0"], p["col1"] + 1):
+            by_pos[(p["row"], c)] = p["id"]
+    out = []
+    n = 0
+    for r in range(H):
+        for c in range(W):
+            v = int(grid[r, c])
+            if v not in PLATFORM:
+                continue
+            n += 1
+            out.append(
+                {
+                    "n": n,
+                    "row": r,
+                    "col": c,
+                    "tile_id": v,
+                    "kind": "ladder_top" if v in LADDER_TOP else "floor",
+                    # LevelMap conventions: y_px is the standing y for this row,
+                    # x_ram is what the game stores for the player's x.
+                    "x_px": c * 8,
+                    "y_px": r * 8,
+                    "x_ram": (c * 8 - 8) // 4,
+                    "platform": by_pos.get((r, c)),
+                }
+            )
+    return out
+
+
+def annotate(frame_path, out_path, grid, surface, ladders, blocks, scale=6):
+    """The frame upscaled, with FLOOR and LADDER-TOP tiles numbered.
+
+    Floors are tinted green and ladder tops yellow (they are the hand-over
+    points); ladder bodies are outlined blue but unnumbered, and sprite blocks
+    are outlined red. Row/col rulers stay for cross-referencing the raw grid.
+    """
+    from PIL import Image, ImageDraw, ImageFont
 
     img = Image.open(frame_path).convert("RGB")
     img = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
-    pad = 28
-    canvas = Image.new("RGB", (img.width + pad, img.height + pad), (16, 16, 16))
-    canvas.paste(img, (pad, pad))
-    d = ImageDraw.Draw(canvas)
     t = 8 * scale
-    # grid + rulers
-    for c in range(W + 1):
-        x = pad + c * t
-        d.line([(x, pad), (x, pad + img.height)], fill=(60, 60, 60))
-        if c < W and c % 2 == 0:
-            d.text((x + 2, 6), str(c), fill=(200, 200, 90))
-    for r in range(H + 1):
-        y = pad + r * t
-        d.line([(pad, y), (pad + img.width, y)], fill=(60, 60, 60))
-        if r < H:
-            d.text((4, y + 8), str(r), fill=(200, 200, 90))
-    # platforms: outline the run, label at its left end
-    for p in platforms:
-        x0 = pad + p["col0"] * t
-        x1 = pad + (p["col1"] + 1) * t
-        y0 = pad + p["row"] * t
-        d.rectangle([x0, y0, x1, y0 + t], outline=(80, 220, 120), width=2)
-        d.text((x0 + 3, y0 + 3), p["id"], fill=(80, 255, 140))
-    # ladders: outline the body, label at the top
+    pad_l, pad_t = 44, 30
+    canvas = Image.new(
+        "RGB", (img.width + pad_l + 4, img.height + pad_t + 4), (12, 12, 12)
+    )
+    canvas.paste(img, (pad_l, pad_t))
+    d = ImageDraw.Draw(canvas, "RGBA")
+    try:
+        font = ImageFont.truetype(
+            "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono-Bold.ttf", 13
+        )
+        ruler = ImageFont.truetype(
+            "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono-Bold.ttf", 15
+        )
+    except OSError:
+        font = ruler = None
+
+    # ladder bodies: context only, no numbers
     for m in ladders:
-        x0 = pad + m["col0"] * t
-        x1 = pad + (m["col1"] + 1) * t
-        y0 = pad + m["row0"] * t
-        y1 = pad + (m["row1"] + 1) * t
-        d.rectangle([x0, y0, x1, y1], outline=(90, 170, 255), width=2)
-        d.text((x0 + 3, y0 + 3), m["id"], fill=(140, 200, 255))
+        d.rectangle(
+            [
+                pad_l + m["col0"] * t,
+                pad_t + m["row0"] * t,
+                pad_l + (m["col1"] + 1) * t,
+                pad_t + (m["row1"] + 1) * t,
+            ],
+            fill=(90, 170, 255, 60),
+            outline=(90, 170, 255, 200),
+            width=2,
+        )
+    # sprite blocks (fruit / escalator)
     for name, b in blocks.items():
         (r0, r1), (c0, c1) = b["rows"], b["cols"]
         d.rectangle(
-            [pad + c0 * t, pad + r0 * t, pad + (c1 + 1) * t, pad + (r1 + 1) * t],
-            outline=(255, 120, 120),
+            [
+                pad_l + c0 * t,
+                pad_t + r0 * t,
+                pad_l + (c1 + 1) * t,
+                pad_t + (r1 + 1) * t,
+            ],
+            outline=(255, 90, 90),
             width=3,
         )
-        d.text((pad + c0 * t + 3, pad + r0 * t - 12), name, fill=(255, 150, 150))
+        d.text(
+            (pad_l + c0 * t, pad_t + r0 * t - 16), name, fill=(255, 140, 140), font=font
+        )
+    # the numbered tiles
+    for s in surface:
+        x0, y0 = pad_l + s["col"] * t, pad_t + s["row"] * t
+        fill = (250, 210, 60, 130) if s["kind"] == "ladder_top" else (60, 230, 120, 100)
+        d.rectangle([x0, y0, x0 + t, y0 + t], fill=fill)
+        d.text((x0 + 3, y0 + 2), str(s["n"]), fill=(255, 255, 255), font=font)
+    # grid on top so numbers stay readable
+    for c in range(W + 1):
+        x = pad_l + c * t
+        d.line([(x, pad_t), (x, pad_t + img.height)], fill=(70, 70, 70))
+    for r in range(H + 1):
+        y = pad_t + r * t
+        d.line([(pad_l, y), (pad_l + img.width, y)], fill=(70, 70, 70))
+    # rulers
+    for c in range(W):
+        d.text((pad_l + c * t + 6, 8), str(c), fill=(210, 210, 90), font=ruler)
+    for r in range(H):
+        d.text((6, pad_t + r * t + t // 3), str(r), fill=(210, 210, 90), font=ruler)
     canvas.save(out_path)
     return out_path
 
@@ -230,13 +303,37 @@ def main() -> None:
     ap.add_argument("--label", default="level")
     ap.add_argument("--out", required=True)
     ap.add_argument("--settle", type=int, default=8)
+    ap.add_argument("--scale", type=int, default=6, help="overlay upscale factor")
+    ap.add_argument(
+        "--tile",
+        type=int,
+        nargs="*",
+        help="translate tile numbers back to row/col/pixels and report what is "
+        "there, then exit (e.g. --tile 623 784)",
+    )
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
     grid = read_grid(args.state, args.settle)
+
     platforms = find_platforms(grid)
     ladders = find_ladders(grid)
     blocks = find_sprite_blocks(grid)
+    surface = number_surface(grid, platforms)
+
+    if args.tile:
+        by_n = {s["n"]: s for s in surface}
+        for n in args.tile:
+            s = by_n.get(n)
+            if s is None:
+                print(f"tile {n}: not a numbered floor/ladder-top tile")
+                continue
+            print(
+                f"tile {s['n']:>4}  {s['kind']:<10} row {s['row']:>2} col {s['col']:>2}"
+                f"  px ({s['x_px']},{s['y_px']})  x_ram {s['x_ram']:>3}"
+                f"  on {s['platform']}"
+            )
+        return
 
     print(f"tile ids present: {sorted({int(v) for v in grid.flatten()} - {0})}")
     print(f"\n=== PLATFORMS ({len(platforms)}) — candidate floors ===")
@@ -266,23 +363,46 @@ def main() -> None:
             + (f" centre_px {v['centre_px']}" if "centre_px" in v else "")
         )
 
+    print(f"\n=== NUMBERED TILES ({len(surface)}) — floors and ladder tops ===")
+    print("numbers run left-to-right along each floor, top row first")
+    for p in platforms:
+        ns = [s for s in surface if s["platform"] == p["id"]]
+        if not ns:
+            continue
+        span = (
+            "{}-{}".format(ns[0]["n"], ns[-1]["n"]) if len(ns) > 1 else str(ns[0]["n"])
+        )
+        tops = [str(s["n"]) for s in ns if s["kind"] == "ladder_top"]
+        print(
+            f"  {p['id']:<4} row {p['row']:>2}  y_px {p['y_px']:>3}  "
+            f"cols {p['col0']:>2}-{p['col1']:<2}  tiles {span:<9}"
+            + (f"  ladder-top tiles: {','.join(tops)}" if tops else "")
+        )
+
     data = {
         "platforms": platforms,
         "ladders": ladders,
         "blocks": blocks,
+        "surface": surface,
         "grid": grid.tolist(),
     }
     jpath = os.path.join(args.out, f"{args.label}_map_raw.json")
     with open(jpath, "w") as fh:
         json.dump(data, fh, indent=1)
     print(f"\nwrote {jpath}")
+    print(
+        "\nOnly floor and ladder-top tiles are numbered. Translate a number with:"
+        "\n  map_builder.py --state <sav> --out <dir> --tile <n> [<n> ...]"
+    )
     if args.frame and os.path.exists(args.frame):
         png = annotate(
             args.frame,
-            os.path.join(args.out, f"{args.label}_map.png"),
-            platforms,
+            os.path.join(args.out, f"{args.label}_tiles.png"),
+            grid,
+            surface,
             ladders,
             blocks,
+            scale=args.scale,
         )
         print(f"wrote {png}")
 
