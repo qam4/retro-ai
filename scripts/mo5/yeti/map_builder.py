@@ -235,15 +235,17 @@ def annotate(frame_path, out_path, grid, surface, ladders, blocks, scale=6):
     )
     canvas.paste(img, (pad_l, pad_t))
     d = ImageDraw.Draw(canvas, "RGBA")
+    # Scale the type to the tile so numbers stay legible at any --scale, and
+    # stroke them in black: the frame underneath is arbitrary pixel art, so a
+    # flat fill colour alone cannot be guaranteed to contrast with it.
+    fpath = "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono-Bold.ttf"
     try:
-        font = ImageFont.truetype(
-            "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono-Bold.ttf", 13
-        )
-        ruler = ImageFont.truetype(
-            "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono-Bold.ttf", 15
-        )
+        font = ImageFont.truetype(fpath, max(13, int(t * 0.46)))
+        ruler = ImageFont.truetype(fpath, max(12, int(t * 0.34)))
     except OSError:
         font = ruler = None
+    NUMBER = (255, 40, 40)
+    STROKE = (0, 0, 0)
 
     # ladder bodies: context only, no numbers
     for m in ladders:
@@ -274,19 +276,29 @@ def annotate(frame_path, out_path, grid, surface, ladders, blocks, scale=6):
         d.text(
             (pad_l + c0 * t, pad_t + r0 * t - 16), name, fill=(255, 140, 140), font=font
         )
-    # the numbered tiles
+    # Category tint first, then the grid, then the numbers on top so nothing
+    # is drawn over them.
     for s in surface:
         x0, y0 = pad_l + s["col"] * t, pad_t + s["row"] * t
-        fill = (250, 210, 60, 130) if s["kind"] == "ladder_top" else (60, 230, 120, 100)
+        fill = (250, 210, 60, 90) if s["kind"] == "ladder_top" else (255, 255, 255, 60)
         d.rectangle([x0, y0, x0 + t, y0 + t], fill=fill)
-        d.text((x0 + 3, y0 + 2), str(s["n"]), fill=(255, 255, 255), font=font)
-    # grid on top so numbers stay readable
     for c in range(W + 1):
         x = pad_l + c * t
         d.line([(x, pad_t), (x, pad_t + img.height)], fill=(70, 70, 70))
     for r in range(H + 1):
         y = pad_t + r * t
         d.line([(pad_l, y), (pad_l + img.width, y)], fill=(70, 70, 70))
+    for s in surface:
+        x0, y0 = pad_l + s["col"] * t, pad_t + s["row"] * t
+        d.text(
+            (x0 + t // 2, y0 + t // 2),
+            str(s["n"]),
+            fill=NUMBER,
+            font=font,
+            anchor="mm",
+            stroke_width=max(2, t // 20),
+            stroke_fill=STROKE,
+        )
     # rulers
     for c in range(W):
         d.text((pad_l + c * t + 6, 8), str(c), fill=(210, 210, 90), font=ruler)
