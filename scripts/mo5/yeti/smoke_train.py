@@ -154,10 +154,14 @@ def main() -> int:
     with open(tmp_cfg, "w") as fh:
         yaml.safe_dump(cfg, fh)
 
-    print(f"smoke: {args.config} for {args.timesteps} steps -> {out}")
+    print(f"smoke: {args.config} for {args.timesteps} steps -> {out}", flush=True)
     env = dict(os.environ)
     env.setdefault("PYTHONPATH", "python:build/ci-linux")
-    proc = subprocess.run(
+    # STREAM the child's output while keeping a copy to parse. capture_output
+    # buffers everything until exit, which makes a multi-minute smoke look hung
+    # to whatever is watching the log — and being watched is the point of this
+    # script.
+    proc = subprocess.Popen(
         [
             sys.executable,
             "scripts/mo5/yeti/train_checkpoint_curriculum.py",
@@ -165,15 +169,22 @@ def main() -> int:
             tmp_cfg,
         ],
         env=env,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
+        bufsize=1,
     )
-    log = proc.stdout + proc.stderr
-    if proc.returncode != 0:
-        print(log[-2000:])
+    lines = []
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        lines.append(line)
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    rc = proc.wait()
+    if rc != 0:
         print("\nFAIL: the run itself errored.")
         return 1
-    return report(log, args.min_chain, args.min_depth)
+    return report("".join(lines), args.min_chain, args.min_depth)
 
 
 if __name__ == "__main__":
