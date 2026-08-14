@@ -69,6 +69,19 @@ def _load_seed_pool(pkl_path: str, pool: str):
     return blobs
 
 
+def _load_start_state(sav_path: str):
+    """The level's own entry state as a one-entry seed pool.
+
+    Preferred over a near-princess pool when the policy can finish the level on
+    its own: the NEXT level's entry state inherits score, bonus and lives from
+    however this level was played, so starting where the level really starts is
+    the only way to capture the state a chained playthrough would actually
+    produce. No frame-stack blob exists for a raw save, so the caller reseeds.
+    """
+    with open(sav_path, "rb") as f:
+        return [(f.read(), None)]
+
+
 def _pick_controllable(candidates, gym_env, iface, pre, probe_steps=10):
     """Pick the earliest candidate where player control is actually live.
 
@@ -106,11 +119,19 @@ def _pick_controllable(candidates, gym_env, iface, pre, probe_steps=10):
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--model", required=True)
-    p.add_argument("--seed-checkpoints", required=True, help="checkpoints.pkl")
+    # Exactly one source of attempt-start states.
+    p.add_argument("--seed-checkpoints", help="checkpoints.pkl")
     p.add_argument(
         "--seed-pool",
         default="L56_bot",
         help="waypoint id (e.g. L56_bot) or cpN (e.g. cp2) to seed from",
+    )
+    p.add_argument(
+        "--seed-state",
+        help="raw .sav to start every attempt from, instead of a seed pool. Use "
+        "this when the policy finishes the level unaided (L3 v15 reaches the "
+        "princess 80.7%% from its own start) -- the captured next-level state "
+        "then carries the score/bonus/lives a real playthrough would.",
     )
     p.add_argument("--out", required=True)
     p.add_argument("--profile", default="yeti_fruit_level2")
@@ -138,6 +159,8 @@ def main() -> None:
         "(e.g. 'level4' -> level4_start.sav / level4_start.png)",
     )
     args = p.parse_args()
+    if bool(args.seed_state) == bool(args.seed_checkpoints):
+        p.error("pass exactly one of --seed-state or --seed-checkpoints")
 
     random.seed(args.seed)
 
@@ -154,10 +177,14 @@ def main() -> None:
     model = PPO.load(args.model, device="auto")
     os.makedirs(args.out, exist_ok=True)
 
-    seeds = _load_seed_pool(args.seed_checkpoints, args.seed_pool)
+    if args.seed_state:
+        seeds = _load_start_state(args.seed_state)
+        origin = f"start state {args.seed_state!r}"
+    else:
+        seeds = _load_seed_pool(args.seed_checkpoints, args.seed_pool)
+        origin = f"pool {args.seed_pool!r}"
     print(
-        f"Loaded {len(seeds)} seed states from pool {args.seed_pool!r}; "
-        f"profile={args.profile}",
+        f"Loaded {len(seeds)} seed states from {origin}; profile={args.profile}",
         flush=True,
     )
 
