@@ -780,7 +780,7 @@ class CheckpointManager:
         _src, _bonus, state, stack, reached = self.checkpoints[key].sample()
         return key, state, stack, reached
 
-    def summary(self):
+    def summary(self, route_order=None):
         sizes = [len(self.checkpoints[i]) for i in range(self.N_RUNGS + 1)]
         rates = []
         for i in range(self.N_RUNGS + 1):
@@ -804,6 +804,9 @@ class CheckpointManager:
         # route points are added.
         if self.waypoints:
             base += f" | route[{len(self.waypoints)}]: {self.milestone_progress()}"
+            # WALL: the actionable half. The scalar above says how far the chain
+            # gets; this says WHERE it stops, which is what you watch for.
+            base += f" | wall: {self.wall(route_order)}"
         return base
 
     def milestone_progress(self) -> str:
@@ -817,6 +820,35 @@ class CheckpointManager:
             return "n/a"
         done = sum(1 for v in self.wp_reach_ema.values() if v >= 0.5)
         return f"{done}/{len(self.wp_reach_ema)} reached>=0.5 from reset"
+
+    def wall(self, route_order=None, threshold: float = 0.5) -> str:
+        """WHERE THE RUN IS STUCK, in one phrase, for watching a run live.
+
+        The first route point the agent does NOT reliably reach, together with the
+        last one it DOES. That pair is the actionable fact: "gets to Rope1_launch
+        0.89, then Rope1 0.02" says the rope crossing is the wall, whereas the
+        aggregate scalar only says the chain is short.
+
+        Needs ``route_order`` to be meaningful — without a declared order there is
+        no "next" point, so it reports the deepest reached instead.
+        """
+        if not self.wp_reach_ema:
+            return "n/a"
+        ids = [w for w in (route_order or []) if w in self.wp_reach_ema]
+        if not ids:
+            best = max(self.wp_reach_ema.items(), key=lambda kv: kv[1])
+            return f"best {best[0]} {best[1]:.2f} (no route order)"
+        last_ok = None
+        for wid in ids:
+            v = self.wp_reach_ema.get(wid, 0.0)
+            if v >= threshold:
+                last_ok = (wid, v)
+                continue
+            prev = (
+                f"after {last_ok[0]} {last_ok[1]:.2f}" if last_ok else "from the start"
+            )
+            return f"{wid} {v:.2f} ({prev})"
+        return f"clear to {ids[-1]}"
 
     def route_table(self, route_order=None) -> str:
         """The canonical route view: one row per route point, route-ordered.
@@ -1024,8 +1056,39 @@ class CheckpointCurriculumEnv(gym.Env):
         # and never re-captures the waypoint an episode was seeded from.
         self._wp_enabled = bool(getattr(cur, "waypoints", False)) if cur else False
         self._wp_tol = int(getattr(cur, "waypoint_tolerance", 2)) if cur else 2
+        # JUMP LANDINGS NEED A WIDER BOX THAN LADDERS. A ladder waypoint is a
+        # single x_ram -- engagement literally requires the exact value (measured
+        # on L4: ladder Lfruit climbs at x_ram 50, not 49 or 51). A jump, rope or
+        # spring landing is wherever the arc drops you, and the waypoint sits on
+        # the platform EDGE, so a 2-unit box is a knife edge the arrival usually
+        # overshoots. Measured on L4 v1: Rope1 read 1.8% while Lclimb2_top -- only
+        # reachable THROUGH Rope1's platform -- read 87%, i.e. the crossing was
+        # happening ~87% of the time and the detector missed it. Reading that as a
+        # wall would have sent us fixing a mechanic that already worked, which is
+        # the SN3 mistake. Same rule for the metric and for capture, so the pools
+        # and the numbers cannot disagree.
+        self._wp_jump_tol = (
+            int(getattr(cur, "jump_waypoint_tolerance", max(6, self._wp_tol)))
+            if cur
+            else 6
+        )
         # {wp_id: (x_ram, y_px, floor)} detection targets from the tilemap.
         self._waypoints = yeti.waypoints(_level) if self._wp_enabled else {}
+        # Which waypoints are jump-edge ones (landings and launch pads), so they
+        # get _wp_jump_tol instead of the ladder tolerance.
+        if self._wp_enabled:
+            from retro_ai.training.yeti_map import get_level_map, jump_waypoints
+
+            try:
+                self._wp_jump_ids = set(jump_waypoints(get_level_map(_level)))
+            except (ValueError, KeyError):
+                self._wp_jump_ids = set()
+        else:
+            self._wp_jump_ids = set()
+        self._wp_tol_of = {
+            wid: (self._wp_jump_tol if wid in self._wp_jump_ids else self._wp_tol)
+            for wid in self._waypoints
+        }
         self._start_wp = None  # the WP this episode was seeded from (skip re-save)
         self._captured_wps: set = set()  # WPs already captured this episode
 
@@ -1292,7 +1355,8 @@ class CheckpointCurriculumEnv(gym.Env):
                 # seed WP / already-captured ones) so the display shows whether
                 # the agent reaches each waypoint's vicinity at all.
                 _manager.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
-                within = abs(x - wx) <= self._wp_tol and abs(y - wy) <= self._wp_tol
+                _tol = self._wp_tol_of.get(wp_id, self._wp_tol)
+                within = abs(x - wx) <= _tol and abs(y - wy) <= _tol
                 # Record EVERY reach (incl. the seed WP / already-captured) for
                 # the reset-origin wp_reach_ema; capture below is more selective.
                 if within:
@@ -1674,7 +1738,7 @@ class CurriculumCallback(BaseCallback):
                 f"step {self.num_timesteps}/{self._total} ({pct:.0f}%) "
                 f"| reward={reward_str} "
                 f"| emu_fps={fps * 4:.0f} "
-                f"| {_manager.summary()}",
+                f"| {_manager.summary(self._route_order)}",
                 flush=True,
             )
             self._write_diag()
@@ -1986,7 +2050,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         model.save(os.path.join(cfg.training.output, "final_model"))
         _manager.save_to_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
         print(f"\nSaved model to {cfg.training.output}/final_model.zip", flush=True)
-        print(f"Final: {_manager.summary()}", flush=True)
+        print(f"Final: {_manager.summary(_route_order_for(cfg))}", flush=True)
     except Exception:
         status = "FAILED"
         exit_code = 1
