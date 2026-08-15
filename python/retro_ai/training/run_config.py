@@ -58,6 +58,10 @@ class TrainingConfig:
     # Save a model snapshot every N timesteps (None -> 2,000,000). Useful
     # for capturing a transient peak in a run that later degrades.
     snapshot_freq_steps: Optional[int] = None
+    # How often to print the route table (one row per route point with its
+    # from-reset reach). That table is the view you actually read to see how far
+    # the agent gets and where it stops, so it defaults to often. None => 50k.
+    route_table_freq_steps: Optional[int] = None
     # Phase-2 warm-start: load only the network WEIGHTS from ``resume``
     # and keep this run's PPO hyperparameters (n_steps, target_kl, ...).
     # A full PPO.load would instead restore the checkpoint's saved

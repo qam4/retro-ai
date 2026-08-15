@@ -408,6 +408,9 @@ class CheckpointManager:
         # Apply the reach gate to WAYPOINT pools too (default False = the
         # historical asymmetry). See pick_start for the evidence both ways.
         self.gate_waypoints = bool(gate_waypoints)
+        # DISPLAY-ONLY route order, used to print the per-point reach vector in
+        # travel order on every progress line. Set by train(); empty on L1/L2.
+        self.route_order: list = []
         self.reach_alpha = 0.02
         # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
@@ -780,7 +783,7 @@ class CheckpointManager:
         _src, _bonus, state, stack, reached = self.checkpoints[key].sample()
         return key, state, stack, reached
 
-    def summary(self, route_order=None):
+    def summary(self):
         sizes = [len(self.checkpoints[i]) for i in range(self.N_RUNGS + 1)]
         rates = []
         for i in range(self.N_RUNGS + 1):
@@ -804,9 +807,6 @@ class CheckpointManager:
         # route points are added.
         if self.waypoints:
             base += f" | route[{len(self.waypoints)}]: {self.milestone_progress()}"
-            # WALL: the actionable half. The scalar above says how far the chain
-            # gets; this says WHERE it stops, which is what you watch for.
-            base += f" | wall: {self.wall(route_order)}"
         return base
 
     def milestone_progress(self) -> str:
@@ -820,35 +820,6 @@ class CheckpointManager:
             return "n/a"
         done = sum(1 for v in self.wp_reach_ema.values() if v >= 0.5)
         return f"{done}/{len(self.wp_reach_ema)} reached>=0.5 from reset"
-
-    def wall(self, route_order=None, threshold: float = 0.5) -> str:
-        """WHERE THE RUN IS STUCK, in one phrase, for watching a run live.
-
-        The first route point the agent does NOT reliably reach, together with the
-        last one it DOES. That pair is the actionable fact: "gets to Rope1_launch
-        0.89, then Rope1 0.02" says the rope crossing is the wall, whereas the
-        aggregate scalar only says the chain is short.
-
-        Needs ``route_order`` to be meaningful — without a declared order there is
-        no "next" point, so it reports the deepest reached instead.
-        """
-        if not self.wp_reach_ema:
-            return "n/a"
-        ids = [w for w in (route_order or []) if w in self.wp_reach_ema]
-        if not ids:
-            best = max(self.wp_reach_ema.items(), key=lambda kv: kv[1])
-            return f"best {best[0]} {best[1]:.2f} (no route order)"
-        last_ok = None
-        for wid in ids:
-            v = self.wp_reach_ema.get(wid, 0.0)
-            if v >= threshold:
-                last_ok = (wid, v)
-                continue
-            prev = (
-                f"after {last_ok[0]} {last_ok[1]:.2f}" if last_ok else "from the start"
-            )
-            return f"{wid} {v:.2f} ({prev})"
-        return f"clear to {ids[-1]}"
 
     def route_table(self, route_order=None) -> str:
         """The canonical route view: one row per route point, route-ordered.
@@ -1687,7 +1658,12 @@ class CurriculumCallback(BaseCallback):
         log_interval: int = 5000,
         diag_path=None,
         n_rungs: int = 4,
-        table_interval: int = 500_000,
+        # The route table is the informative view -- one row per route point with
+        # its from-reset reach -- so it is what you read to see how far the agent
+        # gets and where it stops. At 500k it appeared ~30 times in a 15M run,
+        # which is useless for watching. The step lines carry less information, so
+        # print the table often instead.
+        table_interval: int = 50_000,
         route_order=None,
     ):
         super().__init__()
@@ -1738,7 +1714,7 @@ class CurriculumCallback(BaseCallback):
                 f"step {self.num_timesteps}/{self._total} ({pct:.0f}%) "
                 f"| reward={reward_str} "
                 f"| emu_fps={fps * 4:.0f} "
-                f"| {_manager.summary(self._route_order)}",
+                f"| {_manager.summary()}",
                 flush=True,
             )
             self._write_diag()
@@ -1878,6 +1854,8 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         n_rungs=_ladder_rungs,
         gate_waypoints=cfg.curriculum.gate_waypoints,
     )
+    # Travel order for the per-point reach vector on each progress line.
+    _manager.route_order = _route_order_for(cfg)
 
     print("Checkpoint Curriculum Training", flush=True)
     print(f"  Profile: {cfg.env.profile}", flush=True)
@@ -2036,6 +2014,9 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
                     n_rungs=_ladder_rungs,
                     # Display-only ordering for the route table (no semantics).
                     route_order=_route_order_for(cfg),
+                    table_interval=int(
+                        getattr(cfg.training, "route_table_freq_steps", 0) or 50_000
+                    ),
                 ),
                 EpisodeMetricsCallback(episode_logger, log_interval=10_000),
                 snapshot_cb,
@@ -2050,7 +2031,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         model.save(os.path.join(cfg.training.output, "final_model"))
         _manager.save_to_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
         print(f"\nSaved model to {cfg.training.output}/final_model.zip", flush=True)
-        print(f"Final: {_manager.summary(_route_order_for(cfg))}", flush=True)
+        print(f"Final: {_manager.summary()}", flush=True)
     except Exception:
         status = "FAILED"
         exit_code = 1
