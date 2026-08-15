@@ -1027,14 +1027,16 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     _lvl_map = get_level_map(level)
     _wp_nav = build_navigation_map(level)
     # _wp_groups: list of OR-groups; each = list of (ident, x_ram, y).
-    # With the route potential on, milestones are NOT reward targets: the tour
-    # already routes through them geometrically, and measured on L3's ascent it
-    # gives a cleaner slope than summing them (19 down/0 flat/1 up vs 16/1/3).
-    # They remain graph nodes and curriculum seeds; only the reward term goes.
-    _route_potential = bool(params.get("route_potential", False))
+    # TWO INDEPENDENT LEVERS. ``route_potential`` changes the SHAPE of the base
+    # potential (remaining route length instead of a sum of distances);
+    # ``drop_milestones`` removes the mandatory-waypoint term. They were briefly
+    # coupled -- route_potential implied drop_milestones -- and control D therefore
+    # moved both at once and its result was unattributable. Same mistake v14 made.
+    # Keep them separate so each can be measured alone.
+    _drop_milestones = bool(params.get("drop_milestones", False))
     _wp_groups: list = []
     for _group in (
-        [] if _route_potential else (getattr(_lvl_map, "reward_waypoints", None) or [])
+        [] if _drop_milestones else (getattr(_lvl_map, "reward_waypoints", None) or [])
     ):
         _members = []
         for _ident in _group:
