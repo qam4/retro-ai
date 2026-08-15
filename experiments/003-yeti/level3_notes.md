@@ -857,3 +857,46 @@ with no single cause, and a curriculum instability that wasted most of the run.*
    jobs): route table cannot show event/flag targets so F1 and the princess flag
    are invisible; `mandatory` conflates game-required with route-hypothesis;
    bypassable A2/A5 keep a live distance term in the potential.
+
+## Controls D and F — the milestone reward terms ARE load-bearing
+Both warm-started from the v15 champion with v15's pools, 600k, exit 0.
+
+```
+                    v15 (15M)   ctrl D   ctrl F
+Lsc1_top               0.99      0.85     0.60
+Lsc2_top               0.96      0.84     0.21
+Lsc3_top               0.95      0.82     0.00
+Lsc4_top (SN3)         0.90      0.80     0.00
+A1                     0.85      0.70     0.00
+Lprincess_top          0.80      0.58     0.00
+princess, from reset    80%    61->53%      ~0
+```
+
+**ctrl F = `drop_milestones`, v15's potential, v15's scale.** One lever. The chain
+collapses to nothing, and it starts failing at the SNOWBALL CLIMB (Lsc2/Lsc3), well
+before the A1..A5 ascent the milestones were originally added for. So v11's result
+was real and general: those terms carry per-segment credit the diffuse
+distance-to-fruit gradient does not replace.
+
+**ctrl D was NOT one lever** — my error, the same one v14 made. `route_potential`
+was wired to imply dropping the milestone term, so D moved the potential shape AND
+removed milestones. Its milder decline (53% vs F's ~0) is explained by its scale
+being 6x, which partly compensated. The flags are now independent.
+
+**`route_potential` is a NO-OP on L3 and L4.** With a single fruit the tour is
+`d(pos->fruit) + d(fruit->princess)`, and the second term is CONSTANT, which PBRS
+cancels — verified identical shaping to 9 decimals at equal scale. So the entire
+"remaining route length" analysis could not have affected either level; everything
+it appeared to measure came from removing the 12 milestone terms. The idea is still
+correct and is kept behind the flag, but it only differs with >= 2 fruits (L1, L2),
+both already solved.
+
+**Method lesson.** I predicted F would pass from a STATIC slope analysis: over 20
+samples of L3's ascent the milestone-free potential looked better (19 down / 0 flat
+/ 1 up versus 16 / 1 / 3). Training says the opposite, decisively. A cleaner
+per-step gradient is not the same thing as a learnable reward, and static potential
+geometry is not a substitute for a 600k control. The controls cost ~35 minutes and
+overturned the conclusion.
+
+=> KEEP `reward_waypoints`. L4 keeps them too and gets `waypoints_after_fruit`
+instead, which is what L4 v2 is running.
