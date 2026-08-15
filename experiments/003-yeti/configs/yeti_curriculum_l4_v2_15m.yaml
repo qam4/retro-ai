@@ -1,0 +1,108 @@
+# L4 v2 — first run that can actually finish the level. FROM SCRATCH.
+#
+# From scratch, not warm-started from the L3 champion, for two reasons: it is what
+# L3 itself did (v1/v5 were both from-scratch phase-1 runs), and it keeps the
+# baseline clean so a later warm-start run is a single attributable lever rather
+# than confounded with L4's debut. PPO settings are copied verbatim from v15 for
+# the same reason — nothing here is a new variable except the level.
+#
+# ONE lever vs v1: LevelMap.waypoints_after_fruit (committed with the map, so this
+# config is otherwise v1 verbatim).
+#
+# v1 was UNWINNABLE and was killed at 3.2M. All 12 mandatory waypoint groups were
+# active from step 0, and because L4's fruit is at the opposite end of the map from
+# the princess, 9 of those distance terms shrink going LEFT while only 3 grow -- so
+# the potential paid the agent to walk away from the mandatory fruit. Measured:
+# Lfruit_top reached 0.1%, Lascent_top 99%, and ZERO fruits collected across 3000
+# reset-origin episodes.
+#
+# The fix applies the rule the base potential already had (the princess is not a
+# target until the fruit is collected) to the waypoint groups too. Everything from
+# Lascent_top onward now waits for F1; only Lfruit_top and J2_3_b, which are ON the
+# way to the fruit, stay active from the start.
+#
+# NOT the fix, despite a lot of analysis: route_potential. On a single-fruit level the
+# tour is d(pos->fruit) + d(fruit->princess) and the second term is constant, which
+# PBRS cancels -- verified identical to 9 decimals. It is a no-op here.
+#
+# gate_waypoints: true FROM THE OUTSET. On L3 this was the one change that moved
+# the from-reset chain (7/19 -> 11/19 at 600k, princess 0.00 -> 0.81), and it took
+# eight versions to find because we spent the budget drilling states the agent
+# could not reach. Not relearning that.
+#
+# WHAT L4 ADDS over L3 (see yeti_map.LEVEL4 and level3_notes.md):
+#   kangaroos      cols >= 29, periodic, descending; the FRUIT is inside that zone
+#   snowballs      cols 0-15, thrown by the yeti at cols 2-3; the princess approach
+#   rope 92>93     forced, oscillating: needs a grab AND a release
+#   spring 74>75   forced bounce
+#   two branches   after Lclimb3_top, neither mandatory
+# Ropes and the spring are plain graph edges with no intermediate node, so shaping
+# spans them but the timing is left to the pixels. Expect them to be where this
+# stalls; that is when we measure their poses and model them properly.
+#
+# PREDICTION ON RECORD: the graph makes the LOW branch shorter (656 vs 680), so
+# shaping will favour the branch that needs the second rope — the harder mechanic.
+# If the run stalls at Low2, raising that edge's cost so the graph prefers the high
+# route is the fix, and that would be a single clean lever.
+#
+# READ IT EARLY, do not wait 6h:
+#   python3 scripts/mo5/yeti/smoke_train.py \
+#     --check-log output/mo5/yeti/training/yeti_curriculum_l4_v2_15m/output.log \
+#     --min-chain 4
+# From scratch there is no inherited chain, so the first question is only whether
+# the agent gets off the ground floor at all.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v2_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  # Single fruit, so the remaining-counter IS the presence predicate.
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
