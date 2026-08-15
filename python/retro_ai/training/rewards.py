@@ -787,9 +787,65 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
         agent_floor_from_pixel_xy,
         agent_ladder_from_pixel_xy,
         build_navigation_map,
+        get_level_map,
     )
 
     nav = build_navigation_map(level)
+
+    # ROUTE POTENTIAL (opt-in). Phi = -scale * shortest remaining travel that
+    # collects every outstanding fruit and ends at the princess, instead of a SUM
+    # of independent distances to each outstanding target.
+    #
+    # Why. A sum cannot express "do A, then B" when A and B lie in opposite
+    # directions -- the terms fight. L1-L3 hid that because their targets are
+    # roughly co-directional; L4's route doubles back (fruit far right, princess
+    # far left) and the sum paid the agent to walk AWAY from the mandatory fruit:
+    # 0 fruits collected in 3000 reset-origin episodes.
+    #
+    # The fix is that the princess leg becomes d(fruit -> princess), which does not
+    # move as the agent walks, rather than d(agent -> princess), which does.
+    # Measured on L3's A1..A5 ascent (the stretch v11's milestones were added for),
+    # per-step slope over 20 samples: route 19 down / 0 flat / 1 up, versus the
+    # milestone sum's 16 / 1 / 3. It is also CONTINUOUS across a fruit pickup
+    # (route -16 where the sum jumps +48), because the fruit->princess leg was
+    # already counted -- so it needs no rebaseline there.
+    #
+    # NOTE the per-step magnitude is ~3.5x smaller than the milestone sum's, so
+    # ``scale`` must be raised to keep the shaping-to-sparse balance.
+    route_potential = bool(params.get("route_potential", False))
+    _fruit_ids = sorted(get_level_map(level).fruit_centre_px) if route_potential else []
+    # _suffix[(remaining_set, first)] = distance from `first`, through the rest of
+    # the set in the cheapest order, ending at the princess. Position-independent,
+    # so it is precomputed once; at most 4 fruits, so brute force is fine.
+    _suffix: Dict[Any, float] = {}
+    if route_potential:
+        import itertools as _it
+
+        _ni = nav.node_by_ident
+        _pn = _ni.get("princess")
+        for _r in range(1, len(_fruit_ids) + 1):
+            for _sub in _it.combinations(_fruit_ids, _r):
+                _S = frozenset(_sub)
+                for _first in _sub:
+                    _rest = [i for i in _sub if i != _first]
+                    _best = None
+                    for _order in _it.permutations(_rest):
+                        _seq = [_first, *_order]
+                        _tot = 0.0
+                        _ok = True
+                        for _a, _b in zip(_seq, _seq[1:]):
+                            _ia, _ib = _ni.get(f"F{_a}"), _ni.get(f"F{_b}")
+                            if _ia is None or _ib is None:
+                                _ok = False
+                                break
+                            _tot += nav.dist[_ia][_ib]
+                        _il = _ni.get(f"F{_seq[-1]}")
+                        if not _ok or _il is None or _pn is None:
+                            continue
+                        _tot += nav.dist[_il][_pn]
+                        _best = _tot if _best is None else min(_best, _tot)
+                    if _best is not None:
+                        _suffix[(_S, _first)] = _best
 
     class _PBRSPathProgressReward:
         def __init__(self) -> None:
@@ -834,6 +890,35 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
             # a constant offset that only made phi unreadable.
             any_fruit = bool(ctx.fruits_present) and any(ctx.fruits_present)
             total = 0
+            if route_potential:
+                # One tour: to the cheapest first fruit, then through the rest,
+                # ending at the princess. The tail is position-independent, so
+                # walking toward a fruit always shortens the whole thing.
+                left = frozenset(
+                    fid
+                    for fid, present in enumerate(ctx.fruits_present, start=1)
+                    if present
+                )
+                if not left:
+                    d = nav.path_distance_from_pos(
+                        floor, ladder, agent_pix_x, curr_y, "princess"
+                    )
+                    total = d if d < _UNREACHABLE else 0
+                else:
+                    best = None
+                    for first in left:
+                        d0 = nav.path_distance_from_pos(
+                            floor, ladder, agent_pix_x, curr_y, f"F{first}"
+                        )
+                        if d0 >= _UNREACHABLE:
+                            continue
+                        tail = _suffix.get((left, first))
+                        if tail is None or tail >= _UNREACHABLE:
+                            continue
+                        cand = d0 + tail
+                        best = cand if best is None else min(best, cand)
+                    total = best if best is not None else 0
+                return -progress_scale * total
             if any_fruit:
                 for fid, present in enumerate(ctx.fruits_present, start=1):
                     if present:
@@ -942,8 +1027,15 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     _lvl_map = get_level_map(level)
     _wp_nav = build_navigation_map(level)
     # _wp_groups: list of OR-groups; each = list of (ident, x_ram, y).
+    # With the route potential on, milestones are NOT reward targets: the tour
+    # already routes through them geometrically, and measured on L3's ascent it
+    # gives a cleaner slope than summing them (19 down/0 flat/1 up vs 16/1/3).
+    # They remain graph nodes and curriculum seeds; only the reward term goes.
+    _route_potential = bool(params.get("route_potential", False))
     _wp_groups: list = []
-    for _group in getattr(_lvl_map, "reward_waypoints", None) or []:
+    for _group in (
+        [] if _route_potential else (getattr(_lvl_map, "reward_waypoints", None) or [])
+    ):
         _members = []
         for _ident in _group:
             _idx = _wp_nav.node_by_ident.get(_ident)

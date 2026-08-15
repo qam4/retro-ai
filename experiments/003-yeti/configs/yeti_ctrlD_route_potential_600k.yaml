@@ -1,0 +1,91 @@
+# CONTROL D — does the ROUTE POTENTIAL preserve the L3 champion's chain?
+#
+# ONE lever vs v15: reward.params.route_potential (plus the scale re-calibration
+# that lever forces). Warm-started from the v15 champion with v15's pools, so if
+# the potential is a fair replacement the chain should HOLD, not be rebuilt.
+#
+# What changes. Phi stops being a SUM of distances to every outstanding target and
+# becomes the shortest remaining travel that collects the fruit and ends at the
+# princess. Consequence: LevelMap.reward_waypoints goes inert -- milestones stop
+# being reward targets. They stay graph nodes and curriculum seeds, and the
+# curriculum config here is UNTOUCHED, so the only thing moving is the reward.
+#
+# Why we expect it to hold. On L3's A1..A5 ascent -- the stretch v11's milestones
+# were added for -- the per-step slope over 20 samples is:
+#     route     19 down / 0 flat / 1 up   (the 1 up is a sampling artefact)
+#     milestone 16 down / 1 flat / 3 up   (today)
+# and the route potential is CONTINUOUS across the fruit pickup (-16 where the
+# milestone sum jumps +48), because the fruit->princess leg is already counted.
+#
+# scale 0.06, not 0.01. With gamma=1 an episode's shaping totals Phi(start) -
+# Phi(end): today that is (4856-792)*0.01 = 40.6 on L3, and the route span is 632px,
+# so 40.6/632 = 0.064 keeps the shaping-vs-sparse balance (sparse is ~35-45: fruit
+# ~bonus*0.01, princess ~bonus*0.05). Leaving scale at 0.01 would quietly cut
+# shaping 6x and confound the test.
+#
+# PASS: route[19] stays near v15's 15/19 and the princess rate near 0.81.
+# FAIL: chain degrades => milestones were doing something the tour does not, and
+#       v11's result was not just about filling a direction gap.
+#
+# 600k answers PRESERVATION only, same as controls A and C.
+#   python3 scripts/mo5/yeti/smoke_train.py \
+#     --check-log output/mo5/yeti/training/yeti_ctrlD_route_potential_600k/output.log \
+#     --min-chain 12
+
+training:
+  timesteps: 600_000
+  output: output/mo5/yeti/training/yeti_ctrlD_route_potential_600k
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.06
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+    # THE LEVER.
+    route_potential: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
