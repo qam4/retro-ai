@@ -1,0 +1,100 @@
+# L4 v3 — attack the Step wall by fixing WHERE episodes start.
+#
+# TWO levers vs v2, deliberately bundled. Attribution is the only thing at risk here:
+# L4 has no champion to protect (v2 finished at 0% princess), and G alone probably is
+# not enough, so running it solo risks spending 7h to confirm "still stuck".
+#   split_mandatory_starts  reset | MANDATORY | OTHER instead of reset | rungs | wps
+#   earned_progress_score   score what an episode ADDED, not the depth it reached
+# If this works we get a champion and the ablation becomes cheap. If it fails, run G
+# alone next and we will know it was H.
+#
+# WHAT v2 ESTABLISHED (15M, exit 0):
+#   fruit collected from reset   93%
+#   Rope1                        0.81   the rope is NOT the wall
+#   Spring                       0.78
+#   Step                         0.70
+#   Lclimb3_top                  0.00   <- the wall
+#   princess                     0
+#
+# WHY THE WALL IS AN ALLOCATION PROBLEM, not reward, map or survival:
+#   * the shaping there is correct -- measured +0.16/step walking to the ladder,
+#     +0.96 for the climb, +0.12/step onward via the low branch
+#   * a scripted walk-right-then-UP reaches f11 from 30/30 Step seeds
+#   * yet Step got 1.6% of starts, and those episodes have a MEDIAN LENGTH OF 6
+#     STEPS, so the policy accumulates almost no experience there and flails
+#     (traced: it jumps, drifts left, falls off f10's edge at x_ram 60)
+#   * Step also had the LOWEST weight of any eligible start (goal_score 0.643)
+#     because the old score rewards inheriting a deep seed rather than earning
+#     progress -- the already-solved Lfruit_top scored 0.549 and got MORE practice
+#
+# Measured effect of the two levers on L4's start distribution (60k, warm-started):
+#   rung 3   55.0% -> 14.4%      reset   32.3% -> 46.5%      Step   1.6% -> 3.0%
+# and the earned score swings Step's weight from 0.158 to 1.000 once its EMA
+# re-converges, which needs ~50 episodes at that start (so several hundred k steps).
+#
+# G is validated on L3 (3 seeds, all healthy, 18/19). H could not be tested there --
+# it left L3's start shares unchanged to within a point, so L3 says nothing about it.
+#
+# WATCH: Step's share of starts and whether Lclimb3_top's reach leaves 0.00. The route
+# table now prints every 50k.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v3_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  # Warm-start from v2: keep the fruit trip (93% from reset) and the rope (0.81)
+  # rather than relearning them, so the run's budget goes at the wall.
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v2_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  # Single fruit, so the remaining-counter IS the presence predicate.
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
