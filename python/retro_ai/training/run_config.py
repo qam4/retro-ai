@@ -216,6 +216,15 @@ class CurriculumConfig:
     # cannot deadlock -- the reset rung is always a start candidate -- and at
     # alpha 0.02 a reliably-reached waypoint clears 0.15 in ~8 reset episodes.
     gate_waypoints: bool = False
+    # Partition episode starts as reset | MANDATORY | OTHER instead of
+    # reset | rungs | one waypoint group. A rung pool is not a distinct kind of
+    # start -- "N mandatory targets done" is "standing at waypoint X" -- and it is
+    # only ever filled on a fruit pickup, so on a one-fruit level exactly one rung
+    # pool exists and took 34.6% of L4 v2's starts while the frontier waypoint got
+    # 1.8%. Grouping rungs with the mandatory waypoints removes that duplicate.
+    # On L1/L2 mandatory targets ARE the fruits, so that bucket is exactly the old
+    # rung set. Default False keeps L1/L2/L3 unchanged.
+    split_mandatory_starts: bool = False
 
 
 @dataclass(frozen=True)

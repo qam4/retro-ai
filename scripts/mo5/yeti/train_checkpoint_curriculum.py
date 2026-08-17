@@ -231,6 +231,12 @@ class StartPool:
 # as one source in pick_start's draw (H-AK). Distinct object so it can't
 # collide with an int CP level or a str waypoint id.
 _WP_GROUP = object()
+# Tags for the three-bucket partition (split_mandatory): the two non-reset
+# buckets, and what kind of pool a member of a bucket is.
+_MAND_GROUP = object()
+_OTHER_GROUP = object()
+_RUNG = object()
+_WP = object()
 
 
 class CheckpointManager:
@@ -254,6 +260,7 @@ class CheckpointManager:
         n_rungs: int = 4,
         mandatory_ids=None,
         gate_waypoints: bool = False,
+        split_mandatory: bool = False,
     ):
         # PROGRESS LADDER SIZE. Historically this was the fruit count, so a pool
         # meant "N fruits collected" and the ladder had one step per fruit. That
@@ -408,9 +415,11 @@ class CheckpointManager:
         # Apply the reach gate to WAYPOINT pools too (default False = the
         # historical asymmetry). See pick_start for the evidence both ways.
         self.gate_waypoints = bool(gate_waypoints)
-        # DISPLAY-ONLY route order, used to print the per-point reach vector in
-        # travel order on every progress line. Set by train(); empty on L1/L2.
-        self.route_order: list = []
+        # Three-bucket start partition (reset | mandatory | other) instead of
+        # reset | rungs | one waypoint group. Default False = legacy, so L1/L2/L3
+        # are unchanged. See pick_start for why rungs belong with the mandatory
+        # waypoints rather than being their own kind of start.
+        self.split_mandatory = bool(split_mandatory)
         self.reach_alpha = 0.02
         # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
@@ -752,14 +761,53 @@ class CheckpointManager:
             )
         ]
 
-        candidates = list(cp_candidates)
-        weights = [self.checkpoints[n].weight() for n in cp_candidates]
-        wp_weights = [self.waypoints[w].weight() for w in wp_candidates]
-        if wp_candidates:
-            # Mean, not sum: the group counts as one source regardless of
-            # how many waypoints it holds.
-            candidates.append(_WP_GROUP)
-            weights.append(sum(wp_weights) / len(wp_weights))
+        if self.split_mandatory:
+            # THREE BUCKETS: reset | MANDATORY starts | OTHER starts.
+            #
+            # The legacy partition is reset | rungs | one waypoint group, and on
+            # L4 that misallocates badly. A rung pool is only ever filled on a
+            # FRUIT pickup, so with one fruit exactly one rung pool exists
+            # ("just past the fruit") -- and as its own top-level candidate it
+            # took 34.6% of all starts, re-practising ground already at 93%,
+            # while every waypoint including the frontier shared the remaining
+            # third at ~2% each.
+            #
+            # A rung pool is also not a distinct SITUATION: "3 targets done" on
+            # L4 means "standing just past Fr2", which the Fr2 waypoint pool
+            # already holds with a known position. So rungs are not a separate
+            # kind of start -- they are mandatory starts without a name, and they
+            # belong in the same bucket as the mandatory waypoints. On L1/L2,
+            # where mandatory targets ARE the fruits and there are no waypoints,
+            # that bucket is exactly the old rung set, which is why this unifies
+            # instead of adding a concept.
+            mand = [
+                (_RUNG, n, self.checkpoints[n].weight()) for n in cp_candidates if n
+            ]
+            other = []
+            for w in wp_candidates:
+                bucket = mand if w in self.mandatory_ids else other
+                bucket.append((_WP, w, self.waypoints[w].weight()))
+            candidates = [0]
+            weights = [self.checkpoints[0].weight()]
+            groups = {}
+            for tag, members in ((_MAND_GROUP, mand), (_OTHER_GROUP, other)):
+                if not members:
+                    continue
+                groups[tag] = members
+                # Mean, not sum: a bucket is ONE source however many it holds,
+                # so adding starts never crowds out reset (the v8 failure).
+                candidates.append(tag)
+                weights.append(sum(m[2] for m in members) / len(members))
+        else:
+            candidates = list(cp_candidates)
+            weights = [self.checkpoints[n].weight() for n in cp_candidates]
+            wp_weights = [self.waypoints[w].weight() for w in wp_candidates]
+            groups = {}
+            if wp_candidates:
+                # Mean, not sum: the group counts as one source regardless of
+                # how many waypoints it holds.
+                candidates.append(_WP_GROUP)
+                weights.append(sum(wp_weights) / len(wp_weights))
         # Optional anti-starvation floor (default 0 -> pure weighting),
         # applied across the top-level sources.
         if self.segment_floor > 0.0 and len(candidates) > 1:
@@ -768,6 +816,20 @@ class CheckpointManager:
             f = self.segment_floor
             weights = [(1.0 - f) * (w / total) + f / k for w in weights]
         key = random.choices(candidates, weights=weights, k=1)[0]
+        if key in groups:
+            # Second draw inside the chosen bucket, same 1 - goal_score rule. A
+            # bucket mixes rung pools and waypoint pools, so dispatch on the tag.
+            members = groups[key]
+            kind, ident, _w = random.choices(
+                members, weights=[m[2] for m in members], k=1
+            )[0]
+            if kind is _WP:
+                self.wp_start_counts[ident] = self.wp_start_counts.get(ident, 0) + 1
+                _src, _bonus, state, stack, reached = self.waypoints[ident].sample()
+                return ident, state, stack, reached
+            self.stats["starts"][ident] += 1
+            _src, _bonus, state, stack, reached = self.checkpoints[ident].sample()
+            return ident, state, stack, reached
         # Waypoint group: second-level draw within it by 1 - goal_score.
         if key is _WP_GROUP:
             wp_key = random.choices(wp_candidates, weights=wp_weights, k=1)[0]
@@ -1853,6 +1915,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         mandatory_ids=_ladder_ids,
         n_rungs=_ladder_rungs,
         gate_waypoints=cfg.curriculum.gate_waypoints,
+        split_mandatory=cfg.curriculum.split_mandatory_starts,
     )
     # Travel order for the per-point reach vector on each progress line.
     _manager.route_order = _route_order_for(cfg)
