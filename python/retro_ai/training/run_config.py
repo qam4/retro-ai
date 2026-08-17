@@ -225,6 +225,13 @@ class CurriculumConfig:
     # On L1/L2 mandatory targets ARE the fruits, so that bucket is exactly the old
     # rung set. Default False keeps L1/L2/L3 unchanged.
     split_mandatory_starts: bool = False
+    # Score an episode by what it EARNED over what it had left to do, instead of
+    # the absolute depth it reached. Absolute depth cannot equalise and rewards
+    # inheritance: a deep seed banks most of the goals for free, so it always
+    # scores high and 1 - goal_score gives it the smallest sampling weight.
+    # Measured on L4 v2: Step (the stuck frontier) scored 0.643, the LOWEST weight
+    # of any eligible start, while the already-solved Lfruit_top scored 0.549.
+    earned_progress_score: bool = False
 
 
 @dataclass(frozen=True)

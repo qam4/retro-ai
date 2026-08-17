@@ -1,0 +1,80 @@
+# CONTROL H — does scoring EARNED progress hold L3?
+#
+# ONE lever: curriculum.earned_progress_score. An episode is scored by what it
+# ADDED over what it had LEFT ((reached-start)/(total-start)) instead of the absolute
+# depth it reached (reached/total).
+#
+# Why: absolute depth rewards inheritance. Seed deep, die instantly, and you still
+# score high because the seed banked the goals -- so 1 - goal_score gives deep starts
+# the SMALLEST weight. Measured on L4 v2: Step (stuck frontier) 0.643, the lowest
+# weight of anything eligible, versus the solved Lfruit_top at 0.549.
+#
+# RISK, and the reason for this control: this rewrites the allocation dynamics that
+# produced the L3 champion. It could regress L3 even while helping L4.
+#
+# Warm-started from the v15 champion with v15's pools, so a change that is a fair
+# improvement should HOLD the chain (route[19] 15/19, princess ~80% from reset), not
+# rebuild it. 600k answers PRESERVATION only.
+#
+#   python3 scripts/mo5/yeti/smoke_train.py \
+#     --check-log output/mo5/yeti/training/yeti_ctrlH_earnedscore_600k/output.log --min-chain 12
+
+training:
+  timesteps: 600_000
+  output: output/mo5/yeti/training/yeti_ctrlH_earnedscore_600k
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+    # THE LEVER: drop the mandatory-waypoint term, keep the SUM potential and
+    # v15's scale. If v15's 80% survives this, the milestones were not doing the
+    # work; if it drops, they were. Isolates removal from the potential shape.
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  earned_progress_score: true

@@ -261,6 +261,7 @@ class CheckpointManager:
         mandatory_ids=None,
         gate_waypoints: bool = False,
         split_mandatory: bool = False,
+        earned_progress_score: bool = False,
     ):
         # PROGRESS LADDER SIZE. Historically this was the fruit count, so a pool
         # meant "N fruits collected" and the ladder had one step per fruit. That
@@ -420,6 +421,9 @@ class CheckpointManager:
         # are unchanged. See pick_start for why rungs belong with the mandatory
         # waypoints rather than being their own kind of start.
         self.split_mandatory = bool(split_mandatory)
+        # Score an episode by what it EARNED over what it had left, instead of the
+        # absolute depth it reached. See _episode_score. Default False = legacy.
+        self.earned_progress_score = bool(earned_progress_score)
         self.reach_alpha = 0.02
         # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
@@ -449,6 +453,33 @@ class CheckpointManager:
         # (self.checkpoints[level].goal_score) so it unifies with waypoint
         # pools; see StartPool.
 
+    def _episode_score(self, reached_level, start_rung, total_goals) -> float:
+        """How well did THIS episode do, from where it began?
+
+        Legacy (``earned_progress_score`` off): ``reached_level / total_goals`` --
+        absolute depth reached. That cannot equalise and it rewards inheritance:
+        seed at Step with 12 of 14 targets banked, die instantly, and you score
+        12/14 = 0.86; travel the whole way from reset to Step and die, and you also
+        score 0.86. One did nothing, the other did twelve. Since deep seeds hand
+        over more, they always score high, so ``1 - goal_score`` gives them the
+        SMALLEST sampling weight. Measured on L4 v2: Step 0.643 (the frontier, and
+        the lowest weight of any eligible start) versus Lfruit_top 0.549, which is
+        already solved at 1.00.
+
+        Earned (flag on): what the episode ADDED over what it had LEFT to do --
+        ``(reached - start) / (total - start)``. Step now scores 0/2 = 0.00 and
+        Lfruit_top ~0.86, so the frontier gets the largest weight. It also
+        equalises: perfect play from any start scores 1.0, which is what the
+        self-regulating rule needs to converge.
+        """
+        if not self.earned_progress_score or start_rung is None:
+            return reached_level / float(total_goals)
+        left = float(total_goals - start_rung)
+        if left <= 0:
+            return 1.0
+        gained = float(reached_level - start_rung)
+        return max(0.0, min(1.0, gained / left))
+
     def record_episode(
         self,
         start_level,
@@ -456,6 +487,7 @@ class CheckpointManager:
         reached_wps=None,
         all_wps=None,
         progressed=None,
+        start_rung=None,
     ):
         total_goals = self.N_RUNGS + 1
         # Order-free segment health for EVERY start (CP level or WP id), updated
@@ -473,7 +505,9 @@ class CheckpointManager:
         if isinstance(start_level, str):
             pool = self.waypoints.get(start_level)
             if pool is not None:
-                pool.update_goal_score(reached_level / float(total_goals))
+                pool.update_goal_score(
+                    self._episode_score(reached_level, start_rung, total_goals)
+                )
             return
         if not (0 <= start_level <= self.N_RUNGS):
             return
@@ -493,7 +527,7 @@ class CheckpointManager:
         # weights by (1 - score).
         total_goals = self.N_RUNGS + 1
         self.checkpoints[start_level].update_goal_score(
-            reached_level / float(total_goals)
+            self._episode_score(reached_level, start_level, total_goals)
         )
         # Reach-from-reset EMA: only reset (CP0) episodes are evidence
         # for "can the agent get to CP_n unaided". For each n in 1..4
@@ -1499,6 +1533,7 @@ class CheckpointCurriculumEnv(gym.Env):
                 reached_wps=self._reached_wps_this_ep,
                 all_wps=set(self._waypoints.keys()) if self._wp_enabled else None,
                 progressed=progressed,
+                start_rung=self._start_rung,
             )
             # Flush deferred checkpoint snapshots, scored by how the
             # rest of this episode actually played out. ``source_cp``
@@ -1916,6 +1951,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         n_rungs=_ladder_rungs,
         gate_waypoints=cfg.curriculum.gate_waypoints,
         split_mandatory=cfg.curriculum.split_mandatory_starts,
+        earned_progress_score=cfg.curriculum.earned_progress_score,
     )
     # Travel order for the per-point reach vector on each progress line.
     _manager.route_order = _route_order_for(cfg)
