@@ -900,3 +900,44 @@ overturned the conclusion.
 
 => KEEP `reward_waypoints`. L4 keeps them too and gets `waypoints_after_fruit`
 instead, which is what L4 v2 is running.
+
+## METHOD: a single 600k control on L3 proves nothing. 1 in 3 seeds collapses.
+Measured, with NO change at all — v15's config, warm-started from the champion, three
+seeds:
+
+```
+baseline seed 42    princess 70.3%   route 18/19
+baseline seed  7    princess  0.0%   route  4/19
+baseline seed 13    princess 69.6%   route 18/19
+```
+
+L3 warm-started from v15 is BIMODAL at 600k: it either holds ~70% or collapses to
+~0%, and it collapses in roughly a third of seeds for no reason. Consistent with v15's
+own long run, which oscillates with a ~700k period — 3 of its 25 sliding 600k windows
+read below 5% princess purely by phase. 600k is therefore close to the WORST possible
+measurement length: exactly one sample of the cycle.
+
+**This invalidates every n=1 verdict taken this session:**
+```
+ctrl D  route potential + drop milestones + scale 6x   princess 53%   NOT attributable
+ctrl F  drop_milestones                                princess  0%   could be the 1-in-3 seed
+ctrl G  split_mandatory_starts                         princess  0%   could be the 1-in-3 seed
+ctrl H  earned_progress_score                          princess 72%   indistinguishable from baseline's 70.3%
+```
+In particular "the milestone reward terms are load-bearing", concluded from ctrl F,
+is UNSUPPORTED. It may still be true; it was not established.
+
+**What survives**, because it rests on large samples rather than one short run:
+* v15's own 15M behaviour, including the oscillation and the ~80% healthy-phase ceiling.
+* The from-reset eval of v15's final weights (242/300 stochastic episodes).
+* L4 v1's failure (0 fruits in 3000 reset-origin episodes) — a zero that large is not noise.
+* L4 v2's numbers (fruit 93%, Rope1 0.81, wall at Step with 11206/14436 precarious
+  rejections), from a 15M run.
+* Anything static and offline: the reward-gradient probes, the tour being a no-op on a
+  one-fruit level, the goal_score inversion (Step 0.643 vs Lfruit_top 0.549).
+
+**Rule going forward.** No curriculum or reward verdict from a single 600k run. Either
+3+ seeds per condition with a baseline arm, or a run long enough to average several
+oscillation periods (>= 2M). Report means AND spreads. Cost is ~25 min per seed and
+three can run in parallel on 8 cores, so a 3x3 sweep is about an hour — cheaper than
+one wrong 7-hour L4 run.
