@@ -606,3 +606,62 @@ def test_gate_waypoints_missing_ema_treated_as_unreached():
     mgr.wp_reach_ema.pop("far_wp", None)
     keys = {mgr.pick_start()[0] for _ in range(40)}
     assert keys == {0}
+
+
+# --- admit_requires_survival: drop the inherited-credit shortcut ------------
+#
+# `reached_next` is computed over the WHOLE episode, so a snapshot taken after
+# the episode's deepest point is credited for progress made BEFORE it. Measured
+# on L4 v3 that admitted already-dead states (5/20 Lclimb3_top saves had the
+# death flag set in the saved bytes; 20/20 died within 60 NOOP steps). The flag
+# keeps only snapshots the agent demonstrably survived.
+
+
+def test_admit_requires_survival_rejects_doomed_but_reached_cp():
+    """The exact poisoning case: reached_next True, survival short."""
+    mgr = _mgr(reset_fraction=0.0, admit_requires_survival=True)
+    mgr.save_scored(
+        1, b"corpse", survived_steps=3, reached_next=True, bonus=0, source_cp=0
+    )
+    assert len(mgr.checkpoints[1]) == 0
+    assert mgr.stats["rejected_precarious"][1] == 1
+    assert mgr.stats["admit_reached"][1] == 0
+
+
+def test_admit_requires_survival_rejects_doomed_but_reached_wp():
+    """Same rule for waypoints -- _admit_by_play is the single source."""
+    mgr = _mgr(reset_fraction=0.0, admit_requires_survival=True)
+    mgr.save_waypoint("Lclimb3_top", b"corpse", survived_steps=3, reached_next=True)
+    assert "Lclimb3_top" not in mgr.waypoints
+    assert mgr.wp_rejected_precarious["Lclimb3_top"] == 1
+
+
+def test_admit_requires_survival_still_admits_survivors():
+    """Survival alone is enough, with or without reached_next."""
+    for reached in (True, False):
+        mgr = _mgr(reset_fraction=0.0, admit_requires_survival=True)
+        mgr.save_waypoint("W", b"alive", survived_steps=50, reached_next=reached)
+        assert len(mgr.waypoints["W"]) == 1
+        assert mgr.wp_admit_survived["W"] == 1
+        assert mgr.wp_admit_reached.get("W", 0) == 0
+
+
+def test_admit_requires_survival_defaults_off():
+    """Characterises the legacy lenient path so the default can't drift."""
+    mgr = _mgr(reset_fraction=0.0)
+    assert mgr.admit_requires_survival is False
+    mgr.save_scored(
+        1, b"corpse", survived_steps=3, reached_next=True, bonus=0, source_cp=0
+    )
+    assert len(mgr.checkpoints[1]) == 1
+    assert mgr.stats["admit_reached"][1] == 1
+
+
+def test_admit_requires_survival_matches_cp_and_wp():
+    """CP and WP verdicts stay identical under the flag, as they are without it."""
+    for survived, reached in [(3, True), (50, False), (7, False), (50, True)]:
+        cp = _mgr(reset_fraction=0.0, admit_requires_survival=True)
+        wp = _mgr(reset_fraction=0.0, admit_requires_survival=True)
+        cp.save_scored(1, b"s", survived, reached, bonus=0, source_cp=0)
+        wp.save_waypoint("W", b"s", survived, reached)
+        assert (len(cp.checkpoints[1]) == 1) == ("W" in wp.waypoints)

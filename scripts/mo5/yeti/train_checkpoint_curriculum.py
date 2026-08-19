@@ -262,6 +262,7 @@ class CheckpointManager:
         gate_waypoints: bool = False,
         split_mandatory: bool = False,
         earned_progress_score: bool = False,
+        admit_requires_survival: bool = False,
     ):
         # PROGRESS LADDER SIZE. Historically this was the fruit count, so a pool
         # meant "N fruits collected" and the ladder had one step per fruit. That
@@ -424,6 +425,10 @@ class CheckpointManager:
         # Score an episode by what it EARNED over what it had left, instead of the
         # absolute depth it reached. See _episode_score. Default False = legacy.
         self.earned_progress_score = bool(earned_progress_score)
+        # Admit a snapshot only if the agent SURVIVED from it, dropping the
+        # inherited-credit `reached_next` shortcut. See _admit_by_play for the
+        # measured poisoning and for the option we did not take.
+        self.admit_requires_survival = bool(admit_requires_survival)
         self.reach_alpha = 0.02
         # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
@@ -634,8 +639,38 @@ class CheckpointManager:
         "rejected". Admission is lenient (approach 30): keep the snapshot if
         the producing episode either reached the next target OR stayed alive
         at least ``min_survival_steps`` gym steps from it.
+
+        POISONED POOLS (measured on L4 v3). ``reached_next`` is computed over the
+        WHOLE episode (``_max_cp_this_ep > start_level``), so a snapshot taken
+        AFTER the episode's deepest point inherits credit for progress that
+        happened BEFORE it. On L4 v3 that admitted corpses: of 20 sampled
+        ``Lclimb3_top`` states 5 had the death flag (0x2AFC == 65) already SET in
+        the saved bytes and 20/20 died within 60 NOOP steps; ``Low1_launch`` was
+        3/20 flagged and 20/20 doomed. Every pool up to and including ``Step``
+        was clean, i.e. the corruption starts exactly where the episode's
+        deepest point starts landing before the capture.
+
+        ``admit_requires_survival`` drops the ``reached_next`` shortcut, so a
+        snapshot is kept only if the agent demonstrably SURVIVED from it. Default
+        False because it changes admission on L1-L3 too, whose pools may have
+        relied on the lenient path at sparse rungs (approach 30's stated reason
+        for the leniency) -- so it needs the 3-seed + baseline sweep before it
+        becomes the default.
+
+        THE OTHER OPTION, deliberately not taken (recorded so it isn't
+        rediscovered). Keep ``reached_next`` but ANCHOR it to the snapshot:
+        remember the max rung at save time and admit only when
+        ``max_rung_whole_episode > max_rung_at_save_time``, i.e. progress made
+        AFTER the capture. That preserves the leniency the sparse rungs were
+        given while removing the inherited credit, and it is the more faithful
+        reading of "keep cp[n] if the episode went on to cp[n+1]". It was not
+        chosen because it needs a new per-snapshot field threaded through
+        save_scored/save_waypoint and the deferred-capture buffer, whereas
+        survival-only is a one-line change to an existing signal -- and survival
+        is the property the pool actually needs. Revisit if survival-only proves
+        too strict at sparse rungs.
         """
-        if reached_next:
+        if reached_next and not self.admit_requires_survival:
             return "reached"
         if survived_steps >= self.min_survival_steps:
             return "survived"
@@ -1952,6 +1987,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         gate_waypoints=cfg.curriculum.gate_waypoints,
         split_mandatory=cfg.curriculum.split_mandatory_starts,
         earned_progress_score=cfg.curriculum.earned_progress_score,
+        admit_requires_survival=cfg.curriculum.admit_requires_survival,
     )
     # Travel order for the per-point reach vector on each progress line.
     _manager.route_order = _route_order_for(cfg)

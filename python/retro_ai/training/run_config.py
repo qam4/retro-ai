@@ -232,6 +232,17 @@ class CurriculumConfig:
     # Measured on L4 v2: Step (the stuck frontier) scored 0.643, the LOWEST weight
     # of any eligible start, while the already-solved Lfruit_top scored 0.549.
     earned_progress_score: bool = False
+    # Keep a captured snapshot only if the agent SURVIVED from it, dropping the
+    # `reached_next` shortcut. That shortcut is computed over the WHOLE episode,
+    # so a snapshot taken after the episode's deepest point inherits credit for
+    # progress made BEFORE it -- which admitted corpses on L4 v3: 5/20 sampled
+    # Lclimb3_top states had the death flag already set in the saved bytes and
+    # 20/20 died within 60 NOOP steps (Low1_launch 3/20 and 20/20). Pools up to
+    # and including Step were clean. Default False because it also changes L1-L3
+    # admission, where the leniency was introduced on purpose to protect rare
+    # reaches at sparse rungs; needs a 3-seed sweep with a baseline arm first.
+    # See _admit_by_play for the alternative (anchor reached_next to save time).
+    admit_requires_survival: bool = False
 
 
 @dataclass(frozen=True)
