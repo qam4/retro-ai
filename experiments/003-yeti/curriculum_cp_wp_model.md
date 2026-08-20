@@ -231,6 +231,67 @@ new -> prog ~0). Pairwise numbers stay a DIAGNOSTIC (the tool), not a metric.
 travel order. It carries no semantics, nothing gates on it, and levels may omit
 it (rendering falls back to a stable order so no point is hidden).
 
+## READING THE LOG: what each number is, and what it is NOT
+
+Written down because we have re-derived this after every run and drawn a wrong
+conclusion each time. **None of the training-log numbers is a capability
+measure.** Quote them only for what the third column says.
+
+| field | exact formula | means | does NOT mean |
+|---|---|---|---|
+| `reach` | `wp_reach_ema[w] = .98*prev + .02*[w in reached_wps]`, updated ONLY when `start_level == 0` (real reset) | P(a from-reset episode stood, GROUNDED, inside `w`'s tolerance box) | that any objective was achieved; the box is a POSITION |
+| `prog` | `progress_ema[start] = .98*prev + .02*[progressed]`, `progressed = (reached_wps - inherited - {start_wp}) != {}` or `reached_level > start_level` | P(an episode started HERE touched at least one NEW route point) | that it got closer to the goal, or reached the NEXT point |
+| `pool` | `len(waypoints[w])` | retained seed states | reachability from reset (the reverse curriculum fills pools from other seeds) |
+| `cap/rej` | lifetime capture / survival-gate reject counts | how hard the admission gate is working here | anything about the policy's from-reset skill |
+| `near` | min grounded Chebyshev distance ever seen | got close but never inside the box | a near-miss rate |
+| `reset_reach[n]` | P(from-reset episode reached RUNG n) | rung = COUNT of mandatory targets banked | fruits collected — the fruit is ONE of the mandatory targets (12 on L4) |
+| `gscore[n]` | EMA of `_episode_score` | sampling weight input (`1 - gscore`) | success rate. Absolute-depth by default, so deep seeds score high for free |
+
+### The two traps we keep falling into
+
+**1. `prog` saturates.** `progressed` is "touched anything new", which is free
+from any start that is not the very last one. v4's final table, whole early
+route:
+
+```
+Lfruit_top 1.00  Fr1 1.00  Fr2 1.00  Lfruit_bot 0.99  Lascent_top 0.98
+Lclimb1_top 0.98  Rope1 0.98  Lclimb2_top 0.97  Spring 1.00  Step_launch 0.93
+```
+
+Pinned at 1.00. It is informative ONLY at the frontier (v4: `Step` 0.58,
+`Lclimb3_top` 0.27). This is the same defect already noted for
+`seg_success_ema` — see "Why `prog` is order-free": order-freeness fixed
+branch-safety, not saturation.
+
+**2. `reach` is a position, not an objective.** A tolerance box near a target is
+not the target. v4, measured:
+
+```
+Fr2 reach 0.94    (f4's left edge, x_ram 72, tol 6 -> box 66..78)
+fruit collected   12.3%  (300-ep eval; the fruit sits at x_ram 76)
+```
+
+Both correct, no contradiction: the agent stands on the fruit platform 94% of
+the time and walks the last few tiles into the kangaroo zone 12% of the time.
+Reading `reach` as "collected the fruit" produced a claimed
+"fruit from reset 0.61 -> 0.98" for v4 whose true value was 12.3%.
+
+### The only authoritative numbers
+
+From-reset capability comes from ONE place:
+
+```
+1. train
+2. scripts/mo5/yeti/keep_best_sweep.py   --snapshots-dir <run>/snapshots
+3. scripts/mo5/yeti/eval_from_reset.py   --model <run>/best/best_model.zip \
+       --episodes 300 --stochastic
+```
+
+`final_model.zip` is NOT the run: it is usually in a dip. v4's final model got
+0 fruits in 10 from-reset episodes while its best snapshot got 12.3% — and every
+policy probe run against a final model is therefore unattributable. A single
+snapshot is n=1; the sweep evaluates all of them, so use its spread.
+
 ## DETECTION vs frame_skip: why WP placement must be "where the agent RESTS"
 
 Measured on L3 (`debug/l3_lesc_boarding.py`), and the reason `Lesc_top` reads
