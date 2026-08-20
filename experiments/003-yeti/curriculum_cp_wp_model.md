@@ -281,6 +281,37 @@ cp=[0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]      # v4, 15M
 One usable pool, twelve permanently empty — and `reset_reach` still prints an
 entry per rung, most of which describe rungs no state can occupy.
 
+### Rungs count an UNORDERED SET, so they credit unfinishable routes
+
+`rung_of = len(reached & mandatory_ids)`. The fruit is ONE element, weighted the
+same as a ladder top, and curriculum reach-marking is ungated (only the REWARD
+sum honours `waypoints_after_fruit`). So an agent that skips the fruit and climbs
+the ascent banks milestone after milestone and reads as most-of-the-way-done
+while being incapable of completing the level.
+
+Measured, v4 final `reset_reach` against the 300-episode eval:
+
+```
+rung:     0     1     2     3     4     5     6     7     8     9    10   11-13
+reach: 1.00  0.96  0.93  0.93  0.91  0.90  0.89  0.88  0.87  0.83  0.06  0.00
+
+fruit collected from reset: 12.3%
+```
+
+83% bank 9 of 13 mandatory targets; 12.3% take the fruit. So ~71% of reset
+episodes reach rung 9 WITHOUT the fruit. L4 v1 is the extreme case on record:
+`Lascent_top` 99%, `Lfruit_top` 0.1%, **0 fruits in 3000 reset-origin episodes**
+— an agent that would score `gscore` ~0.85 while being unable to finish.
+
+This is not only a reading hazard: allocation weights starts by
+`1 - goal_score`, so a start that banks milestones on an unfinishable route looks
+nearly solved and receives the SMALLEST sampling weight.
+
+Fix direction (same notion as the reward's phase gate): give targets
+PREREQUISITES and count a rung only when its prerequisites are satisfied, so
+ascent milestones do not count until the fruit is banked. That replaces the
+global `fruits_left` boolean and generalises to multi-fruit levels.
+
 ### The two traps we keep falling into
 
 **1. `prog` saturates.** `progressed` is "touched anything new", which is free
