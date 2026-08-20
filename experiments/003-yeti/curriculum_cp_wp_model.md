@@ -255,9 +255,24 @@ measure.** Quote them only for what the third column says.
 | `waypoints[wp_id]` | the waypoint NAME | any grounded frame inside the waypoint's tolerance box |
 
 The rung INDEX was generalised to mandatory targets; the rung FILL TRIGGER was
-not. So on a one-fruit level exactly one rung pool can ever exist. L4: taking
-the fruit banks `Lfruit_top`, `J2_3_b` and `F1` = 3 mandatory targets, so every
-rung save lands at index 3:
+not. Scope of that mismatch, precisely:
+
+* **General** (all mandatory targets, fruits *and* waypoint milestones):
+  `rung_of`, `_current_rung`, `reached_level`, `_episode_score`, `goal_score` /
+  `gscore`, and the reach EMAs. `_reached_targets` unions inherited waypoints,
+  waypoints reached this episode, and collected fruits, then `rung_of` filters
+  by `mandatory_ids` (from `build_targets`, princess excluded).
+* **Fruit-specific**: ONLY the rung-pool fill trigger,
+  `if fruits < self._prev_fruits`.
+
+So scoring is fine; only STORAGE is affected. `gscore` moves whenever a
+milestone is banked, but the deep rung pools it nominally indexes can never
+receive a state on a one-fruit level because nothing triggers a save there. (The
+principled fix — fire a rung save whenever `_current_rung()` increases — changes
+what fills `checkpoints[]` on every level, so it needs the usual sweep.)
+
+L4: taking the fruit banks `Lfruit_top`, `J2_3_b` and `F1` = 3 mandatory
+targets, so every rung save lands at index 3:
 
 ```
 cp=[0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]      # v4, 15M
