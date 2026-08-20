@@ -247,6 +247,25 @@ measure.** Quote them only for what the third column says.
 | `reset_reach[n]` | P(from-reset episode reached RUNG n) | rung = COUNT of mandatory targets banked | fruits collected — the fruit is ONE of the mandatory targets (12 on L4) |
 | `gscore[n]` | EMA of `_episode_score` | sampling weight input (`1 - gscore`) | success rate. Absolute-depth by default, so deep seeds score high for free |
 
+### Two pool-indexing schemes (they coexist; do not conflate)
+
+| pool | key | filled when |
+|---|---|---|
+| `checkpoints[n]` (rungs) | `n = rung_of(reached) = len(reached & mandatory_ids)` — COUNT of mandatory targets banked, NOT fruits | **only on a FRUIT PICKUP** (`if fruits < prev_fruits`) |
+| `waypoints[wp_id]` | the waypoint NAME | any grounded frame inside the waypoint's tolerance box |
+
+The rung INDEX was generalised to mandatory targets; the rung FILL TRIGGER was
+not. So on a one-fruit level exactly one rung pool can ever exist. L4: taking
+the fruit banks `Lfruit_top`, `J2_3_b` and `F1` = 3 mandatory targets, so every
+rung save lands at index 3:
+
+```
+cp=[0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]      # v4, 15M
+```
+
+One usable pool, twelve permanently empty — and `reset_reach` still prints an
+entry per rung, most of which describe rungs no state can occupy.
+
 ### The two traps we keep falling into
 
 **1. `prog` saturates.** `progressed` is "touched anything new", which is free
