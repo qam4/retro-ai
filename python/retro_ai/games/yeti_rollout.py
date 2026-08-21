@@ -50,7 +50,7 @@ def rollout_episode(
     level: int,
     fruits_total: int,
     start_state: Optional[bytes] = None,
-    settle: int = 5,
+    settle: int = 1,
     max_steps: int = 1000,
     stall_threshold: int = 15,
     deterministic: bool = True,
@@ -77,6 +77,22 @@ def rollout_episode(
         this skips the (~32s on MO5) startup per episode. The CALLER must have
         booted the env once (one ``gym_env.reset()``) before the first call,
         and must pass a ``start_state`` with ``settle >= 1``.
+    settle : NOOP steps taken after ``load_state`` before the policy acts.
+
+        MUST match training, which takes exactly ONE. This defaulted to 5 while
+        the training env was fixed to 1 ("a pure vestige of the
+        pre-notify_state_loaded flush that burned ~20 game frames"), and the fix
+        never propagated here — so every EVAL episode began by standing still
+        for ~20 emulator frames while the level ran on. On L4, whose opening is
+        a timed crossing against kangaroos, that is not a small handicap:
+
+            L4 v4 best snapshot, fruit collected from reset, 40 episodes
+                settle=5   4/40   (10%)
+                settle=1  32/40   (80%)
+
+        The training route table was right and the eval was wrong. Any
+        historical from-reset number produced through this harness was measured
+        with the handicap and is a LOWER BOUND.
     """
     base = stack.base
     gym_env = stack.gym

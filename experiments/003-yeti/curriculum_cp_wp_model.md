@@ -329,17 +329,26 @@ Pinned at 1.00. It is informative ONLY at the frontier (v4: `Step` 0.58,
 branch-safety, not saturation.
 
 **2. `reach` is a position, not an objective.** A tolerance box near a target is
-not the target. v4, measured:
+not the target — `Lfruit_top` is a ladder top on the WAY to the fruit, so reading
+it as "collected the fruit" is wrong (that misreading produced a claimed
+"fruit from reset 0.61 -> 0.98" for v4).
+
+But do NOT over-correct: the reach EMAs are otherwise accurate. When the route
+table and an eval disagree, suspect the EVAL first. v4:
 
 ```
-Fr2 reach 0.94    (f4's left edge, x_ram 72, tol 6 -> box 66..78)
-fruit collected   12.3%  (300-ep eval; the fruit sits at x_ram 76)
+route table   Fr2 reach 0.94
+eval_from_reset (settle=5)   fruit 12.3%      <- WRONG, harness bug
+eval_from_reset (settle=1)   fruit 75-100%    <- agrees with the table
 ```
 
-Both correct, no contradiction: the agent stands on the fruit platform 94% of
-the time and walks the last few tiles into the kangaroo zone 12% of the time.
-Reading `reach` as "collected the fruit" produced a claimed
-"fruit from reset 0.61 -> 0.98" for v4 whose true value was 12.3%.
+`rollout_episode` defaulted to FIVE settle NOOPs after `load_state` while the
+training env takes ONE (it was fixed there; the fix never propagated). Five
+burns ~20 emulator frames while the level runs on, which on L4's timed opening
+costs almost everything: 4/40 fruit at settle=5 vs 32/40 at settle=1, same
+weights. Every from-reset number ever produced through that harness — L1 and L3
+included — is therefore a LOWER BOUND and needs re-measuring before it is
+compared against anything.
 
 ### The only authoritative numbers
 
