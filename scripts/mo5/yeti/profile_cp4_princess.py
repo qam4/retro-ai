@@ -69,7 +69,13 @@ def main() -> None:
             level=1,
             fruits_total=4,
             start_state=random.choice(cp4),
-            settle=5,
+            # ONE settle step, matching the training env. This was 5 (= 20
+            # emulator frames at frame_skip 4) while training takes 1, which
+            # measures a harder task than the policy was trained on: on L4 the
+            # same weights scored 4/40 vs 32/40 on the fruit trip at 5 vs 1.
+            # Any CP4->princess figure measured here before this fix is a LOWER
+            # BOUND (the 68.8% in experiments/003-yeti-training.md included).
+            settle=1,
             max_steps=args.max_steps,
             stall_threshold=args.stall_threshold,
             deterministic=False,
