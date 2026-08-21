@@ -1,0 +1,117 @@
+# L4 v5 — PHASE 1. The one knob L4 has never been given: exploration temperature.
+#
+# ONE LEVER vs v4:  n_steps 512 -> 16,  target_kl 0.07 -> removed.
+# Everything else is v4 byte-for-byte.
+#
+# WHY. Every L4 run has been trained in the phase-2 regime, and v1/v2 were also COLD:
+#
+#   v16 (L1)  n_steps 512, target_kl 0.05, NO warm-start, curriculum
+#   l4 v1     n_steps 512, target_kl 0.07, NO warm-start, curriculum
+#   l4 v2     n_steps 512, target_kl 0.07, NO warm-start, curriculum
+#   l4 v3/v4  same, warm-started from another STEADY run
+#
+# v1/v2 are v16's recipe. And v16's recorded result (H-W in
+# experiments/003-yeti-training.md) is: "every snapshot scored princess 0.0 AND
+# reach4 0.0 -- it plateaus at reach-3 and never once crosses the reach-4 wall in the
+# entire run. So the steady recipe cannot learn from scratch; the big-step phase-1 was
+# doing essential exploration."
+#
+# L4 is that run. Solid to a wall, never crossing it, princess 0 on all 151 snapshots.
+# Warm-starting v3 from v2 and v4 from v3 inherits WEIGHTS, not exploration history --
+# it cannot retroactively supply a phase 1 that never happened.
+#
+# WHY IT FITS THIS WALL SPECIFICALLY. H-W: crossing a plateau "needs a whole new skill
+# chunk, so small greedy steps can't -- nothing nearby improves the return". Measured
+# at Step: climbing immediately fails 20/20 (27 jump timings swept) while waiting ~20
+# steps then climbing succeeds 20/20. So the missing chunk is a PAUSE, and the shaping
+# pays +0.24/step to move and exactly 0 to wait (gamma=1 PBRS: standing still pays
+# nothing). Nothing nearby improves the return, literally.
+#
+# WHAT IS ALREADY RULED OUT by measurement, so this is not a guess of last resort:
+#   * seeds are fine        -- 11/11 of the "always-lose" Lclimb3_top states are
+#                              winnable by script, 11/11 survive in shelter
+#   * the route is fine     -- 0/40 reset episodes take the ascent before the fruit;
+#                              fruit from reset 75-100% across 151 snapshots
+#   * the segment is doable -- 20/20 scripted from Step seeds
+#   * reward is correct     -- +0.24/step toward the launch column, +0.72 for the jump,
+#                              no ambiguity at the low/high branch
+#   * no-op start jitter    -- tested both scopes at 300k, did NOT diversify the pool
+#                              (distinct min-waits 3 -> 3 and 3 -> 2), and cost route
+#                              depth; left in the code, default off
+#
+# EXPECTATIONS. Phase 1 is DELIBERATELY destructive: measured KL up to 68 on L1. The
+# fruit trip will regress and the trace will oscillate -- that is the mechanism, not a
+# failure. So judge this run ONLY via keep_best_sweep across ALL snapshots, never the
+# final model (v4's final model scored 0 fruits from reset while its snapshots scored
+# 75-100%). Snapshot cadence is kept at 100k for that reason.
+#
+# THEN PHASE 2. If a snapshot crosses the wall, cement it: warm-start that snapshot
+# back at n_steps 512 / target_kl 0.07 (v4's settings). That is the L1 recipe, which
+# took 58% -> 99.7% once phase 1 had found the basin.
+#
+# WATCH: whether Lclimb3_top's reach ever leaves ~0.06, whether Low1/Low2 pools grow,
+# and any princess touch at all. The route table prints every 50k.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v5_phase1_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  # v4's step-14.9M snapshot (fruit 12/12 from reset, the latest of the 60 that tie at
+  # 1.000) PLUS v4's checkpoints.pkl, staged together so the run inherits the CLEAN
+  # pools the admission fix produced. Weights-only so the new PPO settings apply.
+  resume: output/mo5/yeti/training/l4_v4_phase1_seed/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  # PHASE 1: high temperature. Small rollouts + NO KL cap = large, noisy, sometimes
+  # destructive updates that can jump across a behavioural plateau. This is the only
+  # difference from v4.
+  n_steps: 16
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

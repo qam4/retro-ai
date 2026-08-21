@@ -1158,6 +1158,11 @@ class CheckpointCurriculumEnv(gym.Env):
         # and never re-captures the waypoint an episode was seeded from.
         self._wp_enabled = bool(getattr(cur, "waypoints", False)) if cur else False
         self._wp_tol = int(getattr(cur, "waypoint_tolerance", 2)) if cur else 2
+        # Random no-op start (see the block in reset()). 0 = off.
+        self._noop_start_max = int(getattr(cur, "noop_start_max", 0)) if cur else 0
+        self._noop_start_scope = (
+            str(getattr(cur, "noop_start_scope", "reset")) if cur else "reset"
+        )
         # JUMP LANDINGS NEED A WIDER BOX THAN LADDERS. A ladder waypoint is a
         # single x_ram -- engagement literally requires the exact value (measured
         # on L4: ladder Lfruit climbs at x_ram 50, not 49 or 51). A jump, rope or
@@ -1322,6 +1327,36 @@ class CheckpointCurriculumEnv(gym.Env):
         else:
             obs, _ = self.gym_env.reset()
             self._start_state_hash = ""
+
+        # RANDOM NO-OP START (the standard Atari trick, applied where it can
+        # actually reach us). The profile already has `random_noop_max`, but it
+        # fires inside the STARTUP SEQUENCE — and this env calls gym reset once
+        # (`if not self._initialized`) then `load_state`s every episode, so that
+        # jitter is overwritten by the first load and never affects L2/L3/L4.
+        #
+        # Why we want it. Measured on v4's pools, the bonus countdown at capture
+        # (a monotonic clock, so a proxy for arrival time) is almost constant:
+        # Lfruit_top spread 2 over 100 captures, Fr2 18, Step 103 with median 751
+        # against max 753. The policy replays ONE open-loop trajectory with
+        # near-identical timing, so it always meets the periodic kangaroos at the
+        # same phase and never has to READ them. That also makes every pool
+        # phase-poor by construction: all 20 sampled Step seeds need a pause of
+        # 16-24 steps, only 3 distinct values, so an agent can pass them by
+        # memorising "wait 20" without learning to react.
+        #
+        # `noop_start_max` draws 0..N extra no-op gym steps after the start state
+        # is in place, decorrelating arrival phase from the route.
+        # `noop_start_scope`: "reset" jitters only reset-origin episodes (keeps
+        # seeds representing exactly the situation they were captured for), "all"
+        # jitters seeds too (diversifies the pools, at the cost of changing what
+        # a seed means). Untested either way — the knob exists so both can be run.
+        if self._noop_start_max > 0 and (
+            self._noop_start_scope == "all" or self._start_wp is None
+        ):
+            for _ in range(random.randint(0, self._noop_start_max)):
+                obs, _, _done, _trunc, _ = self.gym_env.step([0, 0, 0])
+                if _done or _trunc:
+                    break
 
         self._step_count = 0
         self._prev_fruits = self.iface.read_ram_byte(FRUITS_ADDR)

@@ -243,6 +243,23 @@ class CurriculumConfig:
     # reaches at sparse rungs; needs a 3-seed sweep with a baseline arm first.
     # See _admit_by_play for the alternative (anchor reached_next to save time).
     admit_requires_survival: bool = False
+    # RANDOM NO-OP START: draw 0..N extra no-op gym steps after the start state is
+    # loaded, to decorrelate arrival phase from the route. 0 = off (current
+    # behaviour). The profile's own `random_noop_max` cannot serve this: it fires
+    # in the startup SEQUENCE, and this trainer resets gym once then load_states
+    # every episode, so it is overwritten and never reaches L2/L3/L4.
+    #
+    # Why: measured on L4 v4's pools, the bonus countdown at capture (a monotonic
+    # clock ~ arrival time) is nearly constant -- Lfruit_top spread 2 across 100
+    # captures, Step 103 with median 751 vs max 753. The policy replays one
+    # open-loop trajectory at fixed timing, always meets the periodic kangaroos at
+    # the same phase, and never learns to read them; every pool is phase-poor as a
+    # result (all 20 sampled Step seeds need a 16-24 step pause, 3 distinct values).
+    noop_start_max: int = 0
+    # "reset" = jitter only reset-origin episodes (a seed keeps representing the
+    # situation it was captured for); "all" = jitter seeded episodes too
+    # (diversifies pools, but changes what a seed means). Untested either way.
+    noop_start_scope: str = "reset"
 
 
 @dataclass(frozen=True)
