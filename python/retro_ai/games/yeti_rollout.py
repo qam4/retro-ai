@@ -38,6 +38,20 @@ class EpisodeResult:
     positions: List[Tuple[int, int]] = field(default_factory=list)  # (x_px, y)
     actions: List[Tuple[int, ...]] = field(default_factory=list)
     frames: Optional[List[np.ndarray]] = None  # raw frames if keep_frames
+    # ROUTE DEPTH (only populated with track_waypoints=True).
+    #
+    # Why this exists: ``max_cp`` counts fruits plus the princess, so on a single-fruit
+    # level it has three attainable values (0, 1, 2) and cannot distinguish a policy
+    # that stops at the first obstacle from one that gets within a rung of the end.
+    # Every L4 champion ever selected by keep_best_sweep was therefore arbitrary --
+    # v4 kept its 100k snapshot, v5 its 1M, v6 its 200k, all on ties.
+    #
+    # ``max_rung`` is the SAME quantity training reports as ``reset_reach``: how many
+    # MANDATORY route targets the episode has behind it, using the same shared reach
+    # test and the same pose gate.
+    reached_points: set = field(default_factory=set)
+    max_rung: int = 0
+    n_rungs: int = 0
     # First time each checkpoint was reached this episode: cp -> (step, bonus).
     # cp = fruits collected; princess = fruits_total + 1. Used by profiling.
     cp_arrival: Dict[int, Tuple[int, int]] = field(default_factory=dict)
@@ -56,6 +70,9 @@ def rollout_episode(
     deterministic: bool = True,
     keep_frames: bool = False,
     reset_env: bool = True,
+    track_waypoints: bool = False,
+    wp_tol: int = 2,
+    wp_jump_tol: int = 6,
 ) -> EpisodeResult:
     """Roll out a single Yeti episode under the training termination rules.
 
@@ -97,6 +114,38 @@ def rollout_episode(
     base = stack.base
     gym_env = stack.gym
     iface = base._interface
+
+    # --- route-depth tracking (opt-in; off => behaviour unchanged) -----------
+    # Mirrors the trainer exactly: same waypoint positions, same per-axis tolerance
+    # (ladders `wp_tol`, jump landings `wp_jump_tol`), the same SHARED reach test
+    # (targets.within_tol) and the same pose gate (surface poses plus the L3
+    # escalator ride). Anything that diverges here would make eval numbers
+    # incomparable with the route table, which is the whole point of it.
+    wps: dict = {}
+    tol_of: dict = {}
+    mandatory_ids: set = set()
+    n_rungs = 0
+    if track_waypoints:
+        from retro_ai.training.targets import build_targets, within_tol
+        from retro_ai.training.yeti_map import get_level_map, jump_waypoints
+
+        wps = dict(yeti.waypoints(level))
+        try:
+            jump_ids = set(jump_waypoints(get_level_map(level)))
+        except (ValueError, KeyError):
+            jump_ids = set()
+        tol_of = {w: (wp_jump_tol if w in jump_ids else wp_tol) for w in wps}
+        _mand = [
+            t for t in build_targets(level) if t.mandatory and t.kind != "princess"
+        ]
+        for t in _mand:
+            mandatory_ids.add(t.id)
+            if t.node_ident:
+                mandatory_ids.add(t.node_ident)  # graph alias counts the same
+        n_rungs = len(_mand)
+    seed_poses = frozenset(yeti.SURFACE_POSES | {13})
+    reached_points: set = set()
+    fruit_addrs = yeti.fruit_presence_addrs(level) if track_waypoints else {}
 
     if reset_env:
         obs, _ = gym_env.reset()
@@ -149,6 +198,11 @@ def rollout_episode(
         # ladder pose) — a fall passing through a floor line doesn't count.
         if floor is not None and floor > deepest_floor and pose in yeti.SURFACE_POSES:
             deepest_floor = floor
+        if track_waypoints and pose in seed_poses:
+            for wid, (wx, wy, _f) in wps.items():
+                if within_tol((wx, wy), x, y, tol_of.get(wid, wp_tol)):
+                    reached_points.add(wid)
+
         if keep_frames and base._last_raw_obs is not None:
             frames.append(np.asarray(base._last_raw_obs, dtype=np.uint8).copy())
 
@@ -184,6 +238,13 @@ def rollout_episode(
             break
 
     x, y = yeti.read_pos(iface)
+    # Collected fruits count toward the rung exactly as they do in training, where the
+    # reached-set is waypoints UNION fruits-derived-from-their-presence-bytes.
+    if track_waypoints:
+        for fid, addr in fruit_addrs.items():
+            if iface.read_ram_byte(addr) == 0:
+                reached_points.add(f"F{fid}")
+    max_rung = len(reached_points & mandatory_ids) if track_waypoints else 0
     return EpisodeResult(
         length=steps,
         end_reason=end_reason,
@@ -198,4 +259,7 @@ def rollout_episode(
         actions=actions,
         frames=frames,
         cp_arrival=cp_arrival,
+        reached_points=reached_points,
+        max_rung=max_rung,
+        n_rungs=n_rungs,
     )

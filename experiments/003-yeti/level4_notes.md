@@ -1,0 +1,731 @@
+# Yeti Level 4 — run history and wall diagnosis
+
+L4 had no notes file until now. Its narrative lived only in the config headers
+(`configs/yeti_curriculum_l4_v1..v5*.yaml`) and in run logs, which is why probe
+results kept being re-derived or lost. Record findings HERE.
+
+## Status
+
+Princess: **0**, across v1..v6 (6 runs, ~85M steps). The from-reset chain is now
+solid to rung 10 (`Low1`, floor 12) and stops dead there.
+
+| run | lever | outcome |
+|---|---|---|
+| v1 | cold, phase-2 settings | 0 fruits in 3000 reset episodes (route unwinnable: no phase gate) |
+| v2 | `waypoints_after_fruit` phase gate | fruit 93%, wall at `Step` |
+| v3 | warm-start from v2 | pools poisoned (inherited `reached_next` credit) |
+| v4 | `admit_requires_survival` | deepest rung 12; `Step` reach 0.85, `Low1_launch` 0.54 (but see the tol-6 caveat: that 0.54 was counting a stalled climb as an arrival) |
+| v5 | phase-1 temperature (`n_steps` 512→16, no `target_kl`) | regressed everything; deepest rung 10 |
+| v6 | **reward-milestone anchor fix** (`Fr1`, `Rope1`; 3 launch pads dropped) | **best run.** rung-10 from-reset reach 0.06 → 0.66 EMA (peak 0.86 @8.76M); `Low1` touches 1,247 → 23,730; deepest rung 12 |
+
+### v6 champion, measured at n=300 (2026-08-24)
+
+`best/best_model.zip` = `model_14600000_steps.zip`, 300 stochastic from-reset
+episodes, level-4 geometry, stall 40 / max_steps 1500:
+
+```
+reached >= rung 10:  254/300  (84.7%)
+reached >= rung 11:    0/300  ( 0.0%)     <-- the wall, exactly zero
+mean rung: 9.38 / 13
+1 fruit:  289/300 (96.3%)
+princess:   0/300 ( 0.0%)
+```
+
+Two things to take from this. First, rung 10 at **84.7%** is the real v6 gain — v4's
+from-reset reach for the same rung was 0.06. The anchor fix worked. Second, rung 11
+is not "rare", it is **0/300**: a hard barrier, not a low-probability crossing. Do
+not model it as something more training time will smooth out.
+
+Note the 12-episode sweep score for this same snapshot was `rung 10.00`, versus
+9.38 at n=300. 12 episodes is a *trigger* resolution, not a measurement; it cannot
+separate the top snapshots from each other (eight of them scored 9.4–10.0) and it
+cannot tell 0% from ~4%. Always re-eval a champion at 200–300 before building on it.
+
+### `keep_best_sweep` scoring — was broken, now fixed
+
+Historic `best/best_model.zip` under v4 and v5 is **meaningless**: the sweep scored
+`princess + 1e-3 * reach_top`, and on a one-fruit level `reach_top` = P(collect the
+fruit), which saturates at 1.0 for most snapshots. Ties broke to the EARLIEST
+snapshot, so v4 "kept" 100k and v5 kept 1M — both near-untrained. Eval was blind to
+the 13 route rungs between fruit and princess.
+
+Fixed by tracking route depth through the rollout harness
+(`yeti_rollout.rollout_episode(track_waypoints=...)` → `max_rung`, `n_rungs`,
+`reached_points`) and scoring
+`princess + 1e-2 * (mean_rung / n_rungs) + 1e-5 * reach_top`.
+
+Re-sweeping v6's 150 snapshots produced **94 distinct scores** where the old
+formula produced 1–2. Ranking (12 eps each):
+
+| step | mean rung |
+|---|---|
+| 14,600,000 | 10.00 |
+| 2,600,000 | 9.92 |
+| 13,400,000 | 9.92 |
+| 1,200,000 | 9.83 |
+| 8,600,000 | 9.83 |
+| 5,400,000 | 9.75 |
+
+mean 6.37, median 7.88; 8/150 at rung >= 9.5; **10/150 below rung 1.0** (collapsed).
+
+The good snapshots are **scattered** across the whole run (1.2M, 2.6M, 5.4M, 8.6M,
+13.4M, 14.6M), not clustered at the end. So v6 is not a policy that improves and
+then degrades — it oscillates between the rung-10 ceiling and collapse for all 15M.
+That is the gate instability (see "The gate locks out full pools at the wall"), and
+the frozen-snapshot evals independently agree with the training EMAs about which
+phases are the bad ones.
+
+## v5 was not a valid test of its own hypothesis
+
+The hypothesis (see its config header) was that L4 had never received the
+high-temperature phase-1 exploration that unlocked L1, and that supplying it would
+jump the plateau. Two reasons the run cannot answer that:
+
+1. **Confounded staging.** v4 was staged weights-only (`l4_v3_weights_only/`
+   contains just `final_model.zip`) and rebuilt pools from empty. v5 was staged
+   with weights **and** v4's `checkpoints.pkl`. So temperature and initial pools
+   both changed.
+2. **Feedback through the gate.** High-temperature updates degraded from-reset
+   reach, which shut `gate_waypoints` on the deep points, which cut deep starts
+   4-5x (`Low1_launch` 4488 → 917, `Step` 3689 → 1027). Temperature was not an
+   independent variable.
+
+## The gate locks out full pools at the wall
+
+Both v4 and v5 set `gate_waypoints: true`, `reach_threshold: 0.15`. A waypoint is
+eligible as a start only if `wp_reach_ema >= 0.15`. Measured (`episodes.csv`,
+`start_key`), across BOTH runs:
+
+```
+Low1          pool 100   from-reset reach 0.00 (best ever 0.02 v4 / 0.06 v5)   starts 0
+Low2_launch   pool 100   reach 0.00                                            starts 0
+Lhi_up_top / Hi1_launch  pools >0, reach 0.00                                  starts 0
+```
+
+100 admitted, survival-gated seeds at each of two points, never once loaded. The
+gate asks for 15% from-reset reach before permitting practice at the very point
+whose practice would produce that reach. Same mechanism L3 diagnosed (v15 notes,
+"gate oscillation") and prescribed hysteresis for; never implemented. On L4 it
+deadlocks outright rather than oscillating, because deep reach never approaches
+0.15.
+
+Note `Low1_launch` itself WAS heavily practised (4488 starts in v4) — see below
+for why that practice was worth less than it looks.
+
+## WHERE THE FROM-RESET CHAIN ACTUALLY BREAKS (read this before picking a wall)
+
+v4's route table reads, in route order:
+
+```
+Step_launch   0.89
+Step          0.85
+Lclimb3_top   0.06      <- looks like the collapse
+Low1_launch   0.54      <- but this is FURTHER along and HIGHER
+Low1          0.00      <- the real break
+Low2_launch   0.00      (650 captures, all from seeded episodes)
+Low2          0.00      (1 capture, ever)
+```
+
+Reach is non-monotonic along a linear route, so one of those numbers is wrong.
+**MEASURED 2026-08-24: the agent stalls 4px below the platform. `Low1_launch` counts
+that stall as an arrival.**
+
+`debug/l4_climb_height.py --model 14000000 --episodes 30` measures the MINIMUM y
+(highest point) each from-reset episode reaches. A minimum over a whole episode needs
+no tolerance window, so unlike every waypoint-box number it cannot be an artifact of
+the 4-frame detection stride:
+
+```
+min-y per episode          y82 n=15   y84 n=12   y108/140/172 n=1 each
+topped the ladder (<=78)   0/30
+on the ladder column       30/30 episodes, median 38 steps there
+best height ON the ladder  y82 n=15  y86 n=7  y90 n=3  y92 n=1  y146 n=3  y172 n=1
+```
+
+27/30 episodes climb `Lclimb3` to y82-84 and stop. **NONE of 30 ever reaches y78, the
+f11 standing height.** The agent is on the ladder column in every single episode and
+spends ~38 steps there.
+
+That resolves the non-monotonicity, and the honest number is the LOW one:
+
+* `Lclimb3_top` needs y in [76,80]. The agent never gets there. **0.03 is correct.**
+* `Low1_launch` accepts y in [72,84]. The agent stalls at y82, inside the box, so it
+  fires. **0.40-0.54 is the stall being scored as an arrival.**
+
+It also re-reads the pool composition recorded under Q3 below: the 43/100
+`Low1_launch` seeds at y82 in ladder pose are not "contamination", **they are the
+stall point itself**. v4 spent 4488 practice episodes at that waypoint, 43% of them
+starting from exactly where the agent gets stuck, and the other 57% (at y78) from
+states it only ever occupies when seeded there.
+
+**THE WALL IS THE LAST STEP OF THE `Lclimb3` CLIMB: y82 -> y78.** Every other L4
+finding in this file — f11 -> f12, ROPE 2, pool purity, seed determinism — is above
+it and was measured on a region the agent does not reach from reset.
+
+Corroborating, from `debug/l4_f11_arrival_vs_pool.py --model 14000000 --episodes 60
+--settle 1` (v4's 14M snapshot, whose route table reads `Low1_launch` 0.40):
+
+```
+from-reset: STOOD ON f11 in 1/60  (2%)
+  the single arrival was x_ram 66, y78, pose 8  -- i.e. ON THE LADDER at platform
+  height, at the ladder's x; not walking on the platform
+  of that 1, episode later stood on f12:  0
+  of that 1, Low1 reach box fired:        1     -> box fired without a landing
+scripted winnability   arrivals 1/1 (n=1, meaningless)   pool 11/20 (55%)
+```
+
+2% agrees with `Lclimb3_top`'s 0.03-0.06 and refutes `Low1_launch`'s 0.40-0.54.
+The mechanism is box width, in the opposite direction to what this file previously
+claimed:
+
+* `Lclimb3_top` is a LADDER waypoint -> tol 2 -> box x_ram 64..68, y 76..80.
+  That is the platform-standing position. **Honest.**
+* `Low1_launch` is a JUMP waypoint -> tol 6 -> box x_ram 54..66, y **72..84**,
+  pose set including ladder. The `Lclimb3` ladder is at x_ram 66, so a state
+  PART-WAY UP the ladder at y82 sits inside this box. **It fires without the agent
+  ever reaching floor 11.**
+
+So the agent gets part-way up the ladder in ~40-54% of from-reset episodes and onto
+the platform in ~2-3%.
+
+**The honest ordering of L4's walls:**
+
+1. **f10 (`Step`) -> f11, the `Lclimb3` ladder climb, is THE wall.** Reach falls
+   0.85 -> 0.02. Everything above it — the `Low1_launch`, `Low1` and `Low2_launch`
+   pools, 100 states each — was built ENTIRELY from seeded episodes. That is why
+   4488 practice episodes at `Low1_launch` never transferred: they drill a region
+   the agent cannot reach from reset.
+2. f11 -> f12 (`Low1`) and f12 -> f13 (ROPE 2) are LATER walls. Neither can be
+   measured from reset until (1) is solved. Work on them is premature.
+
+Corollary: the `Low1_launch` pool being 43% mid-ladder states (see Q3 below) is not
+merely a capture-tolerance bug, it is a SYMPTOM — at that waypoint the agent is
+usually on the ladder, because it hardly ever makes the platform.
+
+Two earlier claims in this file were wrong and are retracted: that `Lclimb3_top`
+0.06 was a detection artifact, and that f11 -> f12 was the wall. A session's worth of
+probing (Q0, Q3, ROPE 2) was spent above the real break.
+
+The `Low1` box also over-fires: it registered a reach in an episode that never stood
+on f12. Both boxes need auditing, not just `Low1_launch`.
+
+## THE WALLS (measured 2026-08-24)
+
+Ran `debug/l4_low_route_probe.py --n 20 --skip-poses` and
+`debug/l4_low1_jump_bruteforce.py --pool Low1_launch --n-seeds 12` against v4's
+pools. Both scripts already existed (written 2026-08-19/20) with explicit decision
+rules; their results had never been recorded.
+
+Geometry: `f11` P12 y78 x_ram 60-78 → `f12` P11 y70 x_ram 44-56 → `f13` P10 y70
+x_ram 0-30.
+
+### Wall A — f11 → f12 (`Low1`), a plain jump: FEASIBLE, pool half-unusable
+
+```
+scripted walk-left-then-JUMP-LEFT      3/20  (15%)
+best single fixed phase (12/24)        4/20  (20%)
+solvable by SOME phase                10/20  (50%)
+NOOP lifetime  min 29  median 49  max 81   survived 150 frames: 0/20
+```
+
+At training granularity (frame_skip 4, `l4_low1_jump_bruteforce`, 12 seeds):
+best single plan 4/12 (33%), solved by some plan 5/12 (42%). Broken down by the
+seed's own state — the decisive cut:
+
+```
+x_ram 62 y78 pose 4   1/1 solvable
+x_ram 65 y78 pose 4   2/2 solvable
+x_ram 65 y78 pose 5   2/2 solvable
+x_ram 66 y82 pose 8   0/7 solvable   <- LADDER pose, BELOW f11
+```
+
+**Every seed genuinely standing on f11 is solvable (5/5). Every seed in ladder pose
+at y82 is not (0/7).** 7 of the 12 sampled seeds are the latter, consistent with the
+figure recorded in `l4_low1_jump_bruteforce.py`'s docstring from an earlier
+measurement of the whole pool (45/100 in ladder pose 8, 43 of them at y82). The jump
+waypoint tolerance is 6, so the `Low1_launch` box at (60, 78) spans y 72..84 and
+admits x_ram 66 / y82 — a mid-ladder position 4px below the platform — and pose 8
+is in `SEED_POSES`. So the "jump-off pad" pool is ~half mid-climb states from which
+the intended manoeuvre is impossible without first finishing the climb, under a
+~49-frame death clock (nothing survives standing still).
+
+=> Wall A is **not a hard skill**. It is a capture-tolerance defect: half the
+practice at this doorstep is practice at an impossible task. Fix is in capture, not
+in the policy.
+
+### Wall B — f12 → f13 (`Low2`), a ROPE modelled as a jump: 0/20, and the platform is safe
+
+```
+scripted walk-left-then-JUMP-LEFT      0/20  (0%)   16/20 DIED, 4 timeout
+best single fixed phase                0/20  (0%)
+solvable by SOME phase                 0/20  (0%)
+NOOP lifetime  min 150  median 150  max 150   survived 150 frames: 20/20
+```
+
+Zero hazard pressure (every seed survives 150 frames of NOOP) and zero success
+across every phase, with 80% of attempts fatal. This is not phase sensitivity —
+it is the wrong manoeuvre. `LEVEL4` models f12→f13 as a plain `jump_edge`.
+
+**CAVEAT, do not over-read:** `plan_rope` hardcodes `period=24` and sweeps
+`i % 24`, so "all 24 phases" only covers the phase space if the rope's period
+divides 24. Rope 1's carry lasts ~30+ frames in trace. Wall B is therefore
+established as *not a jump* and *not hazard-limited*; it is NOT established as
+infeasible. Re-probe with the measured rope period before concluding that.
+
+**Correction to "the platform is safe": the LANDING platform carries snowballs.**
+The NOOP-survival probe above measures the seed's *departure* platform, which is
+why it read as hazard-free. `yeti_map` has:
+
+```python
+SNOWBALLS = {"P7": (28, 29), "P10": (46, 53)}
+```
+
+`P10` is **floor 13 — rope-2's landing platform** — and it spans cols 0–15, i.e.
+px 0–127, the platform's full width. Visually confirmed in
+`debug/shots/l4_f12_launch_44_70.png`.
+
+This is the asymmetry that explains why rope 1 is easy (reach 0.82 in v4) and rope 2
+is a 0/300 wall: **rope 1's landing platform (P17, floor 7) has no snowball; rope 2's
+does.** So rope 2 is not just a harder rope, it is a rope whose landing must be timed
+against a hazard that traverses the entire target platform. Any fix that treats it as
+a pure locomotion problem is attacking the wrong constraint.
+
+Supporting evidence from v6 (`debug/l4_v6_rope2_videos/`, 6 episodes): 5/6 end in
+death pose 11 (FALL); ep3 hits max_steps stuck at (44, 74) in **pose 17** on the
+launch pad, never departing. Training counters at the same rung: arrives 61%,
+`prog` 0.00, **5,559 precarious rejections**.
+
+## L4 uses sprite poses the codebase does not know about
+
+`debug/l4_rope_pose_trace.py --run <v4> --n 8`, replaying v4's policy from pools:
+
+```
+ROPE 1  f6 -> f7    policy crossed 8/8 (100%)   non-surface poses {9: 213, 14: 41}
+                    moved sideways in pose      {9: 130, 14: 26}
+SPRING  f8 -> f9    policy crossed 0/8          {9: 194, 16: 139, 11: 104}
+ROPE 2  f12 -> f13  policy crossed 0/8          {11: 122, 10: 84, 17: 54, 9: 44, 6: 1}
+   (the wall)                                   pose 17 never moved sideways
+```
+
+Poses **6, 14, 16, 17** appear nowhere in the pose table, in `SURFACE_POSES`
+(`{0,1,2,3,4,5,8}`), or in `SEED_POSES` (`SURFACE_POSES | {13}`, where 13 was added
+for L3's escalator ride). Consequences:
+
+* A **rope carry is pose 14** and moves the agent sideways — a controlled
+  traversal, exactly like L3's pose-13 escalator ride. It is currently classified
+  airborne, so shaping freezes across every rope and **no seed can be captured
+  mid-carry**. There are no intermediate seeds on any rope.
+* The **spring is pose 16**; the f12→f13 crossing shows **pose 17** with no lateral
+  motion plus heavy pose 11 (fall).
+
+**CORRECTION (2026-08-24). Do not conclude from this that the rope modelling is what
+blocks rope 2.** An earlier version of this file ranked "ropes modelled as plain
+jump_edges + pose 14 frozen" as L4's top blocker. That is refuted by L4's own data:
+
+* L4 has TWO ropes, per the authored route in `debug/l4_route_check.py` —
+  `("rope", 92, 93)` = ROPE 1 (f6->f7), and `("rope", 54, 53)` = ROPE 2 (f12->f13,
+  the wall). Plus `("spring", 74, 75)`.
+* `jump_edges` contains BOTH `(6,7)` and `(12,13)`, and pose 14 is outside
+  `SURFACE_POSES` for both. So ROPE 1 carries the identical model defect and the
+  identical shaping freeze — and is crossed **0.90 from reset**.
+
+A defect present at a crossing the agent makes 90% of the time cannot be the reason
+another crossing is never made. The pose facts above stand as facts; their causal
+weight does not.
+
+**Poses are FACING-PAIRED, so 14 and 17 are probably the same state, two directions.**
+The documented table is already paired: 0-3 walk-right / 4-5 walk-left, 9 jump-right /
+10 jump-left. ROPE 1 is entered jumping RIGHT and shows 9 (213) + 14 (41), no 17.
+ROPE 2 is entered jumping LEFT and shows 10 (84) + 17 (54), no 14. Read as a pair:
+**14 = carried facing right, 17 = carried facing left.**
+
+That corrects a claim made earlier in this session: the agent **does** enter a
+rope-carry pose on ROPE 2 (17, fifty-four times), so "it never engages the rope" was
+wrong.
+
+The remaining asymmetry is narrower and is the thing to explain: pose 14 on ROPE 1
+moved the agent sideways 26 of 41 occurrences, while pose 17 on ROPE 2 moved it
+sideways **zero** times. So on ROPE 2 the agent reaches a carry pose but is not
+carried. Whether that is a different mechanic, a wrong entry point, or simply the
+agent grabbing and letting go, is not established — and per the section above, it is
+a LATER wall and should not be worked before f11 -> f12.
+
+Also note the scripted 0/20 does NOT license a mis-modelling claim on its own: the
+`plan_rope` sweep is `i % 24`, so a rope whose period does not divide 24 is never
+jumped at the right moment. It means "this script failed", not "this mechanic is
+wrong".
+
+## THE REACH TEST IS NOW ONE CODE PATH (done 2026-08-24) — and what is still broken
+
+Two consumers decide "has the agent reached this waypoint", and they had separate
+implementations:
+
+* curriculum (`train_checkpoint_curriculum.py`) — reach EMAs, capture, seeding
+* reward (`rewards.py`) — milestone marking inside the PBRS potential
+
+They use the **same anchor** (verified: positions differ for 0 targets on L3 and L4)
+and **different tolerances**: the curriculum passes 2 for ladder waypoints and 6 for
+jump waypoints, the reward always passes `waypoint_reward_tol` = 2. One anchor, two
+box sizes, two answers.
+
+**The bug this produced.** L4 `Fr1` is anchored at x_ram 60 — floor 3's left
+extremity. Measured from reset (10 episodes, 120 grounded steps on that floor) the
+agent occupies only x_ram 64..68 there. So:
+
+```
+reward box   (tol 2)  58..62   ->  0 hits, milestone NEVER marked
+curriculum   (tol 6)  54..66   ->  fires, reach reads ~0.94
+```
+
+Because it is never marked it stays in the active set and the potential sums distance
+to it for the whole episode (`J2_3_b` is not in `waypoints_after_fruit`, so every step
+of every episode). Measured magnitude on floor 3: the milestone term contributes
+**+0.48/step** of leftward pull versus **+0.04/step** from the base route potential —
+12x — and it keeps paying past the safe 3->2 takeoff at x_ram 63-64 to 62 and then 61,
+where the agent dies (6/6 scripted trials, death at x_ram 61 step 4). `J6_7_b` (Rope1)
+has the same defect: box 22..26, agent occupies 27 and 34.
+
+What is NOT established: the training cost. PBRS is policy-invariant in theory, so
+this distorts the learning gradient rather than the optimum.
+
+**What was changed (pure refactor, no behaviour change).**
+`retro_ai.training.targets.within_tol()` is now the single comparison, with
+`Target.reached(x, y, tol_x, tol_y=None)` delegating to it, and both call sites route
+through it. Tolerance stays a caller argument precisely because the two callers still
+pass different values — the refactor stops the comparison drifting, it does NOT fix
+the values. `Target.reached` also raises for non-positional targets (fruits are RAM
+events, the princess is a flag) so a second, wrong detector cannot be invented by
+accident. Equivalence to the old inline logic is pinned exhaustively in
+`tests/python/test_reach_test_shared.py`, which also pins the `Fr1` defect as a
+regression test. Verified: 432 tests pass; a warm-started 40k L3 run marks reaches
+normally (`reset_reach` 0.86 on rungs 1-6, `route[8]: 6/19`).
+
+**Validation, done 2026-08-24: `debug/yeti_validate_targets.py`.** Two tiers, because
+they catch different failures:
+
+* STATIC (no emulator): does the anchor's box contain any position that resolves to
+  the target's own floor, via the same `agent_floor_from_pixel_xy` the reward uses?
+  Done in pixels to dodge the tile-vs-agent conversion trap.
+* MEASURED (`--measure`): does the box ever contain a position the agent is actually
+  grounded at?
+
+An "anchor at a platform extremity" static warning was tried and REMOVED: it fires for
+all 24 L4 jump waypoints, because placing arrivals and launch pads on edges is what
+`jump_waypoints` does. It cannot separate `Fr1` (never marks) from `Spring` (marks
+18x) — the difference is where the agent goes, not geometry. Static alone finds nothing
+on L4; the measured tier is the one that produces a verdict.
+
+**L4 result — 6 targets never mark** (v4 snapshots 14M + 10M, 8 episodes each):
+
+```
+Lclimb3_top     reward=N curric=N    <- the STALL, not misplacement (agent sits at y82,
+                                        box needs y76..80). Already documented above.
+Fr1             reward=N curric=Y
+Rope1           reward=N curric=Y
+Spring_launch   reward=N curric=Y
+Step_launch     reward=N curric=Y
+Low1_launch     reward=N curric=Y
+```
+
+`Fr2`, `Fr2_launch`, `Fr1_launch`, `Spring`, `Step`, `Rope1_launch` and every ladder
+anchor except `Lclimb3_top` mark fine. So five anchors are misplaced, and three of them
+(`Spring_launch`, `Step_launch`, `Low1_launch`) were not on the earlier list.
+
+**L3 is affected too — see `level3_notes.md`.** `Lesc_top` fails the STATIC check (0
+standable positions: anchored at x_ram 33 on a floor whose walkable run ends at 26, so
+7 units off the platform), and `A1_launch` never marks under either detector. That
+changes the framing: this is not a defect that only exists on the level with nothing to
+lose. L3's A2..A5 anchors are untested rather than clean — those floors were never
+visited from reset, so they need seeding from their own pools.
+
+## ANCHOR FIX APPLIED TO L4 (2026-08-24) — this is v6's one lever
+
+Five changes, all L4-only. Two new optional `LevelMap` fields carry them, so L1/L2/L3
+are untouched by construction (`jump_waypoint_pos`, `jump_waypoint_skip`).
+
+**Two anchors moved to measured positions:**
+
+```
+Fr1     x_ram 60 -> 64   floor 3's landing in all 15 observed 2->3 crossings.
+                         60 is the platform's left extremity; walking there is fatal
+                         at 61 (6/6 scripted trials).
+Rope1   x_ram 24 -> 27   the rope landing on floor 7, pose 1, at that floor's standing
+                         y. VISUALLY CONFIRMED by the user from
+                         debug/shots/f7_x27_y118_pose1.png.
+```
+
+The tool's first proposal for `Rope1` was (34, 110), which was **rejected**: that
+position reads pose 8 — the agent CLIMBING the ladder off floor 7, a different event.
+The proposer picks the busiest position without checking it is at the floor's standing
+y, so it can propose a transient. Known limitation, not fixed.
+
+**Three redundant launch pads dropped.** Each shared a platform with a waypoint that
+already marks correctly, so it was a second, wider, misplaced box for one traversal:
+
+```
+Spring_launch  floor 8   Lclimb2_top is at (34,94) -- the very position the measured
+                         proposal for Spring_launch resolved to. Same point, two names.
+Step_launch    floor 9   Spring marks fine there.
+Low1_launch    floor 11  Lclimb3_top is exact (dx=0 dy=0 whenever reached); the launch
+                         pad's tol-6 box also reported the y82 ladder stall, 24 px
+                         away, as an arrival -- the 0.36-vs-0.03 discrepancy.
+```
+
+L4 route points: 33 -> 30.
+
+**Two bugs found while applying it, both by testing rather than reasoning:**
+
+1. The reward read its marking position from the GRAPH NODE, not the waypoint, so
+   moving an anchor did nothing to it. It now takes the position from the shared
+   `Target` — a no-op wherever the two already agreed, which was everywhere before
+   these overrides existed. Distances are still computed from the graph ident, so
+   shaping geometry is unchanged.
+2. `build_targets` linked `Fr1` to its graph name `J2_3_b` by comparing COORDINATES.
+   Moving the anchor severed the link and **L4's mandatory set silently dropped from
+   14 to 12**, shortening the progress ladder with no error. The alias is now derived
+   from the jump-edge structure (`J{fa}_{fb}_b` is the arrival, `_a` the launch pad),
+   so it survives anchor moves. Pinned by a test asserting 14 on both L3 and L4.
+
+**Verification.** 434 tests pass. `debug/yeti_validate_targets.py --level 4 --measure`
+now reports "no unmarkable targets found" where it previously found five. L3 marking
+spot-checked unchanged at `Lsc4_top`, `Lsc1_top`, `A1`.
+
+**Remaining on L3** — see `level3_notes.md`: `Lesc_top` is anchored 7 units off its
+platform (fails the static check) and `A1_launch` never marks. Not fixed, because it
+changes L3's reward and L3 is at 80.7%.
+
+## !! L3 WARNING — fixing anchors or unifying tolerances MEANS RETRAINING L3 !!
+
+L1 and L2 have no jump waypoints at all (`jump_waypoints` returns `{}` for both), so
+they are unaffected by any anchor or tolerance change. **L3 has the A1..A5 ascent, so
+it is affected.** Consequences, before anyone edits a tolerance:
+
+* It changes L3's reward. Per reward-shaping pitfall #4 in `003-yeti-training.md`, the
+  critic is fit to the old reward's scale, so **every L3 champion stops being a valid
+  warm-start** and L3 has to be retrained from scratch (or from phase-1) to be
+  comparable.
+* It changes L3's route-table numbers, so historical reach figures are not comparable
+  across the change.
+* L3 is at 80.7% princess from reset — the best-performing level. Do not spend it to
+  fix a defect measured on L4 until L4 shows the fix does something.
+
+Also unresolved and worth checking before that decision: whether L3's A1..A5 anchors
+have the same edge-placement defect. If they do, it is a candidate explanation for
+L3's distributed ~1.6%-per-segment attrition, which would change the priority order.
+
+## WAYPOINT TOLERANCE — how it should be chosen (measured 2026-08-24)
+
+Full justification now lives on `CurriculumConfig.waypoint_tolerance` in
+`python/retro_ai/training/run_config.py`. Summary and the raw data:
+
+**The x byte moves in 4 px steps.** Holding RIGHT and logging every EMULATOR frame:
+`x_ram` goes 42,43,44,45,... i.e. `px = x_ram*4 + 8` advances 4 px, changing every
+~5-6 frames, with the walk pose cycling 0->1->2->3 in lockstep. So a walk step IS
+4 px and there is no finer horizontal resolution.
+
+**One `tol` is applied to both axes, in different units.** x is in 4 px RAM units, y
+is in pixels, so `waypoint_tolerance: 2` = **+-8 px horizontally, +-2 px vertically**.
+
+**Measured |delta| per GYM STEP (frame_skip 4), 2472 steps of real play:**
+
+```
+|d x_ram|   0: 58.2%   1: 39.5%   2: 2.2%   3: 0.1%
+|d y_px|    0: 58.1%   2:  8.5%   4: 32.6%  6: 0.5%   8: 0.2%
+
+by pose:  walk 0,1,4,5  dy {0,2,4}      walk 2,3  dy {0}      ladder 8  dy {0,4}
+          jump 9/10, fall 11, rope 14 {0,8}, spring 16 {0,4,6}  -- ALL AIRBORNE
+```
+
+Detection is pose-gated (`pose in SEED_POSES`), so the airborne rows can never be
+marked. **The largest DETECTABLE dy is 4** (the ladder climb).
+
+**Defensible values: `tol_x = 1`, `tol_y = 2`.**
+* x: walking visits every `x_ram` value, so a target cannot be skipped; tol_x 0
+  suffices for a rest point and 1 (+-4 px, one step) is insurance. Current 2 is 2x
+  too generous.
+* y: y is always even and a climb advances 4 px per step, so the sampled lattice can
+  sit 2 px off the target — the traced climb ran 94,90,86,82,78 and hit y78 exactly,
+  but a phase-shifted climb samples 80 then 76 and misses. tol_y 2 catches either
+  phase and covers the largest detectable dy. tol_y 1 would fail.
+
+Splitting the field per-axis changes behaviour on every level that uses waypoints, so
+it is documented, not silently applied.
+
+**Frame skip only bites for points passed AT SPEED** — rope carry moves y 8 px per
+gym step, falls and spring 6, all bigger than a +-2 px window. Those poses are
+airborne so it is a non-issue today, but it returns the moment a waypoint is placed
+on a carried/moving segment, or a moving pose is added to `SEED_POSES` (as L3 did
+with escalator ride 13).
+
+Visual: `debug/l4_climb_visual/rest_at_66_82_zoom.png` (via `debug/l4_climb_shot.py`)
+draws the current tol-2 box and the proposed tol_x1/tol_y2 box on a real frame, with
+the RAM reference point crosshaired. Conventions verified in that render: `x_ram*4+8`
+is the sprite CENTRE (the crosshair lands on the ladder's `centre_x`), and
+`floor_top_y` is a STANDING-SPRITE-TOP level, not the platform surface — the surface
+is ~18 px below it. Sprite height in the drawing is display-only; nothing in
+detection or the reward uses a sprite extent, only the single `(x_ram, y)` point.
+
+## Q3 ANSWERED (2026-08-24) — the box costs real practice, but is not the whole wall
+
+`debug/l4_low1_pool_purity.py`, whole `Low1_launch` pool (100 states) from v4,
+classified on load, then v4's 14M snapshot run per class (1 episode/seed, 40 steps):
+
+```
+composition          clean_f11   57/100  (57%)      ladder_y82   43/100  (43%)
+NOOP survival        clean  median 10 gym steps     ladder  median 15
+  (cap 40)           survived 40: 0/57              survived 40: 0/43
+policy LANDED f12    clean  20/57  (35%)            ladder   2/43  (5%)
+                     POOL TOTAL 22/100
+```
+
+Against the readings fixed in the script's docstring:
+
+* **Contamination is real and costly.** 43% of the pool is mid-ladder, and the
+  policy converts 7x worse from it (5% vs 35%). Those 43% are states where the
+  scripted move is 0/7 feasible. So a large share of the 4488 practice episodes v4
+  spent at this doorstep was practice on a near-impossible task.
+* **The clean subset is big enough to filter to** (57/100), so the capture RULE does
+  not have to be redesigned — excluding pose 8 / y < 76 from the `Low1_launch` box
+  would leave a usable pool.
+* **But tightening the box will not fix f11.** Clean seeds are 5/5 *scriptable*
+  (frame_skip 4, n=12) and the policy still lands only 35% from them. So there is a
+  genuine learning shortfall from good states, not merely bad seeds.
+
+One property of f11 worth separating out: **nothing in this pool survives doing
+nothing** — 0/100 last 40 gym steps, median 10 (clean) and 15 (ladder). Contrast
+`Low2_launch`, where 20/20 survive 150 frames. f11 offers no safe dwell, so there is
+no "wait for a gap" option of the kind that cracked `Step`. Whether the remaining
+65% failure from clean seeds is policy skill or kangaroo phase baked into each seed
+is exactly what `debug/l4_seed_determinism.py` was written to separate, and it has
+not been run.
+
+Note: `debug/l4_low1_jump_bruteforce.py --n-seeds 100` was killed by the sidecar's
+hang detector at 6m (it prints nothing until the grid finishes — a false positive,
+not a crash). Not re-run, because the purity probe measured composition exactly and
+the n=12 grid already gave per-class feasibility.
+
+## Q0 ANSWERED (2026-08-24) — f11 is NOT phase-determined; the pool is real practice
+
+`debug/l4_seed_determinism.py --pools Low1_launch,Lclimb3_top --clean-only
+--model 14000000 --n 25 --repeats 10` (v4 pools; two small edits made to the script:
+a `--model` option, because it hardcoded the degraded `final_model.zip` and a bad
+policy loses everywhere and fakes a phase-determined verdict; and `--clean-only`,
+to drop the mid-ladder captures that cannot answer the question at all).
+
+```
+Low1_launch  (clean filter kept 57/100, sampled 25 x 10 repeats)
+  MIXED 15   ALWAYS-win 1   ALWAYS-lose 9      mean success 0.29
+  between-seed var 0.1087   within-seed var 0.0980   -> 53% seed / 47% policy
+
+Lclimb3_top  (clean filter kept 100/100, sampled 25 x 10)
+  MIXED  9   ALWAYS-win 0   ALWAYS-lose 16     mean success 0.16
+  between-seed var 0.0601   within-seed var 0.0716   -> 46% seed / 54% policy
+```
+
+**Verdict: BOTH matter, roughly equally.** 15/25 clean `Low1_launch` seeds are MIXED
+— the same byte-identical saved state both lands and fails purely because the policy
+sampled different actions — so the agent does have agency. But 10/25 have a fixed
+outcome under this policy (9 always-lose, 1 always-win) and the variance splits
+53/47. That is not a bag of coin flips (a phase-determined pool would be ~100%
+between-seed), and it is not "the seed is irrelevant" either.
+
+An earlier version of this section said "NOT phase-determined; the pool is
+legitimate practice". That was stated more strongly than the numbers support: half
+the outcome is decided before the agent acts.
+
+So **the capture-box fix is worth making**: the clean 57 are states the policy can
+influence, and the 43 mid-ladder captures are diluting them with reps on an
+unexecutable task.
+
+Careful with the 9 ALWAYS-lose: that means "this policy never lands from here in 10
+tries", NOT "unwinnable". The scripted grid solved 5/5 of the clean seeds it sampled
+while the policy converts 0.29, which suggests a policy gap rather than fated
+states — but those were not the SAME seeds, so it is not proven per-seed. The tight
+check is to run the scripted grid on exactly the 9 ALWAYS-lose seeds; if a script
+wins from them, they are unambiguously teachable and the shortfall is entirely the
+policy's.
+
+Secondary finding: **all 100 `Lclimb3_top` states pass the clean-f11 rule** (it sits
+at x_ram 66 on the SAME platform as `Low1_launch`'s x_ram 60 jump-off), yet it
+converts worse — 0.16 vs 0.29, 16/25 ALWAYS-lose vs 9/25.
+
+**Do NOT explain that by starting distance — the per-seed table refutes it.** Within
+the `Low1_launch` pool, outcome does not order by x at all:
+
+```
+  x_ram 62  seeds 2, 10, 21    0/10, 0/10, 0/10      lifetimes all [6, 6, 54, 54, ...]
+  x_ram 65  seeds 1, 3, 11     10/10, 9/10, 9/10
+  x_ram 66  seeds 22, 23       0/10, 0/10            seed 23: all ten deaths at step 8
+```
+
+x_ram 62 is CLOSER to the jump-off than 65 and loses every time. So "further right =
+worse" is not the mechanism, and the `Lclimb3_top` gap needs a different explanation.
+
+What the lifetimes suggest instead is **hazard phase**: the three x_ram 62 seeds share
+one signature (die at step 6, or survive to exactly 54) and seed 23 dies at step 8 in
+all ten repeats. Lifetimes across the pool cluster on a few discrete values
+(6, 8, 9, 21, 23, 53-61), which is what a periodic hazard produces. That connects to
+the pool phase-poverty already recorded for `Step` in the v5 config header (bonus at
+capture nearly constant: `Lfruit_top` spread 2 over 100 captures, `Step` 103): if
+captures happen at near-identical times they carry near-identical hazard phases, and
+several "different" seeds are really the same situation.
+
+So the next question is not about position. It is: **does the `Low1_launch` pool span
+hazard phases, or is it a handful of phases repeated?** `debug/l4_step_phase_diversity.py`
+does exactly this measurement for `Step` and can be pointed at this pool.
+
+## Open questions, in priority order
+
+The single wall is now **rung 10 → 11 = rope 2 (f12 → f13)**, measured at 0/300.
+Everything before it is at 84.7%. Questions 1–3 all serve that one wall.
+
+1. What are poses 6, 14, 16, 17 exactly? 14 = rope carry is well supported
+   (8/8 crossings, lateral motion). **17 is the one that matters**: it is what the
+   agent sits in on the rope-2 launch pad at (44, 74) while never departing, and it
+   never moves sideways. Identify it before touching wall B. This is the same class
+   of problem as L3's pose-13 escalator fix, and it feeds `SURFACE_POSES` /
+   `SEED_POSES`, the shaping freeze, and whether a mid-carry state can be seeded.
+2. Is f12→f13 a jump at all? Re-probe with the measured rope period, and with the
+   rope-entry pattern from ROPE 1's trace (jump INTO the rope at a specific x, then
+   be carried) rather than jump-from-edge.
+3. **Does the snowball on `P10` gate the landing?** Rope 2's landing platform carries
+   a snowball across its full width and rope 1's does not — see the correction under
+   Wall B. Measure the hazard phase at the moment of arrival across the rope-2 pool:
+   if the survivable window is narrow, this is a timing problem and no amount of
+   locomotion shaping will crack it.
+4. Does gate hysteresis unlock the two full-but-unused pools? One lever, and it
+   serves L3 as well. v6 spent roughly a third of the run in collapse (9 episodes of
+   300k–900k steps; 10/150 snapshots below rung 1), which is what the `reach_threshold`
+   0.15 hard cutoff produces. L3 v16 prescribed this and it has still never been run.
+5. Why did SPRING replay cross 0/8 here when training reach is 0.89? Probe used
+   v4's `final_model.zip`, which is degraded — re-run from a mid-run snapshot
+   before reading anything into it.
+6. Run the scripted jump grid on exactly the 9 ALWAYS-lose clean seeds (see Q0). If
+   a script wins from them, the f11 shortfall is entirely the policy's and nothing
+   about those states needs changing.
+7. Fix the depth proposer in `debug/yeti_validate_targets.py`: it proposes anchors at
+   transient positions (it suggested `Rope1`→(34,110), mid-rope-carry, and
+   `Low1_launch`→(66,86), mid-climb). Constrain suggestions to the floor's standing y.
+
+## Method notes
+
+* `debug/l4_low_route_probe.py` scripts through a raw `BaseEnv` (`go_explore.make_env`),
+  i.e. **1 emulator frame per step**. `l4_low1_jump_bruteforce.py` uses the gym
+  stack at frame_skip 4, matching training. A move scriptable only at 1-frame
+  granularity may still be out of reach for a policy acting every 4 frames; prefer
+  the frame_skip-4 number when judging learnability.
+* `climb_snapshot_sweep.py` and `climb_reach_probe.py` still hardcode a 5-step
+  settle after `load_state`, which commits `d8fe780` / `bcbcc1b` fixed elsewhere
+  (measured 4/40 vs 32/40 on L4). Both are L3-only, so no L4 number is affected,
+  but their absolute rates are lower bounds. Same for `capture_level3_start.py`
+  (`--settle` default 5), `dump_probe_frames.py`, `dump_probe_videos.py`,
+  `eval_chained_policies.py`.
+* **`eval_from_reset.py` used to infer `level = 2 if start_state else 1`.** L3 and L4
+  both boot from a save-state, so **every L3 and L4 eval ever run through this script
+  silently used level-2 geometry** — level-2 waypoints, level-2 floors, level-2
+  princess. Fruit and princess counts came from RAM so they were unaffected, but
+  anything geometric (and all route-depth scoring) was meaningless. There is now an
+  explicit `--level`; it defaults to the old inference so existing invocations are
+  unchanged, but **pass it always**. `keep_best_sweep.py` gained `--level` and
+  forwards it. Any pre-2026-08-24 L3/L4 eval output that mentions waypoints or floors
+  should be re-run, not trusted.

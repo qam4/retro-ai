@@ -202,6 +202,44 @@ class CurriculumConfig:
     # non-WP L2 runs are byte-identical). ``waypoint_tolerance`` is the
     # per-axis RAM-x/pixel-y window for "reached a waypoint".
     waypoints: bool = False
+    # HOW THIS NUMBER SHOULD BE CHOSEN (measured on MO5 Yeti L4, 2026-08-24;
+    # debug/l4_climb_shot.py and the per-step delta scan in level4_notes.md).
+    #
+    # It is ONE number applied to BOTH axes, but the axes are in different units:
+    # x is the RAM byte 0x2B52 in 4-PIXEL units, y is the RAM byte 0x2B51 in
+    # PIXELS. So `waypoint_tolerance: 2` means +-8 px horizontally and +-2 px
+    # vertically -- a 4x asymmetry that nobody chose on purpose.
+    #
+    # What the window actually has to cover. Detection is pose-gated
+    # (`pose in SEED_POSES`), so only surface/ladder poses can ever be marked.
+    # Measured |delta| per GYM STEP (= frame_skip 4 emulator frames), 2472 steps:
+    #
+    #   |d x_ram|  0: 58.2%   1: 39.5%   2: 2.2%   3: 0.1%
+    #   |d y_px|   0: 58.1%   2:  8.5%   4: 32.6%  6: 0.5%   8: 0.2%
+    #   by pose:   walk (0,1,4,5) dy in {0,2,4};  walk (2,3) {0};  ladder (8) {0,4}
+    #              jump 9/10, fall 11, rope 14 ({0,8}), spring 16 ({0,4,6}) -- all
+    #              AIRBORNE, therefore never eligible for detection
+    #
+    # x: walking advances x_ram ONE unit at a time (a walk step is 4 px, confirmed
+    #    by holding RIGHT and logging per emulator frame), so the agent is sampled
+    #    at every x_ram value and cannot skip a target. tol_x 0 suffices for a rest
+    #    point; tol_x 1 (+-4 px, one movement step) is cheap insurance. tol_x 2 is
+    #    twice what is needed.
+    # y: y is always EVEN and a climb advances 4 px per gym step, so the sampled
+    #    lattice can be offset from the target by 2 (the L4 climb we traced ran
+    #    94,90,86,82,78 and hit y78 exactly; a phase-shifted climb would sample
+    #    80 then 76 and miss it). tol_y 2 catches either phase and also covers the
+    #    largest DETECTABLE dy, which is 4. tol_y 1 would fail on an offset lattice.
+    #
+    # => the defensible choice is PER-AXIS: tol_x = 1, tol_y = 2. Splitting this
+    # into two fields is a behaviour change for every level that uses waypoints, so
+    # it is recorded here rather than done silently.
+    #
+    # Frame skip only bites for points passed AT SPEED: rope carry moves y 8 px per
+    # gym step, falls and the spring 6, all larger than a +-2 px window. Those poses
+    # are airborne and thus never detected, so today it is a non-issue -- but any
+    # future waypoint on a moving/carried segment (or adding a pose to SEED_POSES,
+    # as L3 did with the escalator ride 13) reintroduces it.
     waypoint_tolerance: int = 2
     # Apply the reach gate to WAYPOINT pools as well as the progress rungs, so a
     # waypoint is only used as a start once the agent reaches it from reset at

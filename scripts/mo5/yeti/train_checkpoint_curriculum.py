@@ -29,18 +29,23 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
+from retro_ai.games import yeti
 from retro_ai.training.callbacks import EpisodeMetricsCallback
 from retro_ai.training.env_builder import build_training_env
-from retro_ai.training.rewards import RewardContext, RewardFn
+from retro_ai.training.rewards import (
+    RewardContext,
+    RewardFn,
+    reset_reward,
+    restore_reached_waypoints,
+)
 from retro_ai.training.rewards import create as create_reward
-from retro_ai.training.rewards import reset_reward, restore_reached_waypoints
 from retro_ai.training.run_config import RunConfig
 from retro_ai.training.run_manifest import (
     EpisodeLogger,
     RunManifest,
     seed_everything,
 )
-from retro_ai.games import yeti
+from retro_ai.training.targets import within_tol
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -1493,7 +1498,12 @@ class CheckpointCurriculumEnv(gym.Env):
                 # the agent reaches each waypoint's vicinity at all.
                 _manager.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
                 _tol = self._wp_tol_of.get(wp_id, self._wp_tol)
-                within = abs(x - wx) <= _tol and abs(y - wy) <= _tol
+                # Shared reach test (retro_ai.training.targets.within_tol) -- the SAME
+                # comparison the REWARD uses for milestone marking, so the two can no
+                # longer drift apart. The tolerance VALUES still differ (this passes 2
+                # for ladders / 6 for jumps, the reward always passes 2), which is the
+                # known divergence documented on within_tol.
+                within = within_tol((wx, wy), x, y, _tol)
                 # Record EVERY reach (incl. the seed WP / already-captured) for
                 # the reset-origin wp_reach_ema; capture below is more selective.
                 if within:
@@ -2159,6 +2169,24 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         )
         _manager.load_from_disk(ckpt_path)
         _manager.load_from_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
+        # DROP pools for waypoints this level no longer defines. A resumed pkl can
+        # carry pools for waypoints that have since been removed from the map (L4 v6
+        # dropped Spring_launch / Step_launch / Low1_launch as redundant). Their states
+        # are real, but the waypoint is no longer detected, so its reach EMA stays 0:
+        # under `gate_waypoints` it is silently gated out and merely clutters the route
+        # table with an all-dashes row, and with the gate off it would be sampled as an
+        # untracked start source. Neither is wanted -- if a waypoint was deleted, its
+        # pool should go with it.
+        _known_wps = set(yeti.waypoints(_level_of(cfg)))
+        _stale = [w for w in _manager.waypoints if w not in _known_wps]
+        for w in _stale:
+            _manager.waypoints.pop(w, None)
+        if _stale:
+            print(
+                f"  Dropped {len(_stale)} inherited pool(s) for waypoints this level "
+                f"no longer defines: {sorted(_stale)}",
+                flush=True,
+            )
 
     print("\nTraining...", flush=True)
     status = "COMPLETED"

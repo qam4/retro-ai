@@ -55,6 +55,24 @@ def main() -> None:
         help="save-state to load on each reset (level 2 starts from a save, "
         "not a game reset). Omit for level 1 (game reset).",
     )
+    p.add_argument(
+        "--level",
+        type=int,
+        default=None,
+        help="level geometry to use. Previously INFERRED as '2 if --start-state else "
+        "1', so every L3/L4 eval silently used level-2 geometry. Defaults to that old "
+        "behaviour when omitted so existing invocations are unchanged; pass it "
+        "explicitly (and you must, for route-depth scoring to mean anything).",
+    )
+    p.add_argument(
+        "--no-depth",
+        action="store_true",
+        help="skip route-depth tracking (max_rung). Depth is what lets a sweep rank "
+        "snapshots on a level where princess is uniformly 0 and the fruit count "
+        "saturates.",
+    )
+    p.add_argument("--waypoint-tolerance", type=int, default=2)
+    p.add_argument("--jump-waypoint-tolerance", type=int, default=6)
     args = p.parse_args()
 
     deterministic = not args.stochastic
@@ -76,9 +94,14 @@ def main() -> None:
 
     model = PPO.load(args.model, device="auto")
 
+    level = args.level if args.level is not None else (2 if start_state_bytes else 1)
+    track = not args.no_depth
+
     rows = []
     max_cp_counts: Counter[int] = Counter()
+    rung_counts: Counter[int] = Counter()
     princess_touches = 0
+    n_rungs = 0
 
     for ep in range(args.episodes):
         # Shared rollout harness: identical termination (princess -> death via
@@ -87,22 +110,31 @@ def main() -> None:
         result = rollout_episode(
             stack,
             model,
-            level=2 if start_state_bytes is not None else 1,
+            level=level,
             fruits_total=fruits_total,
             start_state=start_state_bytes,
             max_steps=args.max_steps,
             stall_threshold=args.stall_threshold,
             deterministic=deterministic,
+            track_waypoints=track,
+            wp_tol=args.waypoint_tolerance,
+            wp_jump_tol=args.jump_waypoint_tolerance,
         )
         max_cp_counts[result.max_cp] += 1
+        rung_counts[result.max_rung] += 1
+        n_rungs = result.n_rungs or n_rungs
         if result.princess_touched:
             princess_touches += 1
         rows.append(
             {
                 "ep": ep,
                 "max_cp": result.max_cp,
+                "max_rung": result.max_rung,
                 "steps": result.length,
                 "end_reason": result.end_reason,
+                "final_x": result.final_x,
+                "final_y": result.final_y,
+                "reached_points": sorted(result.reached_points),
             }
         )
         if (ep + 1) % 25 == 0:
@@ -133,6 +165,21 @@ def main() -> None:
         )
     print(f"\nprincess touches: {princess_touches}/{n} ({100*princess_touches/n:.1f}%)")
 
+    mean_rung = (
+        sum(k * v for k, v in rung_counts.items()) / n if track and rung_counts else 0.0
+    )
+    if track and n_rungs:
+        print(f"\nRoute depth (mandatory rungs, {n_rungs} total) -- this is what")
+        print("distinguishes snapshots on a level where princess is uniformly 0:")
+        cum = 0
+        for r in range(n_rungs, -1, -1):
+            cum += rung_counts.get(r, 0)
+            if cum:
+                print(
+                    f"  reached >= rung {r:>2}: {cum:>4}/{n}  ({100 * cum / n:5.1f}%)"
+                )
+        print(f"  mean rung: {mean_rung:.2f} / {n_rungs}")
+
     if args.out:
         with open(args.out, "w") as f:
             json.dump(
@@ -142,8 +189,12 @@ def main() -> None:
                     "deterministic": deterministic,
                     "fruits_total": fruits_total,
                     "start_state": args.start_state,
+                    "level": level,
                     "max_cp_counts": dict(max_cp_counts),
                     "princess_touches": princess_touches,
+                    "rung_counts": dict(rung_counts),
+                    "n_rungs": n_rungs,
+                    "mean_rung": mean_rung,
                     "rows": rows,
                 },
                 f,

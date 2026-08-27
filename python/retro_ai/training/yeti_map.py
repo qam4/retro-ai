@@ -139,6 +139,26 @@ class LevelMap:
     # the bottom hops (START->STEP->2LAD) stay WP-free unless named. None
     # (L1/L2, no jump_edges) => no jump waypoints.
     jump_waypoint_names: Optional[Dict[int, str]] = None
+    # Optional MEASURED anchor overrides for jump waypoints, ``name -> (x_ram, y_px)``.
+    #
+    # ``jump_waypoints`` derives every anchor from a platform EDGE, which is a
+    # geometric guess: the agent takes off and lands 3-4 units INSIDE the platform, so
+    # an edge anchor can sit somewhere it never stands. Measured consequence on L4
+    # ``Fr1`` (edge anchor x_ram 60 on floor 3): the agent occupies only 64..68 there,
+    # so the REWARD's tol-2 box never fired and that milestone was never marked --
+    # leaving a permanent distance term in the potential at ~12x the base route
+    # gradient. See experiments/003-yeti/level4_notes.md.
+    #
+    # An override replaces the derived anchor for detection ONLY. It does NOT move the
+    # navigation-graph node, so path-distance shaping geometry is untouched.
+    # None (L1/L2/L3) => derived anchors, unchanged.
+    jump_waypoint_pos: Optional[Dict[str, Tuple[int, int]]] = None
+    # Optional list of jump-waypoint names NOT to emit. Use for launch pads that are
+    # redundant because the same platform already carries a waypoint that marks
+    # correctly -- e.g. on L4 floor 11, `Low1_launch` and `Lclimb3_top` are the same
+    # platform, and the ladder anchor is exact while the launch pad's wide box also
+    # caught a stalled climb 24 px away and reported it as an arrival.
+    jump_waypoint_skip: Optional[List[str]] = None
     # Optional DISPLAY-ONLY route order: route-point ids bottom-of-route first.
     # Carries NO semantics — the reward still sums over ALL not-yet-reached
     # targets, unordered (settled decision #5 in curriculum_cp_wp_model.md), and
@@ -517,12 +537,9 @@ LEVEL4 = LevelMap(
         "Rope1_launch",
         "Rope1",
         "Lclimb2_top",
-        "Spring_launch",
         "Spring",
-        "Step_launch",
         "Step",
         "Lclimb3_top",
-        "Low1_launch",
         "Low1",
         "Low2_launch",
         "Low2",
@@ -627,6 +644,24 @@ LEVEL4 = LevelMap(
         Platform(23, 118, 200, 232),  # P18
         Platform(24, 142, 168, 200),  # P19, spring above
     ],
+    # MEASURED anchors, replacing edge-derived guesses that never marked.
+    # Both sit on their floor's standing y and on positions the agent demonstrably
+    # occupies (debug/yeti_validate_targets.py --level 4 --measure).
+    #   Fr1   edge 60 -> 64. Floor 3's standing run is 60..68 and the agent occupies
+    #         only 64..68; 64 was the landing in all 15 observed 2->3 crossings.
+    #   Rope1 edge 24 -> 27. Floor 7's standing y is 118; (27,118) is the rope landing,
+    #         visually confirmed. The alternative the tool first proposed, (34,110),
+    #         is pose 8 -- the agent CLIMBING the ladder off that platform, i.e. a
+    #         different event -- so it was rejected.
+    jump_waypoint_pos={"Fr1": (64, 158), "Rope1": (27, 118)},
+    # Redundant launch pads: each shares a platform with a waypoint that already marks
+    # correctly, so they added a second, wider, misplaced box for the same traversal.
+    #   Spring_launch  floor 8  -> Lclimb2_top is at the very position the measured
+    #                             proposal for Spring_launch resolved to (34, 94)
+    #   Step_launch    floor 9  -> Spring marks fine there
+    #   Low1_launch    floor 11 -> Lclimb3_top is exact; the launch pad's tol-6 box
+    #                             also caught the y82 ladder stall 24 px away
+    jump_waypoint_skip=["Spring_launch", "Step_launch", "Low1_launch"],
 )
 
 LEVELS: Dict[int, LevelMap] = {1: LEVEL1, 2: LEVEL2, 3: LEVEL3, 4: LEVEL4}
@@ -751,6 +786,13 @@ def jump_waypoints(lvl: LevelMap) -> Dict[str, Tuple[int, int, int]]:
         c_other = (p_other.x_min + p_other.x_max) / 2.0
         out[name] = _wp(p_land, c_other, land)  # arrival (landing edge)
         out[f"{name}_launch"] = _wp(p_other, c_land, other)  # jump-off pad
+    # Measured overrides and removals (see the LevelMap fields). Applied after
+    # derivation so the derived value stays the default and only named entries change.
+    for nm in lvl.jump_waypoint_skip or ():
+        out.pop(nm, None)
+    for nm, xy in (lvl.jump_waypoint_pos or {}).items():
+        if nm in out:
+            out[nm] = (int(xy[0]), int(xy[1]), out[nm][2])
     return out
 
 

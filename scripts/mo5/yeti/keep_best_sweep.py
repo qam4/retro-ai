@@ -26,7 +26,7 @@ One-shot (eval every snapshot present, keep the best)::
 
 Watch a live run (poll for new snapshots, stop after idle)::
 
-    ... python scripts/mo5/yeti/keep_best_sweep.py --snapshots-dir <run>/snapshots --watch
+    ... keep_best_sweep.py --snapshots-dir <run>/snapshots --watch
 
 The best policy is copied to ``<best-dir>/best_model.zip`` with
 ``best_meta.json``; per-snapshot results accumulate in
@@ -83,9 +83,16 @@ def _eval_snapshot(
     start_state,
     stall_threshold,
     max_steps,
+    level=None,
 ):
-    """Run eval_from_reset.py in a subprocess; return (princess, reach_top)
-    where reach_top = P(reached all fruits) for the level."""
+    """Run eval_from_reset.py in a subprocess; return (princess, reach_top, mean_rung,
+    n_rungs).
+
+    ``mean_rung`` is the average number of MANDATORY route targets an episode gets
+    behind it -- the same quantity training reports as ``reset_reach``. It exists
+    because princess and reach_top cannot rank snapshots on a single-fruit level: see
+    the scoring note in main().
+    """
     cmd = [
         sys.executable,
         "scripts/mo5/yeti/eval_from_reset.py",
@@ -105,6 +112,8 @@ def _eval_snapshot(
         "--max-steps",
         str(max_steps),
     ]
+    if level is not None:
+        cmd += ["--level", str(level)]
     if start_state:
         cmd += ["--start-state", start_state]
     env = dict(os.environ)
@@ -118,7 +127,7 @@ def _eval_snapshot(
     reach_top = (
         sum(v for k, v in data["max_cp_counts"].items() if int(k) >= fruits_total) / n
     )
-    return princess, reach_top
+    return princess, reach_top, data.get("mean_rung", 0.0), data.get("n_rungs", 0)
 
 
 def main() -> None:
@@ -152,6 +161,12 @@ def main() -> None:
     #   --start-state output/mo5/yeti/level2/level2_start.sav
     p.add_argument("--profile", default="yeti_fruit")
     p.add_argument("--fruits-total", type=int, default=4)
+    p.add_argument(
+        "--level",
+        type=int,
+        default=None,
+        help="level geometry; REQUIRED for route-depth scoring to be meaningful",
+    )
     p.add_argument("--start-state", default=None)
     p.add_argument("--stall-threshold", type=int, default=15)
     p.add_argument("--max-steps", type=int, default=1000)
@@ -180,7 +195,7 @@ def main() -> None:
         for step, path in new:
             name = os.path.basename(path)
             try:
-                princess, reach_top = _eval_snapshot(
+                princess, reach_top, mean_rung, n_rungs = _eval_snapshot(
                     path,
                     args.episodes,
                     args.device,
@@ -190,21 +205,41 @@ def main() -> None:
                     start_state=args.start_state,
                     stall_threshold=args.stall_threshold,
                     max_steps=args.max_steps,
+                    level=args.level,
                 )
             except Exception as e:
                 print(f"[keep-best] {name}: eval FAILED ({e})", flush=True)
                 continue
-            score = princess + 1e-3 * reach_top
+            # SCORING, in strict priority: princess, then ROUTE DEPTH, then fruit.
+            #
+            # It used to be `princess + 1e-3 * reach_top`, which cannot rank snapshots
+            # on a single-fruit level: princess is uniformly 0 and reach_top just means
+            # "collected the fruit", which saturates at 1.0. Ties then went to whichever
+            # snapshot was seen FIRST, so every L4 champion ever picked was arbitrary --
+            # v4 kept its 100k snapshot, v5 its 1M, v6 its 200k, while the run's actual
+            # depth peak was elsewhere entirely (v6's was ~8.76M).
+            #
+            # `mean_rung / n_rungs` is the fraction of mandatory route targets an
+            # episode gets behind it on average -- the same quantity the training route
+            # table reports as reset_reach. Weighted below princess so a single princess
+            # touch still outranks any amount of depth, and above reach_top so the fruit
+            # only breaks ties between equally deep policies.
+            depth = (mean_rung / n_rungs) if n_rungs else 0.0
+            score = princess + 1e-2 * depth + 1e-5 * reach_top
             state["evaluated"][name] = {
                 "step": step,
                 "princess": princess,
                 "reach_top": reach_top,
+                "mean_rung": mean_rung,
+                "n_rungs": n_rungs,
+                "depth": depth,
                 "score": score,
                 "n_eval": args.episodes,
             }
             msg = (
                 f"[keep-best] step {step}: princess={princess:.3f} "
-                f"reach_top={reach_top:.3f} (best={best_score():.3f})"
+                f"rung={mean_rung:.2f}/{n_rungs} reach_top={reach_top:.3f} "
+                f"(best={best_score():.4f})"
             )
             if score > best_score():
                 shutil.copyfile(path, os.path.join(best_dir, "best_model.zip"))
@@ -214,6 +249,8 @@ def main() -> None:
                     "score": score,
                     "princess": princess,
                     "reach_top": reach_top,
+                    "mean_rung": mean_rung,
+                    "n_rungs": n_rungs,
                     "n_eval": args.episodes,
                 }
                 with open(os.path.join(best_dir, "best_meta.json"), "w") as f:
@@ -234,7 +271,9 @@ def main() -> None:
     if b:
         print(
             f"\nBest: {b['model']} (step {b['step']}) "
-            f"princess={b['princess']:.3f} reach_top={b.get('reach_top', 0):.3f}  "
+            f"princess={b['princess']:.3f} "
+            f"rung={b.get('mean_rung', 0):.2f}/{b.get('n_rungs', 0)} "
+            f"reach_top={b.get('reach_top', 0):.3f}  "
             f"-> {os.path.join(best_dir, 'best_model.zip')}"
         )
         print("Re-eval the winner with more episodes for a precise number, e.g.:")

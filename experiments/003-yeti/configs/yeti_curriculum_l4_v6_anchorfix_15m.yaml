@@ -1,0 +1,104 @@
+# L4 v6 — CORRECTED WAYPOINT ANCHORS. One lever vs v4.
+#
+# THE LEVER. Two milestone anchors moved to positions the agent measurably occupies,
+# and three redundant launch pads removed. Full detail and evidence in
+# experiments/003-yeti/level4_notes.md ("ANCHOR FIX APPLIED TO L4"). In short:
+#
+#   Fr1    x_ram 60 -> 64   60 is floor 3's left extremity; the agent occupies only
+#                           64..68 there and dies at 61 (6/6). The REWARD's tol-2 box
+#                           at 60 could never fire, so that milestone was NEVER marked
+#                           and its distance term never switched off -- measured at
+#                           +0.48/step of pull against +0.04 from the base route
+#                           potential, 12x, and it kept paying past the safe takeoff
+#                           point toward the lethal 61.
+#   Rope1  x_ram 24 -> 27   same defect; 27 is the rope landing, visually confirmed.
+#   dropped: Spring_launch, Step_launch, Low1_launch -- each shares a platform with a
+#            waypoint that already marks correctly. Low1_launch's wide box is what
+#            reported the y82 ladder stall as an arrival (reach 0.36 vs Lclimb3_top
+#            0.03 for the same event).
+#
+# WHY WARM-STARTED FROM v4 DESPITE THE REWARD CHANGE. Reward-shaping pitfall #4 says a
+# reward change invalidates warm-starts because the critic is fit to the old scale.
+# That is a real caveat here and is why this is a CHECK, not a clean baseline. The
+# change is narrow -- two of eleven milestone groups start switching off when reached,
+# no scale or geometry change -- and warm-starting from v4's weights AND v4's pools is
+# the only way to attribute a difference to the anchors rather than to L4's large
+# run-to-run variance. The exact same config minus the anchor fix was run for 200k as a
+# refactor regression check and reproduced v4 closely (route 15/33, reset_reach
+# 1.00/.99/.97/.94/.91/.90/.87/.82/.81/.78/.06), so that is the reference to compare
+# against, not v4's own 15M numbers.
+#
+# WHAT TO WATCH.
+#   * Fr1 and Rope1 should now appear as REACHED in the route table (reach > 0). If
+#     they still read 0 the fix did not take.
+#   * The wall is rung 9 -> 10 (0.78 -> 0.06 in the regression run). Does removing the
+#     permanent backward pull from Fr1/Rope1 move it at all?
+#   * Lclimb3_top is expected to stay near 0: its problem is the y82 STALL, not the
+#     anchor. Do not read its value as a verdict on this change.
+#   * Judge by keep_best_sweep over ALL snapshots, never the final model.
+#
+# EXPECTATION, stated up front: this removes a measured defect in the shaping signal.
+# It is NOT a plan to cross the rung 9 -> 10 wall, which is the y82 ladder stall and
+# needs its own work. A null result on princess is the likely outcome and would still
+# leave the reward correct.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v6_anchorfix_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # v4's weights AND v4's pools (checkpoints.pkl is loaded from dirname(resume)).
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v4_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

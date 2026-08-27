@@ -1,5 +1,98 @@
 # Level 3 — notes (route, obstacles, geometry)
 
+> ## !! PENDING CHANGE THAT WOULD REQUIRE RETRAINING L3 (noted 2026-08-24) !!
+>
+> A real defect was found on L4 and is documented in `level4_notes.md`: jump-arrival
+> waypoints are anchored on the platform EDGE while the agent lands 3-4 units inside,
+> so the REWARD's milestone box (tolerance 2) can sit somewhere the agent never
+> stands. On L4 `Fr1` that milestone is never marked, and the potential keeps summing
+> distance to it for the whole episode at ~12x the base route gradient.
+>
+> **L3 is exposed to the fix.** L1 and L2 define no jump waypoints, but L3's A1..A5
+> ascent does. So moving anchors, or unifying the two tolerances (curriculum 2/6 vs
+> reward 2), changes L3's reward. Per reward-shaping pitfall #4 in
+> `003-yeti-training.md` the critic is fit to the old reward's scale, which means
+> **every L3 champion listed below stops being a valid warm-start and L3 must be
+> retrained** to produce comparable numbers. Route-table reach figures also become
+> incomparable across the change.
+>
+> L3 is at 80.7% princess from reset — the best result on any level. Do not spend that
+> to fix a defect measured on L4 until L4 shows the fix helps.
+>
+> **Not yet checked: whether L3's own A1..A5 anchors have the same defect.** If they
+> do, it is a candidate explanation for the distributed ~1.6%-per-segment attrition
+> recorded below, and it would raise the priority. That check needs no code change —
+> compare each anchor's box against the positions the agent actually occupies on that
+> platform (method: `debug/l4_jump_geometry.py --level 3`).
+>
+> Already done and safe: the reach comparison itself is now one shared code path
+> (`retro_ai.training.targets.within_tol`), proven byte-identical, so nothing about
+> L3's behaviour has changed yet.
+
+## L3 UNMARKABLE MILESTONES — measured 2026-08-24, NOT yet fixed
+
+`debug/yeti_validate_targets.py --level 3 --measure --episodes 8 --models
+<l3_v6_15M>,<l3_v12_base>`. Two tiers: a static check (does the anchor's box contain
+any position that resolves to the target's own floor, via the same
+`agent_floor_from_pixel_xy` the reward uses) and a measured check (does the box ever
+contain a position the agent is actually grounded at).
+
+```
+target         kind    anchor      floor  standable run   reward box   marks?
+Lesc_top       ladder  (33, 94)      4    16..26          0 positions  N   <-- STATIC FAILURE
+A1_launch      JUMP    (48, 86)     10    48..76         15 positions  N   (reward AND curriculum)
+Lgoat_a_top    ladder  (18, 94)      4    16..26         25 positions  Y
+Lgoat_b_top    ladder  (24, 94)      4    16..26         25 positions  Y
+Ldown_bot / Lsc1..Lsc4_top                                             Y  (all fine)
+A1..A5, A2..A5_launch, Lprincess_top                        floor never visited
+```
+
+**1. `Lesc_top` is unmarkable BY CONSTRUCTION.** Anchored at x_ram 33 on floor 4, whose
+standable run is 16..26. The anchor is **7 units past the end of the platform**, so its
+box contains nothing the agent can stand on. No measurement needed — the static check
+catches it. This is the ESCALATOR BOARDING point, the mechanic L3 spent several
+versions on (see the pose-13 work below). Whatever `Lesc_top` was supposed to
+contribute to shaping or seeding, it has never contributed anything.
+
+**2. `A1_launch` never marks, under BOTH detectors.** It is the launch pad for the
+A1..A5 ascent. Note the recorded history: the SN3 -> A1 hand-off measured **0%**, and
+that was attributed to the milestone-restore/backward-pull problem. This is a second,
+independent candidate cause for the same symptom and it was never checked. Unresolved
+whether the anchor is wrong or the policy simply does not go there.
+
+**3. A2..A5 and their launch pads are UNTESTED, not clean.** Those floors were never
+visited in these from-reset rollouts, so the validator had nothing to compare against.
+To test them, seed from their own pools (`checkpoints.pkl` in an L3 champion dir)
+instead of rolling from reset.
+
+### Why this matters for the 80.7% ceiling
+
+L3's failure profile is *distributed attrition* — ~1.6% per segment across 13 segments,
+with no single wall (see the v15 section). A milestone that never marks keeps a
+permanent distance term in the PBRS potential, so the agent is charged for moving away
+from a point it has already passed and can never clear. Measured magnitude of that
+effect on L4's equivalent defect (`Fr1`): the milestone term contributed **+0.48/step**
+against **+0.04/step** for the base route potential — 12x. If the same thing is
+happening at `Lesc_top` and `A1_launch`, it is a plausible contributor to per-segment
+attrition, and unlike the other candidates it is a bug rather than a tuning question.
+
+**Not established:** the training cost. PBRS is policy-invariant in theory, so this
+distorts the learning gradient rather than the optimum.
+
+### When you come back to this
+
+1. Test A2..A5 anchors from their seed pools (above) so the picture is complete.
+2. `Lesc_top` needs a new anchor; 33 is not on floor 4 at all. Decide whether it should
+   be on the escalator itself (pose 13, a moving segment — a point may be the wrong
+   construct, see the region discussion in `level4_notes.md`) or on the boarding
+   platform within 16..26.
+3. Fixing either anchor changes L3's reward, so per the warning above: every L3
+   champion stops being a valid warm-start and L3 needs retraining to produce
+   comparable numbers. Budget for that before starting.
+4. The fix is being trialled on L4 first, where princess is 0 and there is nothing to
+   lose. Check `level4_notes.md` for the outcome before spending L3's 80.7%.
+
+
 Captured from the user's play knowledge + a RAM tilemap extract of
 `output/mo5/yeti/level3/level3_start.sav`. L3 is substantially harder than L2:
 a long sequential route with three NEW mechanics (escalator, compressor,

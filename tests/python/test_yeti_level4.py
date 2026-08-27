@@ -87,9 +87,18 @@ def test_named_jump_waypoints_cover_every_landing_we_track(lvl):
     landings = {max(a, b) for a, b in lvl.jump_edges}
     assert set(lvl.jump_waypoint_names) <= landings
     jw = jump_waypoints(lvl)
+    skipped = set(lvl.jump_waypoint_skip or ())
     for name in lvl.jump_waypoint_names.values():
         assert name in jw, f"{name} missing arrival waypoint"
-        assert f"{name}_launch" in jw, f"{name} missing launch pad"
+        # A launch pad may be deliberately dropped when the same platform already
+        # carries a waypoint that marks correctly -- otherwise it is a second, wider,
+        # misplaced box for the same traversal. See LevelMap.jump_waypoint_skip.
+        if f"{name}_launch" not in skipped:
+            assert f"{name}_launch" in jw, f"{name} missing launch pad"
+        else:
+            assert (
+                f"{name}_launch" not in jw
+            ), f"{name}_launch skipped but still emitted"
 
 
 def test_route_order_matches_the_waypoint_universe(lvl):

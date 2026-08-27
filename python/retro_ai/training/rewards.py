@@ -51,6 +51,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Mapping
 
+from retro_ai.training.targets import within_tol
+
 
 @dataclass(frozen=True)
 class RewardContext:
@@ -1035,6 +1037,29 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     # Keep them separate so each can be measured alone.
     _drop_milestones = bool(params.get("drop_milestones", False))
     _wp_groups: list = []
+    # MARKING POSITION comes from the shared Target, not from the graph node.
+    #
+    # These two used to be the same expression, and where they still agree this is a
+    # no-op (verified: Target.pos matched the node-derived position for every target on
+    # L3 and L4 before any override existed). It matters where a level supplies a
+    # MEASURED anchor via `LevelMap.jump_waypoint_pos`, because a node is placed on a
+    # platform EDGE while the agent lands 3-4 units inside -- which is how L4 `Fr1`'s
+    # tol-2 box ended up somewhere the agent never stands, so the milestone was never
+    # marked and its distance term never switched off.
+    #
+    # NOTE this changes only WHERE WE TEST FOR ARRIVAL. The distance term below is
+    # still computed from `_ident` against the navigation graph, so shaping geometry is
+    # untouched.
+    _pos_by_node = {}
+    try:
+        from retro_ai.training.targets import build_targets as _bt
+
+        for _t in _bt(level):
+            if _t.node_ident and _t.pos is not None and _t.trigger == "position":
+                _pos_by_node[_t.node_ident] = _t.pos
+    except Exception:  # pragma: no cover - level without a target table
+        _pos_by_node = {}
+
     for _group in (
         [] if _drop_milestones else (getattr(_lvl_map, "reward_waypoints", None) or [])
     ):
@@ -1044,9 +1069,10 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             if _idx is None:
                 continue
             _node = _wp_nav.nodes[_idx]
-            _members.append(
-                (_ident, (_node.x - 8) // 4, _lvl_map.floor_top_y[_node.floor])
+            _mark = _pos_by_node.get(
+                _ident, ((_node.x - 8) // 4, _lvl_map.floor_top_y[_node.floor])
             )
+            _members.append((_ident, _mark[0], _mark[1]))
         if _members:
             _wp_groups.append(_members)
 
@@ -1248,10 +1274,12 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                     if gi in self._reached_wp:
                         continue
                     for _ident, wx, wy in members:
-                        if (
-                            abs(int(ctx.curr_x) - wx) <= wp_tol
-                            and abs(int(ctx.curr_y) - wy) <= wp_tol
-                        ):
+                        # Shared reach test (retro_ai.training.targets.within_tol) --
+                        # the SAME comparison the curriculum uses, so the two can no
+                        # longer drift. NOTE the tolerances still differ: this passes
+                        # `waypoint_reward_tol` (2) while the curriculum passes 6 for
+                        # jump waypoints. See within_tol's docstring.
+                        if within_tol((wx, wy), ctx.curr_x, ctx.curr_y, wp_tol):
                             self._reached_wp.add(gi)
                             break
                 # Reach-marking above is UNGATED on purpose: a group the agent
