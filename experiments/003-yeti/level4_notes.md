@@ -674,25 +674,237 @@ So the next question is not about position. It is: **does the `Low1_launch` pool
 hazard phases, or is it a handful of phases repeated?** `debug/l4_step_phase_diversity.py`
 does exactly this measurement for `Step` and can be pointed at this pool.
 
+## THE DOOMED FRAME, and the anchor fix it produced (2026-08-24)
+
+The single most useful thing learned on this level. **A state can read as grounded and
+already be committed to a fall.** Walking off a platform edge produces a frame where
+`y` is still the floor's standing value and the pose is still a walk pose (5, not 11),
+so every "is the agent standing here" test based on `(y, pose)` says yes. One step
+later it is pose 11 and falling.
+
+Everything below follows from that.
+
+### Sprite geometry (measured, not assumed)
+
+Located the sprite in a frame at a known RAM position (`x_ram` 44 -> px 184, y 70):
+
+```
+width 14 px, height 18 px
+x_ram*4 + 8  = sprite CENTRE   (horizontal)
+y            = sprite TOP      (vertical)   -> feet at y+17
+foot row spans centre-6 .. centre+2, i.e. ~9 px, narrower than the sprite
+```
+
+The convention is asymmetric — centre in x, top in y — which is easy to get wrong.
+
+### How to measure a standable span (`debug/l4_edge_limit.py`)
+
+Naive probes do NOT work, because of the doomed frame. The method that does:
+
+1. walk toward the edge one gym step at a time, `save_state()` at each distinct x;
+2. reload each saved state and hold NOOP for ~12 steps;
+3. a position is standable only if the agent is STILL at the floor's standing y in a
+   surface pose afterwards.
+
+Results (L4, 5 seeds per direction). Note `x_max` is EXCLUSIVE
+(`[col0*8, (col1+1)*8]`):
+
+```
+floor      tiles          LEFT limit        RIGHT limit      fell on NOOP
+ 12    [184..232)      188 = x_min+4      228 = x_max-4          232
+ 13    [  0..128)       (probe stalled)   124 = x_max-4          128
+  3    [248..280)      256 = x_min+8      276 = x_max-4      248, 280
+  9    [200..232)      208 = x_min+8      232 = x_max+0
+```
+
+Right limit is `x_max - 4` (floor 9's `+0` is unexplained; likely a small inaccuracy in
+that platform's recorded extent). Left limit is `x_min + 4` or `+8` and is NOT a
+formula — probe per floor.
+
+### TWO STATIC RULES THAT DO NOT WORK — do not re-derive these
+
+* **"the whole 16 px sprite must be inside the platform"** — flags 19 of 30 L4 anchors,
+  including `Spring` and `Step`, which mark fine. No discrimination.
+* **`centre <= x_max - 8`**, inferred from positions the agent had been OBSERVED
+  standing at — wrong twice: the bound is 4 not 8, and "never observed at the edge"
+  was mistaken for "cannot be at the edge". It declared `Low2` 8 px off the platform
+  and L3's `A1..A5` broken, on no real evidence.
+
+Geometry alone can only narrow the search: an anchor within 4 px of a tile edge is
+SUSPECT and needs the NOOP probe; 8 px or more inside is safe. That is all
+`debug/yeti_standable_audit.py` now claims.
+
+### The fix (v7's lever)
+
+```
+Low2_launch   x_ram 44 -> 45   px 184 -> 188   floor 12's FIRST standable centre
+Low2          x_ram 30 -> 29   px 128 -> 124   floor 13's LAST standable centre
+```
+
+`Low2_launch` was anchored on floor 12's tile edge, where the agent cannot stand. Its
+capture box therefore recorded doomed frames: **all 100 seeds fell within a step or
+two, 19 of them already in pose 11 on load.** The pool meant to teach the rope-2
+crossing taught falling instead, and the agent never attempted the jump — visible in
+`Low2_launch_ep0`, which starts mid-fall, drops onto the trampoline below, is thrown
+back up to floor-12 height, jumps left and dies. Contrast `Rope1_launch`, whose anchor
+happens to sit 24 px from where its seeds land (on a ladder): 0/100 doomed.
+
+Pool provenance was added at the same time and is REQUIRED for the anchor fix to do
+anything — see below.
+
+## POOL ANCHOR PROVENANCE (2026-08-24)
+
+`checkpoints.pkl` now records `waypoint_anchors`: the anchor each pool was captured
+around. On load, a pool whose anchor has since MOVED is dropped.
+
+Without this the anchor fix is inert on a warm start. The resume path already dropped
+pools for waypoints a level no longer DEFINES, but that check is on the NAME, and an
+anchor move keeps the name — so the 100 doomed `Low2_launch` states would have been
+re-imported and v7 would have measured nothing. (Same shape as the `build_targets`
+alias bug: a name/coordinate check that an anchor move slips through.)
+
+Files written before the field exists cannot be checked; the loader now says so instead
+of trusting them silently. `debug/yeti_stamp_pool_anchors.py` backfills provenance into
+an older file by re-deriving the old anchors with the override removed (not hardcoded).
+Run on v6's pool file, which is why the drop fires:
+
+```
+Dropped inherited pool 'Low2_launch': anchor moved (44,70) -> (45,70), 100 states
+Dropped inherited pool 'Low2':        anchor moved (30,70) -> (29,70), 7 states
+pools inherited: 18 (was 20); Rope1_launch / Low1 / Lclimb3_top untouched
+```
+
+Pinned by `tests/python/test_pool_anchor_provenance.py` (8 tests).
+
+## THE POSE CATALOGUE, AND A CHECK FOR GAPS IN IT (2026-08-24)
+
+`yeti.POSE_NAMES` is now the single catalogue of every identified sprite pose, with
+`yeti.KNOWN_POSES` and `yeti.unknown_poses()`. The trainer censuses every pose it sees
+(`CheckpointManager.pose_seen`) and the status line reports any code that is not
+catalogued. Silence on that line is the assertion that the catalogue is complete.
+
+Why it matters: an uncatalogued pose is a silent behaviour change, not trivia. Every
+pose-gated decision — waypoint reach detection, seed capture, reward milestone marking,
+deepest-floor crediting — reads an unrecognised code as "not on a surface", so whatever
+happened in that frame does not count anywhere.
+
+**The walk cycle is FOUR poses per direction, and only the rightward one was listed.**
+
+```
+0,1,2,3   dx in {0, +4}   walk RIGHT, grounded   all in SURFACE_POSES
+4,5,6,7   dx in {-4, 0}   walk LEFT,  grounded   6 and 7 ARE MISSING
+```
+
+Measured by holding a direction and logging pose against the per-step lateral delta at
+the floor's standing y, across 4 L4 floors. Effect on L4 floor 12: **54% of grounded
+leftward-walking frames are discarded by the surface gate, versus 0% walking right.**
+
+L4's closing stretch is leftward — rope 2 crosses floor 12 → 13 leftward, and floor 13
+to the princess ladder is leftward — so the gap lands exactly on this level's wall. It
+also means the `Low2_launch` pool was being filled from only the subset of leftward
+frames that happened to be pose 4 or 5, which interacts with the doomed-frame problem
+above.
+
+`SURFACE_POSES` is deliberately UNCHANGED for now, with the gap exported as
+`SURFACE_POSES_MISSING_LEFT`. Admitting 6 and 7 alters which frames can mark a reward
+milestone, so it is a reward change: it invalidates existing champions as warm-starts
+and must be run as its own lever. Do not fold it in with an anchor change.
+
+**Pose 15 exists and is unidentified.** The check found it within minutes of going in —
+4 occurrences in a 3000-step smoke run. Not yet characterised; do not guess. Poses 6
+and 7 also remain to be confirmed as a full cycle on levels other than L4.
+
+## POSES 16 AND 17 ARE THE TRAMPOLINE, NOT A ROPE CARRY (2026-08-24)
+
+Corrects an earlier reading in this file. There is a trampoline at
+`Platform(24, 142, 168, 200)` ("P19, spring above"), directly below the rope-2 gap.
+
+```
+14  rope carry      confirmed on rope 1: x advances while y holds, then pose 9 arcs out
+16  trampoline up, facing right
+17  trampoline up, facing left
+```
+
+Poses 16/17 rise 4 px per gym step at CONSTANT x while the agent is thrown back up from
+the trampoline. The earlier note that "ep3 hangs at (44,74) in pose 17 on the launch
+pad" was wrong: the agent had already fallen off floor 12 and was cycling
+fall -> trampoline -> rise -> fall. Any analysis reading pose 17 as "stuck on the rope"
+is misreading a fall-recovery loop.
+
+Rope 1's crossing, for reference (from its pool, champion policy): walk to floor 6's
+edge, `pose 14` carry for ~5 gym steps (px 60 -> 72, y 118 -> 110), then `pose 9` arc,
+landing GROUNDED at px 116 — exactly the `Rope1` anchor.
+
+## FLOOR 13'S FLAT GRADIENT IS A SYMPTOM, NOT A SECOND BUG (2026-08-24)
+
+Worth recording because it was initially written up as an independent defect.
+
+Standing on floor 13 with rung 11 UNMARKED, the potential is flat across px 40..104 —
+64 px, half the platform. The rung-11 anchors (`Low2` px 124, `Lhi_down_bot` px 104)
+are on the platform's right; the princess ladder is at px 40 on the left; and along a
+1-D platform the two path-distance terms cancel exactly (sum = 88 at every x in that
+span). No gradient, no signal, while snowballs cross the platform.
+
+But a marked group LEAVES the sum (`if gi in self._reached_wp: continue`), and with
+rung 11 marked the pull is cleanly left toward the ladder. So the flat zone is not a
+shaping-design flaw — it is what an unmarkable milestone looks like from downstream,
+the same failure mode as `Fr1`. Fix the marking and it disappears.
+
+Snowballs on floor 13 are real (user-confirmed on video, and the hazard comment puts
+them on `P10`, which IS floor 13) — they are what kills the agent while it wanders the
+flat zone. They are not the root cause.
+
+## L4 HAS TWO ROUTES TO FLOOR 13 — and we deliberately do not steer between them
+
+```
+route A   floor 11 -> floor 12 -> ROPE 2 (56 px gap, widest on the level) -> floor 13
+route B   floor 11 -> ladder px 296 -> floor 14 -> five 16 px hops (f15..f19)
+                   -> ladder px 104 DOWN -> floor 13
+both      floor 13 -> ladder px 40 -> floor 20 -> princess
+```
+
+That is what the rung-11 OR-group `[J12_13_b, Lhi_down_bot]` encodes: one member per
+route. The group is correct as designed.
+
+Route B is unexplored — `Lhi_up_top` has ZERO captured seeds in 15M steps, though its
+ladder foot is 24 px from where the agent stands 84.7% of the time. Its five jumps are
+16 px each, the same size as `Fr1` (cleared 96%), versus rope 2's 56 px. The graph makes
+route A look 16% shorter (152 vs 176 from rung 10), so the shaping points at the rope.
+
+**Rejected as a lever.** Waypoints and rewards describe the level; the agent picks the
+route. Biasing toward route B would be us choosing. Also note the potential is a
+shortest-path sum, so it will always prefer the shorter route — route B's first three
+steps are penalised (152 -> 176 -> 200 -> 216) whatever the anchors are. That is
+geometry, not a defect.
+
 ## Open questions, in priority order
 
-The single wall is now **rung 10 → 11 = rope 2 (f12 → f13)**, measured at 0/300.
-Everything before it is at 84.7%. Questions 1–3 all serve that one wall.
+The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300.
+Everything before it is at 84.7%.
 
-1. What are poses 6, 14, 16, 17 exactly? 14 = rope carry is well supported
-   (8/8 crossings, lateral motion). **17 is the one that matters**: it is what the
-   agent sits in on the rope-2 launch pad at (44, 74) while never departing, and it
-   never moves sideways. Identify it before touching wall B. This is the same class
-   of problem as L3's pose-13 escalator fix, and it feeds `SURFACE_POSES` /
-   `SEED_POSES`, the shaping freeze, and whether a mid-carry state can be seeded.
-2. Is f12→f13 a jump at all? Re-probe with the measured rope period, and with the
-   rope-entry pattern from ROPE 1's trace (jump INTO the rope at a specific x, then
-   be carried) rather than jump-from-edge.
-3. **Does the snowball on `P10` gate the landing?** Rope 2's landing platform carries
-   a snowball across its full width and rope 1's does not — see the correction under
-   Wall B. Measure the hazard phase at the moment of arrival across the rope-2 pool:
-   if the survivable window is narrow, this is a timing problem and no amount of
-   locomotion shaping will crack it.
+1. **Run v7: the `Low2_launch` / `Low2` anchor fix as the one lever.** The pool that
+   was supposed to teach the rope-2 crossing consisted entirely of doomed states, so
+   the crossing has never actually been practised — see "THE DOOMED FRAME" above. This
+   is the first time the agent will get real repetitions at it. Warm-start from v6 and
+   confirm the drop fires in the log (`Dropped inherited pool 'Low2_launch'`); without
+   it the run measures nothing.
+2. Where does the rope actually DEPOSIT the agent on floor 13? Every landing on record
+   is inside an existing detection box, so the distribution is self-selecting and
+   cannot be read off the pools. Roll out from floor-12 seeds and log x whenever the
+   agent reaches floor 13's standing y in a surface pose, ignoring all boxes. Decides
+   whether `Low2` at px 124 is where arrivals happen or whether the anchor wants to be
+   further left.
+3. Does the snowball on floor 13 gate the landing, once the agent gets there often
+   enough to measure? Confirmed present and lethal, but with rung 11 at 0/300 there is
+   no arrival sample to measure the hazard phase against. Revisit after v7.
+4. **Admit poses 6 and 7 to `SURFACE_POSES`** — its own lever, and probably the biggest
+   single one available, because it affects every level and every leftward approach (54%
+   of grounded left-walk frames currently discarded). It is a reward change, so it
+   invalidates champions as warm-starts; see the pose-catalogue section. Sequencing
+   question: it interacts with the `Low2_launch` fix, since that pool was being filled
+   from only the pose-4/5 subset of leftward frames.
+5. Identify pose 15 (found by the new uncatalogued-pose check, 4 occurrences in a
+   3000-step run) and confirm the 4/5/6/7 left cycle on L1–L3 as well as L4.
 4. Does gate hysteresis unlock the two full-but-unused pools? One lever, and it
    serves L3 as well. v6 spent roughly a third of the run in collapse (9 episodes of
    300k–900k steps; 10/150 snapshots below rung 1), which is what the `reach_threshold`

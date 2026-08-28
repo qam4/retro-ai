@@ -25,7 +25,8 @@ import os
 import random
 import threading
 import time
-from typing import Optional
+from collections import Counter
+from typing import Dict, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -292,6 +293,33 @@ class CheckpointManager:
         # graph's "J10_11_b") so a seed naming either form still counts.
         self.N_RUNGS = int(n_rungs)
         self.mandatory_ids = set(mandatory_ids or ())
+        # ANCHOR PROVENANCE for waypoint pools: wp_id -> (x_ram, y_px) as the level
+        # defined it when these states were captured. Persisted, and compared on load
+        # so a pool captured around an OLD anchor is discarded rather than inherited.
+        #
+        # Why this is needed: the resume path already drops pools for waypoints the
+        # level no longer DEFINES, but that is a check on the NAME. Moving an anchor
+        # keeps the name, so the stale pool sails through -- and a pool is exactly the
+        # thing an anchor move is meant to invalidate, because its states were selected
+        # by proximity to the old position.
+        #
+        # Measured on L4: `Low2_launch` was anchored at px 184, floor 12's tile edge,
+        # where the agent reads as grounded for one frame and then falls. All 100 of its
+        # seeds were unrecoverable, so the pool meant to teach the rope-2 crossing
+        # taught falling instead and the agent never attempted the jump. Correcting the
+        # anchor to px 188 fixes future captures; without this check a warm start would
+        # have carried the 100 dead states forward and the fix would have done nothing.
+        self.waypoint_anchors: Dict[str, Tuple[int, int]] = {}
+        # Every sprite pose this run has observed, and how often. Surfaced in the status
+        # line so an UNCATALOGUED pose cannot pass unnoticed again.
+        #
+        # An unknown pose is a silent behaviour change, not trivia: every pose-gated
+        # decision (waypoint detection, seed capture, reward milestone marking, floor
+        # crediting) reads an unrecognised code as "not on a surface", so whatever
+        # happened in that frame does not count. Poses 6 and 7 are grounded left-walk
+        # frames that were missing from SURFACE_POSES, which suppressed ~54% of grounded
+        # frames on any leftward approach for the whole history of this project.
+        self.pose_seen: Counter = Counter()
         # frontier_fraction / earlier_fraction are retained for config
         # back-compat but no longer used by pick_start (approach 30).
         # reset_fraction is reinterpreted as the CP0 floor and only
@@ -936,6 +964,18 @@ class CheckpointManager:
             f"rejected={rej} success=[{', '.join(rates)}] "
             f"reset_reach={reach} gscore={gscore}"
         )
+        # Loudly, on every status line, if the run has seen a pose we cannot name.
+        # Silence here is the assertion that the pose catalogue is complete.
+        _unknown = yeti.unknown_poses(self.pose_seen)
+        if _unknown:
+            base += " | UNCATALOGUED POSES " + ", ".join(
+                f"{p}x{self.pose_seen[p]}" for p in sorted(_unknown)
+            )
+        # Grounded leftward-walk frames the surface gate currently discards. Non-zero is
+        # expected until poses 6/7 are admitted (a reward change, run as its own lever).
+        _missed = sum(self.pose_seen[p] for p in yeti.SURFACE_POSES_MISSING_LEFT)
+        if _missed:
+            base += f" | left-walk frames not counted as surface: {_missed}"
         # The per-waypoint detail (pool size, reset-reach, approach distance,
         # capture/reject counts) used to be appended here as THREE parallel
         # walls, each sorted differently. It now lives in route_table(), printed
@@ -1010,6 +1050,9 @@ class CheckpointManager:
             "waypoints": {
                 w: (list(p.states), p.goal_score) for w, p in self.waypoints.items()
             },
+            # The anchor each pool was captured around, so a later run can tell
+            # whether the position has since moved. See CheckpointManager.__init__.
+            "waypoint_anchors": dict(self.waypoint_anchors),
         }
         # Atomic write: pickle to a temp file then os.replace, so a crash or
         # interrupt mid-write can never corrupt an existing pool file (matters
@@ -1049,8 +1092,24 @@ class CheckpointManager:
                 if len(self.checkpoints[rung]) < self.max_states_per_checkpoint:
                     self.checkpoints[rung].states.append(entry)
         # Waypoint pools (optional; absent in pre-WP files).
+        #
+        # A pool's states were selected by proximity to the waypoint's anchor, so if
+        # that anchor has since MOVED the states no longer describe the position they
+        # are filed under and must not be inherited. The name-based stale check in
+        # main() cannot see this: an anchor move keeps the name.
+        saved_anchors = data.get("waypoint_anchors", {}) or {}
+        moved, unknown = [], []
         for wp_id, payload in data.get("waypoints", {}).items():
             states, goal_score = payload
+            now = self.waypoint_anchors.get(wp_id)
+            was = saved_anchors.get(wp_id)
+            if now is not None and was is not None and tuple(was) != tuple(now):
+                moved.append((wp_id, tuple(was), tuple(now)))
+                continue
+            if now is not None and was is None:
+                # Pre-provenance file: cannot verify, so the states are inherited as
+                # before. Reported rather than silently trusted.
+                unknown.append(wp_id)
             pool = StartPool(self.max_states_per_checkpoint, self.reach_alpha)
             for s in states:
                 if len(pool) >= self.max_states_per_checkpoint:
@@ -1058,6 +1117,19 @@ class CheckpointManager:
                 pool.states.append(_normalize_seed(s))
             pool.goal_score = float(goal_score)
             self.waypoints[wp_id] = pool
+        for wp_id, was, now in moved:
+            print(
+                f"  Dropped inherited pool {wp_id!r}: anchor moved {was} -> {now}, "
+                f"so its {len(data['waypoints'][wp_id][0])} state(s) were captured "
+                "around a position this level no longer uses",
+                flush=True,
+            )
+        if unknown:
+            print(
+                f"  {len(unknown)} inherited pool(s) predate anchor provenance and "
+                f"could not be checked: {sorted(unknown)}",
+                flush=True,
+            )
         # Per-rung COUNTERS are deliberately not inherited. They are cumulative
         # display stats indexed by rung, and a file may have been written under a
         # different ladder, which makes its indices meaningless here. The pools
@@ -1454,6 +1526,11 @@ class CheckpointCurriculumEnv(gym.Env):
             died=died,
         )
         reward = float(self._reward_fn(ctx))
+
+        # Census every pose the run observes, so an uncatalogued one shows up in the
+        # status line instead of silently failing every pose gate. See
+        # CheckpointManager.pose_seen and yeti.unknown_poses.
+        _manager.pose_seen[int(ctx.pose)] += 1
 
         # Snapshot on fruit collection. Scoring is deferred to episode
         # end (see _pending_saves): we judge the state by how the rest
@@ -2036,6 +2113,12 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     )
     # Travel order for the per-point reach vector on each progress line.
     _manager.route_order = _route_order_for(cfg)
+    # Anchor provenance for waypoint pools. Must be set BEFORE any load_from_disk so
+    # the resume path can compare a file's anchors against the ones in force now and
+    # discard pools captured around a position that has since moved.
+    _manager.waypoint_anchors = {
+        w: (int(x), int(y)) for w, (x, y, _f) in yeti.waypoints(_level_of(cfg)).items()
+    }
 
     print("Checkpoint Curriculum Training", flush=True)
     print(f"  Profile: {cfg.env.profile}", flush=True)

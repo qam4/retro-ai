@@ -36,6 +36,13 @@ class EpisodeResult:
     final_x: int
     final_y: int
     positions: List[Tuple[int, int]] = field(default_factory=list)  # (x_px, y)
+    # Sprite pose per step, parallel to ``positions``. Position alone cannot tell a
+    # fall from a rope carry from a stalled stand, and L4 turns on poses the codebase
+    # does not yet name (6, 14, 16, 17), so any analysis of a rope or spring segment
+    # needs this alongside x/y. Detection is also pose-gated, so a step at the right
+    # coordinates in the wrong pose does NOT mark a waypoint -- without the pose the
+    # trace looks like an unexplained miss.
+    poses: List[int] = field(default_factory=list)
     actions: List[Tuple[int, ...]] = field(default_factory=list)
     frames: Optional[List[np.ndarray]] = None  # raw frames if keep_frames
     # ROUTE DEPTH (only populated with track_waypoints=True).
@@ -172,6 +179,7 @@ def rollout_episode(
     touched = False
     end_reason = "max_steps"
     positions: List[Tuple[int, int]] = []
+    poses: List[int] = []
     actions: List[Tuple[int, ...]] = []
     frames: Optional[List[np.ndarray]] = [] if keep_frames else None
     cp_arrival: Dict[int, Tuple[int, int]] = {}
@@ -190,6 +198,7 @@ def rollout_episode(
         princess = iface.read_ram_byte(yeti.PRINCESS_FLAG_ADDR)
 
         positions.append((x * 4, y))
+        poses.append(int(pose))
         actions.append(tuple(int(a) for a in np.ravel(action)))
         if y > max_y:
             max_y = y
@@ -256,6 +265,7 @@ def rollout_episode(
         final_x=x,
         final_y=y,
         positions=positions,
+        poses=poses,
         actions=actions,
         frames=frames,
         cp_arrival=cp_arrival,

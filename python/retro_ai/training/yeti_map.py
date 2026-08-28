@@ -653,7 +653,21 @@ LEVEL4 = LevelMap(
     #         visually confirmed. The alternative the tool first proposed, (34,110),
     #         is pose 8 -- the agent CLIMBING the ladder off that platform, i.e. a
     #         different event -- so it was rejected.
-    jump_waypoint_pos={"Fr1": (64, 158), "Rope1": (27, 118)},
+    #   Low2_launch  edge 44 -> 45. px 184 -> 188. Floor 12's tile edge is 184 but the
+    #         agent CANNOT stand there: px 184 reads as grounded (y still 70, walk pose)
+    #         and then falls on the next step. Measured left limit is 188 = x_min + 4
+    #         (debug/l4_edge_limit.py, which confirms a stance by reloading it and
+    #         holding NOOP). This is why all 100 Low2_launch seeds were doomed -- the
+    #         capture box was centred one step past the edge, so the pool taught falling
+    #         instead of the rope-2 crossing, and the agent never attempted the jump.
+    #   Low2  edge 30 -> 29. px 128 -> 124. Same defect mirrored: floor 13's tile edge
+    #         is 128 and px 128 falls on NOOP; the last standable centre is 124.
+    jump_waypoint_pos={
+        "Fr1": (64, 158),
+        "Rope1": (27, 118),
+        "Low2_launch": (45, 70),
+        "Low2": (29, 70),
+    },
     # Redundant launch pads: each shares a platform with a waypoint that already marks
     # correctly, so they added a second, wider, misplaced box for the same traversal.
     #   Spring_launch  floor 8  -> Lclimb2_top is at the very position the measured

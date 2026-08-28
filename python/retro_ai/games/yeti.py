@@ -41,12 +41,59 @@ PRINCESS_FLAG_ADDR = 11050  # 0x2B2A: level-cleared flag (0->1 rising edge)
 DEATH_FLAG_ADDR = 11004  # 0x2AFC
 DEATH_FLAG_VALUE = 65
 
-# Sprite poses where the player is on a surface (grounded floor / ladder):
-# {0-3 walk-right, 4-5 walk-left, 8 ladder up/down/idle}. Airborne/freeze
-# poses: {9 jump-right, 10 jump-left, 11 fall, 12 death-anim}. 0x2B54 is a
-# display sprite index, not the full physics state — key on the whitelist,
-# not single values. See experiments/003-yeti-training.md "run 3".
+# EVERY pose code we have identified, and how. 0x2B54 is a display sprite index, not
+# the full physics state, so behaviour is keyed on whitelists below rather than on
+# single values.
+#
+# This catalogue exists because an incomplete one cost real training time: the walk
+# cycle is FOUR poses per direction, but only the rightward cycle was ever fully
+# listed. Poses 6 and 7 are grounded leftward-walk frames and were absent from
+# ``SURFACE_POSES``, so roughly half of all leftward walking was invisible to waypoint
+# detection, seed capture and reward marking. Use :func:`unknown_poses` to assert that
+# a run never sees a code that is not in here.
+#
+# Measured (debug walk probe, 4 L4 floors, holding a direction and logging pose with
+# the per-step lateral delta at the floor's standing y):
+#   poses 0,1,2,3 -> dx in {0, +4}   the RIGHTWARD walk cycle
+#   poses 4,5,6,7 -> dx in {-4, 0}   the LEFTWARD walk cycle
+# and (L4 rope/trampoline traces): 14 carries the agent along a rope, 16/17 lift it
+# vertically at constant x off the trampoline below the rope-2 gap.
+POSE_NAMES: Mapping[int, str] = {
+    0: "walk-right (grounded)",
+    1: "walk-right (grounded)",
+    2: "walk-right (grounded)",
+    3: "walk-right (grounded)",
+    4: "walk-left (grounded)",
+    5: "walk-left (grounded)",
+    6: "walk-left (grounded) -- NOT in SURFACE_POSES, see below",
+    7: "walk-left (grounded) -- NOT in SURFACE_POSES, see below",
+    8: "ladder up/down/idle (grounded)",
+    9: "jump-right (airborne)",
+    10: "jump-left (airborne)",
+    11: "fall (airborne)",
+    12: "death animation",
+    13: "escalator ride (L3), a controlled vertical traversal",
+    14: "rope carry (L4), lateral motion while held",
+    16: "trampoline rise, facing right (L4)",
+    17: "trampoline rise, facing left (L4)",
+}
+KNOWN_POSES = frozenset(POSE_NAMES)
+
+# Sprite poses where the player is on a surface (grounded floor / ladder).
+#
+# !! KNOWN INCOMPLETE: poses 6 and 7 are grounded leftward-walk frames (measured, see
+# POSE_NAMES) and are deliberately NOT added here yet. Adding them is a REWARD change
+# -- it alters which frames can mark a milestone -- so it invalidates existing
+# champions as warm-starts and must be run as its own lever. Tracked in
+# experiments/003-yeti/level4_notes.md.
+#
+# Consequence while they are absent: on a leftward approach only about half of the
+# grounded frames are eligible for detection or capture (measured 54% suppressed on L4
+# floor 12, versus 0% walking right).
 SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
+# Grounded leftward-walk poses missing from SURFACE_POSES. Named so callers and tests
+# can refer to the gap explicitly instead of re-deriving it.
+SURFACE_POSES_MISSING_LEFT = frozenset({6, 7})
 
 # Per-fruit "is this fruit still on the map" addresses: NON-ZERO means present,
 # zero means collected. That predicate is the whole contract — the table does not
@@ -102,6 +149,22 @@ def read_pose(iface) -> int:
 def is_grounded(iface) -> bool:
     """True when the player sprite is on a surface (grounded floor / ladder)."""
     return read_pose(iface) in SURFACE_POSES
+
+
+def unknown_poses(poses) -> set:
+    """Which of ``poses`` are not in :data:`POSE_NAMES`?
+
+    An uncatalogued pose is not a curiosity, it is a silent behaviour change: every
+    pose-gated decision (waypoint detection, seed capture, reward milestone marking,
+    floor crediting) treats an unrecognised code as "not on a surface", so whatever the
+    agent was doing in that frame does not count. That is how poses 6 and 7 -- half the
+    leftward walk cycle -- went unnoticed while suppressing ~54% of grounded leftward
+    frames.
+
+    Callers should surface the result rather than raise: an unknown pose means the
+    catalogue needs extending, not that the run is invalid.
+    """
+    return {int(p) for p in poses} - KNOWN_POSES
 
 
 def waypoints(level: int) -> Mapping[str, Tuple[int, int, int]]:
