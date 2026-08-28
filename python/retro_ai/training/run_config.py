@@ -68,6 +68,14 @@ class TrainingConfig:
     # hyperparameters, silently ignoring the new ones. Default False
     # preserves the original full-state resume behavior.
     warmstart_weights_only: bool = False
+    # Where to inherit the curriculum's seed pools from. Default (None) is
+    # ``dirname(resume)/checkpoints.pkl``, which assumes the weights and the pools sit
+    # in the same directory. They often do not: a keep-best sweep writes the champion to
+    # ``<run>/best/best_model.zip`` while the pools stay at ``<run>/checkpoints.pkl``,
+    # so resuming from a champion silently inherits NO pools -- the load just misses.
+    # Set this to the pool file explicitly when warm-starting from a champion or a
+    # snapshot.
+    resume_pools: Optional[str] = None
 
 
 @dataclass(frozen=True)

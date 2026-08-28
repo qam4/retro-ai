@@ -1,0 +1,107 @@
+# L4 v8 PROBE — 100k, not a training run. Do ALL pools refill CLEANLY?
+#
+# This exists so we do not spend 6 hours to learn something a few minutes can tell us.
+# It answers one mechanical question and then stops.
+#
+# WHAT CHANGED SINCE v7. v7 moved two anchors to the measured standable LIMIT and the
+# pool came back just as dirty: 92 of 100 seeds still at px 184, the brink. The reason is
+# arithmetic -- the anchor moved 4 px while the capture box is +-24 px, so the box still
+# admitted the unstandable position. Moving one anchor was never going to work.
+#
+# v8 fixes the class instead. Every L4 jump anchor is now DERIVED: placed against the
+# edge that faces the other platform, but pulled inside far enough that its whole box
+# fits within the floor's standable span, and the tolerance is derived per platform
+# rather than a flat +-24 px. Measured, route-A boxes reaching outside their platform
+# went 21 -> 0. Route B's Hi chain is untouched (16 px platforms, single standable
+# centre, and never explored).
+#
+# PASS looks like, in order:
+#   1. The log shows TEN drops on startup (every jump waypoint whose anchor moved).
+#      Without them the run inherits v6's states and measures nothing.
+#   1b. The log shows exactly ONE narrowed tolerance: Fr2 from 2 to 1, because floor 4's
+#      standable span is only 8 px wide. Any other name there means an anchor drifted.
+#   2. `Low2_launch` refills at all -- the agent still reaches floor 12 often (v6:
+#      23,730 Low1 touches), so captures should resume quickly.
+#   3. THE ACTUAL TEST: the new seeds are standable. Check with
+#        debug/l4_pool_purity.py --run <this output> --pools Low2_launch,Low2
+#      v6 read 19/100 non-surface and the rest on the brink at px 184. This should read
+#      0% non-surface, clustered at px 188 or right of it.
+#
+# NOT the point of this run: princess, depth, or any reach number. 100k steps is far too
+# short, and the eight-env warm start makes early route numbers noisy. Do not read them.
+#
+# NOT INCLUDED, deliberately. Poses 6 and 7 are grounded leftward-walk frames missing
+# from SURFACE_POSES, which discards ~54% of grounded frames on any leftward approach --
+# and rope 2 is a leftward crossing, so that gap sits on this exact wall. It is the
+# larger lever and it plausibly explains why these captures landed on doomed frames in
+# the first place. But admitting them changes which frames can mark a reward milestone,
+# so it invalidates the warm start and cannot share a run with an anchor change. One
+# lever at a time: verify this mechanism, then test that one on its own.
+
+training:
+  timesteps: 100_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v8_boxfix_100k
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 50_000
+  route_table_freq_steps: 25_000
+  # v6's weights AND v6's pools (checkpoints.pkl is loaded from dirname(resume)).
+  # That pool file was backfilled with anchor provenance by
+  # debug/yeti_stamp_pool_anchors.py, which is what lets the two drops above fire --
+  # it was written before the field existed, so otherwise it cannot be checked.
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v6_anchorfix_15m/best/best_model.zip
+  warmstart_weights_only: true
+  # The champion lives in best/ but the pools live in the run root, so this MUST be
+  # given explicitly -- otherwise the pool load silently misses and the run starts with
+  # empty pools, which would look like the fix working when nothing was inherited at all.
+  resume_pools: output/mo5/yeti/training/yeti_curriculum_l4_v6_anchorfix_15m/checkpoints.pkl
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

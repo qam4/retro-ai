@@ -662,11 +662,59 @@ LEVEL4 = LevelMap(
     #         instead of the rope-2 crossing, and the agent never attempted the jump.
     #   Low2  edge 30 -> 29. px 128 -> 124. Same defect mirrored: floor 13's tile edge
     #         is 128 and px 128 falls on NOOP; the last standable centre is 124.
+    # DERIVED, not hand-placed. Every jump anchor is put against the edge that faces the
+    # other platform -- which is where the agent departs from or arrives at -- but
+    # pulled
+    # far enough inside that its DETECTION BOX fits entirely within the floor's
+    # standable
+    # span (`standable_span`, i.e. [x_min+8, x_max-8]).
+    #
+    # The invariant is the point: a box that reaches outside the span admits positions
+    # the agent cannot stand on. Before this, 21 of 30 L4 boxes violated it and all 21
+    # were jump waypoints, because `jump_waypoints` derives anchors from platform EDGES
+    # while the standable run stops short of them. That single defect produced three
+    # separate symptoms: `Low2_launch` captured 100 unrecoverable seeds (its box
+    # straddled floor 12's brink at px 184), `Low1_launch` reported a stalled ladder
+    # climb 24 px away as an arrival, and `Fr1` could never be marked by the reward.
+    #
+    # Cross-check, independent of the derivation: each new box contains the positions
+    # the
+    # agent was MEASURED standing at on that floor -- Rope1's landing at px 116 is
+    # inside
+    # 112..128, Low1's seeds at 220 inside 208..224, Fr2's at 304/308 inside 304..312.
+    #
+    # Route B's Hi1..Hi5 chain is derived the same way. Those platforms are 16 px wide,
+    # so their standable span is a SINGLE centre and the derived tolerance is 0 -- which
+    # detects fine, because x advances one 4-px unit per step and cannot skip an exact
+    # value. The anchors had to move for that to work: at tol 0 on the OLD
+    # edge-derived anchor they would detect NEVER rather than occasionally, so narrowing
+    # the tolerance while leaving them out would have been a regression.
+    #
+    # Note Hi1 and Hi2_launch resolve to the same px (248): on a two-tile platform the
+    # arrival and the departure genuinely are the same spot.
     jump_waypoint_pos={
-        "Fr1": (64, 158),
-        "Rope1": (27, 118),
-        "Low2_launch": (45, 70),
-        "Low2": (29, 70),
+        "Fr1": (64, 158),  # already inside its span; unchanged
+        "Fr1_launch": (52, 158),  # px 232 -> 216, box 208..224 in 192..224
+        "Fr2": (75, 150),  # px 296 -> 308, box 304..312 (tol 1; span is only 8 wide)
+        "Fr2_launch": (64, 158),  # px 280 -> 264, box 256..272 in 256..272
+        "Rope1": (28, 118),  # px 116 -> 120, box 112..128 in 112..160
+        "Rope1_launch": (8, 118),  # px  56 ->  40, box  32..48  in 8..48
+        "Spring": (52, 94),  # px 200 -> 216, box 208..224 in 208..224
+        "Step": (64, 102),  # px 248 -> 264, box 256..272 in 256..296
+        "Low1": (52, 70),  # px 232 -> 216, box 208..224 in 192..224
+        "Low2": (26, 70),  # px 124 -> 112, box 104..120 in 8..120
+        "Low2_launch": (48, 70),  # px 188 -> 200, box 192..208 in 192..224
+        # route B, same derivation; tol 0 on the 16 px platforms
+        "Hi1": (60, 46),  # px 256 -> 248
+        "Hi1_launch": (70, 54),  # px 272 -> 288, box 280..296 in 280..312
+        "Hi2": (52, 38),  # px 224 -> 216
+        "Hi2_launch": (60, 46),  # px 240 -> 248
+        "Hi3": (44, 30),  # px 192 -> 184
+        "Hi3_launch": (52, 38),  # px 208 -> 216
+        "Hi4": (36, 22),  # px 160 -> 152
+        "Hi4_launch": (44, 30),  # px 176 -> 184
+        "Hi5": (26, 30),  # px 128 -> 112, box 104..120 in 88..120
+        "Hi5_launch": (36, 22),  # px 144 -> 152
     },
     # Redundant launch pads: each shares a platform with a waypoint that already marks
     # correctly, so they added a second, wider, misplaced box for the same traversal.
@@ -808,6 +856,75 @@ def jump_waypoints(lvl: LevelMap) -> Dict[str, Tuple[int, int, int]]:
         if nm in out:
             out[nm] = (int(xy[0]), int(xy[1]), out[nm][2])
     return out
+
+
+def standable_span(lvl: LevelMap, floor: int) -> Optional[Tuple[int, int]]:
+    """CONSERVATIVE range of sprite-centre px the agent can stand on, on ``floor``.
+
+    ``[x_min + 8, x_max - 8]``. Inclusive; None if the floor has no platform entry, and
+    ``lo > hi`` for a platform too narrow to have a safe centre at all.
+
+    WHERE THE 8 COMES FROM, AND WHY IT IS CONSERVATIVE RATHER THAN EXACT. ``x_max`` is
+    EXCLUSIVE (extents are ``[col0*8, (col1+1)*8]``) and the sprite CENTRE is
+    ``x_ram*4 + 8`` with the sprite 14 px wide and its feet ~9 px across. The true
+    limits were measured per floor by walking to the edge, saving each candidate,
+    reloading it and holding NOOP -- which is necessary because a frame at the edge
+    reads as GROUNDED (y still at the standing value, walk pose, not 11) while already
+    committed to a fall, so any test that does not confirm survival believes it:
+
+        floor 12  [184..232)   measured  188 .. 228     = x_min+4, x_max-4
+        floor 13  [  0..128)   measured    ? .. 124     =          x_max-4
+        floor  3  [248..280)   measured  256 .. 276     = x_min+8, x_max-4
+        floor  9  [200..232)   measured  208 .. 232     = x_min+8, x_max+0
+
+    Those do not reduce to one formula, so this deliberately does NOT try to be exact.
+    ``[x_min+8, x_max-8]`` is inside every span measured above, so a box that fits in
+    here is safe on all of them -- and being provably-inside is what the callers need,
+    not tightness. Tighten a specific floor only with a fresh NOOP measurement.
+    """
+    if not lvl.platforms:
+        return None
+    for p in lvl.platforms:
+        if p.floor == floor:
+            return (p.x_min + 8, p.x_max - 8)
+    return None
+
+
+def waypoint_tolerance(lvl: LevelMap, floor: int, x_ram: int, requested: int) -> int:
+    """Largest tolerance <= ``requested`` whose box fits inside the floor's safe span.
+
+    THE INVARIANT: a detection box must lie entirely within the standable span. Every
+    waypoint defect found on this game violated it, three times over the same shape:
+
+    * ``Low2_launch`` was anchored at floor 12's tile edge and its box straddled the
+      brink, so the seed pool filled with states that read as grounded and fell one step
+      later -- all 100 of them, and the pool meant to teach the rope-2 crossing taught
+      falling instead.
+    * ``Low1_launch``'s +-24 px box reached a ladder 24 px away and reported a stalled
+      climb as an arrival (reach 0.36 against 0.03 for the same event).
+    * ``Fr1`` sat on a platform extremity the agent never occupies, so the reward could
+      never mark it and its distance term never switched off.
+
+    Why a fixed number cannot work: the jump tolerance was 6 (+-24 px), which needs a
+    48 px span, and span width on L4 ranges from 0 to 300 px. Measured against
+    ``[x_min+8, x_max-8]``, 21 of 30 L4 boxes and 13 of 19 L3 boxes overflowed -- and
+    ALL 21 L4 failures were jump waypoints while all nine ladder waypoints passed. The
+    Hi-chain platforms are 16 px wide, so their safe span is a SINGLE centre and no
+    tolerance above 0 can fit. The constraint is per-platform, so the number must be
+    derived per platform.
+
+    ``requested`` is the caller's ceiling (the curriculum's ladder/jump tolerance), so
+    this only ever narrows. Returns 0 when nothing wider fits, which still detects: x
+    advances one 4-px unit per step, so the agent cannot skip an exact value.
+    """
+    span = standable_span(lvl, floor)
+    if span is None:
+        return int(requested)
+    lo, hi = span
+    centre = x_ram * 4 + 8
+    # Room on each side, in whole 4-px units; the box must fit BOTH ways.
+    room = min((centre - lo) // 4, (hi - centre) // 4)
+    return max(0, min(int(requested), int(room)))
 
 
 def build_fixed_nodes(lvl: LevelMap = LEVEL1) -> List[Node]:

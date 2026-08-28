@@ -734,12 +734,25 @@ Geometry alone can only narrow the search: an anchor within 4 px of a tile edge 
 SUSPECT and needs the NOOP probe; 8 px or more inside is safe. That is all
 `debug/yeti_standable_audit.py` now claims.
 
-### The fix (v7's lever)
+### The first attempt at a fix, and why it FAILED
 
 ```
 Low2_launch   x_ram 44 -> 45   px 184 -> 188   floor 12's FIRST standable centre
 Low2          x_ram 30 -> 29   px 128 -> 124   floor 13's LAST standable centre
 ```
+
+Correct positions, useless as a fix. Measured with a 100k probe (v7): the pool came back
+with **92 of 100 seeds still at px 184**, 16 of them already falling. Barely different
+from v6's 81/100.
+
+The reason is arithmetic and should have been checked first: the anchor moved 4 px
+while the capture box is +-24 px (jump tolerance 6). Moving a 48 px box by 4 px barely
+changes what it admits, and the agent lingers at the edge, so the brink is still what
+gets captured. **An anchor move cannot fix a box that is wider than the platform's safe
+region.** See "WAYPOINT BOXES MUST FIT THE PLATFORM" below for what actually worked.
+
+Cost of finding this out: one 3-minute probe. This is the argument for always probing at
+100k before committing to a 6-hour run.
 
 `Low2_launch` was anchored on floor 12's tile edge, where the agent cannot stand. Its
 capture box therefore recorded doomed frames: **all 100 seeds fell within a step or
@@ -751,6 +764,81 @@ happens to sit 24 px from where its seeds land (on a ladder): 0/100 doomed.
 
 Pool provenance was added at the same time and is REQUIRED for the anchor fix to do
 anything — see below.
+
+## WAYPOINT BOXES MUST FIT THE PLATFORM (2026-08-24) — this is what fixed it
+
+THE INVARIANT: **a detection box must lie entirely inside the platform's standable
+span.** Every waypoint defect on this game violated it, and they were all the same bug
+wearing different clothes:
+
+* `Low2_launch`'s box straddled floor 12's brink, so its pool filled with 100 states that
+  read as grounded and fell a step later;
+* `Low1_launch`'s +-24 px box reached a ladder 24 px away and reported a stalled climb as
+  an arrival (reach 0.36 vs 0.03 for the same event);
+* `Fr1` sat on an extremity the agent never occupies, so the reward could never mark it.
+
+Measured against `[x_min+8, x_max-8]` (`yeti_map.standable_span`, conservative — it is
+inside every per-floor limit measured by the NOOP probe):
+
+```
+L4   21 of 30 boxes reached outside their platform     ALL 21 were jump waypoints
+L3   13 of 19                                          all 9 L4 ladder boxes passed
+```
+
+One cause, not 21 mistakes: `jump_waypoints` derives anchors from platform EDGES while
+the standable run stops short of them, and the jump tolerance was a flat +-24 px needing
+a 48 px span that most of these platforms do not have. The Hi-chain platforms are 16 px
+wide, so their span is a SINGLE centre and no tolerance above 0 can fit.
+
+### Tolerance-only was tried and REVERTED
+
+Narrowing the tolerance alone is a regression, because 19 of 21 L4 jump ANCHORS were
+themselves outside the span: narrowing drives them to tol 0 on a position the agent
+cannot stand on, so they detect NEVER instead of occasionally. Only `Fr1` and `Rope1`
+survived it, and only because those two had already been re-measured. Anchor and
+tolerance have to move together.
+
+### What was done
+
+Both are now DERIVED from the map, per waypoint:
+
+* anchor: placed against the edge that faces the other platform (where the agent departs
+  from or arrives at), pulled inside far enough that the whole box fits;
+* tolerance: `yeti_map.waypoint_tolerance` narrows the caller's ceiling until the box
+  fits. The curriculum's flat jump tolerance 6 is now a ceiling, not a value.
+
+Result: **L4 boxes outside their span went 21 -> 0**, route A and route B. Independent
+cross-check: every new box contains positions the agent was measured standing at
+(Rope1's landing px 116 inside 112..128; Low1's seeds at 220 inside 208..224; Fr2's at
+304/308 inside 304..312).
+
+Verified by a 100k probe (v8) — the pool purity that failed all day now passes:
+
+```
+Low2_launch on-surface seeds     positions
+v6   81/100    62 at px 184 (the brink), 19 already falling
+v7   84/100    76 at px 184        <- the 4 px anchor move changed nothing
+v8   10/10     px 192,196,200,208  none at the brink, none falling
+```
+
+`Low1`, `Spring`, `Step`, `Rope1` all came back 100% on-surface too.
+
+### TWO THINGS NOT TO MISREAD
+
+* **Reach numbers are not comparable across a tolerance change.** The reach EMA uses the
+  same tolerance that shrank, so the identical trajectory now registers fewer arrivals.
+  v8 reads rung-10 reach 0.27 against v7's 0.50 from the same champion; that is the
+  metric moving, not the policy. No v8 route number can be compared to an earlier run.
+* **Fewer seeds per unit time.** `Low2_launch` captured 10 seeds in 100k where v6 got
+  100, because the box went from +-24 px to +-8 px and now admits only genuine launch-pad
+  stances. Correct, but thinner practice early in a run.
+
+This is a REWARD change (marking moves with the anchors), so warm-starts are no longer
+strictly clean. Direction of change is favourable — every box gains usable area rather
+than losing it — but the critic was fit to the old signal.
+
+L3 is deliberately untouched: 11 violations remain (`Lesc_top` plus the A1..A5 ascent),
+pinned by a test so there is a baseline when it is picked up.
 
 ## POOL ANCHOR PROVENANCE (2026-08-24)
 
@@ -882,18 +970,19 @@ geometry, not a defect.
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300.
 Everything before it is at 84.7%.
 
-1. **Run v7: the `Low2_launch` / `Low2` anchor fix as the one lever.** The pool that
-   was supposed to teach the rope-2 crossing consisted entirely of doomed states, so
-   the crossing has never actually been practised — see "THE DOOMED FRAME" above. This
-   is the first time the agent will get real repetitions at it. Warm-start from v6 and
-   confirm the drop fires in the log (`Dropped inherited pool 'Low2_launch'`); without
-   it the run measures nothing.
+1. **Pick v9's lever.** Waypoint geometry is now sound (boxes 21 -> 0, pools verified
+   clean at 100k), so the next run is the first one in a while whose seeding is not
+   defective. Two honest candidates:
+   * poses 6/7 into `SURFACE_POSES` — 1857 discarded grounded left-walk frames per 100k,
+     affects every level, and L4's closing stretch is leftward. Biggest expected effect,
+     but a reward change on top of one we just made.
+   * simply run the corrected geometry at 15M and get a clean baseline to compare
+     against. Slower to inform, but it is the run that tells us what the fixes bought.
 2. Where does the rope actually DEPOSIT the agent on floor 13? Every landing on record
    is inside an existing detection box, so the distribution is self-selecting and
    cannot be read off the pools. Roll out from floor-12 seeds and log x whenever the
    agent reaches floor 13's standing y in a surface pose, ignoring all boxes. Decides
-   whether `Low2` at px 124 is where arrivals happen or whether the anchor wants to be
-   further left.
+   whether `Low2` at px 112 sits where arrivals actually happen.
 3. Does the snowball on floor 13 gate the landing, once the agent gets there often
    enough to measure? Confirmed present and lethal, but with rung 11 at 0/300 there is
    no arrival sample to measure the hazard phase against. Revisit after v7.

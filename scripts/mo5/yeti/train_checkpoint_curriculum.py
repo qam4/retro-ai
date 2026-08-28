@@ -1269,10 +1269,47 @@ class CheckpointCurriculumEnv(gym.Env):
                 self._wp_jump_ids = set()
         else:
             self._wp_jump_ids = set()
-        self._wp_tol_of = {
-            wid: (self._wp_jump_tol if wid in self._wp_jump_ids else self._wp_tol)
-            for wid in self._waypoints
-        }
+        # DERIVED per waypoint. The ladder/jump values above are only a CEILING; each
+        # box
+        # is then narrowed until it fits inside its own platform's standable span
+        # (yeti_map.waypoint_tolerance). A box reaching outside that span admits
+        # positions
+        # the agent cannot stand on, which is how `Low2_launch` captured 100
+        # unrecoverable
+        # seeds and `Low1_launch` reported a stalled ladder climb 24 px away as an
+        # arrival.
+        #
+        # Narrowing is only safe once the ANCHORS are inside their spans. Applied to the
+        # old edge-derived anchors it was a regression: 19 of 21 L4 jump anchors sat
+        # outside the span, so narrowing drove them to tol 0 on unstandable positions
+        # and
+        # they stopped detecting altogether. With the corrected anchors
+        # (LevelMap.jump_waypoint_pos) it should narrow almost nothing -- Fr2 from 2
+        # to 1,
+        # because floor 4's span is only 8 px wide. Anything else appearing here means
+        # an
+        # anchor has drifted.
+        self._wp_tol_of = {}
+        if self._wp_enabled:
+            from retro_ai.training.yeti_map import get_level_map as _glm
+            from retro_ai.training.yeti_map import waypoint_tolerance as _wp_tolerance
+
+            _lvl_map = _glm(_level)
+            _narrowed = []
+            for wid, (wx, _wy, wfloor) in self._waypoints.items():
+                want = self._wp_jump_tol if wid in self._wp_jump_ids else self._wp_tol
+                got = _wp_tolerance(_lvl_map, wfloor, wx, want)
+                self._wp_tol_of[wid] = got
+                if got != want:
+                    _narrowed.append((wid, want, got))
+            if _narrowed and env_id == 0:
+                print(
+                    f"  Narrowed {len(_narrowed)} waypoint tolerance(s) to fit inside "
+                    "their platform's standable span:",
+                    flush=True,
+                )
+                for wid, want, got in sorted(_narrowed):
+                    print(f"    {wid:<16} tol {want} -> {got}", flush=True)
         self._start_wp = None  # the WP this episode was seeded from (skip re-save)
         self._captured_wps: set = set()  # WPs already captured this episode
 
@@ -2247,9 +2284,20 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
                 env=vec_env,
                 tensorboard_log=os.path.join(cfg.training.output, "tb"),
             )
-        ckpt_path = os.path.join(
+        # Pools default to sitting beside the weights, but a champion lives in
+        # <run>/best/ while its pools stay at <run>/checkpoints.pkl -- so warm-starting
+        # from a champion inherits nothing unless the path is given explicitly.
+        # Missing pools are not an error (a cold pool file is legitimate), so this
+        # would fail silently; say something instead.
+        ckpt_path = cfg.training.resume_pools or os.path.join(
             os.path.dirname(cfg.training.resume), "checkpoints.pkl"
         )
+        if not os.path.exists(ckpt_path):
+            print(
+                f"  NOTE no pool file at {ckpt_path} — starting with EMPTY pools. "
+                "If you meant to inherit them, set training.resume_pools.",
+                flush=True,
+            )
         _manager.load_from_disk(ckpt_path)
         _manager.load_from_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
         # DROP pools for waypoints this level no longer defines. A resumed pkl can

@@ -85,9 +85,13 @@ def test_l4_corrected_anchors_are_markable_where_the_agent_actually_stands():
     assert all(t["Fr1"].reached(x, 158, 2) for x in (64, 65, 66))
     # and the old edge anchor's lethal neighbourhood no longer marks
     assert not t["Fr1"].reached(60, 158, 2)
-    # Rope1 marks at the rope landing
-    assert t["Rope1"].pos == (27, 118)
-    assert t["Rope1"].reached(27, 118, 2)
+    # Rope1 marks at the rope landing. The anchor is x_ram 28 (px 120) rather than the
+    # measured landing itself (px 116): anchors are now DERIVED so the whole tol-2 box
+    # fits inside floor 7's standable span (112..160), and a box centred on 116 would
+    # start at 108, off the platform. The measured landing is still inside the box.
+    assert t["Rope1"].pos == (28, 118)
+    assert t["Rope1"].reached(28, 118, 2)
+    assert t["Rope1"].reached(27, 118, 2)  # the measured landing still marks
 
 
 def test_l4_redundant_launch_pads_are_gone():
