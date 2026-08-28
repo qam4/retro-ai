@@ -893,10 +893,34 @@ also means the `Low2_launch` pool was being filled from only the subset of leftw
 frames that happened to be pose 4 or 5, which interacts with the doomed-frame problem
 above.
 
-`SURFACE_POSES` is deliberately UNCHANGED for now, with the gap exported as
-`SURFACE_POSES_MISSING_LEFT`. Admitting 6 and 7 alters which frames can mark a reward
-milestone, so it is a reward change: it invalidates existing champions as warm-starts
-and must be run as its own lever. Do not fold it in with an anchor change.
+### FIXED (v9): poses 6 and 7 admitted to `SURFACE_POSES`
+
+Probed at 100k. Result is mixed and the honest reading matters:
+
+* **The gate is complete.** `grounded frames NOT counted as surface` is absent from the
+  status line, against 1857 per 100k in v8. Pools stayed 100% on-surface, so admitting
+  more frames did not admit bad ones.
+* **Capture counts did NOT move.** Spring 142->143, Step 141->140, Lclimb3_top 134->131,
+  Low1 134->133, Low2_launch 10->8. Flat, or noise.
+
+**Why the "54% of frames" figure over-promised, and the lesson.** Capture and reach are
+ONCE-PER-EPISODE events, not per-frame: a waypoint captures at most once per visit, and
+the agent already had some pose-4-or-5 frame inside the box during each visit. Doubling
+the eligible frames cannot produce more captures when one was always sufficient. A
+per-frame statistic does not predict a per-episode outcome — check which one a mechanism
+actually depends on before predicting from it.
+
+**Where it does genuinely matter** is the shaping freeze, which IS per-frame
+(`rewards.py`: `airborne = pose not in _surf`, and the potential is only sampled on
+surface poses). Leftward walking earned shaping credit on roughly half its steps, so the
+gradient was intermittent in one direction only. That is a real defect and this fixes it,
+but it shows up as learning efficiency over millions of steps and is invisible at 100k.
+
+So this lever is defensible on correctness and UNPROVEN on effect. It was kept because it
+is correct and cheap to carry, not because the probe endorsed it.
+
+It is still a reward change (more frames can mark a milestone), so warm-started critics
+are fit to the old signal.
 
 **Pose 15 exists and is unidentified.** The check found it within minutes of going in —
 4 occurrences in a 3000-step smoke run. Not yet characterised; do not guess. Poses 6

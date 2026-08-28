@@ -33,18 +33,26 @@ def test_walk_cycles_are_four_poses_each():
     assert left == {4, 5, 6, 7}
 
 
-def test_the_known_gap_is_named_not_just_commented():
-    """The two grounded left-walk poses missing from the surface gate are exported, so
-    callers and status lines can point at the gap instead of re-deriving it."""
-    assert yeti.SURFACE_POSES_MISSING_LEFT == {6, 7}
-    # they are catalogued as grounded...
-    for p in yeti.SURFACE_POSES_MISSING_LEFT:
-        assert p in yeti.KNOWN_POSES
-        assert "grounded" in yeti.POSE_NAMES[p]
-    # ...but deliberately still excluded from the surface gate. Admitting them changes
-    # which frames can mark a reward milestone, so it invalidates existing champions as
-    # warm-starts and has to be its own training lever.
-    assert not (yeti.SURFACE_POSES_MISSING_LEFT & yeti.SURFACE_POSES)
+def test_every_grounded_pose_is_in_the_surface_gate():
+    """THE invariant. A grounded pose outside SURFACE_POSES is silently discarded by
+    waypoint detection, seed capture, reward marking and floor crediting.
+
+    Poses 6 and 7 -- the second half of the LEFTWARD walk cycle -- were missing until
+    2026-08-24, which discarded 54% of grounded frames on any leftward approach (against
+    0% rightward, since 0-3 were all present). L4's closing stretch is leftward, so the
+    gap sat exactly on that level's wall."""
+    grounded = {p for p, n in yeti.POSE_NAMES.items() if "grounded" in n}
+    assert grounded == {0, 1, 2, 3, 4, 5, 6, 7, 8}
+    assert grounded <= yeti.SURFACE_POSES, grounded - yeti.SURFACE_POSES
+
+
+def test_both_walk_directions_are_equally_detectable():
+    """The bug was an ASYMMETRY: the rightward cycle was fully admitted and the leftward
+    one only half. Any future asymmetry here is the same bug returning."""
+    right = {p for p, n in yeti.POSE_NAMES.items() if n.startswith("walk-right")}
+    left = {p for p, n in yeti.POSE_NAMES.items() if n.startswith("walk-left")}
+    assert len(right) == len(left) == 4
+    assert right <= yeti.SURFACE_POSES and left <= yeti.SURFACE_POSES
 
 
 def test_unknown_poses_detects_an_uncatalogued_code():

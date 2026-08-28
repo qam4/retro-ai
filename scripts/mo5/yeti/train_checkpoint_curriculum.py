@@ -971,11 +971,19 @@ class CheckpointManager:
             base += " | UNCATALOGUED POSES " + ", ".join(
                 f"{p}x{self.pose_seen[p]}" for p in sorted(_unknown)
             )
-        # Grounded leftward-walk frames the surface gate currently discards. Non-zero is
-        # expected until poses 6/7 are admitted (a reward change, run as its own lever).
-        _missed = sum(self.pose_seen[p] for p in yeti.SURFACE_POSES_MISSING_LEFT)
+        # Grounded frames the surface gate discards. Should be 0 now that the left-walk
+        # cycle (poses 6/7) is admitted; a non-zero value means some other grounded pose
+        # is still missing from SURFACE_POSES, which silently suppresses detection and
+        # capture in those frames.
+        _missed = sum(
+            n
+            for p, n in self.pose_seen.items()
+            if p in yeti.KNOWN_POSES
+            and "grounded" in yeti.POSE_NAMES[p]
+            and p not in yeti.SURFACE_POSES
+        )
         if _missed:
-            base += f" | left-walk frames not counted as surface: {_missed}"
+            base += f" | grounded frames NOT counted as surface: {_missed}"
         # The per-waypoint detail (pool size, reset-reach, approach distance,
         # capture/reject counts) used to be appended here as THREE parallel
         # walls, each sorted differently. It now lives in route_table(), printed

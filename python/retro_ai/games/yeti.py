@@ -65,8 +65,8 @@ POSE_NAMES: Mapping[int, str] = {
     3: "walk-right (grounded)",
     4: "walk-left (grounded)",
     5: "walk-left (grounded)",
-    6: "walk-left (grounded) -- NOT in SURFACE_POSES, see below",
-    7: "walk-left (grounded) -- NOT in SURFACE_POSES, see below",
+    6: "walk-left (grounded)",
+    7: "walk-left (grounded)",
     8: "ladder up/down/idle (grounded)",
     9: "jump-right (airborne)",
     10: "jump-left (airborne)",
@@ -81,19 +81,21 @@ KNOWN_POSES = frozenset(POSE_NAMES)
 
 # Sprite poses where the player is on a surface (grounded floor / ladder).
 #
-# !! KNOWN INCOMPLETE: poses 6 and 7 are grounded leftward-walk frames (measured, see
-# POSE_NAMES) and are deliberately NOT added here yet. Adding them is a REWARD change
-# -- it alters which frames can mark a milestone -- so it invalidates existing
-# champions as warm-starts and must be run as its own lever. Tracked in
-# experiments/003-yeti/level4_notes.md.
+# POSES 6 AND 7 WERE MISSING UNTIL 2026-08-24, when the set read {0,1,2,3,4,5,8}.
+# They are grounded leftward-walk frames: the walk cycle is FOUR poses per direction
+# and only the rightward one (0-3) had ever been catalogued. Measured effect of the
+# omission on L4 floor 12 -- 54% of grounded frames while walking LEFT were discarded
+# by this gate, against 0% walking right.
 #
-# Consequence while they are absent: on a leftward approach only about half of the
-# grounded frames are eligible for detection or capture (measured 54% suppressed on L4
-# floor 12, versus 0% walking right).
-SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
-# Grounded leftward-walk poses missing from SURFACE_POSES. Named so callers and tests
-# can refer to the gap explicitly instead of re-deriving it.
-SURFACE_POSES_MISSING_LEFT = frozenset({6, 7})
+# Since the gate drives waypoint detection, seed capture, reward milestone marking and
+# floor crediting, half of every leftward approach did not count. L4's closing stretch
+# is entirely leftward (rope 2 crosses floor 12 -> 13 leftward, and floor 13 to the
+# princess ladder is leftward), so the gap sat on that level's wall.
+#
+# Adding them is a REWARD change: more frames can mark a milestone, so the potential's
+# trajectory differs and a critic fit to the old signal is mismatched. Run as its own
+# lever rather than folded into another change.
+SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 6, 7, 8})
 
 # Per-fruit "is this fruit still on the map" addresses: NON-ZERO means present,
 # zero means collected. That predicate is the whole contract — the table does not
