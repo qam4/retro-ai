@@ -662,59 +662,68 @@ LEVEL4 = LevelMap(
     #         instead of the rope-2 crossing, and the agent never attempted the jump.
     #   Low2  edge 30 -> 29. px 128 -> 124. Same defect mirrored: floor 13's tile edge
     #         is 128 and px 128 falls on NOOP; the last standable centre is 124.
-    # DERIVED, not hand-placed. Every jump anchor is put against the edge that faces the
-    # other platform -- which is where the agent departs from or arrives at -- but
-    # pulled
-    # far enough inside that its DETECTION BOX fits entirely within the floor's
-    # standable
-    # span (`standable_span`, i.e. [x_min+8, x_max-8]).
+    # ANCHORS COME FROM A MEASURED GROUNDED CENSUS, NOT FROM PLATFORM GEOMETRY.
     #
-    # The invariant is the point: a box that reaches outside the span admits positions
-    # the agent cannot stand on. Before this, 21 of 30 L4 boxes violated it and all 21
-    # were jump waypoints, because `jump_waypoints` derives anchors from platform EDGES
-    # while the standable run stops short of them. That single defect produced three
-    # separate symptoms: `Low2_launch` captured 100 unrecoverable seeds (its box
-    # straddled floor 12's brink at px 184), `Low1_launch` reported a stalled ladder
-    # climb 24 px away as an arrival, and `Fr1` could never be marked by the reward.
+    # A geometric derivation was tried here and measured harmful. Both the idea and the
+    # measurement that killed it are recorded so it is not attempted again.
     #
-    # Cross-check, independent of the derivation: each new box contains the positions
-    # the
-    # agent was MEASURED standing at on that floor -- Rope1's landing at px 116 is
-    # inside
-    # 112..128, Low1's seeds at 220 inside 208..224, Fr2's at 304/308 inside 304..312.
+    # THE FAILED IDEA. Place every jump anchor against the edge facing the other
+    # platform, pulled inside far enough that its detection box fits within the
+    # standable span (`standable_span`), narrowing the tolerance per platform to make it
+    # fit. That made all 30 L4 boxes "correct" by that invariant: violations 21 -> 0.
     #
-    # Route B's Hi1..Hi5 chain is derived the same way. Those platforms are 16 px wide,
-    # so their standable span is a SINGLE centre and the derived tolerance is 0 -- which
-    # detects fine, because x advances one 4-px unit per step and cannot skip an exact
-    # value. The anchors had to move for that to work: at tol 0 on the OLD
-    # edge-derived anchor they would detect NEVER rather than occasionally, so narrowing
-    # the tolerance while leaving them out would have been a regression.
+    # WHY IT IS WRONG. A jump's landing position depends on the POLICY that jumped.
+    # Measured on floor 7, same seed pool, two policies:
     #
-    # Note Hi1 and Hi2_launch resolve to the same px (248): on a two-tile platform the
-    # arrival and the departure genuinely are the same spot.
+    #     v6 champion   lands at px 116                     box 112..128 covered 83%
+    #     v11 policy    lands at px 108, jumps to 136..148  same box covered 1.8%
+    #
+    # A box sized to one policy's landing misses another's. Worse, the agent is grounded
+    # for only TWO FRAMES at px 108 and is then airborne (pose 9) all the way to the
+    # ladder at px 144 -- and detection is pose-gated, so those frames cannot fire. So a
+    # jump platform offers one narrow grounded window, and an anchor 4 px off it detects
+    # nothing. Anchor 28 (px 120) sat on the jump arc and scored 0.00.
+    #
+    # Narrowing reproduced a documented failure verbatim, including its number: `Rope1`
+    # read 1.8% while `Lclimb2_top` -- reachable only THROUGH Rope1's platform -- read
+    # 0.71. That divergence is the diagnostic: a waypoint far below its own downstream
+    # neighbour means detection is blind, not that the agent stopped going there.
+    #
+    # HOW THESE WERE CHOSEN INSTEAD (debug/l4_anchor_recommend.py). Census the positions
+    # the agent is actually grounded at, across at least TWO policies from different
+    # runs, score per EPISODE, and pick by the WORST policy's score. Single-policy
+    # validation is what produced the landmine: anchor 28 scored 1.00 against v6's
+    # champion and 0.00 against a later one. Tolerance stays flat (jump 6, ladder 2);
+    # the reward channel's tolerance is a fixed 2 regardless, so the anchor alone
+    # decides whether a MANDATORY milestone can ever be marked.
+    #
+    # THE DISTINCTION THAT WAS MISSED. A box extending into the VOID is harmless --
+    # detection is pose-gated, so there are no grounded frames out there. A box covering
+    # a platform's LETHAL EDGE, where the agent reads grounded and falls on the next
+    # step, is what poisoned `Low2_launch`'s pool. Those are different problems, and
+    # narrowing detection fixed the second by breaking the first. The right shape is
+    # wide DETECTION plus a CAPTURE filter that rejects unrecoverable seeds -- which is
+    # `admit_requires_survival`, a direct test, not a pose proxy.
+    #
+    # `standable_span` and `waypoint_tolerance` remain as MEASUREMENT tools (used by
+    # debug/l4_edge_limit.py and debug/yeti_standable_audit.py) but are deliberately NOT
+    # wired into detection.
     jump_waypoint_pos={
-        "Fr1": (64, 158),  # already inside its span; unchanged
-        "Fr1_launch": (52, 158),  # px 232 -> 216, box 208..224 in 192..224
-        "Fr2": (75, 150),  # px 296 -> 308, box 304..312 (tol 1; span is only 8 wide)
-        "Fr2_launch": (64, 158),  # px 280 -> 264, box 256..272 in 256..272
-        "Rope1": (28, 118),  # px 116 -> 120, box 112..128 in 112..160
-        "Rope1_launch": (8, 118),  # px  56 ->  40, box  32..48  in 8..48
-        "Spring": (52, 94),  # px 200 -> 216, box 208..224 in 208..224
-        "Step": (64, 102),  # px 248 -> 264, box 256..272 in 256..296
-        "Low1": (52, 70),  # px 232 -> 216, box 208..224 in 192..224
-        "Low2": (26, 70),  # px 124 -> 112, box 104..120 in 8..120
-        "Low2_launch": (48, 70),  # px 188 -> 200, box 192..208 in 192..224
-        # route B, same derivation; tol 0 on the 16 px platforms
-        "Hi1": (60, 46),  # px 256 -> 248
-        "Hi1_launch": (70, 54),  # px 272 -> 288, box 280..296 in 280..312
-        "Hi2": (52, 38),  # px 224 -> 216
-        "Hi2_launch": (60, 46),  # px 240 -> 248
-        "Hi3": (44, 30),  # px 192 -> 184
-        "Hi3_launch": (52, 38),  # px 208 -> 216
-        "Hi4": (36, 22),  # px 160 -> 152
-        "Hi4_launch": (44, 30),  # px 176 -> 184
-        "Hi5": (26, 30),  # px 128 -> 112, box 104..120 in 88..120
-        "Hi5_launch": (36, 22),  # px 144 -> 152
+        "Fr1": (64, 158),
+        # x_ram 27 -> 25 (px 116 -> 112 -> 108). Both 25 and 27 score 1.00 per episode,
+        # but 25 puts the MODAL landing at the box CENTRE instead of its edge. Anchor 28
+        # scored 1.00 against v6's champion and 0.00 against a later policy that landed
+        # 4 px further left, so leftward margin is the thing that was missing.
+        "Rope1": (25, 118),
+        # x_ram 48 -> 51. Mandatory, and its tol-2 reward box at 192..208 fired on 0.12
+        # of episodes for the worse of two policies; the agent's modal grounded position
+        # on floor 9 is px 212. New box 196..212.
+        "Spring": (51, 94),
+        # x_ram 60 -> 66. Mandatory, and its tol-2 reward box at 240..256 fired on
+        # 0.00 of episodes -- the agent stands at px 256/272 on floor 10, so the box
+        # never contained it. Unmarked since v4, leaving its distance term switched
+        # on for every episode (the `Fr1` defect). New box 256..288, worst policy 0.92.
+        "Step": (66, 102),
     },
     # Redundant launch pads: each shares a platform with a waypoint that already marks
     # correctly, so they added a second, wider, misplaced box for the same traversal.

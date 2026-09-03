@@ -989,6 +989,267 @@ shortest-path sum, so it will always prefer the shorter route — route B's firs
 steps are penalised (152 -> 176 -> 200 -> 216) whatever the anchors are. That is
 geometry, not a defect.
 
+## !! DO NOT WARM-START FROM A CHAMPION (measured 2026-08-31) !!
+
+The most actionable thing learned so far, and it cost a 6.5 hour run to find.
+
+v10 warm-started from v6's `best/best_model.zip` (mean rung 9.55 at n=60) and ended at
+6.60. That looks like a catastrophic regression. It is not.
+
+**A champion is SELECTED as the best of ~150 snapshots**, i.e. selected for being an
+outlier of a very wide distribution. Continuing training from one returns to the
+distribution by construction. Bisection control arm A0 — v6's own code at `bc85424`, v6's
+config, v6's pools, seed 42, ONLY `resume` pointed at the champion — reproduces the
+"collapse" with none of the later changes present:
+
+```
+starting policy   9.55
+A0  250k          1.20
+A0  500k          2.43
+A0  750k          7.53
+A0   1M           1.03      (v10 at 1M was 4.13, i.e. BETTER than the control)
+```
+
+So no geometry or pose change was implicated. Use a run's `final_model.zip`, as v4->v6
+did, or start cold. If a champion must be used, expect to re-earn its level.
+
+## THE POLICY OSCILLATES ACROSS ALMOST THE WHOLE DEPTH RANGE
+
+A0's own numbers above are the clearest measurement of it: **1.03 -> 7.53 -> 1.03 within
+250k steps.** v6's `Spring` reach hit exactly 0.00 at 4.5M, 6.0M and 9.5M and bounced back
+to 0.75 / 0.68 / 0.77 each time, with the skill intact throughout.
+
+Consequences, learned the hard way — four wrong causal explanations were produced in one
+day by ignoring them:
+
+* **A single snapshot eval is not a measurement of a run.** A sequence of them is not a
+  "degradation curve"; it is samples of a swinging process. v10's
+  `8.53, 4.13, 5.57, 6.00, 5.80, 5.60` was read as progressive collapse. It was noise.
+* **Champion vs final is never a valid comparison.** Compare DISTRIBUTIONS over all
+  snapshots (`keep_best_sweep`), which is what the depth scoring exists for.
+* **A reach EMA hitting 0.00 does not mean the skill is lost.** Confirm with an eval before
+  believing it. v6's zeros were EMA dips; v10's were real, and only an n=60 eval
+  distinguished them.
+* **A 1M abort gate does not work as a point reading.** The oscillation band spans the
+  whole range within 250k, so any single early number is uninformative. A gate has to be a
+  distribution over several early snapshots.
+
+## RUN PROTOCOL — what to fix before launching, every time
+
+Today's run was described as carrying "three changes" and actually carried four. The
+unlisted one (warm-start source) turned out to be the only one that mattered, and a null
+result would have been uninterpretable either way.
+
+1. **Name every difference from the reference run, including the boring ones.** Warm-start
+   SOURCE is a lever in its own right, not plumbing. So are seed, pools, and PPO
+   hyperparameters.
+2. **One lever, or a control arm.** If more than one thing moves, a control is mandatory,
+   not optional. Commits make clean bisection points — `git worktree add /tmp/wt <sha>`,
+   run with `PYTHONPATH=/tmp/wt/python` and the script from the worktree, cwd in the main
+   repo so `output/` and `roms/` resolve.
+3. **Fix the measuring stick.** Evaluate every arm with the CURRENT evaluator at one
+   tolerance, never by each arm's own route table. Verify the stick reads the shared
+   starting policy consistently first (the champion scored 9.38 at tol 2/6 and 9.55 at
+   2/2, so either is valid; mixing them between arms is not).
+4. **Judge by distribution, not by the final model or the champion.**
+5. A metric change is a lever. Narrowing the waypoint tolerance changed what `reach` means,
+   which made a real regression look like an artifact and an artifact look like a
+   regression. Re-validate the stick whenever detection changes.
+
+## v10 RESULT (2026-08-31) — no attribution possible
+
+Full sweep, same settings and same stick as v6's:
+
+```
+            n     mean   median    max    >=9.5    <1.0
+v6         150    6.37    7.88    10.00    8/150   10/150
+v10        151    5.84    6.42     8.92    0/151    5/151
+```
+
+Modestly worse at the top, modestly better at the bottom (half as many collapses). **Not
+attributable to the committed fixes**, because v10 also changed its warm-start source and
+A0 showed that change alone dominates the outcome. The geometry and pose fixes therefore
+remain UNTESTED for effect, though verified correct for behaviour (boxes 21 -> 0, pools
+100% on-surface, gate complete).
+
+Princess 0 across all 151 snapshots; rung 11 never reached. Nothing so far has moved the
+actual wall.
+
+Next: rerun the current code with v6's exact warm-start source (v4's `final_model.zip`,
+v4's pools, seed 42) so v6's distribution becomes a legitimate control and
+`mean 6.37 / median 7.88` is the number to beat.
+
+## ANCHORS: THE GEOMETRIC DERIVATION WAS WRONG, THE CENSUS IS RIGHT (2026-09-03)
+
+`e667206` derived all 20 L4 jump anchors from platform geometry (fit the tol box inside
+`standable_span`) and narrowed tolerance to make them fit. Bisected at 1.2M each, seed 42,
+v4 warm start, one lever per arm:
+
+```
+arm                          Rope1 @ healthy step
+revert (neither change)          0.75 - 0.84
+B1 anchors only                  0.79 - 0.85
+B2 tolerance only                0.78 - 0.87
+v11 both              decays to  0.01 - 0.06  and STAYS there for 11M steps
+v11 repeat, seed 43   decays to  0.01         reproduced
+```
+
+### The diagnostic that actually works: divergence from the downstream neighbour
+
+`Lclimb2_top` is reachable ONLY THROUGH Rope1's platform. So this is impossible:
+
+```
+v11        1.5M   reward 57 (healthy)   Rope1 0.01   Lclimb2_top 0.81
+v11rep43  1.15M   reward 50 (healthy)   Rope1 0.01   Lclimb2_top 0.74
+```
+
+The agent crosses rope 1 and the detector is blind. **A waypoint reading far below its own
+downstream neighbour at healthy reward means detection is broken, not that the agent
+stopped going there.** Use that, not the absolute value. The same signature is on record
+from L4 v1 (Rope1 1.8% vs Lclimb2_top 87%) where the response was to widen the box — a
+workaround for the anchor, not a fix.
+
+### Why geometry is the wrong criterion
+
+A jump landing depends on the POLICY. Measured on floor 7, same pool, two policies:
+
+```
+v6 champion   lands px 116
+v11 policy    lands px 108, then AIRBORNE 112..136, ladder at 144
+```
+
+Traced frame by frame: **grounded for TWO FRAMES at px 108, then pose 9 all the way to the
+ladder.** Detection is pose-gated, so the airborne frames cannot fire. A jump platform
+offers one narrow grounded window and an anchor 4 px off it detects nothing:
+
+```
+anchor 25 (px 108) box 100..116    v6 1.00   v11 0.97
+anchor 27 (px 116) box 108..124    v6 1.00   v11 0.97
+anchor 28 (px 120) box 112..128    v6 1.00   v11 0.00   <- sits on the jump arc
+```
+
+Anchor 28 scored 1.00 against the champion. Single-policy validation is what planted it.
+
+### The two channels, which is why neither half of the bisect reproduced it
+
+Curriculum tolerance is 6 (+-24 px); the REWARD tolerance is a fixed 2 (+-8 px). B1 broke
+only the reward channel, B2 only the curriculum channel, v11 broke both.
+
+### Rule adopted (debug/l4_anchor_recommend.py)
+
+Census the positions the agent is actually GROUNDED at, over >= 2 policies from different
+runs, score per EPISODE, choose by the WORST policy's score, keep tolerance flat.
+
+### Two mandatory milestones were unmarkable in the v4/v6 baseline
+
+The `Fr1` defect class, still live until now. A mandatory milestone whose tol-2 reward box
+contains no position the agent is ever grounded at can never be marked, so its distance
+term stays switched on for every episode:
+
+```
+Step    anchor 60  box 240..256   fires 0.00   (agent stands at px 256/272)  -> 66
+Spring  anchor 48  box 192..208   fires 0.12   (modal grounded px 212)       -> 51
+Rope1   anchor 27                 fires 1.00   -> 25, mode at box CENTRE not edge
+```
+
+`test_mandatory_reward_boxes_cover_a_measured_grounded_position` now guards this class.
+
+### Verdict on the three censused anchors: better on every axis
+
+`l4_anchors_v2_1200k` vs the revert probe as control, matched at HEALTHY steps:
+
+```
+step   arm         reward   Rope1   Spring   Step   Lclimb2_top
+600k   control       45.9    0.75    0.74    0.70      0.74
+600k   anchors_v2    53.4    0.83    0.75    0.71      0.81
+700k   control       46.4    0.67    0.64    0.62      0.66
+700k   anchors_v2    53.4    0.85    0.82    0.81      0.85
+750k   control       46.4    0.71    0.68    0.67      0.69
+750k   anchors_v2    53.4    0.87    0.84    0.81      0.87
+```
+
+## THE FROM-RESET REWARD COLLAPSES AND RECOVERS. ENDPOINT READS ARE NOT VERDICTS.
+
+Measured directly from `episodes.csv`, mean `total_reward` of from-reset episodes per 100k:
+
+```
+revert control  ... 46 46 [2.6] 44 52 55        one bucket at 2.6, recovers
+B1              ... 50 54 [21]  53 53           recovers
+anchors_v2      ... 53 47 [3.5  3.0  3.5  3.0]  collapsed at 900k, run ENDED at 1.2M
+v11 (15M)       collapses to ~2-20 about 20 separate times, recovers every time
+```
+
+When it collapses, **every** waypoint reads 0.00 together, including ones whose anchors
+never moved (`Fr1` 0.94 -> 0.03, `Lfruit_top` 0.98 -> 0.72) while `prog` stays 0.88-0.99
+and captures keep accruing. That is a global policy collapse, distinguishable from
+detection blindness by exactly this: detection blindness leaves reward HEALTHY and hits ONE
+waypoint; collapse takes reward to ~3 and hits ALL of them.
+
+`l4_anchors_v2`'s 0.00 at 1.0M/1.2M was collapse, not its anchors. Read matched healthy
+steps, and never treat a run's last snapshot as its result.
+
+## A MID-JUMP STATE DOES NOT RELOAD INTO A FALL (measured, the comment was false)
+
+Claimed three times in `train_checkpoint_curriculum.py` as the justification for gating
+seed capture on grounded poses. Save a pose-9 state mid-arc, reload, feed identical inputs:
+
+```
+without reload   px 40 y 114 -> 44/110 -> 48/108 -> 56/108 -> 64/114   pose 9 throughout
+after reload     px 40 y 114 -> 44/110 -> 48/108 -> 56/108 -> 64/114   IDENTICAL
+```
+
+A save-state is a full emulator snapshot; velocity and jump counters return with it.
+Grounded is also INSUFFICIENT: `Low2_launch` held 100 seeds that read grounded on floor
+12's brink and fell one step after load. `admit_requires_survival` is the direct test.
+Grounded stays as a PREFERENCE (a mid-jump seed hands the agent a committed trajectory),
+not a correctness requirement. Comments corrected.
+
+## PROPOSED, NOT YET RUN: SPRITE OVERLAP + POSE BLOCKLIST
+
+Today's fixes are per-anchor. This retires the class. Detection currently asks "is the
+agent's POSITION inside a tolerance box". Ask instead "does the agent's SPRITE contain the
+anchor POINT". Identical in x (sprite half-width IS a derived tolerance, ~7 px ~ 2 x_ram)
+but very different in y: today's test is +-tol around the sprite TOP, a 4 px window, while
+overlap asks whether the point lies in [y, y+17], an 18 px window. A jumping agent's y
+DECREASES, so its sprite still spans the floor line for much of the arc.
+
+Measured, fraction of episodes firing, on the good anchor and the one that broke:
+
+```
+                          v6champ a25  a28     v11 a25  a28
+SPRITE allow surface           0.04  1.00         0.96  0.00   <- still anchor-sensitive
+SPRITE allow +traverse         1.00  1.00         0.96  0.96
+SPRITE block fall+death        1.00  1.00         0.96  0.96
+SPRITE no gate                 1.00  1.00         0.96  0.96
+```
+
+Sprite overlap ALONE does not help; sprite overlap plus a non-allowlist gate makes the
+anchor stop mattering. Note the top-left cell: anchor 25, the one shipped today, is 0.04
+on the champion under the current allowlist test.
+
+**Allowlist vs blocklist.** `SURFACE_POSES` is an allowlist, which FAILS CLOSED: poses 6
+and 7 were missing from it for the project's entire history (~54% of grounded frames on any
+leftward approach suppressed) and pose 15 is STILL uncatalogued and appears every run. A
+blocklist fails open — an unknown pose counts, and only poses known invalid are named.
+Excluding 11 (fall) and 12 (death) is a judgement call, not a measurement; fall frames do
+not intersect these boxes either way.
+
+Shape: detection = sprite overlaps anchor point; gate = blocklist {11, 12}; capture =
+survival gate, with grounded as an eviction PREFERENCE. This changes reward AND metrics, so
+it invalidates comparison to v6 and needs a fresh champion first.
+
+## THE WALL IS Step -> Lclimb3_top, NOT RUNG 11
+
+`prog` = P(an episode seeded here reaches any NEW route point). Both arms, healthy steps:
+
+```
+Step          reach 0.81   prog 0.02
+Lclimb3_top   reach 0.02   prog  --
+```
+
+The agent arrives at Step reliably and gets nowhere from it. Effort aimed at rung 11
+(`Low2`, floor 13) was two route points too far along.
+
 ## Open questions, in priority order
 
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300.

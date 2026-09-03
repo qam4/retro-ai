@@ -1,0 +1,111 @@
+# L4 v11 — the CONTROLLED test of the waypoint-geometry and pose fixes.
+#
+# ONE LEVER: the code. Everything else is byte-identical to v6, so v6's snapshot
+# distribution is a legitimate control and the number to beat is v6's
+# mean 6.37 / median 7.88 / max 10.00 over 150 snapshots.
+#
+#   same warm-start source   v4's final_model.zip (NOT a champion -- see below)
+#   same pools               v4's, via dirname(resume)
+#   same seed                42
+#   same PPO hyperparameters, same 15M horizon, same env
+#
+# WHY THIS RUN EXISTS. v10 tried to test the same code but ALSO changed its warm-start
+# source to v6's champion, and control arm A0 proved that change alone reproduces the
+# apparent collapse (9.55 -> 1.03 within 1M with NONE of the code changes present). v10's
+# result is therefore uninterpretable, and v10's own distribution (mean 5.84, median 6.42)
+# cannot be compared to v6's. See level4_notes.md "DO NOT WARM-START FROM A CHAMPION".
+#
+# WHAT THE CODE CHANGES ARE (all committed, all verified correct, none verified as helping)
+#
+#   e667206  waypoint anchors AND tolerances derived from the map so every detection box
+#            fits inside its platform's standable span. L4 violations 21 -> 0. Fixed the
+#            Low2_launch pool, which had held 100 seeds on floor 12's unstandable brink --
+#            the pool meant to teach the rope-2 crossing had been teaching falling.
+#   7b27d49  pool anchor provenance: a pool whose anchor moved is dropped rather than
+#            silently inherited. Without it this run would reuse stale seeds.
+#   f2d37cb  poses 6 and 7 (the second half of the LEFTWARD walk cycle) admitted to
+#            SURFACE_POSES. They were missing, so ~54% of grounded frames on any leftward
+#            approach were discarded by detection, capture, marking and the per-frame
+#            shaping freeze. L4's closing stretch is entirely leftward.
+#
+# HOW TO READ IT — and the rule that cost a wasted run to learn
+#
+#   * Judge by keep_best_sweep over ALL snapshots, against v6's distribution. NEVER by the
+#     final model, and NEVER by the champion.
+#   * Do NOT read a single snapshot eval, or a sequence of them, as a trend. The policy
+#     oscillates across almost the entire depth range: control arm A0 measured
+#     1.03 -> 7.53 -> 1.03 inside 250k steps.
+#   * `reach` hitting 0.00 in the route table does not mean a skill was lost. v6 hit 0.00
+#     three times with the skill intact. Confirm with an eval before believing it.
+#   * THE one number that matters is rung 11 (reach floor 13 = cross rope 2). It has been 0
+#     for the life of this level, including all 151 v10 snapshots. Everything above is a
+#     precondition, not evidence the crossing will happen.
+#
+# CONFIRM AT STARTUP or the run is wasted:
+#   - `Narrowed 21 waypoint tolerance(s)`, nine to 2, Fr2 to 1, the ten Hi-chain to 0.
+#   - NO `grounded frames NOT counted as surface` line.
+#   - Pools load from v4's dir. v4's pkl predates provenance so expect
+#     `inherited pool(s) predate anchor provenance and could not be checked` -- correct
+#     here, since v4's anchors are not this code's anchors. NOTE this means v4's stale
+#     pools ARE inherited; that matches v6 exactly, which is the point of the control.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v11_controlled_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # v4's weights AND v4's pools (checkpoints.pkl is loaded from dirname(resume)).
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v4_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

@@ -1,0 +1,119 @@
+# L4 v10 — 15M. First run whose waypoint geometry and pose gate are both CORRECT.
+#
+# This is not a single-lever run. It carries three fixes, all committed and each verified
+# mechanically at 100k, none verified as helping the agent. That is the deliberate choice:
+# they are correctness fixes to the machinery that decides whether the agent gets practice
+# and credit, and splitting them into separate 6-hour runs would cost days to measure
+# effects the probes say are invisible at short horizons.
+#
+# WHAT CHANGED SINCE v6
+#
+# 1. WAYPOINT GEOMETRY (commit e667206). A detection box must lie entirely inside the
+#    platform's standable span; 21 of 30 L4 boxes violated that and all 21 were jump
+#    waypoints. Anchors and tolerances are now DERIVED from the map -- anchor against the
+#    edge facing the other platform, pulled inside far enough that the box fits; tolerance
+#    narrowed per platform from a ceiling rather than a flat +-24 px. L4 violations 21 -> 0.
+#    Verified: the Low2_launch pool went from 100 seeds on floor 12's unstandable brink
+#    (19 already falling) to 10/10 on-surface inside 192..208. The pool that was supposed
+#    to teach the rope-2 crossing had been teaching falling.
+#
+# 2. POOL ANCHOR PROVENANCE (commit 7b27d49). checkpoints.pkl records the anchor each pool
+#    was captured around and drops pools whose anchor has moved. Without it this run would
+#    silently inherit v6's stale seeds and measure nothing.
+#
+# 3. LEFT-WALK POSES (commit f2d37cb). Poses 6 and 7 are grounded leftward-walk frames and
+#    were missing from SURFACE_POSES, so ~54% of grounded frames on any leftward approach
+#    were discarded by detection, capture, marking AND the per-frame shaping freeze. L4's
+#    closing stretch is entirely leftward.
+#
+# WHAT TO WATCH, and what NOT to read
+#
+#   * THE ONE NUMBER THAT MATTERS: rung 11 (reach floor 13, i.e. cross rope 2). It has been
+#     0/300 for the life of this level. Everything above is a precondition; none of it is
+#     evidence the crossing will happen.
+#   * Confirm at startup, or the run is wasted:
+#       - 12 `Dropped inherited pool` lines (every waypoint whose anchor moved). Without
+#         them this inherits v6's stale seeds, including the 100 doomed Low2_launch states.
+#       - `Narrowed 21 waypoint tolerance(s)`, all from the ceiling of 6. Nine reach 2, Fr2
+#         reaches 1 (floor 4's span is only 8 px wide) and the ten Hi-chain waypoints reach
+#         0 (16 px platforms, a single standable centre). Tol 0 still detects: x advances
+#         one 4-px unit per step, so an exact value cannot be skipped.
+#       - NO `grounded frames NOT counted as surface` line at all.
+#   * Watch `Low2_launch` pool SIZE. Its box is now +-8 px instead of +-24, so it captured
+#     10 seeds in 100k where v6 got 100. If it stays near-empty at 15M the crossing still
+#     is not being practised and the anchor wants revisiting -- that is the main risk here.
+#   * REACH NUMBERS DO NOT COMPARE TO ANY EARLIER RUN. The reach EMA uses the tolerance
+#     that shrank in (1) and the pose gate that widened in (3), so the metric moved twice.
+#     v6's 9.38/13 depth is not a baseline for this run. Judge by keep_best_sweep over all
+#     snapshots, never the final model.
+#   * `UNCATALOGUED POSES 15xN` is expected: pose 15 is real, seen in every probe, and not
+#     yet identified. It is reported, not fixed.
+#
+# WARM START. v6's champion weights and v6's pools. The reward changed in (1) and (3), so
+# the critic is fit to the old scale -- the standard caveat, accepted because a cold 15M
+# start on this level has never produced anything and L4's run-to-run variance would make
+# attribution impossible anyway.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v10_geometry_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # v6 champion weights + v6 pools.
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v6_anchorfix_15m/best/best_model.zip
+  # The champion is in best/ but the pools are in the run root, so this MUST be explicit
+  # or the pool load silently misses and the run starts with empty pools.
+  resume_pools: output/mo5/yeti/training/yeti_curriculum_l4_v6_anchorfix_15m/checkpoints.pkl
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

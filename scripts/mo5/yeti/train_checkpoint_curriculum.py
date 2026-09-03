@@ -67,9 +67,22 @@ Y_POS = 11089
 # rewards to freeze shaping while airborne. See experiments/003-yeti-
 # training.md "run 3" for the measured table.
 POSE_ADDR = 11092
-# Poses where the agent is on a surface (grounded floor / ladder). A
-# checkpoint seed is only snapshotted while grounded, so we never seed the
-# curriculum with a mid-jump/airborne state that inherits a fall.
+# Poses where the agent is on a surface (grounded floor / ladder). Seeds are
+# only snapshotted while grounded.
+#
+# This comment used to justify that with "a mid-jump state inherits a fall on
+# reload". That is FALSE and was measured: save a pose-9 state mid-arc, reload
+# it, feed the same inputs, and the trajectory is frame-identical (y 114 -> 110
+# -> 108 -> 110 -> 114, pose stays 9). A save-state is a full emulator snapshot,
+# so velocity and jump counters come back with it; there is no mechanism for it
+# to degrade into a fall.
+#
+# Grounded is also INSUFFICIENT for the property actually wanted: `Low2_launch`
+# held 100 seeds that read grounded on floor 12's brink and fell one step after
+# load. The direct test is `admit_requires_survival`, which keeps a capture only
+# if the episode survived from it. Grounded remains a reasonable PREFERENCE --
+# a mid-jump seed hands the agent a committed trajectory it cannot steer for the
+# first few steps -- but it is a preference, not a correctness requirement.
 # (Shared definition in retro_ai.games.yeti; re-exported here.)
 SURFACE_POSES = yeti.SURFACE_POSES
 # Pose 13 is the L3 ESCALATOR RIDE pose (measured): the agent stands on a
@@ -1277,47 +1290,33 @@ class CheckpointCurriculumEnv(gym.Env):
                 self._wp_jump_ids = set()
         else:
             self._wp_jump_ids = set()
-        # DERIVED per waypoint. The ladder/jump values above are only a CEILING; each
-        # box
-        # is then narrowed until it fits inside its own platform's standable span
-        # (yeti_map.waypoint_tolerance). A box reaching outside that span admits
-        # positions
-        # the agent cannot stand on, which is how `Low2_launch` captured 100
-        # unrecoverable
-        # seeds and `Low1_launch` reported a stalled ladder climb 24 px away as an
-        # arrival.
+        # FLAT per kind, deliberately. A scheme that narrowed each box to fit inside
+        # its platform's standable span was tried and REVERTED: it caused a measured
+        # regression and the reasoning is worth keeping.
         #
-        # Narrowing is only safe once the ANCHORS are inside their spans. Applied to the
-        # old edge-derived anchors it was a regression: 19 of 21 L4 jump anchors sat
-        # outside the span, so narrowing drove them to tol 0 on unstandable positions
-        # and
-        # they stopped detecting altogether. With the corrected anchors
-        # (LevelMap.jump_waypoint_pos) it should narrow almost nothing -- Fr2 from 2
-        # to 1,
-        # because floor 4's span is only 8 px wide. Anything else appearing here means
-        # an
-        # anchor has drifted.
-        self._wp_tol_of = {}
-        if self._wp_enabled:
-            from retro_ai.training.yeti_map import get_level_map as _glm
-            from retro_ai.training.yeti_map import waypoint_tolerance as _wp_tolerance
-
-            _lvl_map = _glm(_level)
-            _narrowed = []
-            for wid, (wx, _wy, wfloor) in self._waypoints.items():
-                want = self._wp_jump_tol if wid in self._wp_jump_ids else self._wp_tol
-                got = _wp_tolerance(_lvl_map, wfloor, wx, want)
-                self._wp_tol_of[wid] = got
-                if got != want:
-                    _narrowed.append((wid, want, got))
-            if _narrowed and env_id == 0:
-                print(
-                    f"  Narrowed {len(_narrowed)} waypoint tolerance(s) to fit inside "
-                    "their platform's standable span:",
-                    flush=True,
-                )
-                for wid, want, got in sorted(_narrowed):
-                    print(f"    {wid:<16} tol {want} -> {got}", flush=True)
+        # A jump's landing position depends on the POLICY that jumped. Measured on
+        # floor 7, same seed pool, two policies: v6's champion lands at px 116, while a
+        # later policy lands at px 108 and then jumps to 136..148. A 16 px box sized to
+        # the first covered 3/163 grounded frames of the second -- 1.8%, the exact
+        # figure this file's tolerance comment already recorded from L4 v1, where
+        # `Rope1` read 1.8% while `Lclimb2_top`, reachable only THROUGH Rope1's
+        # platform, read 87%.
+        #
+        # So the wide +-24 px jump box is not slack, it spans the variance a LEARNING
+        # agent's landings actually have. Narrowing it took `Low1` and `Low2_launch`
+        # from 0.61 to 0.00 in a controlled run (v6's warm start and seed, only the code
+        # differing): the agent stopped reaching the rope-2 launch pad at all.
+        #
+        # The real defect that narrowing was aimed at is different: a box covering a
+        # platform's LETHAL EDGE, where the agent reads grounded and falls next step,
+        # poisons that waypoint's seed POOL. A box reaching into the void is harmless,
+        # because detection is pose-gated. The fix belongs in capture admission --
+        # reject a seed inside a lethal margin -- not in detection width. Not done yet;
+        # see experiments/003-yeti/level4_notes.md.
+        self._wp_tol_of = {
+            wid: (self._wp_jump_tol if wid in self._wp_jump_ids else self._wp_tol)
+            for wid in self._waypoints
+        }
         self._start_wp = None  # the WP this episode was seeded from (skip re-save)
         self._captured_wps: set = set()  # WPs already captured this episode
 
@@ -1508,8 +1507,9 @@ class CheckpointCurriculumEnv(gym.Env):
         # actually unfolds.
         self._pending_wp_saves = []
         # A checkpoint snapshot deferred to the next grounded frame:
-        # (collected_total, save_step) or None. Avoids seeding the curriculum
-        # with a mid-jump state (which inherits a fall on reload).
+        # (collected_total, save_step) or None. Prefers a state the agent can
+        # steer from immediately. NOT because a mid-jump state reloads into a
+        # fall — that claim is false, see SURFACE_POSES above.
         self._grounded_snap_due = None
         # Highest checkpoint level reached this episode, in CP-level
         # units (0..fruits_total fruits collected; princess touch counts
@@ -1581,8 +1581,9 @@ class CheckpointCurriculumEnv(gym.Env):
         # end (see _pending_saves): we judge the state by how the rest
         # of the real episode unfolds, not a passive probe. The snapshot
         # itself is deferred to the next GROUNDED frame (pose in
-        # SURFACE_POSES) so we never seed the curriculum with a mid-jump /
-        # airborne state that inherits a fall on reload.
+        # SURFACE_POSES), which prefers a seed the agent can steer from on its
+        # first step. A mid-jump state does NOT reload into a fall; see the
+        # measurement recorded at SURFACE_POSES above.
         if fruits < self._prev_fruits:
             self._fruits_collected_this_ep += self._prev_fruits - fruits
             collected_total = self._current_rung(ctx.fruits_present)

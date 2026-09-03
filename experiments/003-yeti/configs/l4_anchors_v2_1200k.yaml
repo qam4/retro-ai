@@ -1,0 +1,113 @@
+# L4 ANCHORS v2 — 1.2M. Three anchors moved, each chosen by MULTI-POLICY census.
+#
+# ONE LEVER: three entries in LevelMap.jump_waypoint_pos. Tolerance untouched (flat, jump
+# 6 / ladder 2). Same warm start (v4 final_model), same seed 42, same config as the revert
+# probe, so the revert probe IS the control: its Rope1 read 0.84 at 1.2M.
+#
+#   Rope1  27 -> 25   px 116 -> 108. Both score 1.00 per episode; 25 puts the MODAL
+#                     landing at the box CENTRE rather than its edge. Anchor 28 scored
+#                     1.00 against v6's champion and 0.00 against a later policy that
+#                     landed 4 px further left -- leftward margin is what was missing.
+#   Spring 48 -> 51   MANDATORY. tol-2 reward box 192..208 fired on 0.12 of episodes for
+#                     the worse of two policies; modal grounded position is px 212.
+#   Step   60 -> 66   MANDATORY. tol-2 reward box 240..256 fired on 0.00 -- the agent
+#                     stands at px 256/272, so the box never contained it. Unmarked since
+#                     v4, leaving its distance term switched on every episode. 0.00 -> 0.92.
+#
+# WHY THESE AND NOT THE 20 DERIVED ONES. The earlier set came from platform geometry (fit
+# the box inside the standable span) and was measured harmful: it put Rope1's box on the
+# jump arc. These come from a grounded-position census across two policies, scored per
+# EPISODE, choosing by the WORST policy's score. Different basis, opposite direction.
+#
+# PASS:  Rope1 >= ~0.7 at 1.2M (control: 0.84), and Spring/Step no worse than the control.
+# FAIL:  Rope1 decays to ~0.0x as it did when the box moved onto the jump arc.
+#
+# CANNOT tell us anything about the deep route: the control's Low1/Low2_launch were 0.00
+# through 1.2M and only reached 0.61 after millions of steps.
+#
+# CAVEATS, stated because they weaken the evidence. The two census policies are not
+# independent -- both descend from v4. Fr1 (0.36), Lclimb2_top (0.32) and Lclimb3_top
+# (0.24) score poorly and no tol-2 anchor does better, so either the census pool is thin at
+# 25 episodes or those floors need a different detector shape. Not addressed here.
+#
+# ONE THING TESTED, and only one. v11 (narrowed +-8 px jump boxes) had Rope1 at 0.68-0.86
+# up to 450k, then 0.13 at 850k and 0.05 at 1.25M: the policy drifted to landing at px 108,
+# fell outside the 112..128 box, and never recovered -- because Rope1 is MANDATORY, so once
+# it stops marking its distance term never switches off and pulls backward for the rest of
+# every episode. A narrow detector plus policy drift is a one-way trap.
+#
+# The revert restores the flat +-24 px jump box (92..140 for Rope1) and the anchor at
+# x_ram 27. Measured on v11's own late policy, same pool: detection 1.8% -> 74.1%.
+#
+# PASS:  Rope1 reach still >= ~0.7 at 1.2M.  v6 (the control, same v4 warm start, same
+#        seed) held 0.57-0.84 throughout its early training.
+# FAIL:  Rope1 decays toward 0.0x as v11's did after 850k -- meaning width was not the
+#        mechanism and the diagnosis is wrong again.
+#
+# WHAT THIS CANNOT TELL US. Nothing about the deep route or rope 2. v6's Low1 and
+# Low2_launch were ALSO 0.00-0.03 through its first 700k and only reached 0.61 after
+# millions of steps. Any Low1/Low2_launch reading here is uninformative in both directions.
+#
+# Also do not read `mean rung` from single snapshots: control arm A0 measured
+# 1.03 -> 7.53 -> 1.03 within 250k steps on this level.
+
+training:
+  timesteps: 1_200_000
+  output: output/mo5/yeti/training/l4_anchors_v2_1200k
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 200_000
+  route_table_freq_steps: 50_000
+  # v4's weights AND v4's pools (checkpoints.pkl is loaded from dirname(resume)).
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v4_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

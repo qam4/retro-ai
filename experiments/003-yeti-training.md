@@ -184,6 +184,21 @@ and "lessons" kept getting refuted by the next run. New discipline:
    baseline. If not, revert and record why.
 5. **Backlog, not bundling.** New ideas from each discussion go into the
    backlog below and are tested one at a time, in priority order.
+6. **A run's last snapshot is not its result.** Measured from `episodes.csv`,
+   mean from-reset reward per 100k steps: the revert control dips to **2.6** for
+   one bucket and recovers; B1 dips to 21 and recovers; a 15M run collapses to
+   ~2-20 about **twenty separate times** and recovers every time. A 1.2M arm that
+   happens to END inside a dip reads 0.00 on every waypoint. Compare arms at
+   MATCHED HEALTHY steps (from-reset reward > 30), never at the endpoint.
+7. **Distinguish detection blindness from policy collapse before explaining
+   either.** They look identical in a route table and have opposite causes:
+   - *collapse* — from-reset reward ~3, **every** waypoint 0.00 including ones
+     whose anchors never moved, `prog` still 0.88-0.99, captures still accruing.
+   - *blindness* — reward HEALTHY, **one** waypoint decays while its own
+     DOWNSTREAM neighbour stays high. `Lclimb2_top` is reachable only THROUGH
+     `Rope1`, so `Rope1` 0.01 / `Lclimb2_top` 0.81 at reward 57 is physically
+     impossible and proves the detector is blind, not that the agent stopped
+     going there. Use the downstream-neighbour divergence as the test.
 
 ### Reward-shaping pitfalls (read before touching the reward)
 
@@ -1197,6 +1212,67 @@ alone doesn't resolve the over-concentration.
   a single/final snapshot is meaningless on an oscillating policy — always SWEEP
   snapshots from reset and keep the best. Prior v5/v6 evals are fine (they were
   genuinely stuck), but should ideally have been snapshot sweeps too.
+- [x] **H-AN — L4 waypoint anchors from a grounded census (DONE, committed).**
+  `e667206` derived all 20 L4 jump anchors from platform geometry (fit the tol box
+  inside `standable_span`) and narrowed tolerance to match. Bisected at 1.2M/arm,
+  seed 42, v4 warm start, one lever each: revert 0.75-0.84, B1 anchors-only
+  0.79-0.85, B2 tol-only 0.78-0.87, BOTH decays to 0.01 and stays there 11M steps
+  (reproduced on seed 43). Individually harmless, jointly destructive.
+  **Root cause:** a jump's landing depends on the POLICY. On floor 7 the agent is
+  grounded for TWO FRAMES at px 108 then airborne to the ladder at 144, and
+  detection is pose-gated, so an anchor 4 px off detects nothing — anchor 28 scored
+  1.00 vs v6's champion and 0.00 vs a later policy. **Rule adopted:** census
+  grounded positions over >=2 policies from different runs, score per EPISODE, pick
+  by the WORST policy's score, keep tolerance flat
+  (`debug/l4_anchor_recommend.py`). Shipped `Rope1` 27->25, `Spring` 48->51,
+  `Step` 60->66. Also found `Step` (0.00) and `Spring` (0.12) were MANDATORY
+  milestones whose fixed tol-2 reward box never contained the agent — the `Fr1`
+  defect, live since v4, so their distance term never switched off. Verified vs the
+  revert probe at matched healthy steps: 700k reward 53.4 vs 46.4, Rope1 0.85 vs
+  0.67, Step 0.81 vs 0.62.
+- [ ] **H-AO — the wall is `Step` -> `Lclimb3_top` (NEXT, diagnosis, no training).**
+  `prog` = P(an episode seeded here reaches any NEW route point). Both arms, healthy
+  steps: `Step` reach 0.81 / **prog 0.02**, `Lclimb3_top` reach 0.02. The agent
+  arrives at Step reliably and gets nowhere from it. All prior effort aimed at rung
+  11 (`Low2`, floor 13) was two route points too far along. Method: roll out from
+  the `Step` pool, classify where episodes go and how they end, and check whether
+  `Lclimb3_top`'s 0.02 is non-arrival or another detection blind spot (apply the
+  H-AN divergence test — its downstream `Low1` is also 0.00, so the test is
+  inconclusive there and needs a direct trace).
+- [ ] **H-AP — re-establish a champion on current code (REQUIRED before H-AQ).**
+  15M, current code, v4 `final_model.zip` warm start, seed 42 — v6's exact recipe so
+  its distribution (n=150, mean 6.37, median 7.88, max 10.00) is a legitimate
+  control. There is currently NO champion for this code: v6's was built at
+  `bc85424`, before the revert and the censused anchors. Without this, H-AQ has
+  nothing valid to compare against. Judge by `keep_best_sweep` distribution, not the
+  final model.
+- [ ] **H-AQ — sprite-overlap detection + pose BLOCKLIST (BACKLOG, after H-AP).**
+  Retires the anchor-placement bug class instead of fixing instances. Detection
+  currently asks "is the agent's POSITION inside a tolerance box"; ask instead "does
+  the agent's SPRITE contain the anchor POINT". Identical in x (sprite half-width IS
+  a derived tolerance, ~7 px ~ 2 x_ram units) but very different in y: today's test
+  is +-tol around the sprite TOP (4 px window) while overlap asks whether the point
+  lies in `[y, y+17]` (18 px). A jumping agent's y DECREASES, so its sprite still
+  spans the floor line for much of the arc. Measured, fraction of episodes firing,
+  good anchor vs the one that broke:
+  ```
+                            v6champ a25  a28     v11 a25  a28
+  SPRITE allow surface           0.04  1.00         0.96  0.00
+  SPRITE allow +traverse         1.00  1.00         0.96  0.96
+  SPRITE block fall+death        1.00  1.00         0.96  0.96
+  ```
+  Sprite overlap ALONE does not help; overlap PLUS a non-allowlist gate makes the
+  anchor stop mattering. **Blocklist, not allowlist:** `SURFACE_POSES` fails CLOSED
+  — poses 6/7 were missing from it for the project's entire history (~54% of
+  grounded frames on any leftward approach suppressed) and pose 15 is still
+  uncatalogued and appears every run. A blocklist fails open. Shape: detection =
+  sprite overlaps anchor point; gate = blocklist {11 fall, 12 death}; capture =
+  `admit_requires_survival` with grounded as an eviction PREFERENCE, not a filter
+  (measured: a mid-jump state reloads frame-identically, so the "inherits a fall"
+  justification was false; and grounded is insufficient anyway — `Low2_launch` held
+  100 grounded-but-doomed seeds). Changes reward AND metrics, so it invalidates
+  comparison to v6 and needs H-AP first. Big change: expect to bisect it if it
+  regresses, so land it as ONE lever with a control arm.
 - [ ] **H-B — does curriculum help an EASY target?** From the baseline,
   add *only* a CP0+CP1 start mix (capped at CP1) and compare CP0->CP2
   vs reset-only. Needs a `max_start_level` knob.

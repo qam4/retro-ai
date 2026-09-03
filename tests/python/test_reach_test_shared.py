@@ -85,13 +85,14 @@ def test_l4_corrected_anchors_are_markable_where_the_agent_actually_stands():
     assert all(t["Fr1"].reached(x, 158, 2) for x in (64, 65, 66))
     # and the old edge anchor's lethal neighbourhood no longer marks
     assert not t["Fr1"].reached(60, 158, 2)
-    # Rope1 marks at the rope landing. The anchor is x_ram 28 (px 120) rather than the
-    # measured landing itself (px 116): anchors are now DERIVED so the whole tol-2 box
-    # fits inside floor 7's standable span (112..160), and a box centred on 116 would
-    # start at 108, off the platform. The measured landing is still inside the box.
-    assert t["Rope1"].pos == (28, 118)
-    assert t["Rope1"].reached(28, 118, 2)
-    assert t["Rope1"].reached(27, 118, 2)  # the measured landing still marks
+    # Rope1 sits at x_ram 25 (px 108), the MODAL landing across two policies, chosen by
+    # multi-policy census. A geometric derivation briefly put it at 28 (px 120): that
+    # scored 1.00 against v6's champion and 0.00 against a later policy landing 4 px
+    # further left, because the tol-2 reward box 112..128 sat on the jump arc. Centring
+    # on the mode is what buys margin against the next policy's drift.
+    assert t["Rope1"].pos == (25, 118)
+    assert t["Rope1"].reached(25, 118, 2)  # px 108, the modal landing
+    assert t["Rope1"].reached(27, 118, 2)  # px 116, the other policy's landing
 
 
 def test_l4_redundant_launch_pads_are_gone():

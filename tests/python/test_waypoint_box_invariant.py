@@ -1,19 +1,35 @@
-"""A detection box must fit inside its platform's standable span.
+"""Jump detection boxes reach OUTSIDE their platform, and that is correct. Here is why.
 
-Every waypoint defect found on this game is the same violation of that one rule:
+This module used to assert the opposite. It enforced "a detection box must fit inside
+the platform's standable span", which drove a change narrowing jump tolerances from
++-24 px to +-8 px and moving 20 anchors to make them fit. That change caused a measured
+regression and was reverted; these tests now pin the reverted state and record the
+reasoning, so the same idea is not re-derived from first principles a third time.
 
-* ``Low2_launch`` was anchored at floor 12's tile edge and its box straddled the brink,
-  so its seed pool filled with states that read as grounded and fell one step later --
-  all 100 of them. The pool meant to teach the rope-2 crossing taught falling.
-* ``Low1_launch``'s +-24 px box reached a ladder 24 px away and reported a stalled climb
-  as an arrival: reach 0.36 against 0.03 for the same event.
-* ``Fr1`` sat on a platform extremity the agent never occupies, so the reward could
-  never mark it and its distance term never switched off.
+WHY A NARROW BOX IS WRONG FOR A JUMP
 
-These tests pin the rule and RECORD the current violations, so the scale of the problem
-is a number in CI rather than something rediscovered per run. They are written to pass
-against today's map: the expected-violation counts are asserted, so fixing anchors will
-fail these tests and force the counts down deliberately.
+**A jump's landing position depends on the POLICY that jumped.** Measured on floor 7,
+from the same seed pool, with two policies:
+
+    v6 champion   lands at px 116                     box 112..128 covered 83%
+    later policy  lands at px 108, then JUMPS to 136  the same box covered 1.8%
+
+1.8% is also the figure `train_checkpoint_curriculum.py`'s tolerance comment recorded
+from L4 v1, where `Rope1` read 1.8% while `Lclimb2_top` -- reachable only THROUGH
+Rope1's platform -- read 87%. Narrowing reproduced a documented failure exactly.
+
+Cost, in a controlled run (v6's warm start, v6's seed, only the code differing): `Low1`
+and `Low2_launch` went 0.61 -> 0.00. The agent stopped reaching the rope-2 launch pad.
+
+THE DISTINCTION THAT MATTERS
+
+A box reaching into the VOID is harmless: detection is pose-gated, so no grounded frame
+can occur there. A box covering a platform's LETHAL EDGE -- where the agent reads
+grounded and falls on the next step -- poisons that waypoint's seed POOL, which is what
+happened to `Low2_launch` (100 seeds, all unrecoverable). Those are different problems.
+The fix for the second belongs in CAPTURE admission, not in detection width: a pool
+needs states you can play from, while a reach metric must tolerate policy variance.
+Not implemented yet.
 """
 
 from __future__ import annotations
@@ -30,7 +46,7 @@ LADDER_TOL, JUMP_TOL = 2, 6
 
 
 def _boxes(level):
-    """(wp_id, requested_tol, box_lo, box_hi, span, is_jump) per positional waypoint."""
+    """(wp_id, tol, box_lo, box_hi, span, is_jump) per positional waypoint."""
     lvl = get_level_map(level)
     if not lvl.platforms:
         return []
@@ -46,151 +62,103 @@ def _boxes(level):
     return out
 
 
-def test_standable_span_is_inside_every_measured_limit():
-    """The span is [x_min+8, x_max-8], chosen to be conservative rather than exact.
-    These are the limits measured per floor by the NOOP-confirmed edge probe; the span
-    must be a SUBSET of each, or a box that "fits" could still sit off the platform."""
+def test_jump_tolerance_is_flat_and_wide():
+    """The reverted state: jump waypoints get a flat +-24 px box, ladders +-8 px.
+    `waypoint_tolerance` still exists as a measurement helper but must NOT be applied to
+    detection -- that application is what regressed."""
+    assert JUMP_TOL == 6
     lvl = get_level_map(4)
-    measured = {12: (188, 228), 3: (256, 276), 9: (208, 232)}
-    for floor, (lo_m, hi_m) in measured.items():
-        lo, hi = standable_span(lvl, floor)
-        assert lo >= lo_m, f"floor {floor}: span starts left of the measured limit"
-        assert hi <= hi_m, f"floor {floor}: span ends right of the measured limit"
-    # floor 13's left probe stalled, so only its right limit is known (124).
-    assert standable_span(lvl, 13)[1] <= 124
+    # the helper would narrow most jump boxes; detection must not use it
+    narrowed = [
+        wid
+        for wid, (x, _y, f) in yeti.waypoints(4).items()
+        if wid in set(jump_waypoints(lvl))
+        and waypoint_tolerance(lvl, f, x, JUMP_TOL) != JUMP_TOL
+    ]
+    assert len(narrowed) >= 15, "helper unexpectedly agrees with the flat tolerance"
 
 
-def test_l4_ladder_boxes_all_fit():
-    """Ladders are exact positions on wide platforms, which is why they are the
-    waypoints that work. All nine L4 ladders pass while all 21 L4 jump waypoints fail --
-    that contrast is the evidence the defect is in how jump anchors are derived, not in
-    waypoints generally."""
+def test_l4_anchors_come_from_a_multi_policy_census():
+    """Four measured overrides, each justified by a WORST-POLICY per-episode score from
+    debug/l4_anchor_recommend.py. The 20-anchor geometric derivation was reverted; these
+    are censused, which is a different basis.
+
+        Rope1  27 -> 25   1.00 both ways; 25 centres the modal landing instead of
+                          putting it on the box edge (anchor 28 scored 1.00 on one
+                          policy and 0.00 on another, for exactly that reason)
+        Spring 48 -> 51   worst-policy 0.12 -> 0.80
+        Step   60 -> 66   worst-policy 0.00 -> 0.92, i.e. it never marked at all
+    """
+    lvl = get_level_map(4)
+    assert lvl.jump_waypoint_pos == {
+        "Fr1": (64, 158),
+        "Rope1": (25, 118),
+        "Spring": (51, 94),
+        "Step": (66, 102),
+    }
+
+
+def test_ladder_boxes_stay_inside_their_platform():
+    """Ladders are exact positions on wide platforms, so their tight boxes fit. This is
+    the one place the fit-inside property does hold, and it is why ladder waypoints were
+    never the ones misbehaving."""
     for wid, _tol, lo, hi, (slo, shi), is_jump in _boxes(4):
         if not is_jump:
             assert lo >= slo and hi <= shi, f"L4 ladder {wid} overflows"
 
 
-def test_l3_has_three_bad_LADDER_anchors():
-    """L3 is worse than L4: three of its ladder anchors also overflow, on the goat
-    platform (safe span 80..104).
-
-    `Lesc_top` is the extreme case at px 132..148 -- 28 px clear of the platform, which
-    matches the "0 standable positions" already recorded in level3_notes.md. These are a
-    DIFFERENT bug from the jump-anchor derivation and need their own measurement; they
-    are pinned here so they are not lost again."""
-    bad = [
-        w
-        for w, _t, lo, hi, (slo, shi), is_jump in _boxes(3)
-        if not is_jump and (lo < slo or hi > shi)
-    ]
-    assert sorted(bad) == ["Lesc_top", "Lgoat_a_top", "Lgoat_b_top"]
+def test_jump_boxes_DO_overflow_and_that_is_intended():
+    """Recorded, not deplored. 21 of 30 L4 boxes reach outside the standable span, and
+    all 21 are jump waypoints. Making this number 0 is what broke the level."""
+    bad = [w for w, _t, lo, hi, (slo, shi), _j in _boxes(4) if lo < slo or hi > shi]
+    jump = set(jump_waypoints(get_level_map(4)))
+    assert len(bad) == 21
+    assert set(bad) <= jump
 
 
-HI_CHAIN = frozenset(
-    {
-        "Hi1",
-        "Hi1_launch",
-        "Hi2",
-        "Hi2_launch",
-        "Hi3",
-        "Hi3_launch",
-        "Hi4",
-        "Hi4_launch",
-        "Hi5",
-        "Hi5_launch",
-    }
-)
+def test_rope1_box_covers_both_measured_landings():
+    """One box must cover landings from DIFFERENT policies: v6's champion lands at
+    px 116, a later policy at px 108. The tol-2 reward box (fixed at 2 regardless of the
+    curriculum's tolerance) must contain both, and the wide curriculum box must too."""
+    x, _y, floor = yeti.waypoints(4)["Rope1"]
+    c = x * 4 + 8
+    lo, hi = c - 4 * JUMP_TOL, c + 4 * JUMP_TOL
+    for landing in (108, 116):
+        assert (
+            lo <= landing <= hi
+        ), f"px {landing} outside Rope1 curriculum box {lo}..{hi}"
+    # The REWARD box is tol 2 whatever the curriculum uses. Rope1 is mandatory, so a box
+    # that misses the landing leaves a distance term switched on for the whole episode.
+    for landing in (108, 116):
+        assert c - 8 <= landing <= c + 8, f"Rope1 reward box misses px {landing}"
+    assert floor == 7
 
 
-def _violations(level, tol_ceiling=2):
-    """Waypoints whose DERIVED box still reaches outside their standable span."""
-    lvl = get_level_map(level)
-    if not lvl.platforms:
-        return []
-    bad = []
-    for wid, (x, _y, floor) in yeti.waypoints(level).items():
-        span = standable_span(lvl, floor)
-        if span is None:
-            continue
-        tol = waypoint_tolerance(lvl, floor, x, tol_ceiling)
+def test_mandatory_reward_boxes_cover_a_measured_grounded_position():
+    """The `Fr1` / `Spring` / `Step` defect class: a mandatory milestone whose tol-2
+    reward box contains no position the agent is ever grounded at can never be marked,
+    so its distance term never switches off. Modal grounded positions, measured.
+    """
+    modes = {"Rope1": (7, [108, 116]), "Spring": (9, [212]), "Step": (10, [256, 272])}
+    for wid, (floor, obs) in modes.items():
+        x, _y, f = yeti.waypoints(4)[wid]
+        assert f == floor
         c = x * 4 + 8
-        if c - 4 * tol < span[0] or c + 4 * tol > span[1]:
-            bad.append(wid)
-    return sorted(bad)
+        assert any(
+            c - 8 <= o <= c + 8 for o in obs
+        ), f"{wid} reward box {c - 8}..{c + 8} contains none of {obs}"
 
 
-def test_l4_has_no_violations_left_at_all():
-    """THE GOAL, and the guard against regressing it. Every one of L4's 30 waypoints has
-    a box entirely inside its platform's standable span. Was 21 violations.
-
-    The fix was to DERIVE each jump anchor: place it against the edge facing the other
-    platform, which is where the agent departs from or arrives at, but pulled inside far
-    enough that the whole box fits -- and derive the tolerance per platform rather than
-    using a flat +-24 px."""
-    assert _violations(4) == []
-
-
-def test_hi_chain_detects_at_tolerance_zero():
-    """Route B's platforms are 16 px wide, so the span is a SINGLE centre and the
-    derived tolerance is 0. That still detects: x advances one 4-px unit per step,
-    so an exact value cannot be skipped.
-
-    The anchors had to move for this to hold. At tol 0 on the old edge-derived
-    anchor the box sat OFF the platform, so narrowing the tolerance without
-    re-anchoring would turn "detects occasionally" into "detects never"."""
+def test_standable_span_still_available_as_a_measurement_tool():
+    """Kept for debug/l4_edge_limit.py and debug/yeti_standable_audit.py. Its per-floor
+    numbers were measured by walking to the edge and confirming the stance survives a
+    NOOP hold, which is useful -- the APPLICATION to detection was the wrong part."""
     lvl = get_level_map(4)
-    for wid in HI_CHAIN:
-        x, _y, floor = yeti.waypoints(4)[wid]
+    for floor, (lo_m, hi_m) in {12: (188, 228), 3: (256, 276), 9: (208, 232)}.items():
         lo, hi = standable_span(lvl, floor)
-        c = x * 4 + 8
-        assert lo <= c <= hi, f"{wid} anchor px {c} outside span {lo}..{hi}"
+        assert lo >= lo_m and hi <= hi_m
 
 
-def test_l3_violations_recorded_out_of_scope():
-    """L3 is explicitly out of scope for now; recorded so a later fix has a baseline.
-
-    13 boxes overflowed with the old flat tolerance; deriving the tolerance rescues
-    two of them (`Lgoat_a_top` and `Lgoat_b_top`, whose anchors DO sit inside their span
-    and just needed a narrower box), leaving 11. Of those, `Lesc_top` is a bad ANCHOR,
-    28 px clear of its platform, matching the "0 standable positions" already in
-    level3_notes.md; A1..A5 are the ascent chain, which needs the same anchor derivation
-    L4 just got."""
-    bad = _violations(3, tol_ceiling=6)
-    assert len(bad) == 11
-    assert "Lesc_top" in bad
-    assert {f"A{i}" for i in range(1, 6)} <= set(bad)
-
-
-def test_the_defect_was_structural_not_a_list_of_mistakes():
-    """All 21 original L4 violations were jump waypoints and all nine ladders passed,
-    because `jump_waypoints` derives anchors from platform EDGES while the standable run
-    stops short of them, and the flat +-24 px jump tolerance needs a 48 px span most of
-    these platforms do not have. One cause, 21 symptoms."""
-    lvl = get_level_map(4)
-    jump = set(jump_waypoints(lvl))
-    with_old_flat_tolerance = [
-        w for w, _t, lo, hi, (slo, shi), _j in _boxes(4) if lo < slo or hi > shi
-    ]
-    assert set(with_old_flat_tolerance) <= jump
-
-
-def test_waypoint_tolerance_only_ever_narrows_and_never_overflows():
-    lvl = get_level_map(4)
-    for wid, (x, _y, floor) in yeti.waypoints(4).items():
-        for want in (0, 1, 2, 6):
-            got = waypoint_tolerance(lvl, floor, x, want)
-            assert 0 <= got <= want
-            span = standable_span(lvl, floor)
-            c = x * 4 + 8
-            if span[0] <= c <= span[1]:
-                # anchor inside the span => the returned box must fit
-                assert c - 4 * got >= span[0] and c + 4 * got <= span[1]
-
-
-def test_hi_chain_platforms_admit_no_tolerance_at_all():
-    """Two-tile platforms have a single safe centre, so the constraint is genuinely
-    per-platform and no global tolerance can be correct."""
-    lvl = get_level_map(4)
-    for floor in (15, 16, 17, 18):
-        lo, hi = standable_span(lvl, floor)
-        assert lo == hi, f"floor {floor} span {lo}..{hi} unexpectedly wide"
+def test_l3_untouched():
+    """L3 is out of scope and must not have moved."""
+    assert get_level_map(3).jump_waypoint_pos in (None, {})
