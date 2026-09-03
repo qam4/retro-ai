@@ -1250,6 +1250,78 @@ Lclimb3_top   reach 0.02   prog  --
 The agent arrives at Step reliably and gets nowhere from it. Effort aimed at rung 11
 (`Low2`, floor 13) was two route points too far along.
 
+### Why: the ladder-3 head is lethal on a timer
+
+40 episodes from the `Step` pool, control's 800k policy (`debug/l4_step_handoff.py`),
+measured by FLOOR OCCUPANCY so no anchor is involved:
+
+```
+floor 10  y 102  px 248..304   39/40  0.97
+floor 11  y  78  px 248..320    4/40  0.10
+floor 12  y  70  px 184..232    0/40  0.00
+```
+
+37/40 end ON the ladder at px 272, y 78..90. The climb itself is clean and the death flag
+flips at the exact frame y reaches 78, which is floor 11's standing level:
+
+```
+px 272 y 98 pose 8 -> y 94 -> y 90 -> y 86 -> y 82 -> y 78  DEAD
+```
+
+Scripted departure sweep, `debug/l4_ladder3_timing.py` -- walk to the base, wait N frames,
+hold UP, then hold one action for 20 frames:
+
+```
+after arrival   surviving waits out of 0..40
+NOOP            NONE
+LEFT            14..22
+RIGHT           11..28
+JUMP-L          11..21
+```
+
+Identical on both seeds, so the hazard cycle is deterministic. Waits 0..10 die during the
+climb whatever follows. **A ~18-frame safe window exists: this is a learnable timing
+skill, not a structural dead end.**
+
+### And the reach gate makes it unlearnable
+
+`gate_waypoints: true` with `reach_threshold: 0.15` filters a waypoint on its OWN
+from-reset reach. `Lclimb3_top` is 0.02, so it is excluded as a start state. Measured over
+the control's 7140 episodes (`start_key` in episodes.csv):
+
+```
+start_key        starts    reach   pool
+Step                217     0.81    100
+Lclimb3_top           0     0.02    100
+Low1                  0     0.00    100
+Low2_launch           0     0.00    100
+```
+
+Three pools of 100 seeds, sampled ZERO times in a 1.2M run. The seeds are usable --
+seeded there directly with the same policy, 30 episodes each:
+
+```
+from Lclimb3_top:  floor 11 0.90   floor 12 0.17
+from Low1:         floor 12 0.90   floor 13 0.00
+from Low2_launch:  floor 12 0.50   floor 13 0.00
+```
+
+`Lclimb3_top` reaches floor 12 in 17% of episodes. That is a live gradient the trainer
+never receives.
+
+**The gate is self-locking at the frontier.** The frontier is by definition the point the
+agent does not reach yet, so its own reach is ~0, so it is never sampled, so the skill is
+never practised, so its reach stays ~0. This is what has been blocking L4 -- not anchors,
+not tolerances, not warm-start choice. Fix under test as H-AR: gate on the PREDECESSOR's
+reach, so `Lclimb3_top` opens on `Step`'s 0.81 while `Low1` stays shut until
+`Lclimb3_top` itself clears the threshold. The frontier then advances one rung at a time,
+which preserves the protection the gate was added for.
+
+### The next wall is already visible
+
+Floor 12 -> floor 13 is 0/60 from the `Low1` and `Low2_launch` pools. The rope-2 crossing
+is untouched and sits directly behind this one.
+
 ## Open questions, in priority order
 
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300.

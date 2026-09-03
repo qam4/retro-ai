@@ -262,6 +262,27 @@ class CurriculumConfig:
     # cannot deadlock -- the reset rung is always a start candidate -- and at
     # alpha 0.02 a reliably-reached waypoint clears 0.15 in ~8 reset episodes.
     gate_waypoints: bool = False
+    # Gate a waypoint on its PREDECESSOR's reach instead of its own. Requires
+    # ``gate_waypoints``. Default False = the own-reach rule.
+    #
+    # WHY. Gating on a waypoint's OWN reach is self-locking at the frontier: the
+    # frontier is by definition the point the agent does not yet reach, so its reach
+    # is ~0, so it is never sampled, so the skill is never practised, so its reach
+    # stays ~0. Measured on L4 (`l4_anchors_v2_1200k`): `Lclimb3_top`, `Low1` and
+    # `Low2_launch` each held 100 usable seeds and were sampled 0 times out of 7140
+    # episodes, while `Step` -- the point immediately before `Lclimb3_top` -- was
+    # reached 0.81 of the time from reset. The agent arrives at the ladder-3 base
+    # reliably and dies on the single frame it tops out (an enemy crosses the head;
+    # scripted sweep: departures 11-28 frames into the cycle survive, 0-10 die).
+    # That is not an unreachable state, it is the frontier, and it was the only
+    # thing standing between the run and rung 11.
+    #
+    # This keeps the protection the own-reach rule was added for. A waypoint whose
+    # PREDECESSOR is also unreached stays gated, so the frontier advances exactly
+    # one rung at a time and we never drill states the agent genuinely cannot get
+    # near -- which is what wasted ~40% of L3's episodes. The first point on the
+    # route has no predecessor and is treated as reachable (reset reaches it).
+    gate_waypoints_by_predecessor: bool = False
     # Partition episode starts as reset | MANDATORY | OTHER instead of
     # reset | rungs | one waypoint group. A rung pool is not a distinct kind of
     # start -- "N mandatory targets done" is "standing at waypoint X" -- and it is

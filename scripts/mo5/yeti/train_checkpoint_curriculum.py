@@ -279,6 +279,7 @@ class CheckpointManager:
         n_rungs: int = 4,
         mandatory_ids=None,
         gate_waypoints: bool = False,
+        gate_waypoints_by_predecessor: bool = False,
         split_mandatory: bool = False,
         earned_progress_score: bool = False,
         admit_requires_survival: bool = False,
@@ -463,6 +464,14 @@ class CheckpointManager:
         # Apply the reach gate to WAYPOINT pools too (default False = the
         # historical asymmetry). See pick_start for the evidence both ways.
         self.gate_waypoints = bool(gate_waypoints)
+        # Gate a waypoint on its PREDECESSOR's reach rather than its own, so the
+        # frontier is reachable-by-one-step instead of already-reached. See
+        # _wp_eligible and run_config.CurriculumConfig for the measurement.
+        self.gate_waypoints_by_predecessor = bool(gate_waypoints_by_predecessor)
+        # Travel order along the route. Set by the trainer after construction. Used
+        # for the route table AND, when gating by predecessor, to find a waypoint's
+        # predecessor -- so this is no longer display-only.
+        self.route_order: list = []
         # Three-bucket start partition (reset | mandatory | other) instead of
         # reset | rungs | one waypoint group. Default False = legacy, so L1/L2/L3
         # are unchanged. See pick_start for why rungs belong with the mandatory
@@ -803,6 +812,47 @@ class CheckpointManager:
             )
             break
 
+    def _wp_predecessor(self, wid):
+        """The route point immediately before ``wid``, or None if it is first/absent."""
+        try:
+            i = self.route_order.index(wid)
+        except (ValueError, AttributeError):
+            return None
+        return self.route_order[i - 1] if i > 0 else None
+
+    def _wp_eligible(self, wid) -> bool:
+        """May ``wid`` be used as a START state?
+
+        Three regimes:
+
+        * gate off                 -- always (the historical asymmetry).
+        * own-reach gate           -- ``wp_reach_ema[wid] >= reach_threshold``.
+        * PREDECESSOR-reach gate   -- eligible if the agent reaches EITHER this point
+          or the one immediately before it on the route.
+
+        The own-reach rule is self-locking at the frontier: the frontier is the point
+        the agent does not reach yet, so its reach is ~0, so it is never sampled, so
+        the skill is never practised. Measured on L4: `Lclimb3_top`, `Low1` and
+        `Low2_launch` each held 100 usable seeds and were sampled 0/7140 times, while
+        `Step` -- immediately before `Lclimb3_top` -- was reached 0.81 from reset.
+
+        Gating on the predecessor keeps the protection the gate exists for (a point
+        whose predecessor is ALSO unreached stays shut, so the frontier opens one rung
+        at a time) while making the one advanceable rung trainable.
+        """
+        if not self.gate_waypoints:
+            return True
+        thr = self.reach_threshold
+        if self.wp_reach_ema.get(wid, 0.0) >= thr:
+            return True
+        if not self.gate_waypoints_by_predecessor:
+            return False
+        prev = self._wp_predecessor(wid)
+        if prev is None:
+            # First point on the route (or no route order): reset reaches it.
+            return wid in self.route_order or not self.route_order
+        return self.wp_reach_ema.get(prev, 0.0) >= thr
+
     def pick_start(self):
         """Pick a starting checkpoint level (H-T: aggregate-goal-score
         weighting — one rule for every level, no fixed reset reserve,
@@ -869,11 +919,7 @@ class CheckpointManager:
         wp_candidates = [
             w
             for w, pool in self.waypoints.items()
-            if len(pool) > 0
-            and (
-                not self.gate_waypoints
-                or self.wp_reach_ema.get(w, 0.0) >= self.reach_threshold
-            )
+            if len(pool) > 0 and self._wp_eligible(w)
         ]
 
         if self.split_mandatory:
@@ -2153,11 +2199,14 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         mandatory_ids=_ladder_ids,
         n_rungs=_ladder_rungs,
         gate_waypoints=cfg.curriculum.gate_waypoints,
+        gate_waypoints_by_predecessor=cfg.curriculum.gate_waypoints_by_predecessor,
         split_mandatory=cfg.curriculum.split_mandatory_starts,
         earned_progress_score=cfg.curriculum.earned_progress_score,
         admit_requires_survival=cfg.curriculum.admit_requires_survival,
     )
-    # Travel order for the per-point reach vector on each progress line.
+    # Travel order. Feeds the route table AND, under
+    # `gate_waypoints_by_predecessor`, the start-eligibility rule -- so this is
+    # semantic now, not display-only. Must be set before the first pick_start.
     _manager.route_order = _route_order_for(cfg)
     # Anchor provenance for waypoint pools. Must be set BEFORE any load_from_disk so
     # the resume path can compare a file's anchors against the ones in force now and

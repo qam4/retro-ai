@@ -1230,7 +1230,7 @@ alone doesn't resolve the over-concentration.
   defect, live since v4, so their distance term never switched off. Verified vs the
   revert probe at matched healthy steps: 700k reward 53.4 vs 46.4, Rope1 0.85 vs
   0.67, Step 0.81 vs 0.62.
-- [ ] **H-AO — the wall is `Step` -> `Lclimb3_top` (NEXT, diagnosis, no training).**
+- [x] **H-AO — the wall is `Step` -> `Lclimb3_top` (DONE, DIAGNOSED — see H-AR).**
   `prog` = P(an episode seeded here reaches any NEW route point). Both arms, healthy
   steps: `Step` reach 0.81 / **prog 0.02**, `Lclimb3_top` reach 0.02. The agent
   arrives at Step reliably and gets nowhere from it. All prior effort aimed at rung
@@ -1239,6 +1239,46 @@ alone doesn't resolve the over-concentration.
   `Lclimb3_top`'s 0.02 is non-arrival or another detection blind spot (apply the
   H-AN divergence test — its downstream `Low1` is also 0.00, so the test is
   inconclusive there and needs a direct trace).
+  **RESULT.** Three findings, each measured, which together explain why rung 11 has
+  been 0 for the life of the project.
+  1. *Arriving at the ladder-3 head is lethal on a TIMER, not structurally.* 37/40
+     episodes from the `Step` pool die on the ladder, the death flag flipping the exact
+     frame y reaches 78 (floor 11's standing level). Scripted departure sweep
+     (`debug/l4_ladder3_timing.py`): hold NOOP on arrival and 0/41 waits survive; hold
+     LEFT and waits 14-22 survive; hold RIGHT and waits 11-28 survive. Departures 0-10
+     die during the climb whatever follows. So there is a ~18-frame safe window in a
+     deterministic cycle — a learnable timing skill.
+  2. *So `Lclimb3_top` from-reset reach is 0.02, and the reach gate then shuts it out.*
+     `gate_waypoints: true` + `reach_threshold: 0.15` filters on a waypoint's OWN
+     reach.
+  3. *Measured consequence: the three deepest pools are never sampled.* From the
+     control's 7140 episodes (`start_key` counts in episodes.csv): `Step` 217 starts,
+     `Lclimb3_top` **0**, `Low1` **0**, `Low2_launch` **0** — each holding 100 seeds.
+     And the seeds are good: seeded there directly with the control's 800k policy,
+     `Lclimb3_top` reaches floor 12 in 0.17 of episodes, `Low1` reaches floor 12 in
+     0.90. A live gradient the trainer never sees.
+  The gate is self-locking at the frontier: the frontier is by definition the point not
+  yet reached, so its own reach is ~0, so it is never sampled, so the skill is never
+  practised. **This, not anchors or tolerances or warm-starts, is what has been blocking
+  L4.** Tools: `debug/l4_step_handoff.py`, `debug/l4_ladder3_timing.py`.
+  Also visible: floor 12 -> 13 is 0/60 from the `Low1` and `Low2_launch` pools, so the
+  rope-2 crossing is the NEXT wall behind this one.
+- [ ] **H-AR — gate a waypoint on its PREDECESSOR's reach (RUNNING, 1.2M).**
+  `curriculum.gate_waypoints_by_predecessor`, default False so L1/L2/L3 are unchanged.
+  A waypoint is eligible as a start if the agent reaches EITHER it or the route point
+  immediately before it. `Lclimb3_top` opens because `Step` is 0.81; `Low1` stays shut
+  until `Lclimb3_top` itself clears 0.15, so the frontier advances exactly one rung at
+  a time. That keeps the protection the gate was added for (L3: ungated drilling of
+  unreachable states produced skill that did not compose to reset, 0.03%, at ~40% of
+  episodes) while making the one advanceable rung trainable.
+  ONE LEVER vs `l4_anchors_v2_1200k`, which is therefore the control.
+  PASS: `Lclimb3_top` appears in the start_key counts at all AND its from-reset reach
+  rises above the control's 0.02. FAIL: still 0 starts (the gate was not the binding
+  constraint), or starts non-zero with reach still ~0.02 (not learnable from these
+  seeds). Read at matched HEALTHY steps, 600-850k — the control collapses from 900k on.
+  Config `experiments/003-yeti/configs/l4_predgate_1200k.yaml`, log `debug/l4_predgate/`.
+  Unit-pinned in `tests/python/test_wp_predecessor_gate.py`, including a test that
+  asserts the OLD rule locks out the frontier.
 - [ ] **H-AP — re-establish a champion on current code (REQUIRED before H-AQ).**
   15M, current code, v4 `final_model.zip` warm start, seed 42 — v6's exact recipe so
   its distribution (n=150, mean 6.37, median 7.88, max 10.00) is a legitimate
