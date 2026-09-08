@@ -51,7 +51,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Mapping
 
-from retro_ai.training.targets import within_tol
+from retro_ai.training.targets import reaches
 
 
 @dataclass(frozen=True)
@@ -1020,6 +1020,9 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     progress_scale = float(params.get("scale", 0.01))
     level = int(params.get("level", 1))
     wp_tol = int(params.get("waypoint_reward_tol", 2))
+    # Geometry of the reach test; forced to match the curriculum by the trainer.
+    # See CurriculumConfig.waypoint_reach_mode.
+    wp_reach_mode = str(params.get("waypoint_reach_mode", "box"))
     segment_shaping = bool(params.get("ladder_segment_shaping", False))
     # When segment shaping is on, the escalator RIDE pose (13) is a controlled
     # vertical traversal, not a fall, so it counts as on-surface (un-frozen) so
@@ -1274,12 +1277,20 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                     if gi in self._reached_wp:
                         continue
                     for _ident, wx, wy in members:
-                        # Shared reach test (retro_ai.training.targets.within_tol) --
-                        # the SAME comparison the curriculum uses, so the two can no
-                        # longer drift. NOTE the tolerances still differ: this passes
-                        # `waypoint_reward_tol` (2) while the curriculum passes 6 for
-                        # jump waypoints. See within_tol's docstring.
-                        if within_tol((wx, wy), ctx.curr_x, ctx.curr_y, wp_tol):
+                        # Shared reach test (retro_ai.training.targets.reaches) -- the
+                        # SAME comparison AND the same geometry mode the curriculum
+                        # uses, so the two cannot drift. NOTE the tolerances still
+                        # differ in "box" mode: this passes `waypoint_reward_tol` (2)
+                        # while the curriculum passes 6 for jump waypoints. In "sprite"
+                        # mode the tolerance is ignored entirely, which removes that
+                        # divergence as a side effect.
+                        if reaches(
+                            (wx, wy),
+                            ctx.curr_x,
+                            ctx.curr_y,
+                            wp_tol,
+                            mode=wp_reach_mode,
+                        ):
                             self._reached_wp.add(gi)
                             break
                 # Reach-marking above is UNGATED on purpose: a group the agent

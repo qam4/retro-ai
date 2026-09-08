@@ -1,0 +1,86 @@
+# HOW OFTEN DOES v6's CODE CASCADE? bc85424, 2M, seed 44.
+#
+# Run with the bc85424 worktree:
+#   env PYTHONPATH=/tmp/wt_a0/python:build/ci-linux RETRO_AI_ROM_DIR=roms \
+#     python3 /tmp/wt_a0/scripts/mo5/yeti/train_checkpoint_curriculum.py --config <this>
+#
+# 2M, NOT 15M, because the decision is visible by 1.5M. v6 (seed 42) crossed the 0.15
+# reach gate on `Lclimb3_top` at ~1.1M and cascaded to 0.70 by 1.55M. Seed 43 on the SAME
+# code was still at 0.03 with prog `—` (never sampled, i.e. self-locked) at 2.5M. Running
+# 15M to observe a 1.2M event wasted 6 hours; this is the same question at 1/7 the cost.
+#
+# WHAT IS ACTUALLY IN DOUBT. `Lclimb3_top` reach under the own-reach gate:
+#
+#     v6 seed 42       0.42 @1.2M -> 0.70 @1.55M     CASCADED
+#     v6 seed 43       0.03 @1.55M, 0.01 @~2.5M      self-locked
+#     revert probe     0.08                          self-locked
+#     anchors_v2       0.06                          self-locked
+#     B1               0.14                          self-locked
+#     B2               0.04                          self-locked
+#
+# Five self-locked, one cascaded. If v6 seed 42 is a coin-flip winner then there is NO
+# regression to bisect, and a week of anchor/tolerance work was aimed at a variable that
+# was never the cause. Seeds 44/45/46 give n=5 on bc85424 itself.
+#
+# READ: did `Lclimb3_top` reach exceed 0.15 and STAY there (prog stops being `—`), and did
+# `Low1` follow it up as it did for seed 42?
+training:
+  timesteps: 2_000_000
+  output: output/mo5/yeti/training/l4_v6seed44_2m
+  num_envs: 8
+  seed: 44
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  # v4's weights AND v4's pools (checkpoints.pkl is loaded from dirname(resume)).
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v4_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

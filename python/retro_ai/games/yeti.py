@@ -96,6 +96,22 @@ KNOWN_POSES = frozenset(POSE_NAMES)
 # trajectory differs and a critic fit to the old signal is mismatched. Run as its own
 # lever rather than folded into another change.
 SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 6, 7, 8})
+# BLOCKLIST counterpart to SURFACE_POSES, for deciding whether a frame may count as
+# REACHING a waypoint. 11 is fall, 12 is the death animation; everything else counts.
+#
+# WHY A BLOCKLIST. `SURFACE_POSES` is an allowlist and therefore FAILS CLOSED: a pose
+# missing from it silently suppresses every pose-gated decision. Poses 6 and 7 -- half
+# of the leftward walk cycle -- were absent for the entire history of this project,
+# which suppressed ~54% of grounded frames on any leftward approach. Pose 15 is STILL
+# uncatalogued and appears in every run. Each such omission is an invisible behaviour
+# change. A blocklist fails OPEN: an unknown pose counts, and only poses known to be
+# invalid are named, so the failure mode is a spurious detection you can see rather than
+# a missing one you cannot.
+#
+# Excluding fall is a JUDGEMENT, not a measurement: falling PAST a waypoint is not
+# reaching it. The data cannot settle it here because fall frames do not intersect the
+# boxes measured so far -- `block fall+death` and `no gate` scored identically.
+NON_TRAVERSAL_POSES = frozenset({11, 12})
 
 # Per-fruit "is this fruit still on the map" addresses: NON-ZERO means present,
 # zero means collected. That predicate is the whole contract — the table does not

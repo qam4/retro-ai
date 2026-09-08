@@ -151,6 +151,85 @@ def within_tol(
     return abs(int(x_ram) - wx) <= tol_x and abs(int(y_px) - wy) <= tol_y
 
 
+# Sprite extents, MEASURED from frames at known RAM positions: 14 px wide, 18 px tall.
+# x (0x2B52 * 4 + 8) is the sprite CENTRE, y (0x2B51) is the sprite TOP, so the sprite
+# occupies centre-7..centre+6 horizontally and y..y+17 vertically.
+SPRITE_W = 14
+SPRITE_H = 18
+
+
+def sprite_overlaps(pos: Tuple[int, int], x_ram: int, y_px: int) -> bool:
+    """Does the agent's SPRITE contain the anchor POINT?
+
+    The inverse of :func:`within_tol`, which asks whether the agent's POSITION falls
+    inside a tolerance box around the anchor. Asking it the other way round removes the
+    tolerance as a free parameter -- the sprite's own size becomes the tolerance.
+
+    In x the two tests are nearly the same thing: half the sprite width is 7 px, which
+    is ~2 x_ram units, i.e. today's ``tol=2``. **The difference is in y.**
+    ``within_tol`` compares to the anchor's y with the SAME small tolerance (``tol=2``
+    is +-2 PIXELS, a 4 px window around the sprite top), whereas overlap asks whether
+    the anchor lies anywhere in ``y .. y+17`` -- an 18 px window. A jumping agent's y
+    DECREASES, so its sprite still spans a floor's standing line for much of the jump
+    arc.
+
+    WHY THIS MATTERS (measured on L4 floor 7). The agent lands at px 108, is grounded
+    for TWO FRAMES, and is then airborne (pose 9) all the way to the ladder at px 144.
+    With a 4 px y-window plus a grounded pose gate, a waypoint there can only fire in
+    those two frames, so an anchor 4 px off detects nothing: anchor 28 scored 1.00
+    against one policy and 0.00 against another that landed 4 px further left. Under
+    sprite overlap with a non-allowlist pose gate, both anchors score ~1.00 on both
+    policies -- the anchor stops mattering, which retires a whole class of bug rather
+    than instances.
+
+    Measured, fraction of episodes in which the test ever fires, Rope1, two policies,
+    the good anchor (25) and the one that broke (28)::
+
+                                  v6champ a25  a28     v11 a25  a28
+        box + allowlist                1.00  1.00         0.97  0.00
+        sprite + allowlist             0.04  1.00         0.96  0.00
+        sprite + blocklist{11,12}      1.00  1.00         0.96  0.96
+
+    Note the middle row: sprite overlap ALONE does not help, because the grounded
+    allowlist still pins detection to the same two frames. It needs the pose gate to
+    stop failing closed (see ``yeti.NON_TRAVERSAL_POSES``).
+    """
+    wx, wy = pos
+    ax = int(wx) * 4 + 8  # anchor, as a sprite-centre pixel
+    cx = int(x_ram) * 4 + 8  # agent, as a sprite-centre pixel
+    # 14 is EVEN, so the span around the centre is asymmetric: centre-7 .. centre+6.
+    # This is the span the offline gate measurements used, so keep it identical or their
+    # numbers stop applying.
+    if not (cx - SPRITE_W // 2 <= ax <= cx + SPRITE_W // 2 - 1):
+        return False
+    top = int(y_px)
+    return top <= int(wy) <= top + SPRITE_H - 1
+
+
+def reaches(
+    pos: Tuple[int, int],
+    x_ram: int,
+    y_px: int,
+    tol_x: int,
+    tol_y: Optional[int] = None,
+    mode: str = "box",
+) -> bool:
+    """THE reach test, with the geometry selectable. ``mode`` is "box" or "sprite".
+
+    "box" is :func:`within_tol` and is the default so nothing changes unless a run opts
+    in. "sprite" is :func:`sprite_overlaps` and ignores the tolerance arguments entirely
+    -- the sprite's size IS the tolerance. Every consumer (curriculum detection, reward
+    milestone marking, eval rollout) must be given the same mode or they will disagree,
+    which is why the trainer forces one value into the reward params rather than letting
+    them be configured separately.
+    """
+    if mode == "sprite":
+        return sprite_overlaps(pos, x_ram, y_px)
+    if mode != "box":
+        raise ValueError(f"unknown reach mode {mode!r} (expected 'box' or 'sprite')")
+    return within_tol(pos, x_ram, y_px, tol_x, tol_y)
+
+
 def build_targets(level: int = 1) -> List[Target]:
     """Derive every target for ``level`` from its :class:`LevelMap`.
 
@@ -256,4 +335,13 @@ def targets_by_id(level: int = 1) -> Dict[str, Target]:
     return {t.id: t for t in build_targets(level)}
 
 
-__all__ = ["Target", "build_targets", "targets_by_id", "within_tol"]
+__all__ = [
+    "SPRITE_H",
+    "SPRITE_W",
+    "Target",
+    "build_targets",
+    "reaches",
+    "sprite_overlaps",
+    "targets_by_id",
+    "within_tol",
+]

@@ -283,6 +283,34 @@ class CurriculumConfig:
     # near -- which is what wasted ~40% of L3's episodes. The first point on the
     # route has no predecessor and is treated as reachable (reset reaches it).
     gate_waypoints_by_predecessor: bool = False
+    # Geometry of the waypoint reach test: "box" (ships today) or "sprite".
+    #
+    # "box" asks whether the agent's POSITION falls inside a tolerance box around the
+    # anchor. "sprite" asks the inverse -- whether the agent's 14x18 SPRITE contains the
+    # anchor POINT -- which removes the tolerance as a free parameter. In x the two are
+    # nearly identical (sprite is one x_ram unit tighter each side); the real difference
+    # is y, where the box compares against the anchor with the same small tolerance (tol
+    # 2 = +-2 PIXELS) while overlap accepts anywhere in y..y+17.
+    #
+    # WHY. Measured on L4 floor 7: the agent lands at px 108, is grounded for TWO
+    # FRAMES, then is airborne to the ladder at px 144. A 4 px y-window plus a grounded
+    # allowlist can only fire in those two frames, so an anchor 4 px off detects nothing
+    # -- anchor 28 scored 1.00 against one policy and 0.00 against another. Under sprite
+    # overlap with a non-allowlist pose gate both anchors score ~1.00 on both policies.
+    #
+    # This value is applied to the curriculum's detection AND forced into the reward's
+    # params by the trainer, because the historical bug in this area is precisely the
+    # two consumers disagreeing about whether a waypoint was reached.
+    #
+    # Offline pre-flight (debug/l4_detector_sweep.py, 2 policies, 20 episodes, every
+    # route point): no waypoint loses a genuine detection. The only points that fire
+    # LESS are the four `_launch` pads, where the shipped tol-6 box was firing at the
+    # PREDECESSOR'S SEED 16-24 px away, before the agent moved -- a known defect (three
+    # other launch pads were deleted for being "a second, wider, misplaced box for the
+    # same traversal"). Switching to sprite mode therefore also silently fixes four
+    # milestones that currently mark early; that is a reward change riding along with a
+    # detection change, so it is called out rather than discovered later.
+    waypoint_reach_mode: str = "box"
     # Partition episode starts as reset | MANDATORY | OTHER instead of
     # reset | rungs | one waypoint group. A rung pool is not a distinct kind of
     # start -- "N mandatory targets done" is "standing at waypoint X" -- and it is

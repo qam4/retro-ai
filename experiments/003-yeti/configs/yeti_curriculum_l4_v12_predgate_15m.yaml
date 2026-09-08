@@ -1,0 +1,108 @@
+# L4 v12 — 15M, PREDECESSOR GATE. First full run with a change that has a measured
+# effect behind it.
+#
+# Byte-identical to yeti_curriculum_l4_v6_anchorfix_15m.yaml except for
+# `curriculum.gate_waypoints_by_predecessor: true`. Same warm start (v4's final_model +
+# v4's pools), same seed 42, same PPO, same snapshot_freq 100_000 so the snapshot sweep is
+# directly comparable to v6's.
+#
+# NOT a strict one-lever test against v6, and the difference must be stated: the CODE also
+# carries the censused anchors from dc8e5a0 (`Rope1` 27->25, `Spring` 48->51, `Step`
+# 60->66) and the reverted tolerance, whereas v6 ran at bc85424. Both changes were measured
+# separately at 1.2M -- anchors in l4_anchors_v2_1200k, the gate in l4_predgate_1200k -- so
+# v6's distribution is a REFERENCE POINT, not a control.
+#
+# v6 reference, snapshot sweep, n=150: mean 6.37, median 7.88, max 10.00, >=9.5 8/150,
+# <1.0 10/150. Princess 0. Rung 11 never reached in any run to date.
+#
+# WHAT THE GATE FIXED, measured at 1.2M against l4_anchors_v2_1200k as control:
+#
+#     Lclimb3_top reach   0.02 -> 0.32..0.36 at 800-850k
+#     Lclimb3_top prog    never sampled -> 0.58..0.74
+#     Low1        prog    never sampled -> 0.47..0.80  (frontier advanced one rung
+#                                                       on its own once Lclimb3_top
+#                                                       cleared 0.15)
+#     Step        prog     0.02..0.04 -> 0.09..0.19
+#     floor 11 -> 12 jump  0.20 -> 0.80 (region detector, seeded at Lclimb3_top)
+#
+# The bug it fixed: gating a waypoint on its OWN from-reset reach is self-locking at the
+# frontier. In the control, `Lclimb3_top`, `Low1` and `Low2_launch` each held 100 usable
+# seeds and were sampled 0 times in 7140 episodes.
+#
+# WHAT IS STILL OPEN, and what this run is actually testing:
+#
+#   1. LADDER-3 ARRIVAL TIMING. Arriving at floor 11 (y 78, px 272) is lethal on a
+#      deterministic timer -- departures 11..28 frames into the cycle survive, 0..10 die
+#      (debug/l4_ladder3_timing.py). `reach` counts any touch, so Lclimb3_top's 0.35
+#      includes episodes that die on the frame they top out, which is why `Low1` reach is
+#      still ~0.00 while seeded episodes reach floor 12 in 0.80. The pool that drills the
+#      timing is `Step`, whose prog went 0.02 -> 0.19 and had not converged by 1.2M.
+#      PASS: Step prog keeps climbing and Low1 reach lifts off 0.00.
+#   2. RUNG 11, the floor 12 -> 13 rope-2 crossing. Untouched: 0/60 episodes from the
+#      Low1 and Low2_launch pools reached floor 13. Under the predecessor rule
+#      `Low2_launch` only opens once `Low1` clears 0.15, so item 1 has to land first.
+#
+# READ IT AS A DISTRIBUTION over snapshots (keep_best_sweep), never as the final model or
+# the champion, and never from a single endpoint -- the from-reset reward collapses to ~3
+# for 100-200k at a time and recovers, in every arm including controls (method rule 6).
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v12_predgate_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # v4's weights AND v4's pools (checkpoints.pkl is loaded from dirname(resume)).
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v4_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true

@@ -46,7 +46,7 @@ from retro_ai.training.run_manifest import (
     RunManifest,
     seed_everything,
 )
-from retro_ai.training.targets import within_tol
+from retro_ai.training.targets import reaches, within_tol
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -1301,6 +1301,9 @@ class CheckpointCurriculumEnv(gym.Env):
         # positions. Capture is grounded-only, once per waypoint per episode,
         # and never re-captures the waypoint an episode was seeded from.
         self._wp_enabled = bool(getattr(cur, "waypoints", False)) if cur else False
+        # Geometry of the reach test for DETECTION only (capture stays box+grounded).
+        # Forced into the reward params too, in the runner, so they cannot disagree.
+        self._wp_reach_mode = str(getattr(cur, "waypoint_reach_mode", "box") or "box")
         self._wp_tol = int(getattr(cur, "waypoint_tolerance", 2)) if cur else 2
         # Random no-op start (see the block in reset()). 0 = off.
         self._noop_start_max = int(getattr(cur, "noop_start_max", 0)) if cur else 0
@@ -1660,26 +1663,55 @@ class CheckpointCurriculumEnv(gym.Env):
         # per waypoint per episode, and never the waypoint the episode was
         # seeded from. Real states only (grounded gate); these feed the
         # optional, non-gating WP start-pools.
-        if self._wp_enabled and ctx.pose in SEED_POSES:
+        # DETECTION and CAPTURE are deliberately SEPARATE decisions here.
+        #
+        # They used to share one pose gate and one geometry test, which meant widening
+        # detection also unpinned the seed pools. Those are different risks: detection
+        # feeds the reach metric and (via the reward's own copy of the test) milestone
+        # marking, while capture decides what states a pool is built from. Splitting
+        # them lets `waypoint_reach_mode` be evaluated without touching the pools.
+        #
+        #   detection -- geometry from `waypoint_reach_mode`; pose gate is the grounded
+        #                allowlist in "box" mode (byte-identical to before) and the
+        #                fail-open blocklist in "sprite" mode.
+        #   capture   -- ALWAYS grounded + the box test, i.e. exactly what shipped, so
+        #                seeds stay pinned where they are.
+        if self._wp_enabled:
+            _grounded = ctx.pose in SEED_POSES
+            _pose_ok_detect = (
+                _grounded
+                if self._wp_reach_mode == "box"
+                else ctx.pose not in yeti.NON_TRAVERSAL_POSES
+            )
             for wp_id, (wx, wy, _floor) in self._waypoints.items():
-                # Record closest grounded approach for EVERY waypoint (even the
+                # Record closest GROUNDED approach for EVERY waypoint (even the
                 # seed WP / already-captured ones) so the display shows whether
-                # the agent reaches each waypoint's vicinity at all.
-                _manager.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
+                # the agent reaches each waypoint's vicinity at all. Stays
+                # grounded-only whatever the reach mode, so the number keeps
+                # meaning the same thing across runs.
+                if _grounded:
+                    _manager.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
                 _tol = self._wp_tol_of.get(wp_id, self._wp_tol)
-                # Shared reach test (retro_ai.training.targets.within_tol) -- the SAME
-                # comparison the REWARD uses for milestone marking, so the two can no
-                # longer drift apart. The tolerance VALUES still differ (this passes 2
-                # for ladders / 6 for jumps, the reward always passes 2), which is the
-                # known divergence documented on within_tol.
-                within = within_tol((wx, wy), x, y, _tol)
+                # Shared reach test (retro_ai.training.targets.reaches) -- the SAME
+                # comparison AND mode the REWARD uses for milestone marking, so the two
+                # cannot drift apart. In "box" mode the tolerance VALUES still differ
+                # (this passes 2 for ladders / 6 for jumps, the reward always passes 2),
+                # the known divergence documented on within_tol; "sprite" mode ignores
+                # tolerance entirely and so removes it.
+                detected = _pose_ok_detect and reaches(
+                    (wx, wy), x, y, _tol, mode=self._wp_reach_mode
+                )
                 # Record EVERY reach (incl. the seed WP / already-captured) for
                 # the reset-origin wp_reach_ema; capture below is more selective.
-                if within:
+                if detected:
                     self._reached_wps_this_ep.add(wp_id)
                 if wp_id == self._start_wp or wp_id in self._captured_wps:
                     continue
-                if within:
+                # CAPTURE: grounded + box, unconditionally. A pool of mid-jump states
+                # would reload fine (verified frame-identical) but hands the agent a
+                # committed trajectory, and unpinning the pools is a separate lever from
+                # changing detection.
+                if _grounded and within_tol((wx, wy), x, y, _tol):
                     # Defer: capture the state + frame-stack now (the grounded
                     # moment) but score/admit at episode end via the survival
                     # gate (see the _pending_wp_saves flush). At most once per
@@ -2282,6 +2314,10 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
             # rewards that ignore the param.
             reward_params = dict(cfg.reward.params)
             reward_params.setdefault("gamma", cfg.ppo.gamma)
+            # NOT setdefault: the curriculum value WINS, so the reward and the
+            # curriculum can never disagree about the reach geometry. That exact
+            # disagreement is the documented `Fr1` defect.
+            reward_params["waypoint_reach_mode"] = cfg.curriculum.waypoint_reach_mode
             env_reward_fn = create_reward(cfg.reward.name, reward_params)
             env = CheckpointCurriculumEnv(
                 cfg=cfg,

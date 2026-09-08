@@ -1322,6 +1322,96 @@ which preserves the protection the gate was added for.
 Floor 12 -> floor 13 is 0/60 from the `Low1` and `Low2_launch` pools. The rope-2 crossing
 is untouched and sits directly behind this one.
 
+## v12 (15M, PREDECESSOR GATE): NOT A REGRESSION. v6 SEED 42 WAS A 1-IN-4 OUTLIER.
+
+This section previously concluded that v12 regressed v6. That was wrong, and the error is
+worth keeping because it cost most of a day: a large difference between two single runs was
+explained as a code regression before anyone checked whether the GOOD run was reproducible.
+
+WHAT LOOKED LIKE A REGRESSION. v12 matched v6 on `Step` (0.7-0.87) and `Lclimb3_top`
+(0.6-0.79) but `Low1` sat at 0.00 for the whole 15M where v6 held 0.4-0.76:
+
+```
+P(reach Low1 | reached Lclimb3_top), whole run
+    v6  seed 42     5158/5533 = 0.93
+    v12 seed 42       14/7757 = 0.00     (0.08 even in seeded episodes)
+```
+
+WHAT IT ACTUALLY WAS. v6's OWN CODE (bc85424) on three fresh seeds, everything truncated
+at 2M so the comparison is apples to apples:
+
+```
+run                     L3top   Low1   P(Low1 | L3top)
+v6  seed 42 (bc85424)    1825   1644       0.81
+v6  seed 44 (bc85424)     165     12       0.07
+v6  seed 45 (bc85424)     245      6       0.02
+v6  seed 46 (bc85424)     216     16       0.07
+v12 seed 42 (f069429)    1643    533       0.16
+```
+
+**v12 beats every ordinary seed of v6's own code**, and reaches `Lclimb3_top` 7-10x more
+often (1643 vs 165-245) -- which is the predecessor gate working. v6 seed 42 won a coin
+flip: its from-reset policy scratched past the 0.15 reach gate at ~1.1M and cascaded, and
+1 seed in 4 does that.
+
+DEAD HYPOTHESES, all of which had a mechanism and a story:
+* poses 6/7 in `SURFACE_POSES`, 7b27d49's trainer changes, the censused anchors -- none is
+  implicated, because v6's own code fails the same way on fresh seeds.
+* `Low1_launch`'s deletion -- v6 never used it: 0 seeds, 0 reaches, empty pool.
+* `Step`'s reward box as an accidental "brake" that delayed the ladder climb into the safe
+  window -- seeds 44/45/46 all have `Step` unmarkable exactly like seed 42, and did not
+  cascade.
+
+WHAT IS REAL, and it is a better-posed problem: **the `Lclimb3_top -> Low1` crossing is
+learned in about 1 run in 4, and nothing we control influences that.** The floor 11 -> 12
+leftward jump comes right after a TIMED hazard at the ladder-3 head (departures 11-28
+frames into the cycle survive, 0-10 die), the enemy IS visible in the 84x84 observation, and
+the `Step` seed pool spans the cycle (77-86% of its seeds survive an immediate climb). So
+it is learnable in principle and learned unreliably in practice.
+
+## IS v6 REPRODUCIBLE? NO — and that is the answer to a week of hunting (H-AS)
+
+Answered by 3 seeds x 2M on bc85424 rather than the 15M run that was started first. The
+15M was killed at 1h10m once the point was clear; sizing a run to a 1.2M event at 15M is
+recorded as method rule 8.
+
+## BOTH v6 AND v12 WALL AT ROPE 2, AND NEITHER EVER CROSSED IT
+
+The chain, whole run:
+
+```
+                              v6 seed42     v12
+P(Lclimb3_top | Step)            0.79       0.74
+P(Low1 | Lclimb3_top)            0.93       0.06    <- v12 loses mass here
+P(Low2_launch | Low1)            0.96       0.88
+P(Low2 | Low2_launch)          0.0004     0.0021    <- BOTH die here
+```
+
+v6 stood on the rope-2 launch pad **25,520 times and crossed 10**. So the difference
+between the runs is upstream THROUGHPUT to the launch pad, not progress on rope 2. Fixing
+the floor 11 -> 12 crossing buys more attempts at rope 2, and v6 already showed what 25,520
+attempts buys: nothing.
+
+
+## FLOOR 13 HAS BEEN REACHED 24 TIMES EVER, AND NEVER SEEDED FROM
+
+Across every L4 run on disk (`reached_points` is `;`-separated -- splitting on `|` gives
+a false zero):
+
+```
+                                    episodes reached    ever seeded from
+Low2_launch   rope-2 launch, f12          27,944              2,811
+Low2          rope-2 LANDING, f13             24                  0
+Lhi_down_bot  the other way onto f13          23                  0
+Lhi_up_top    Hi-chain entry                 103                  0
+```
+
+So the launch pad is thoroughly explored (v6 alone: 25,520) and the landing has been
+touched 24 times in the project's history -- v6 x10, v10 x6, v4 x3, v11 x2, singles in
+v8/v9/v11rep43. Never once used as a start. Floor 13 is not unreachable; it is reached
+too rarely for a pool to form, and under the own-reach gate `Low2` was never eligible to
+train from, so the 7 seeds v6 banked were dead weight.
+
 ## Open questions, in priority order
 
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300.

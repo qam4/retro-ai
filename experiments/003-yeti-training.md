@@ -190,6 +190,18 @@ and "lessons" kept getting refuted by the next run. New discipline:
    ~2-20 about **twenty separate times** and recovers every time. A 1.2M arm that
    happens to END inside a dip reads 0.00 on every waypoint. Compare arms at
    MATCHED HEALTHY steps (from-reset reward > 30), never at the endpoint.
+8. **Size a run to the DECISION POINT, not to the full length, and prefer n over
+   length.** Cost 6 hours to learn. v6's cascade -- the only thing that distinguished it
+   -- happened between 1.0M and 1.2M, so 1.5M (~40 min) answered "does it cascade". A 15M
+   run was launched instead, and a second 15M run (v12) was launched to *beat* v6 before
+   anyone had checked whether v6's number was reproducible at all. Wrong order and wrong
+   length. When a claim rests on one run, buy SEEDS at the decision length rather than
+   steps on one seed: 3 seeds x 2M costs less than half of one 15M and answers a question
+   that 15M cannot.
+9. **Before explaining a gap, check whether the outlier is the good run.** The table read
+   `revert probe 0.08, anchors_v2 0.06, B1 0.14, B2 0.04, v6 0.42`. Four clustered low and
+   one high was called a regression in the four; "v6 is the outlier" was the simpler
+   reading of the same numbers and was not tested until 6 hours later.
 7. **Distinguish detection blindness from policy collapse before explaining
    either.** They look identical in a route table and have opposite causes:
    - *collapse* — from-reset reward ~3, **every** waypoint 0.00 including ones
@@ -1263,7 +1275,8 @@ alone doesn't resolve the over-concentration.
   L4.** Tools: `debug/l4_step_handoff.py`, `debug/l4_ladder3_timing.py`.
   Also visible: floor 12 -> 13 is 0/60 from the `Low1` and `Low2_launch` pools, so the
   rope-2 crossing is the NEXT wall behind this one.
-- [ ] **H-AR — gate a waypoint on its PREDECESSOR's reach (RUNNING, 1.2M).**
+- [x] **H-AR — gate a waypoint on its PREDECESSOR's reach (DONE. Mechanism works;
+  did NOT beat v6 at 15M — see H-AS).**
   `curriculum.gate_waypoints_by_predecessor`, default False so L1/L2/L3 are unchanged.
   A waypoint is eligible as a start if the agent reaches EITHER it or the route point
   immediately before it. `Lclimb3_top` opens because `Step` is 0.81; `Low1` stays shut
@@ -1279,13 +1292,87 @@ alone doesn't resolve the over-concentration.
   Config `experiments/003-yeti/configs/l4_predgate_1200k.yaml`, log `debug/l4_predgate/`.
   Unit-pinned in `tests/python/test_wp_predecessor_gate.py`, including a test that
   asserts the OLD rule locks out the frontier.
-- [ ] **H-AP — re-establish a champion on current code (REQUIRED before H-AQ).**
+- [x] **H-AP — champion on current code (DONE. v12 = 15M. NOT worse than v6 once v6
+  is measured at more than one seed — see H-AS).**
   15M, current code, v4 `final_model.zip` warm start, seed 42 — v6's exact recipe so
   its distribution (n=150, mean 6.37, median 7.88, max 10.00) is a legitimate
   control. There is currently NO champion for this code: v6's was built at
   `bc85424`, before the revert and the censused anchors. Without this, H-AQ has
   nothing valid to compare against. Judge by `keep_best_sweep` distribution, not the
   final model.
+  **H-AR RESULT at 1.2M: the mechanism does exactly what it was built to do.**
+  `Lclimb3_top` went from 0 starts in 7140 control episodes to 44 starts by 200k; reach
+  0.02 -> 0.36; prog `—` -> 0.74; `Low1` opened by itself once `Lclimb3_top` cleared 0.15
+  and `Low2_launch` correctly stayed shut. The floor 11 -> 12 crossing measured 0.20 ->
+  0.80. Committed as f069429.
+  **H-AP RESULT at 15M (v12): v6 IS STILL BETTER, and there is a real regression.**
+  v12 matched v6 on `Step` (0.7-0.87) and `Lclimb3_top` (0.6-0.79) but `Low1` was 0.00
+  for the whole 15M where v6 held 0.4-0.76. The broken link, from episodes.csv:
+  ```
+  P(reach Low1 | reached Lclimb3_top)   from reset   seeded
+      v6                              5158/5533=0.93   0.93
+      v12                               14/7757=0.00   0.08
+  ```
+  v12 reached `Lclimb3_top` MORE than v6 (32433 vs 23084 episodes) and `Low1` far less
+  (6285 vs 23730). Anchor-free floor-occupancy from each run's own `Lclimb3_top` pool,
+  25 episodes, matched snapshots -- no champion/final mixing:
+  ```
+  step      v12 len/f12      v6 len/f12
+  1.0M       55 / 0.56        57 / 0.68     <- equal here
+  1.4M       27 / 0.36        74 / 0.96
+  2.6M       47 / 0.52       119 / 0.72
+  6.6M       76 / 0.60       113 / 0.80
+  14.0M      67 / 0.44        95 / 0.88     <- v6 learned it, v12 never did
+  ```
+  So it is a LEARNING failure: current code crosses 0.56 of the time at 1.0M and never
+  improves, while v6 climbs to 0.88 and its episodes get 2x longer. RULED OUT: detection
+  (measured anchor-free), the seed pools (v6's and v12's `Lclimb3_top` pools are
+  near-identical -- pose 8/0 at px 272, and 0/100 survive standing still in BOTH, which
+  is expected given the floor-11 enemy), capability, and `Low1_launch` deletion (v6 never
+  used it: 0 seeds, 0 reaches, empty pool). NOT ruled out: poses 6/7, 7b27d49, the
+  censused anchors, the gate's altered start distribution.
+- [x] **H-AS — is v6 REPRODUCIBLE? (DONE. NO — 1 seed in 4. There was no regression.)**
+  Before bisecting four levers, test whether the thing we are bisecting toward is real.
+  v6 is n=1, its own `Low2` peaked at 0.02, and method rule 6 records that from-reset
+  reward collapses to ~3 and recovers in every arm, so single L4 runs are unreliable.
+  Seed 43 deliberately -- rerunning seed 42 on identical code reproduces v6 and measures
+  nothing. Worktree `/tmp/wt_a0` at bc85424; config
+  `experiments/003-yeti/configs/l4_v6repro_s43_15m.yaml`; log `debug/l4_v6repro_s43/`.
+  **RESULT: FAIL, decisively.** bc85424's own code on three fresh seeds, all truncated at
+  2M so it is apples to apples with v12:
+  ```
+  run                     L3top   Low1   P(Low1 | L3top)
+  v6  seed 42 (bc85424)    1825   1644       0.81
+  v6  seed 44 (bc85424)     165     12       0.07
+  v6  seed 45 (bc85424)     245      6       0.02
+  v6  seed 46 (bc85424)     216     16       0.07
+  v12 seed 42 (f069429)    1643    533       0.16
+  ```
+  v12 beats every ordinary seed of v6's code and reaches `Lclimb3_top` 7-10x more often,
+  so the predecessor gate is a real improvement and there was never a regression to find.
+  v6 seed 42 scratched past the 0.15 gate at ~1.1M and cascaded; 1 seed in 4 does.
+  This retires H-AR's four candidate levers (poses 6/7, 7b27d49, the censused anchors, the
+  gate's start distribution) AND the `Step`-as-accidental-brake theory: seeds 44/45/46 all
+  have `Step` unmarkable exactly like seed 42 and did not cascade.
+  Run at 3 seeds x 2M, ~2.6h total, after a 15M single-seed attempt was killed at 1h10m —
+  see method rules 8 and 9.
+- [ ] **H-AT — the real problem: the `Lclimb3_top -> Low1` crossing is learned 1 run in 4.**
+  Not a regression, an unreliability. The floor 11 -> 12 leftward jump follows a TIMED
+  hazard at the ladder-3 head: scripted departures 11-28 frames into the cycle survive,
+  0-10 die (`debug/l4_ladder3_timing.py`). Learnable in principle -- the enemy IS visible
+  in the 84x84 observation, and the `Step` pool spans the hazard cycle (77-86% of its seeds
+  survive an immediate climb, against the ~40% a phase-diverse pool would predict). So the
+  information and the practice states are both present and it still only lands 1 in 4.
+  NOT yet attempted. Whatever is tried, judge it at >= 3 seeds: `P(Low1 | Lclimb3_top)` is
+  0.81 / 0.07 / 0.02 / 0.07 on IDENTICAL code, so n=1 cannot see anything.
+- [ ] **H-AU — rope 2 has never been crossed, by anything, ever.**
+  `Low2` (floor 13) has been touched 24 times in the project's entire history and never
+  once used as a seed; `Lhi_down_bot`, the other way onto floor 13, 23 times. v6 stood on
+  the launch pad 25,520 times and crossed 10 (P = 0.0004); v12, 6,276 attempts, 13
+  crossings. So this is not "not reached yet" -- it has been attempted tens of thousands of
+  times and fails. Fixing H-AT buys more attempts, and 25,520 attempts already bought
+  nothing, so rope 2 needs its own diagnosis. Videos exist from a prior session
+  (`debug/l4_v6_rope2_videos/`). This is the actual goal and the least-studied part.
 - [ ] **H-AQ — sprite-overlap detection + pose BLOCKLIST (BACKLOG, after H-AP).**
   Retires the anchor-placement bug class instead of fixing instances. Detection
   currently asks "is the agent's POSITION inside a tolerance box"; ask instead "does

@@ -1,0 +1,108 @@
+# L4 HITBOX A/B, 2M, seed 46, mode box.
+#
+# ONE LEVER: `curriculum.waypoint_reach_mode`. "box" is what ships; "sprite" asks whether
+# the agent's 14x18 SPRITE contains the anchor POINT instead of whether its POSITION falls
+# in a tolerance box. Same seed, same warm start, same everything else, so the paired
+# "box" run at the same seed IS the control.
+#
+# 2M and THREE SEEDS, not 15M and one. Measured this week: on identical code
+# P(Low1 | Lclimb3_top) was 0.81 on seed 42 and 0.07 / 0.02 / 0.07 on seeds 44/45/46. A
+# single 15M run cannot tell a change from a coin flip, and two of them were spent finding
+# that out.
+#
+# WHY SPRITE. In x the two tests are close (sprite is ~1 x_ram unit TIGHTER each side).
+# The difference is y: box compares against the anchor with the same small tolerance
+# (tol 2 = +-2 PIXELS) while overlap accepts anywhere in y..y+17, an 18 px window. On L4
+# floor 7 the agent lands at px 108, is grounded for TWO FRAMES, then is airborne to the
+# ladder at px 144 -- so with a 4 px y-window plus a grounded allowlist an anchor 4 px off
+# detects nothing. Anchor 28 scored 1.00 against one policy and 0.00 against another.
+# Under sprite overlap plus a fail-open pose gate, both anchors score ~1.00 on both.
+#
+# CAPTURE IS UNCHANGED, deliberately. Detection and capture were one decision sharing a
+# pose gate and a geometry test; they are now split. Capture still requires grounded + the
+# box test, so the seed pools stay pinned exactly where they are. Unpinning them is a
+# separate lever and is NOT taken here.
+#
+# KNOWN CONFOUND, stated because it will otherwise be discovered later. Sprite mode also
+# fixes four `_launch` waypoints that currently mark ~16-24 px EARLY, at their
+# predecessor's seed position (measured: Fr1_launch, Fr2_launch, Rope1_launch, Hi1_launch
+# all fire before the agent moves). That is a reward change riding along with a detection
+# change. It is a real defect -- three other launch pads were already deleted for being
+# "a second, wider, misplaced box for the same traversal" -- but it means a difference in
+# this run has two possible causes.
+#
+# JUDGE ON THE STABLE UPSTREAM CHAIN, which is what a regression would dent:
+#     P(Lclimb3_top | Step)   0.74-0.79 in every run measured
+#     Step reach              ~0.88
+#     Lclimb3_top reach       ~0.82
+#     from-reset reward       ~50
+# and on whether the four launch pads stop marking at their predecessor's position.
+#
+# DO NOT judge on P(Low1 | Lclimb3_top) or on Low2. The former is the coin flip above; the
+# latter has never been crossed by any run at any seed (24 touches of floor 13 in the whole
+# project, never once seeded from).
+#
+# Offline pre-flight before any of this: debug/l4_detector_sweep.py over every route point
+# on two policies found NO waypoint that loses a genuine detection.
+training:
+  timesteps: 2_000_000
+  output: output/mo5/yeti/training/l4_hitbox_box_s46_2m
+  num_envs: 8
+  seed: 46
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  # v4's weights AND v4's pools (checkpoints.pkl is loaded from dirname(resume)).
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v4_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  waypoint_reach_mode: box
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
