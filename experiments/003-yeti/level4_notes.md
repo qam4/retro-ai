@@ -1412,6 +1412,88 @@ v8/v9/v11rep43. Never once used as a start. Floor 13 is not unreachable; it is r
 too rarely for a pool to form, and under the own-reach gate `Low2` was never eligible to
 train from, so the 7 seeds v6 banked were dead weight.
 
+## ROPE 2 (2026-09-09): THE DIAGNOSIS WAS ALREADY WRITTEN DOWN, AND THE FIX WAS REVERTED
+
+Read `yeti_map.py`'s comment above `jump_waypoint_pos` FIRST. It already says, in full:
+
+> `Low2_launch edge 44 -> 45. px 184 -> 188. Floor 12's tile edge is 184 but the agent
+> CANNOT stand there... Measured left limit is 188 = x_min + 4 (debug/l4_edge_limit.py,
+> which confirms a stance by reloading it and holding NOOP). This is why all 100
+> Low2_launch seeds were doomed -- the capture box was centred one step past the edge, so
+> the pool taught falling instead of the rope-2 crossing, and the agent never attempted
+> the jump.`
+
+That is the whole diagnosis, including the tool. A full day was spent re-deriving it from
+video and traces. **Read the existing comments before investigating.**
+
+### THE REAL DEFECT: the comment claims a fix the code does not contain
+
+The comment is written in the PAST TENSE, as though `edge 44 -> 45` had been applied. It
+has not: `jump_waypoint_pos` has no `Low2_launch` entry, so the anchor is the derived
+default, px 184. `e667206` applied it; reverting that commit wholesale over the `Rope1`
+regression removed the code and LEFT THE COMMENT ASSERTING IT. Anyone reading the file
+concludes this is fixed. See method rule 10 (revert surgically, never wholesale).
+
+### What 2026-09-09 actually added
+
+1. **The survival gate cannot clean this pool, and that was not previously recorded.**
+   `admit_requires_survival` keeps a capture if the agent survives >= `min_survival_steps`
+   (30). Holding NOOP from each of the 100 `Low2_launch` seeds:
+   ```
+   start px:                    184: 81   188: 8   192: 10   196: 1
+   fell off immediately:        81/100
+   steps to death:              median 83   min 82
+   passes the >=30-step gate:   100/100
+   ```
+   The trampoline keeps a doomed state alive ~82 steps, so every doomed seed is ADMITTED.
+   Raising the threshold is not a fix -- it would only have to beat one bounce cycle. The
+   criterion must become "GROUNDED ON A PLATFORM when the window ends".
+
+2. **CORRECTION to the recorded span.** `standable_span`'s docstring records floor 12 as
+   `188 .. 228 = x_min+4, x_max-4`. The right end is wrong: px 228 falls 0/8, px 224 stands
+   8/8. Usable span is **188..224**. (The left end, 188, is confirmed -- two independent
+   measurements now agree, which is the main reason to trust it.)
+   ```
+   FLOOR 12, tile extent 184..232     walking LEFT   walking RIGHT
+     184                                  0/8            0/8      falls
+     188 .. 224                           8/8            8/8      OK
+     228, 232                             0/8            0/8      falls
+   ```
+
+3. **Approach direction does NOT affect standability.** Tested because the foot row is
+   asymmetric (centre-6..centre+2), so a mirrored sprite could plausibly change it. It does
+   not: 8/8 both ways at every usable px, 0/8 both ways at every bad one. Hypothesis
+   rejected. (No RAM-write exists on the interface, so direction-INDEPENDENT standability
+   is not measurable; "can the agent BE here and survive" is the criterion that matters for
+   anchor placement anyway.)
+
+4. `Low1`'s anchor (px 232) is ALSO outside the span, yet its pool is HEALTHY (96 seeds at
+   px 220, 4 at 224) because the agent falls at 228 before it can reach 232. **A lethal
+   anchor can be harmless**, so "this anchor is wrong" does not imply "this is the blocker".
+
+### DECIDED, not yet applied
+
+* Re-land `Low2_launch` px 184 -> 188, and make the comment's tense match the code.
+* `Low1` px 232 -> 224. Harmless today, but the potential aims at an unreachable pixel.
+* Correct `standable_span`'s docstring: floor 12 right limit 228 -> 224.
+* Survival gate: require grounded-on-platform at window end. Widest blast radius (every
+  pool, every level), so check how many L1/L2/L3 seeds it would newly reject.
+
+### NOT VERIFIED
+
+* That any of this improves anything. `Low1` shows a lethal anchor can be inert.
+* That the crossing is even POSSIBLE from px 188. An earlier claim here comparing rope-1's
+  grab distance to rope-2's was RETRACTED: ropes move between frames, so single-frame pixel
+  measurement does not support it.
+* **Cheapest falsification, before any GPU:** from px 188, sweep scripted jump timings and
+  ask whether ANY sequence crosses. If none does, the anchor is not the binding constraint.
+
+Tools: `debug/l4_crossing_trace.py` (per-step reward trace + video),
+`debug/l4_low2launch_fix_visual.py`, `debug/l4_pull_direction.py`.
+Figure `debug/l4_rope2_geom/low2launch_fix_v2.png`;
+clip `debug/l4_rope2_fromreset/rope2_failed_ep0.mp4`.
+
+
 ## Open questions, in priority order
 
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300.

@@ -653,15 +653,28 @@ LEVEL4 = LevelMap(
     #         visually confirmed. The alternative the tool first proposed, (34,110),
     #         is pose 8 -- the agent CLIMBING the ladder off that platform, i.e. a
     #         different event -- so it was rejected.
-    #   Low2_launch  edge 44 -> 45. px 184 -> 188. Floor 12's tile edge is 184 but the
-    #         agent CANNOT stand there: px 184 reads as grounded (y still 70, walk pose)
-    #         and then falls on the next step. Measured left limit is 188 = x_min + 4
-    #         (debug/l4_edge_limit.py, which confirms a stance by reloading it and
-    #         holding NOOP). This is why all 100 Low2_launch seeds were doomed -- the
-    #         capture box was centred one step past the edge, so the pool taught falling
-    #         instead of the rope-2 crossing, and the agent never attempted the jump.
-    #   Low2  edge 30 -> 29. px 128 -> 124. Same defect mirrored: floor 13's tile edge
-    #         is 128 and px 128 falls on NOOP; the last standable centre is 124.
+    #   Low2_launch  edge 44 -> 45. px 184 -> 188. APPLIED (see the entry below). Floor
+    #         12's tile edge is 184 but the agent CANNOT stand there: px 184 reads as
+    #         grounded (y still 70, walk pose) and then falls on the next step. Measured
+    #         left limit is 188 = x_min + 4 (debug/l4_edge_limit.py, which confirms a
+    #         stance by reloading it and holding NOOP). This is why all 100 Low2_launch
+    #         seeds were doomed -- the capture box was centred one step past the edge,
+    #         so
+    #         the pool taught falling instead of the rope-2 crossing, and the agent
+    #         never
+    #         attempted the jump.
+    #         NOTE this paragraph asserted the fix in the past tense for weeks while the
+    #         code did NOT contain it: e667206 applied it and was reverted wholesale
+    #         over
+    #         an unrelated `Rope1` regression. If you change an anchor, change this
+    #         comment and the dict in the same edit.
+    #   Low2  edge 30 -> 29. px 128 -> 124. NOT APPLIED -- floor 13 is reached ~24
+    #   times in
+    #         the project's history so there is no seed evidence to check it against.
+    #         Same
+    #         defect mirrored in principle: floor 13's tile edge is 128 and px 128
+    #         falls on
+    #         NOOP; the last standable centre is 124.
     # ANCHORS COME FROM A MEASURED GROUNDED CENSUS, NOT FROM PLATFORM GEOMETRY.
     #
     # A geometric derivation was tried here and measured harmful. Both the idea and the
@@ -724,6 +737,36 @@ LEVEL4 = LevelMap(
         # never contained it. Unmarked since v4, leaving its distance term switched
         # on for every episode (the `Fr1` defect). New box 256..288, worst policy 0.92.
         "Step": (66, 102),
+        # x_ram 44 -> 45 (px 184 -> 188). RE-LANDED 2026-09-09. This exact fix shipped
+        # in
+        # e667206 and was lost when that commit was reverted WHOLESALE over the `Rope1`
+        # regression -- the comment above kept asserting it in the past tense while the
+        # code had no entry here at all, so the file read as already fixed for weeks.
+        #
+        # px 184 is floor 12's tile edge and the agent CANNOT stand on it: walk there,
+        # hold NOOP, and it falls 0/8 (px 188 stands 8/8). Independently measured twice,
+        # weeks apart, by debug/l4_edge_limit.py and again by a full-platform sweep, and
+        # the two agree. Approach direction does NOT matter: 8/8 both walking left and
+        # walking right at every usable px, tested because the foot row is asymmetric
+        # (centre-6..centre+2) so a mirrored sprite might plausibly have changed it.
+        #
+        # THIS MOVES THE POTENTIAL'S TARGET ONLY. The shaping was paying +1.08 -- the
+        # largest single payment in a from-reset trace -- for the grounded step onto the
+        # lethal pixel. It does NOT stop px-184 states entering the pool: capture is
+        # tol 6, so the box is 164..212 after the move and still spans 184. Cleaning the
+        # pool needs the survival gate (see H-AW): 81/100 of this pool's seeds sit on
+        # px 184 and fall on load, yet all 100 pass the >=30-step gate because the
+        # trampoline below keeps them alive a median of 83 steps.
+        "Low2_launch": (45, 70),
+        # x_ram 56 -> 54 (px 232 -> 224). px 232 is floor 12's x_max and falls 0/8; 224
+        # stands 8/8. Harmless in practice -- this pool is healthy (96 seeds at px 220,
+        # 4 at 224) because the agent falls at 228 BEFORE it can reach 232, so captures
+        # land on safe ground. Kept anyway because the potential should not aim at a
+        # pixel the agent can never occupy. Worth remembering as the counter-example: a
+        # lethal anchor can be completely inert, so "this anchor is wrong" does not
+        # imply
+        # "this is what is blocking us".
+        "Low1": (54, 70),
     },
     # Redundant launch pads: each shares a platform with a waypoint that already marks
     # correctly, so they added a second, wider, misplaced box for the same traversal.
@@ -881,7 +924,7 @@ def standable_span(lvl: LevelMap, floor: int) -> Optional[Tuple[int, int]]:
     reads as GROUNDED (y still at the standing value, walk pose, not 11) while already
     committed to a fall, so any test that does not confirm survival believes it:
 
-        floor 12  [184..232)   measured  188 .. 228     = x_min+4, x_max-4
+        floor 12  [184..232)   measured  188 .. 224     = x_min+4, x_max-8
         floor 13  [  0..128)   measured    ? .. 124     =          x_max-4
         floor  3  [248..280)   measured  256 .. 276     = x_min+8, x_max-4
         floor  9  [200..232)   measured  208 .. 232     = x_min+8, x_max+0

@@ -198,6 +198,18 @@ and "lessons" kept getting refuted by the next run. New discipline:
    length. When a claim rests on one run, buy SEEDS at the decision length rather than
    steps on one seed: 3 seeds x 2M costs less than half of one 15M and answers a question
    that 15M cannot.
+10. **Revert SURGICALLY, never wholesale.** `e667206` bundled two changes: derived
+   anchors/tolerances (harmful, measured) and `Low2_launch` px 184 -> 188 (CORRECT, and
+   independently re-measured a week later as 0/8 vs 8/8 survival). Reverting the commit
+   wholesale over the `Rope1` regression threw the correct fix out with the broken one, and
+   nothing re-examined it because the bisect only ever looked at `Rope1`. When a commit is
+   reverted for one measured harm, enumerate what ELSE it contained and re-land the parts
+   that stand on their own evidence.
+11. **When numbers stall, watch the video.** A week of route tables, reach EMAs, bisects and
+   two 15M runs never surfaced the rope-2 launch pad. One from-reset clip showed the agent
+   being paid to walk off a cliff, bounce on a trampoline, and repeat. Every wrong call this
+   week was an inference from a training OUTCOME; the finding that stuck was a direct
+   emulator read.
 9. **Before explaining a gap, check whether the outlier is the good run.** The table read
    `revert probe 0.08, anchors_v2 0.06, B1 0.14, B2 0.04, v6 0.42`. Four clustered low and
    one high was called a regression in the four; "v6 is the outlier" was the simpler
@@ -1356,6 +1368,70 @@ alone doesn't resolve the over-concentration.
   have `Step` unmarkable exactly like seed 42 and did not cascade.
   Run at 3 seeds x 2M, ~2.6h total, after a 15M single-seed attempt was killed at 1h10m —
   see method rules 8 and 9.
+- [x] **H-AQ — sprite-overlap detection + pose blocklist (DONE, NEGATIVE but SAFE. Code
+  kept, default NOT flipped. c666500.)**
+  A/B at 3 seeds x 2M, `box` vs `sprite` paired per seed, one lever
+  (`curriculum.waypoint_reach_mode`).
+  **SAFE:** `Step` reach 0.65->0.69 and 0.72->0.72, no upstream regression; the offline
+  sweep over every route point on two policies found no waypoint losing a genuine
+  detection.
+  **NOT AN IMPROVEMENT.** Anchor-free floor occupancy, matched snapshot 1.75M, one FIXED
+  reference pool so only the policy varies, 30 episodes each:
+  ```
+  arm          mean_len  floor11  floor12
+  box_s44        71       1.00     0.40      tie
+  sprite_s44     47       1.00     0.40
+  box_s45        92       1.00     0.47      box better
+  sprite_s45     33       1.00     0.30
+  box_s46        35       1.00     0.27      box better
+  sprite_s46     28       0.97     0.23
+  ```
+  Box is equal-or-better on the crossing in 3/3 pairs, and sprite's episodes are ~45%
+  shorter in 3/3. No single pair is significant at n=30 (se ~0.08), but the direction is
+  consistent on two independent measures.
+  **THE TRAP THIS RUN WALKED INTO, and why the anchor-free check exists.** `Lclimb3_top`
+  reach DOUBLED under sprite (0.22->0.48, 0.17->0.35) and that was entirely definitional:
+  a wider y-window fires more often. Method rule 5 -- a metric change is a lever -- applied
+  to the exact number that looked like the win. Floor occupancy ignores anchors and
+  tolerances, so it is the honest comparison.
+  **UNVERIFIED mechanism for why it may be slightly worse:** the 18 px y-window lets a
+  milestone mark MID-JUMP, before the agent has landed and secured the position, so the
+  distance term switches off early and the shaping gradient weakens for the rest of the
+  traversal. Not measured; do not act on it without measuring.
+  **Kept anyway** because it is flag-gated at "box", the tests pin the geometry, and it
+  measured four `_launch` pads that mark ~16-24 px EARLY at their predecessor's seed
+  (frame-0 hits 25/40, 37/40, 39/40, 20/40 under box; 0/40 under sprite). Narrowing them
+  to tol 2 instead was measured and rejected -- it removes the false positives but guts
+  real detection (Fr1_launch 0.45->0.05, Hi1_launch ->0.10), the same trap as e667206.
+  So the launch-pad defect is now documented with a measured fix, whether or not we take
+  it this way.
+- [ ] **H-AV — IS THE ROPE-2 CROSSING POSSIBLE FROM px 188 AT ALL? (NEXT, no GPU, ~20 min.)**
+  The one unverified link in the rope-2 chain. From px 188 (measured standable), sweep
+  scripted jump timings and directions and ask whether ANY sequence reaches floor 13
+  (y 70, px 0..128). Same method that settled the ladder-3 hazard, where scripted
+  departures 11-28 frames into the cycle survived and 0-10 died.
+  WHY THIS GATES EVERYTHING ELSE: `Low1`'s anchor is also on a lethal pixel and its pool is
+  completely healthy, so a real anchor defect can be inert. If nothing crosses from px 188
+  then the `Low2_launch` anchor is not the binding constraint and the survival-gate work
+  (H-AW) should not be spent on rope 2 yet.
+  PASS: some scripted line crosses -> the position is viable, the agent simply never learns
+  it, and H-AW is on the critical path. FAIL: nothing crosses -> find what does before
+  touching the curriculum.
+  NOTE ropes MOVE between frames, so a single-frame pixel measurement of rope position is
+  NOT valid evidence (an earlier attempt at that was retracted). The sweep has to be over
+  timings, not geometry.
+- [ ] **H-AW — SURVIVAL GATE: require grounded-on-platform, not merely alive.**
+  `admit_requires_survival` keeps a capture if the agent lives >= `min_survival_steps` (30).
+  Measured on the `Low2_launch` pool: 81/100 seeds sit on the lethal px 184 and fall on
+  load, but the trampoline below keeps them alive a median of 83 steps, so 100/100 are
+  ADMITTED. The gate that exists to reject doomed seeds cannot see this class at all.
+  RAISING THE THRESHOLD IS NOT THE FIX -- it would only have to beat one particular bounce
+  cycle, and a different trampoline gives a different number. The criterion must become
+  "grounded on a platform when the window ends".
+  BLAST RADIUS: every pool on every level. Before applying, count how many existing L1/L2/L3
+  seeds it would newly reject -- if it rejects a large fraction of a working level's pools,
+  it needs to be opt-in per level.
+  Depends on H-AV for whether to prioritise it on rope 2.
 - [ ] **H-AT — the real problem: the `Lclimb3_top -> Low1` crossing is learned 1 run in 4.**
   Not a regression, an unreliability. The floor 11 -> 12 leftward jump follows a TIMED
   hazard at the ladder-3 head: scripted departures 11-28 frames into the cycle survive,
@@ -1365,15 +1441,48 @@ alone doesn't resolve the over-concentration.
   information and the practice states are both present and it still only lands 1 in 4.
   NOT yet attempted. Whatever is tried, judge it at >= 3 seeds: `P(Low1 | Lclimb3_top)` is
   0.81 / 0.07 / 0.02 / 0.07 on IDENTICAL code, so n=1 cannot see anything.
-- [ ] **H-AU — rope 2 has never been crossed, by anything, ever.**
-  `Low2` (floor 13) has been touched 24 times in the project's entire history and never
-  once used as a seed; `Lhi_down_bot`, the other way onto floor 13, 23 times. v6 stood on
-  the launch pad 25,520 times and crossed 10 (P = 0.0004); v12, 6,276 attempts, 13
-  crossings. So this is not "not reached yet" -- it has been attempted tens of thousands of
-  times and fails. Fixing H-AT buys more attempts, and 25,520 attempts already bought
-  nothing, so rope 2 needs its own diagnosis. Videos exist from a prior session
-  (`debug/l4_v6_rope2_videos/`). This is the actual goal and the least-studied part.
-- [ ] **H-AQ — sprite-overlap detection + pose BLOCKLIST (BACKLOG, after H-AP).**
+- [~] **H-AU — rope 2: the LAUNCH PAD IS A LETHAL PIXEL (diagnosed 2026-09-09; fixes
+  designed, none applied yet).**
+  `Low2` has been reached 24 times in the project's history and never seeded from; v6 stood
+  on the launch pad 25,520 times and crossed 10 (P = 0.0004). Diagnosed by watching a
+  from-reset video, after the numeric routes all missed it.
+  **MEASURED (direct emulator reads, not training outcomes):**
+  ```
+  FLOOR 12, tile extent 184..232      walking LEFT   walking RIGHT
+    184                                   0/8            0/8     falls
+    188 .. 224                            8/8            8/8     OK
+    228                                   0/8            0/8     falls
+    232                                   0/8            0/8     falls
+  ```
+  * `Low2_launch`'s anchor is px 184 -> LETHAL. 81/100 of its pool sit there and fall on
+    load. The shaping pays **+1.08** for the grounded step onto it -- the largest single
+    payment in the whole from-reset trace.
+  * The agent then falls, the TRAMPOLINE below bounces it back to floor 12, and it repeats
+    until it dies. Pose 14 (rope carry) never appears: it never grabs the rope.
+  * `admit_requires_survival` cannot clean this. Median 83 steps to death vs
+    `min_survival_steps: 30`, so 100/100 doomed seeds are ADMITTED. Raising the threshold
+    is not the fix; the criterion must become "grounded on a platform at window end".
+  * The recorded span in `standable_span`'s docstring (188..228) is WRONG at the right end.
+  * **Direction does not matter** -- tested because the foot row is asymmetric
+    (centre-6..centre+2); 8/8 both ways everywhere. Hypothesis rejected.
+  * `Low1`'s anchor (px 232) is ALSO outside the span but its pool is HEALTHY, because the
+    agent falls at 228 before ever reaching 232. **A lethal anchor can be harmless**, so
+    "this anchor is wrong" does not imply "this is the blocker".
+  **THE REAL DEFECT:** yeti_map.py's comment states `Low2_launch edge 44 -> 45` in the PAST
+  TENSE, but `jump_waypoint_pos` has no such entry -- `e667206` applied it and the wholesale
+  revert removed the code while LEAVING THE COMMENT. The file reads as already fixed.
+  **DECIDED, not yet applied:** re-land Low2_launch 184->188 and make the comment match the
+  code; Low1 232->224; correct standable_span's docstring (floor 12 right limit 228 -> 224,
+  measured 0/8 at 228 vs 8/8 at 224); survival gate -> grounded-on-platform at window end.
+  **NOT VERIFIED:** that any of it improves anything, and that the crossing is even
+  POSSIBLE from px 188. The rope-position analysis was retracted (ropes move between
+  frames, so single-frame pixel measurement is unreliable).
+  **NEXT, before any GPU:** from px 188 sweep scripted jump timings and ask whether ANY
+  sequence crosses. If none does, the anchor is not the binding constraint. Tools:
+  `debug/l4_crossing_trace.py`, `debug/l4_low2launch_fix_visual.py`,
+  `debug/l4_pull_direction.py`. Figure `debug/l4_rope2_geom/low2launch_fix_v2.png`;
+  clip `debug/l4_rope2_fromreset/rope2_failed_ep0.mp4`.
+- [x] **H-AQ (original proposal; superseded by the entry above, which has the result).**
   Retires the anchor-placement bug class instead of fixing instances. Detection
   currently asks "is the agent's POSITION inside a tolerance box"; ask instead "does
   the agent's SPRITE contain the anchor POINT". Identical in x (sprite half-width IS

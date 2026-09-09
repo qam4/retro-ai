@@ -79,15 +79,26 @@ def test_jump_tolerance_is_flat_and_wide():
 
 
 def test_l4_anchors_come_from_a_multi_policy_census():
-    """Four measured overrides, each justified by a WORST-POLICY per-episode score from
-    debug/l4_anchor_recommend.py. The 20-anchor geometric derivation was reverted; these
-    are censused, which is a different basis.
+    """Six measured overrides, from TWO different kinds of evidence. The 20-anchor
+    geometric derivation was reverted; neither basis here is geometric.
+
+    Per-episode WORST-POLICY detection score (debug/l4_anchor_recommend.py):
 
         Rope1  27 -> 25   1.00 both ways; 25 centres the modal landing instead of
                           putting it on the box edge (anchor 28 scored 1.00 on one
                           policy and 0.00 on another, for exactly that reason)
         Spring 48 -> 51   worst-policy 0.12 -> 0.80
         Step   60 -> 66   worst-policy 0.00 -> 0.92, i.e. it never marked at all
+
+    Direct STANDABILITY measurement -- walk there, hold NOOP 30 frames, both approach
+    directions, 8 seeds each. Floor 12's usable span is px 188..224:
+
+        Low2_launch 44 -> 45   px 184 falls 0/8, px 188 stands 8/8. Re-landed after
+                               e667206's wholesale revert dropped it while its comment
+                               kept claiming it.
+        Low1        56 -> 54   px 232 falls 0/8, px 224 stands 8/8. Inert in practice
+                               (that pool is healthy) but the potential should not aim
+                               at a pixel the agent can never occupy.
     """
     lvl = get_level_map(4)
     assert lvl.jump_waypoint_pos == {
@@ -95,7 +106,29 @@ def test_l4_anchors_come_from_a_multi_policy_census():
         "Rope1": (25, 118),
         "Spring": (51, 94),
         "Step": (66, 102),
+        "Low2_launch": (45, 70),
+        "Low1": (54, 70),
     }
+
+
+def test_floor12_anchors_are_inside_the_MEASURED_usable_span():
+    """The span is px 188..224, measured directly, not derived from the tile extent.
+
+    Floor 12's recorded extent is [184, 232) and the naive reading -- x_min+4 .. x_max-4
+    = 188..228 -- is what `standable_span`'s docstring used to say. px 228 actually
+    FALLS
+    (0/8, both approach directions), so the right end is 224. This test exists because
+    two anchors sat outside the span for weeks: `Low2_launch` on px 184 (which poisoned
+    81 of its 100 seeds) and `Low1` on px 232 (which happened to be harmless).
+    """
+    lo, hi = 188, 224
+    for wid in ("Low2_launch", "Low1"):
+        x, _y, floor = yeti.waypoints(4)[wid]
+        assert floor == 12
+        px = x * 4 + 8
+        assert (
+            lo <= px <= hi
+        ), f"{wid} anchor px {px} outside the measured span {lo}..{hi}"
 
 
 def test_ladder_boxes_stay_inside_their_platform():
