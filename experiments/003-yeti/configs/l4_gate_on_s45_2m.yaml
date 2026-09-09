@@ -1,0 +1,94 @@
+# L4 GROUNDED ADMISSION GATE, 2M, seed 45, gate on.
+#
+# ONE LEVER: `curriculum.admit_requires_grounded`. Both arms carry the re-landed anchor
+# fixes (Low2_launch px 188, Low1 px 224) from 9802fbe, so the paired `off` run at the same
+# seed IS the control.
+#
+# WHAT IT FIXES. `admit_requires_survival` keeps a capture if the agent lives >= 30 steps.
+# That cannot see a state that falls off a platform and is CAUGHT. Measured: 81 of 100
+# `Low2_launch` seeds sit on px 184 -- floor 12's tile edge, 0/8 survive a NOOP hold while
+# px 188 survives 8/8 -- and the trampoline below keeps them alive a MEDIAN OF 83 STEPS. So
+# 100/100 doomed seeds were admitted, and the pool meant to teach the rope-2 crossing taught
+# the fall-bounce loop instead. The criterion becomes "ends its survival window in
+# SEED_POSES".
+#
+# WHY THIS IS WORTH A RUN, unlike the anchor fix alone. From the corrected px 188 the
+# crossing is ACHIEVABLE: 40 crossings in 3312 scripted trials, pattern 'jumpL held', waits
+# clustered 17-23, on 6/6 seeds (debug/l4_rope2_feasible.py). So a ~5-frame window exists
+# and the poisoned pool is what stops the agent practising it.
+#
+# BLAST RADIUS, measured over existing pools (debug/l4_survival_gate_blast.py): L4 rejects
+# 23 of 415 seeds (6%, ALL in `Low2_launch`); L3 rejects 5 of 463 (1%) and keeps 25/25 of
+# `Lesc_top`. An earlier draft used SURFACE_POSES and required y unchanged, which rejected
+# every escalator ride -- pose 13 is legitimate and an escalator carries the agent down.
+#
+# 3 SEEDS, 2M each. On identical code P(Low1 | Lclimb3_top) is 0.81 / 0.07 / 0.02 / 0.07, so
+# n=1 cannot distinguish a change from a coin flip. Two 15M runs were spent learning that.
+#
+# READ: (a) does `Low2_launch`'s pool stop being px-184 states -- check the pool's px
+# histogram directly, that is the mechanism; (b) `Low2_launch` cap/rej, which should show
+# many more rejections; (c) the stable upstream chain must not regress -- P(Lclimb3_top |
+# Step) 0.74-0.79, Step reach ~0.88.
+# DO NOT read Low2 reach: floor 13 has been touched 24 times in the project's history.
+training:
+  timesteps: 2_000_000
+  output: output/mo5/yeti/training/l4_gate_on_s45_2m
+  num_envs: 8
+  seed: 45
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  # v4's weights AND v4's pools (checkpoints.pkl is loaded from dirname(resume)).
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v4_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  admit_requires_grounded: true

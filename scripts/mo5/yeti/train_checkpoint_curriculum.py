@@ -283,6 +283,7 @@ class CheckpointManager:
         split_mandatory: bool = False,
         earned_progress_score: bool = False,
         admit_requires_survival: bool = False,
+        admit_requires_grounded: bool = False,
     ):
         # PROGRESS LADDER SIZE. Historically this was the fruit count, so a pool
         # meant "N fruits collected" and the ladder had one step per fruit. That
@@ -484,6 +485,9 @@ class CheckpointManager:
         # inherited-credit `reached_next` shortcut. See _admit_by_play for the
         # measured poisoning and for the option we did not take.
         self.admit_requires_survival = bool(admit_requires_survival)
+        # Require the capture to END ITS SURVIVAL WINDOW in a seedable pose, not merely
+        # to be alive. See _admit_by_play for the measurement; default False.
+        self.admit_requires_grounded = bool(admit_requires_grounded)
         self.reach_alpha = 0.02
         # Index 0..N = reach CP0..CP_N from reset; index N+1 = reach the
         # PRINCESS from reset (the actual win condition). Index 0 pinned 1.
@@ -650,6 +654,7 @@ class CheckpointManager:
         source_cp,
         stack=None,
         reached=None,
+        end_pose=None,
     ):
         """Admit a checkpoint snapshot judged by *real play*, not a probe.
 
@@ -685,7 +690,7 @@ class CheckpointManager:
             return
         self._insert(fruits_collected, source_cp, bonus, state_bytes, stack, reached)
 
-    def _admit_by_play(self, survived_steps, reached_next):
+    def _admit_by_play(self, survived_steps, reached_next, end_pose=None):
         """Shared play-based admission verdict for deferred snapshots.
 
         A single source of truth for BOTH fruit checkpoints (save_scored)
@@ -724,7 +729,35 @@ class CheckpointManager:
         survival-only is a one-line change to an existing signal -- and survival
         is the property the pool actually needs. Revisit if survival-only proves
         too strict at sparse rungs.
+
+        ``admit_requires_grounded`` adds the missing half. "Alive after N steps" cannot
+        see a state that falls off a platform and is CAUGHT by something. Measured on
+        L4:
+        81 of 100 `Low2_launch` seeds sit on px 184 -- floor 12's tile edge, where the
+        agent reads grounded for one frame and then falls (0/8 survive a NOOP hold,
+        while
+        px 188 survives 8/8) -- and the trampoline below keeps them alive a MEDIAN OF 83
+        STEPS against `min_survival_steps` 30. So 100/100 doomed seeds were admitted,
+        and
+        the pool meant to teach the rope-2 crossing taught the fall-bounce loop instead.
+        Raising the threshold is NOT the fix: it would only have to beat one particular
+        bounce cycle, and a different trampoline gives a different number.
+
+        The criterion is therefore "ends the window in SEED_POSES", i.e. on a surface or
+        on the L3 escalator. NOTE the escalator: an earlier draft used SURFACE_POSES and
+        additionally required y to be unchanged, which rejects 25/25 of L3's `Lesc_top`
+        seeds -- legitimate rides, and the y test fails an escalator by construction
+        since
+        the platform carries the agent down. Blast radius of the corrected criterion,
+        measured over existing pools with debug/l4_survival_gate_blast.py: L4 rejects
+        23 of
+        415 (6%, ALL in `Low2_launch`), L3 rejects 5 of 463 (1%), and `Lesc_top` keeps
+        25/25. Concentrated exactly where intended, so it is safe global rather than
+        per-level.
         """
+        if self.admit_requires_grounded and end_pose is not None:
+            if int(end_pose) not in SEED_POSES:
+                return "rejected"
         if reached_next and not self.admit_requires_survival:
             return "reached"
         if survived_steps >= self.min_survival_steps:
@@ -737,6 +770,7 @@ class CheckpointManager:
         state_bytes,
         survived_steps,
         reached_next,
+        end_pose=None,
         source_cp=0,
         bonus=0,
         stack=None,
@@ -1555,6 +1589,12 @@ class CheckpointCurriculumEnv(gym.Env):
         # keep the capture here and judge it by how the rest of the episode
         # actually unfolds.
         self._pending_wp_saves = []
+        # Pose observed at each gym step of this episode, indexed by step. Lets the
+        # admission gate ask "what was the agent doing when its survival window closed?"
+        # -- which is how a state that falls off a platform and is CAUGHT by a
+        # trampoline
+        # gets rejected despite staying alive. See _admit_by_play.
+        self._pose_log = []
         # A checkpoint snapshot deferred to the next grounded frame:
         # (collected_total, save_step) or None. Prefers a state the agent can
         # steer from immediately. NOT because a mid-jump state reloads into a
@@ -1625,6 +1665,9 @@ class CheckpointCurriculumEnv(gym.Env):
         # status line instead of silently failing every pose gate. See
         # CheckpointManager.pose_seen and yeti.unknown_poses.
         _manager.pose_seen[int(ctx.pose)] += 1
+        # Indexed by gym step, so the admission gate can look up the pose at
+        # save_step + min_survival_steps. See _admit_by_play.
+        self._pose_log.append(int(ctx.pose))
 
         # Snapshot on fruit collection. Scoring is deferred to episode
         # end (see _pending_saves): we judge the state by how the rest
@@ -1839,6 +1882,7 @@ class CheckpointCurriculumEnv(gym.Env):
                     survived_steps,
                     reached_next,
                     save_bonus,
+                    end_pose=self._pose_at_window_end(save_step),
                     source_cp=save_src,
                     stack=save_stack,
                     reached=save_reached,
@@ -1864,6 +1908,7 @@ class CheckpointCurriculumEnv(gym.Env):
                     wp_state,
                     wp_survived,
                     wp_reached_next,
+                    end_pose=self._pose_at_window_end(wp_step),
                     source_cp=save_src,
                     bonus=wp_bonus,
                     stack=wp_stack,
@@ -1875,6 +1920,19 @@ class CheckpointCurriculumEnv(gym.Env):
             self._log_episode(end_reason, fruits, bonus, score)
 
         return self._wrap_obs(obs), reward, done, truncated, info
+
+    def _pose_at_window_end(self, save_step):
+        """Pose when this capture's survival window closed, or None if unknown.
+
+        The window is ``min_survival_steps`` gym steps after the capture. If the episode
+        ended first the caller's ``survived_steps`` test already rejects the snapshot,
+        so
+        None is returned and the gate falls through to its step-count check.
+        """
+        want = int(save_step) + int(_manager.min_survival_steps)
+        if 0 <= want < len(self._pose_log):
+            return self._pose_log[want]
+        return None
 
     def _reached_targets(self, fruits_present=None) -> set:
         """Every target reached so far this episode, INCLUDING what the seed
@@ -2235,6 +2293,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         split_mandatory=cfg.curriculum.split_mandatory_starts,
         earned_progress_score=cfg.curriculum.earned_progress_score,
         admit_requires_survival=cfg.curriculum.admit_requires_survival,
+        admit_requires_grounded=cfg.curriculum.admit_requires_grounded,
     )
     # Travel order. Feeds the route table AND, under
     # `gate_waypoints_by_predecessor`, the start-eligibility rule -- so this is

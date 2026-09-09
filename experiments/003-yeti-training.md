@@ -1420,18 +1420,37 @@ alone doesn't resolve the over-concentration.
   NOTE ropes MOVE between frames, so a single-frame pixel measurement of rope position is
   NOT valid evidence (an earlier attempt at that was retracted). The sweep has to be over
   timings, not geometry.
-- [ ] **H-AW — SURVIVAL GATE: require grounded-on-platform, not merely alive.**
+- [~] **H-AW — SURVIVAL GATE: require SEED_POSES at window end, not merely alive.
+  (Blast radius MEASURED 2026-09-09; criterion corrected; not yet implemented.)**
   `admit_requires_survival` keeps a capture if the agent lives >= `min_survival_steps` (30).
-  Measured on the `Low2_launch` pool: 81/100 seeds sit on the lethal px 184 and fall on
-  load, but the trampoline below keeps them alive a median of 83 steps, so 100/100 are
-  ADMITTED. The gate that exists to reject doomed seeds cannot see this class at all.
-  RAISING THE THRESHOLD IS NOT THE FIX -- it would only have to beat one particular bounce
-  cycle, and a different trampoline gives a different number. The criterion must become
-  "grounded on a platform when the window ends".
-  BLAST RADIUS: every pool on every level. Before applying, count how many existing L1/L2/L3
-  seeds it would newly reject -- if it rejects a large fraction of a working level's pools,
-  it needs to be opt-in per level.
-  Depends on H-AV for whether to prioritise it on rope 2.
+  It cannot see a whole class of doomed state: 81/100 of L4's `Low2_launch` seeds sit on the
+  lethal px 184 and fall on load, but the trampoline keeps them alive a median of 83 steps,
+  so 100/100 are ADMITTED. Raising the threshold is NOT the fix -- it would only have to beat
+  one particular bounce cycle.
+  **FIRST ATTEMPT WAS WRONG, and the blast-radius check caught it.** "Alive AND pose in
+  SURFACE_POSES AND y unchanged" rejects 25/25 of L3's `Lesc_top` seeds -- legitimate
+  escalator rides (pose 13, deliberately admitted by the trainer's own SEED_POSES), and the
+  y test fails an escalator by design since the platform carries the agent down.
+  **CORRECTED CRITERION: alive AND pose in SEED_POSES** (surface poses plus pose 13).
+  Measured with `debug/l4_survival_gate_blast.py`, 25 seeds per pool, 30 NOOP frames:
+  ```
+                      ALIVE  STRICT  SEEDPOSE  newly rejects
+  L4 (v6)  total        330     307      307     23  (ALL 23 in Low2_launch)
+  L3 (v9)  total        357     327      352      5  (A1_launch 1, A5 4)
+           Lesc_top      25       0       25      0  escalator rides preserved
+  ```
+  So 6% on L4 and 1% on L3, concentrated exactly on the states this is meant to reject. Safe
+  to make global rather than opt-in per level.
+  CAVEAT: the probe holds NOOP, so a state the POLICY could rescue but NOOP cannot reads as
+  doomed. That is the same assumption the shipped `min_survival_steps` probe makes, so the
+  comparison is apples to apples -- but the real gate judges by the episode that actually
+  followed, which is strictly more information than NOOP has.
+  JUSTIFIED BY A REACHABLE WIN (H-AV): from the corrected px 188 the rope-2 crossing is
+  achievable -- 40 crossings in 3312 scripted trials, 'jumpL held', waits 17-23, on 6/6
+  seeds. So there is a ~5-frame window behind this pool, and the pool is what stops the
+  agent practising it.
+  TODO: implement in `_admit_by_play`, add a test that a bouncing-on-trampoline state is
+  rejected while an escalator-ride state is kept, then A/B at 3 seeds x 2M.
 - [ ] **H-AT — the real problem: the `Lclimb3_top -> Low1` crossing is learned 1 run in 4.**
   Not a regression, an unreliability. The floor 11 -> 12 leftward jump follows a TIMED
   hazard at the ladder-3 head: scripted departures 11-28 frames into the cycle survive,

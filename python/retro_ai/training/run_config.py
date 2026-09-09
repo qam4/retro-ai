@@ -338,6 +338,29 @@ class CurriculumConfig:
     # reaches at sparse rungs; needs a 3-seed sweep with a baseline arm first.
     # See _admit_by_play for the alternative (anchor reached_next to save time).
     admit_requires_survival: bool = False
+    # Also require the capture to END ITS SURVIVAL WINDOW in a seedable pose (a surface
+    # pose, or the L3 escalator ride) rather than merely to be alive. Requires
+    # ``admit_requires_survival`` to be meaningful. Default False.
+    #
+    # WHY. "Alive after N steps" cannot see a state that falls off a platform and is
+    # CAUGHT by something. Measured on L4: 81 of 100 `Low2_launch` seeds sit on px 184
+    # --
+    # floor 12's tile edge, where the agent reads grounded for one frame then falls (0/8
+    # survive a NOOP hold; px 188 survives 8/8) -- and the trampoline below keeps them
+    # alive a MEDIAN OF 83 STEPS against `min_survival_steps` 30. So 100/100 doomed
+    # seeds
+    # were admitted and the pool meant to teach the rope-2 crossing taught the
+    # fall-bounce
+    # loop instead. Raising the threshold is not the fix: it would only have to beat one
+    # particular bounce cycle.
+    #
+    # BLAST RADIUS, measured over existing pools (debug/l4_survival_gate_blast.py): L4
+    # rejects 23 of 415 seeds (6%, ALL in `Low2_launch`); L3 rejects 5 of 463 (1%) and
+    # keeps 25/25 of `Lesc_top`. An earlier draft of the criterion used SURFACE_POSES
+    # and
+    # required y to be unchanged, which rejected all 25 escalator rides -- pose 13 is a
+    # legitimate seed state and the y test fails an escalator by construction.
+    admit_requires_grounded: bool = False
     # RANDOM NO-OP START: draw 0..N extra no-op gym steps after the start state is
     # loaded, to decorrelate arrival phase from the route. 0 = off (current
     # behaviour). The profile's own `random_noop_max` cannot serve this: it fires
