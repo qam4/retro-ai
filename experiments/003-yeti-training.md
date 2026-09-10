@@ -205,6 +205,19 @@ and "lessons" kept getting refuted by the next run. New discipline:
    nothing re-examined it because the bisect only ever looked at `Rope1`. When a commit is
    reverted for one measured harm, enumerate what ELSE it contained and re-land the parts
    that stand on their own evidence.
+12. **Never state a MECHANISM you have not measured, even when the outcome is
+   measured.** Broken twice in one session and caught both times by the user asking for
+   proof. "The gate admits px-184 captures because the agent recovered in the original
+   episode" and "because the end_pose lookup falls out of range" were both asserted from a
+   single debug line that did not even log the capture position. Instrumented properly:
+   px-184 captures are rejected 8/8 with the early policy and 8/8 with the late one, so
+   BOTH explanations are false and the real one is still unknown. Report the outcome, mark
+   the mechanism unknown, and go measure it -- a plausible mechanism is the most expensive
+   kind of wrong because it stops the search.
+13. **Produce the visual by default for any claim about what the agent DID.** The
+   filmstrip (`debug/l4_gate_admitted_proof.py`) settled in one image what three rounds of
+   argument could not, and the from-reset clip found the rope-2 launch pad after a week of
+   route tables missed it. If a claim is about behaviour, film it.
 11. **When numbers stall, watch the video.** A week of route tables, reach EMAs, bisects and
    two 15M runs never surfaced the rope-2 launch pad. One from-reset clip showed the agent
    being paid to walk off a cliff, bounce on a trampoline, and repeat. Every wrong call this
@@ -1420,37 +1433,36 @@ alone doesn't resolve the over-concentration.
   NOTE ropes MOVE between frames, so a single-frame pixel measurement of rope position is
   NOT valid evidence (an earlier attempt at that was retracted). The sweep has to be over
   timings, not geometry.
-- [~] **H-AW — SURVIVAL GATE: require SEED_POSES at window end, not merely alive.
-  (Blast radius MEASURED 2026-09-09; criterion corrected; not yet implemented.)**
-  `admit_requires_survival` keeps a capture if the agent lives >= `min_survival_steps` (30).
-  It cannot see a whole class of doomed state: 81/100 of L4's `Low2_launch` seeds sit on the
-  lethal px 184 and fall on load, but the trampoline keeps them alive a median of 83 steps,
-  so 100/100 are ADMITTED. Raising the threshold is NOT the fix -- it would only have to beat
-  one particular bounce cycle.
-  **FIRST ATTEMPT WAS WRONG, and the blast-radius check caught it.** "Alive AND pose in
-  SURFACE_POSES AND y unchanged" rejects 25/25 of L3's `Lesc_top` seeds -- legitimate
-  escalator rides (pose 13, deliberately admitted by the trainer's own SEED_POSES), and the
-  y test fails an escalator by design since the platform carries the agent down.
-  **CORRECTED CRITERION: alive AND pose in SEED_POSES** (surface poses plus pose 13).
-  Measured with `debug/l4_survival_gate_blast.py`, 25 seeds per pool, 30 NOOP frames:
+- [x] **H-AW — SURVIVAL GATE: require SEED_POSES at window end (DONE, NEGATIVE. Flag
+  committed 91cebf6, default OFF, do not enable.)**
+  A/B at 3 seeds x 2M, one lever, both arms carrying the re-landed anchor fixes.
+  **RESULT: no effect on pool composition.** `Low2_launch` seeds at px 184 (LETHAL, 0/8
+  survive), counted AS SAVED:
   ```
-                      ALIVE  STRICT  SEEDPOSE  newly rejects
-  L4 (v6)  total        330     307      307     23  (ALL 23 in Low2_launch)
-  L3 (v9)  total        357     327      352      5  (A1_launch 1, A5 4)
-           Lesc_top      25       0       25      0  escalator rides preserved
+  gate off:  13, 13, 17  of 100        gate on:  34, 20, 24  of 100
   ```
-  So 6% on L4 and 1% on L3, concentrated exactly on the states this is meant to reject. Safe
-  to make global rather than opt-in per level.
-  CAVEAT: the probe holds NOOP, so a state the POLICY could rescue but NOOP cannot reads as
-  doomed. That is the same assumption the shipped `min_survival_steps` probe makes, so the
-  comparison is apples to apples -- but the real gate judges by the episode that actually
-  followed, which is strictly more information than NOOP has.
-  JUSTIFIED BY A REACHABLE WIN (H-AV): from the corrected px 188 the rope-2 crossing is
-  achievable -- 40 crossings in 3312 scripted trials, 'jumpL held', waits 17-23, on 6/6
-  seeds. So there is a ~5-frame window behind this pool, and the pool is what stops the
-  agent practising it.
-  TODO: implement in `_admit_by_play`, add a test that a bouncing-on-trampoline state is
-  rejected while an escalator-ride state is kept, then A/B at 3 seeds x 2M.
+  And they are NEW, not inherited from the v4 warm start: 11/11/9 (off) and 33/13/20 (on).
+  **AND THAT CONTRADICTS THE GATE'S OWN BEHAVIOUR, WHICH IS UNEXPLAINED.** Instrumented to
+  log capture position, survival, end pose and verdict: px-184 captures are REJECTED 8/8
+  with the 400k policy and 8/8 again with the 2M policy. Only two code paths write a
+  waypoint pool -- `save_waypoint` (gated) and the load-from-disk path (inherited) -- so
+  these seeds should be impossible. NOT RESOLVED after four probes; parked deliberately
+  rather than explained away.
+  Two of my explanations for it were asserted without measurement and both were then
+  disproved (see method rule 12): "the agent recovered so end_pose was a surface pose" and
+  "the end_pose lookup falls out of range". Neither holds.
+  PROVEN by filmstrip (`debug/l4_gate_admitted_proof.py`,
+  `debug/l4_rope2_geom/gate_admitted_seed_falls.png`): a px-184 seed from a gate-ON pool
+  that is absent from v4's pool, reloaded and held NOOP, falls -- pose 5 grounded at t+0,
+  pose 11 FALL by t+3, y 70 -> 126.
+  ALSO MEASURED: one earlier reading of "40 seeds at px 184" was inflated to 40 from 34 by
+  reading the position AFTER one NOOP step; a seed carrying leftward motion moves 188 -> 184
+  in one frame. Read pool positions AS SAVED.
+  NEXT IDEA, not attempted: reject a capture whose POSITION lies outside its floor's
+  MEASURED usable span (floor 12 = px 188..224). That is a static check needing no
+  simulation and no reasoning about episode continuations, and it encodes the measurement
+  directly. Blocked on the unexplained admission path above -- if seeds can enter the pool
+  by a route we have not found, a capture-time filter may not reach them either.
 - [ ] **H-AT — the real problem: the `Lclimb3_top -> Low1` crossing is learned 1 run in 4.**
   Not a regression, an unreliability. The floor 11 -> 12 leftward jump follows a TIMED
   hazard at the ladder-3 head: scripted departures 11-28 frames into the cycle survive,

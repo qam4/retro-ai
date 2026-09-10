@@ -1595,6 +1595,8 @@ class CheckpointCurriculumEnv(gym.Env):
         # trampoline
         # gets rejected despite staying alive. See _admit_by_play.
         self._pose_log = []
+        # Sprite-centre px per gym step, same indexing as _pose_log.
+        self._x_log = []
         # A checkpoint snapshot deferred to the next grounded frame:
         # (collected_total, save_step) or None. Prefers a state the agent can
         # steer from immediately. NOT because a mid-jump state reloads into a
@@ -1668,6 +1670,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # Indexed by gym step, so the admission gate can look up the pose at
         # save_step + min_survival_steps. See _admit_by_play.
         self._pose_log.append(int(ctx.pose))
+        self._x_log.append(int(ctx.curr_x) * 4 + 8)
 
         # Snapshot on fruit collection. Scoring is deferred to episode
         # end (see _pending_saves): we judge the state by how the rest
@@ -1903,12 +1906,13 @@ class CheckpointCurriculumEnv(gym.Env):
             ) in self._pending_wp_saves:
                 wp_survived = self._step_count - wp_step
                 wp_reached_next = self._max_cp_this_ep > start_level
+                _wp_end_pose = self._pose_at_window_end(wp_step)
                 _manager.save_waypoint(
                     wp_id,
                     wp_state,
                     wp_survived,
                     wp_reached_next,
-                    end_pose=self._pose_at_window_end(wp_step),
+                    end_pose=_wp_end_pose,
                     source_cp=save_src,
                     bonus=wp_bonus,
                     stack=wp_stack,
