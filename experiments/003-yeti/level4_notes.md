@@ -41,9 +41,11 @@ not model it as something more training time will smooth out.
 > champion measures (0/300, and re-swept on current code its champion is again 0/300).
 > But v13's champion reaches **rung 12 in 1/300** from reset — it credits `Low2` and
 > `Lhi_down_bot`, i.e. it crosses rope 2. So rung 11 is a ~0.3% crossing for that
-> policy, not a wall at zero. See "v13 RESULT" below. Rung 12 had already been touched
-> during v6's TRAINING (see the v6 row in the table above); what is new is seeing it in
-> a from-reset champion eval.
+> policy, not a wall at zero — confirmed independently at 3/1071 in a from-reset hunt
+> (pooled 4/1371 = 0.29%), with all three crossings caught on video and using pose 15,
+> the leftward rope carry. See "v13 RESULT" and the pose-15 section below. Rung 12 had
+> already been touched during v6's TRAINING (see the v6 row in the table above); what is
+> new is seeing it from reset, repeatedly, and knowing the manoeuvre it uses.
 
 Note the 12-episode sweep score for this same snapshot was `rung 10.00`, versus
 9.38 at n=300. 12 episodes is a *trigger* resolution, not a measurement; it cannot
@@ -969,11 +971,40 @@ shows pose 14; rope 2 is crossed LEFTWARD and shows 15, never 14. Every pose-15 
 the crossing sits at exactly y = 62 — the rope's height — while px keeps advancing, which
 is precisely 14's documented signature, "lateral motion while held".
 
-**The departure pixel is px 188, not px 184.** The working route leaves floor 12 from
-px 188 — the pixel `9802fbe` corrected the anchor to. So the +0.12 shaped reward for
-stepping 188 -> 184 is NOT the entry to the working route, and a lethal-margin admission
-filter would not be deleting the only thing that works. That was an open worry when the
-filter was proposed; it is now closed.
+**CONFIRMED ON 3/3 CROSSINGS (1071 episodes).** All three use pose 15, none uses pose 14
+or 16/17, and every one of the 15 pose-15 frames sits at exactly y = 62:
+
+```
+crossing  ep     airborne   departs   lands   pose sequence
+   1      236     38 steps   px 188   px  88  [4, 10, 15, 10, 15, 10, 5]
+   2     1003     25 steps   px 184   px 120  [5, 10, 15, 10, 0]
+   3     1070     45 steps   px 188   px  92  [4, 10, 15, 10, 15, 10, 4]
+```
+
+Rate: 3/1071 = 0.28%, and pooled with the n=300 champion eval, 4/1371 = 0.29%. So ~0.3%
+is the right figure for this policy.
+
+**px 184 IS NOT UNIFORMLY LETHAL — a correction.** An earlier version of this section
+claimed the working route departs from px 188, therefore the +0.12 for stepping
+188 -> 184 is not the route's entry and a lethal-margin filter is safe. Crossing 2
+departs from **px 184** and crosses successfully, landing at px 120. The claim is
+withdrawn. What the measurements actually support is narrower and conditional:
+
+* px 184 is lethal **from rest**: 20/20 pool seeds and 12/12 walk-there-and-stop trials
+  die, at a median of step 82, via the fall onto the trampoline.
+* px 184 is survivable **with leftward momentum and an immediate rope grab**, 1/3 of
+  observed crossings.
+
+So a lethal-margin filter on CAPTURES is still justified — a seed is reloaded at rest,
+which is the doomed case — but "px 184 is off the route" is false. Do not use this to
+argue that stepping there is always a mistake.
+
+**The landing spread straddles `Low2`'s credit window.** Landings were px 88, 92, 120
+against a window of px 104..152. Only crossing 2 is credited `Low2` on landing; the other
+two must walk RIGHT afterwards to earn it. That matches the 11 genuine pool captures
+sitting at px 104..124 — they are captured after the walk, not at touchdown. Recorded as
+data, not as a proposed anchor move: three landings is a thin census, and this file's
+rule is that anchors come from a multi-policy grounded census.
 
 Catalogued in `POSE_NAMES` as "rope carry, facing left (L4), lateral motion while held".
 The name deliberately omits the word "grounded", because
@@ -1698,7 +1729,8 @@ Tools added: `debug/l4_pad_reward.py` (trainer-identical reward on a pad),
 ## Open questions, in priority order
 
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300 for v6's
-champion but **1/300 for v13's** (2026-09-11) — so it is a ~0.3% crossing, not zero.
+champion but **1/300 for v13's** (2026-09-11) — so it is a crossing at ~0.3%, not zero.
+Confirmed independently at 3/1071 in a from-reset hunt; pooled 4/1371 = 0.29%.
 Everything before it is at 84.7%.
 
 1. **Pick v9's lever.** Waypoint geometry is now sound (boxes 21 -> 0, pools verified
