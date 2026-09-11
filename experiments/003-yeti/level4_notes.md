@@ -36,6 +36,15 @@ from-reset reach for the same rung was 0.06. The anchor fix worked. Second, rung
 is not "rare", it is **0/300**: a hard barrier, not a low-probability crossing. Do
 not model it as something more training time will smooth out.
 
+> **SUPERSEDED IN PART (2026-09-11).** The "hard barrier, not a low-probability
+> crossing" reading no longer holds as a general claim. It is still exactly what v6's
+> champion measures (0/300, and re-swept on current code its champion is again 0/300).
+> But v13's champion reaches **rung 12 in 1/300** from reset — it credits `Low2` and
+> `Lhi_down_bot`, i.e. it crosses rope 2. So rung 11 is a ~0.3% crossing for that
+> policy, not a wall at zero. See "v13 RESULT" below. Rung 12 had already been touched
+> during v6's TRAINING (see the v6 row in the table above); what is new is seeing it in
+> a from-reset champion eval.
+
 Note the 12-episode sweep score for this same snapshot was `rung 10.00`, versus
 9.38 at n=300. 12 episodes is a *trigger* resolution, not a measurement; it cannot
 separate the top snapshots from each other (eight of them scored 9.4–10.0) and it
@@ -1494,9 +1503,153 @@ Figure `debug/l4_rope2_geom/low2launch_fix_v2.png`;
 clip `debug/l4_rope2_fromreset/rope2_failed_ep0.mp4`.
 
 
+## v13 RESULT (2026-09-11) — PASS as "not worse", and there is now a champion for current code
+
+v13's purpose was an ARTIFACT, not a hypothesis test: current code had no champion
+because v6's was built at `bc85424`, before the censused anchors (`dc8e5a0`), the
+re-landed `Low2_launch` px 184 -> 188 fix (`9802fbe`) and the predecessor gate
+(`f069429`). It ran 15M on v4's warm start with seed 42 — v6's exact warm-start source,
+which is what the v10 RESULT section asked for so that v6 becomes a legitimate control.
+
+**The stick changed, so v6 was re-swept on current code.** `dc8e5a0` moved the
+`Rope1`/`Spring`/`Step` anchors, and route depth is scored through those anchors, so
+v6's published row is not apples-to-apples with v13. Both runs have exactly 150
+snapshots; both were swept at 12 episodes, 1 fruit, `--level 4`, the L4 start state,
+stall 40, max-steps 1500. The control went to `best_restick/` so v6's historic
+`sweep_state.json` is preserved.
+
+```
+                              n    mean   median    max    >=9.5    <1.0
+v6  (published, OLD stick)   150   6.37    7.88    10.00   8/150   10/150
+v6  (re-swept, CURRENT)      150   6.48    7.88    10.00  11/150    9/150
+v13 (CURRENT)                150   7.03    7.88    10.00  12/150    9/150
+```
+
+The stick change alone is worth +0.11 mean; v13 is +0.55 over the same-stick control,
+with identical median and max, one more snapshot >= 9.5 and one fewer collapse. By this
+file's own rule — at-or-near v6 reads as "not worse", only a repeated multi-seed win
+reads as "better" — **v13 is a PASS for "current code is not worse"**. It is NOT
+evidence of "better": one seed, and v6 seed 42 is a known 1-in-4 outlier.
+
+### The champions, re-eval'd at n=300 — and the n=12 pick does NOT hold up
+
+Both champions read rung 10.00 at n=12, which cannot separate them, so both were
+re-eval'd at n=300 on the same stick per the trigger-vs-measurement rule above:
+
+```
+                          n     mean_rung   princess    >=rung 10      >=rung 11
+v13         1.3M         300      8.49       0/300     190 (63.3%)    1/300
+v6-restick  2.1M         300      8.52       0/300     226 (75.3%)    0/300
+```
+
+**v13's champion is not better than v6's.** Mean is a tie (8.49 vs 8.52) and v6's holds
+rung 10 far more reliably (75.3% vs 63.3%). This is the trigger-vs-measurement warning
+playing out in full: a 12-episode selection picked a v13 snapshot that does not hold its
+rank at n=300. So the DISTRIBUTION result (v13 7.03 vs v6 6.48 over 150 snapshots) and
+the CHAMPION result point different ways, and only the distribution supports "current
+code is not worse". Do not quote v13's champion as an improvement.
+
+**RUNG 11 IS PASSED IN A FROM-RESET CHAMPION EVAL, once.** Rung 12 had been touched
+during v6's TRAINING before (see the v6 table row), but every champion eval on record
+read rung 11 at 0/300, and this file concluded from that it was "a hard barrier, not a
+low-probability crossing". That conclusion is now qualified — see the superseding note in
+the Status section. v13's champion, episode 68 of 300 from reset,
+reached **rung 12** — credited BOTH `Low2` and `Lhi_down_bot`, i.e. it crossed rope 2 and
+arrived on floor 13 — then died after 533 steps at (x_ram 35, y 94). Full credit list:
+`F1, Fr1, Fr1_launch, Fr2, Fr2_launch, Lascent_top, Lclimb1_top, Lclimb2_top,
+Lclimb3_top, Lfruit_bot, Lfruit_top, Lhi_down_bot, Low1, Low2, Low2_launch, Rope1,
+Rope1_launch, Spring, Step`. One episode in 600 across both champions, so ~0.3% from
+reset — a real crossing, not a ceiling. Note the n=12 sweep could never have shown this:
+a mean over 12 episodes cannot surface a 1-in-300 event, which is why the earlier
+reading of "no snapshot exceeds rung 10.0" said nothing about whether the wall is
+passable.
+
+Princess remains 0 everywhere: 0/300 for both champions and 0 across all 300 snapshot
+evals. v13's good snapshots are scattered (1.3M, 5.6M, 8.1M, 8.9M), the same oscillation
+v6 shows, so the champion is again an early transient and NOT a policy the run converged
+to. Remember "DO NOT WARM-START FROM A CHAMPION": v13's champion must not seed the next
+run.
+
+## ROPE 2: THE SCRIPTED FALSIFICATION, RUN (2026-09-11)
+
+This answers the "NOT VERIFIED / cheapest falsification" item above — from px 188,
+sweep scripted timings and ask whether any sequence crosses — with the stated
+conclusion: **the anchor is not the binding constraint.** Scope limit up front: three
+plan families, ~700 trials, on v13's pools. Not exhaustive over all input sequences.
+
+Plan families tried, all from grounded floor-12 pool seeds (`Low2_launch` px >= 188 and
+`Low1`), classified against `Low2`'s real credit window px 104..152 (anchor px 128,
+`jump_waypoint_tolerance` 6 RAM = +-24 px — NOT the ladder tolerance of 2):
+
+```
+A  wait W (0..30) on the pad, then hold jump-left   reaches floor 13, lands px 88 (80/89)
+                                                    or px 92 (9/89) -> 0/89 in the window
+B  hold jump-left K steps, then neutral             nothing reaches floor 13 below K=26
+C  run-up: N (0..14) left steps from Low1, then     0 crossings. jump-left and
+   hold jump-left / jump-upleft / jump-up           jump-upleft died 6/6 at EVERY N,
+                                                    including N=0 from px 224
+```
+
+`pose 14` (the rope carry) occurred **0 times in ~700 trials**. Every floor-13 arrival
+was the documented trampoline loop, not the rope: walk off floor 12, land on
+`Platform(24, 142, 168, 200)`, rise in pose 17 at constant x, drift left, land floor 13
+at px 88. C's result is the giveaway — holding a jump input just marches the agent off
+floor 12's left edge, which is why every "crossing" this file's earlier sweeps produced
+landed at px 88.
+
+The real crossing DOES land in the window: the 11 genuine `Low2` captures sit at
+px 104..124, y 66..70. And it demonstrably happens in training — 21 episodes that
+started UPSTREAM of rope 2 were credited `Low2` (9 of them from reset), and one reached
+`Lprincess_top` from reset at step 1,607,256 (633 steps, reward 63.59). So the
+manoeuvre is real and reproducible by the policy, just not by any script tried here.
+Earlier wording in this session's analysis claimed the crossing "never happened"; that
+was wrong and is retracted.
+
+**New measurement worth acting on: the shaping's optimum on floor 12 IS the lethal
+pixel.** Path distance to `J12_13_b` from floor 12 falls monotonically leftward and
+bottoms out at px 184 (56, against 60 at px 188). Stepping 188 -> 184 is the ONLY
+positive shaped reward anywhere on that pad (+0.12 measured with the trainer's own
+reward); holding position pays 0.000 and the whole 85-step fall-bounce pays 0.000.
+Lethality, measured on a hazard-free floor (no snowballs, no kangaroos on floor 12, so
+an idle death there can only be a fall):
+
+```
+px 184   12/12 die (walk there and stop)   20/20 die (pool seeds)   median death step 82
+px 188    7/20 die
+px 192    0/11
+px 196     0/1
+```
+
+Death at step 82 against `min_survival_steps` 30 is why these captures are admitted, and
+61 of 100 v13 `Low2_launch` seeds sit on px 184. This is direct support for the
+lethal-margin admission filter already proposed above, and it supplies the threshold.
+Note the filter must be admission-side: the comment in
+`train_checkpoint_curriculum.py` records that narrowing DETECTION took `Low1` and
+`Low2_launch` from 0.61 to 0.00.
+
+Method traps hit while measuring this, worth not repeating:
+
+* `build_training_env(...).gym.step` returns reward 0 for every action. The trainer does
+  NOT use the gym's reward; it builds a `RewardContext` per step and calls
+  `reward_fn(ctx)`. Any reward probe must reproduce that, INCLUDING
+  `restore_reached_waypoints` and the curriculum's `fruit_presence_addrs` (defaulting to
+  the level-1 dict makes the reward chase a stale fruit and raise `KeyError 'F3'`).
+* A persistence check for "can the agent stand here" needs a window LONGER THAN ~82
+  STEPS. A 10-step idle hold reports px 184 as standable, the same blind spot that lets
+  doomed px-184 captures through admission.
+* `Platform.x_min`/`x_max` are a LOGICAL walkable line that may span jumpable gaps by
+  design. Diffing them against measured standable spans does not reveal bugs; an
+  apparent 13-floor mismatch built this way was meaningless and is withdrawn.
+
+Tools added: `debug/l4_pad_reward.py` (trainer-identical reward on a pad),
+`debug/l4_pad_wait_sweep.py`, `debug/l4_pad_hold_length.py`, `debug/l4_pad_phase_seed.py`,
+`debug/l4_low2_landing.py`, `debug/l4_rope_compare.py`, `debug/l4_rope2_runup.py`,
+`debug/l4_platform_audit.py` (note its hold is too short, see above).
+
 ## Open questions, in priority order
 
-The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300.
+The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300 for v6's
+champion but **1/300 for v13's** (2026-09-11) — so it is a ~0.3% crossing, not zero.
 Everything before it is at 84.7%.
 
 1. **Pick v9's lever.** Waypoint geometry is now sound (boxes 21 -> 0, pools verified
