@@ -110,14 +110,25 @@ def test_unknown_mode_is_rejected_loudly():
 
 def test_pose_blocklist_fails_open_where_the_allowlist_failed_closed():
     """`SURFACE_POSES` omitted poses 6 and 7 -- half the leftward walk cycle -- for the
-    project's whole history, and pose 15 is still uncatalogued. An allowlist turns every
-    such omission into silent suppression; a blocklist only excludes what it names."""
+    project's whole history, and pose 15 went uncatalogued just as long. An allowlist
+    turns every such omission into silent suppression; a blocklist only excludes what it
+    names.
+
+    This test used pose 15 as its live example of an uncatalogued code. It is no longer
+    one: on 2026-09-11 it was identified as the LEFTWARD rope carry, i.e. the rope-2
+    crossing itself -- which is exactly the point of the blocklist. Because the gate
+    fails open, that unknown pose still counted for reach the whole time it was unnamed.
+    Had reach been gated on the `SURFACE_POSES` allowlist instead, L4's wall manoeuvre
+    would have been invisible to detection. The example is now a hypothetical code."""
     assert yeti.NON_TRAVERSAL_POSES == frozenset({11, 12})
     # the poses that were historically missing now pass a blocklist gate
     for p in (6, 7):
         assert p not in yeti.NON_TRAVERSAL_POSES
+    # the once-unknown pose 15 is catalogued now, and still counts for reach
+    assert 15 in yeti.KNOWN_POSES
+    assert 15 not in yeti.NON_TRAVERSAL_POSES
     # an UNCATALOGUED pose passes the blocklist but would fail the allowlist
-    unknown = 15
+    unknown = 99
     assert unknown not in yeti.KNOWN_POSES
     assert unknown not in yeti.SURFACE_POSES  # allowlist: silently suppressed
     assert unknown not in yeti.NON_TRAVERSAL_POSES  # blocklist: counted

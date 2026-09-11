@@ -935,6 +935,55 @@ are fit to the old signal.
 4 occurrences in a 3000-step smoke run. Not yet characterised; do not guess. Poses 6
 and 7 also remain to be confirmed as a full cycle on levels other than L4.
 
+## POSE 15 IS THE LEFTWARD ROPE CARRY — i.e. THE ROPE-2 CROSSING (2026-09-11)
+
+The pose the trainer has reported as `UNCATALOGUED POSES 15x5901` on every status line,
+for the whole history of this project, is the manoeuvre L4's wall is made of.
+
+Identified from the first rope-2 crossing ever recorded on video: v13's champion, from
+reset, episode 236 of a 1500-episode hunt (`debug/l4_rope2_video.py`, clip
+`debug/l4_rope2_video/crossing_1_ep236_neither.mp4` — the filename says "neither"
+because the script's classifier only knew pose 14 at the time). User-confirmed on the
+video.
+
+```
+t=478  [0,2,0]  px 188  y 70  pose 4   grounded   <- leaves floor 12 from px 188
+t=479           px 184  y 66  pose 10  airborne
+t=487           px 164  y 62  pose 15
+t=488           px 160  y 62  pose 15
+t=489           px 160  y 62  pose 15
+t=500           px 132  y 62  pose 15
+t=516  [1,2,1]  px  88  y 70  pose 5   grounded   <- floor 13, 38 steps in the air
+```
+
+Three things this settles.
+
+**It is a rope traverse, not a jump and not the trampoline.** px advances monotonically
+188 -> 88 across 38 airborne steps with no ground contact, while y oscillates
+70/60/62/52/62/52/70. Repeated jumps would touch down in between. Pose 14 never appears
+and neither does 16/17.
+
+**Pose 15 is 14's LEFTWARD counterpart.** The catalogue is paired by facing direction
+throughout (0-3/4-7 walk, 9/10 jump, 16/17 trampoline). Rope 1 is crossed RIGHTWARD and
+shows pose 14; rope 2 is crossed LEFTWARD and shows 15, never 14. Every pose-15 frame in
+the crossing sits at exactly y = 62 — the rope's height — while px keeps advancing, which
+is precisely 14's documented signature, "lateral motion while held".
+
+**The departure pixel is px 188, not px 184.** The working route leaves floor 12 from
+px 188 — the pixel `9802fbe` corrected the anchor to. So the +0.12 shaped reward for
+stepping 188 -> 184 is NOT the entry to the working route, and a lethal-margin admission
+filter would not be deleting the only thing that works. That was an open worry when the
+filter was proposed; it is now closed.
+
+Catalogued in `POSE_NAMES` as "rope carry, facing left (L4), lateral motion while held".
+The name deliberately omits the word "grounded", because
+`train_checkpoint_curriculum.py` derives its grounded-pose set by substring on these
+names; `test_no_pose_name_falsely_claims_grounded` now guards that. Adding it is
+otherwise behaviour-neutral — `KNOWN_POSES` feeds only the uncatalogued census, and 15
+was already counted for reach (the `NON_TRAVERSAL_POSES` blocklist names only 11 and 12).
+The census warning that has fired on every run now goes quiet, and
+`unknown_poses(range(18))` is empty, so the next genuinely new code will stand out.
+
 ## POSES 16 AND 17 ARE THE TRAMPOLINE, NOT A ROPE CARRY (2026-08-24)
 
 Corrects an earlier reading in this file. There is a trampoline at

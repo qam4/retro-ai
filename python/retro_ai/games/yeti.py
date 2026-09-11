@@ -74,6 +74,22 @@ POSE_NAMES: Mapping[int, str] = {
     12: "death animation",
     13: "escalator ride (L3), a controlled vertical traversal",
     14: "rope carry (L4), lateral motion while held",
+    # IDENTIFIED 2026-09-11, from the first recorded rope-2 crossing (v13's champion,
+    # from reset, episode 236 of a 1500-episode hunt; user-confirmed on the video).
+    # 15 is the LEFTWARD counterpart of 14, which fits this table's direction pairing
+    # (0-3/4-7 walk, 9/10 jump, 16/17 trampoline) and the fact that rope 1 is crossed
+    # rightward and shows 14 while rope 2 is crossed leftward and shows 15, never 14.
+    #
+    # The carry signature matches 14's ("lateral motion while held"): across the 38
+    # airborne steps of that crossing, px advanced monotonically 188 -> 88 with no
+    # ground contact, and every pose-15 frame sat at exactly y = 62 -- the rope's
+    # height -- while px kept advancing. The rest of the traverse read pose 10.
+    #
+    # This was the pose the trainer had been reporting as `UNCATALOGUED POSES 15x5901`
+    # on every status line, and it turns out to be the manoeuvre L4's wall is made of.
+    # NOTE the name must not contain "grounded": train_checkpoint_curriculum.py derives
+    # its grounded-pose set by substring on these names.
+    15: "rope carry, facing left (L4), lateral motion while held",
     16: "trampoline rise, facing right (L4)",
     17: "trampoline rise, facing left (L4)",
 }
@@ -102,11 +118,13 @@ SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 6, 7, 8})
 # WHY A BLOCKLIST. `SURFACE_POSES` is an allowlist and therefore FAILS CLOSED: a pose
 # missing from it silently suppresses every pose-gated decision. Poses 6 and 7 -- half
 # of the leftward walk cycle -- were absent for the entire history of this project,
-# which suppressed ~54% of grounded frames on any leftward approach. Pose 15 is STILL
-# uncatalogued and appears in every run. Each such omission is an invisible behaviour
-# change. A blocklist fails OPEN: an unknown pose counts, and only poses known to be
-# invalid are named, so the failure mode is a spurious detection you can see rather than
-# a missing one you cannot.
+# which suppressed ~54% of grounded frames on any leftward approach. Pose 15 went
+# uncatalogued for just as long and appeared in every run; it was finally identified on
+# 2026-09-11 as the LEFTWARD rope carry, i.e. the rope-2 crossing itself -- so the
+# unknown pose the census kept reporting was the manoeuvre the level's wall is made of.
+# Each such omission is an invisible behaviour change. A blocklist fails OPEN: an
+# unknown pose counts, and only poses known to be invalid are named, so the failure mode
+# is a spurious detection you can see rather than a missing one you cannot.
 #
 # Excluding fall is a JUDGEMENT, not a measurement: falling PAST a waypoint is not
 # reaching it. The data cannot settle it here because fall frames do not intersect the

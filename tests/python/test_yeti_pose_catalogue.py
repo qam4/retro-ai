@@ -58,11 +58,14 @@ def test_both_walk_directions_are_equally_detectable():
 def test_unknown_poses_detects_an_uncatalogued_code():
     assert yeti.unknown_poses([0, 8, 11]) == set()
     assert yeti.unknown_poses([0, 99]) == {99}
-    # 16/17 are catalogued (trampoline). 15 is NOT: it was observed within minutes of
-    # this check going in (4 occurrences in a 3000-step smoke run) and has not been
-    # identified yet, so it must still report as unknown. When someone identifies it and
-    # adds it to POSE_NAMES, this line is the one to update.
-    assert yeti.unknown_poses([15, 16, 17]) == {15}
+    # 15/16/17 are all catalogued now. 15 was the long-standing unknown -- observed
+    # within minutes of this check going in, reported as `UNCATALOGUED POSES 15x5901` on
+    # every v13 status line, and identified 2026-09-11 as the leftward rope carry from
+    # the first recorded rope-2 crossing. This line used to assert `== {15}`.
+    assert yeti.unknown_poses([15, 16, 17]) == set()
+    # The catalogue should now be gap-free across the whole observed 0..17 range, so a
+    # future new code stands out instead of hiding among known-missing ones.
+    assert yeti.unknown_poses(range(18)) == set()
 
 
 def test_unknown_poses_accepts_a_counter_or_any_iterable():
@@ -82,11 +85,30 @@ def test_airborne_poses_are_not_surface():
 
 
 def test_l4_rope_and_trampoline_poses_are_distinguished():
-    """14 is the rope carry; 16/17 are the trampoline below the rope-2 gap. Conflating
-    them produced a wrong diagnosis once -- pose 17 at the launch pad was read as
-    "hanging on the rope" when the agent had already fallen and was bouncing back up."""
+    """14/15 are the rope carry (right/left); 16/17 are the trampoline below the
+    rope-2 gap. Conflating them produced a wrong diagnosis once -- pose 17 at the
+    launch pad was read as "hanging on the rope" when the agent had already fallen
+    and was bouncing back up."""
     assert "rope" in yeti.POSE_NAMES[14]
+    assert "rope" in yeti.POSE_NAMES[15]
     assert "trampoline" in yeti.POSE_NAMES[16]
     assert "trampoline" in yeti.POSE_NAMES[17]
-    for p in (14, 16, 17):
+    for p in (14, 15, 16, 17):
         assert p not in yeti.SURFACE_POSES
+
+
+def test_rope_carry_poses_are_a_direction_pair():
+    """15 is the LEFTWARD rope carry, the counterpart of 14. Rope 1 is crossed rightward
+    and shows 14; rope 2 is crossed leftward and shows 15, never 14 -- which is why L4's
+    wall involves a pose the catalogue did not know."""
+    assert "left" in yeti.POSE_NAMES[15]
+    assert "left" not in yeti.POSE_NAMES[14]
+
+
+def test_no_pose_name_falsely_claims_grounded():
+    """train_checkpoint_curriculum.py derives its grounded-pose set by substring
+    match on these names, so an airborne pose whose name contains "grounded" would
+    silently join that set. Guards the naming of 15, added later than the rest."""
+    for p, name in yeti.POSE_NAMES.items():
+        if "grounded" in name:
+            assert p in yeti.SURFACE_POSES, f"pose {p} claims grounded but is not"
