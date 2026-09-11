@@ -971,6 +971,48 @@ shows pose 14; rope 2 is crossed LEFTWARD and shows 15, never 14. Every pose-15 
 the crossing sits at exactly y = 62 — the rope's height — while px keeps advancing, which
 is precisely 14's documented signature, "lateral motion while held".
 
+### ROPE 2 IS A TWO-CATCH TRAVERSE. THAT IS WHY IT IS NOT ROPE 1.
+
+User-confirmed on the videos for crossings 1 and 3: the agent jumps, CATCHES THE ROPE,
+swings left a little, jumps left again, CATCHES A ROPE AGAIN, then jumps onto the
+platform. The pose stream says the same thing — two separate runs of pose 15, with
+pose-10 hops between them:
+
+```
+crossing 3  [4, 10, 15, 10, 15, 10, 4]
+   catch 1   t=482-484   px 168, 172, 172   y 62
+   catch 2   t=498-500   px 136, 132, 132   y 62
+
+crossing 1  [4, 10, 15, 10, 15, 10, 5]
+   catch 1   t=487-489   px 164, 160, 160   y 62
+   catch 2   t=500       px 132             y 62
+
+crossing 2  [5, 10, 15, 10, 0]            <- ONE catch, and still crossed
+   catch 1   t=489-491   px 160, 156, 156   y 62      landed px 120
+```
+
+Catches cluster in two groups, px 156..172 and px 132..136, both at y = 62. The gap runs
+from floor 12's edge (px 184) to floor 13's edge (px 128), so two ropes hanging inside it
+fits. Whether that is two distinct ropes or one rope caught at two swing phases is NOT
+settled — position alone cannot separate those, and this file already retracted one claim
+for exactly that reason ("ropes move between frames, so single-frame pixel measurement
+does not support it"). Crossing 2's single catch is also unexplained.
+
+**Compare rope 1, which the agent clears at 0.68-0.83 reach:** ONE catch — pose 14 carry
+for ~5 gym steps (px 60 -> 72, y 118 -> 110), then a pose 9 arc landing at px 116. So the
+answer to "why isn't rope 2 as easy as rope 1" is not gap width (52 px vs 60 px, nearly
+equal) and not the anchor. Rope 1 is one timed catch; rope 2 is two timed catches on
+moving ropes, in sequence. At ~0.3% end to end, that is consistent with each catch being
+individually unlikely.
+
+**This is why every scripted plan failed.** Three plan families, ~700 trials, all built
+on HOLDING a jump input — and a held input can never do this: it needs a release and a
+re-jump timed to a moving rope, twice. Holding just marches the agent off floor 12's edge,
+which is why every scripted "crossing" landed at px 88 via the trampoline. The scripted
+falsification's conclusion (the anchor is not the binding constraint) stands, but the
+reason is now positive rather than an absence: the manoeuvre is a two-catch rope sequence,
+not a jump of any timing.
+
 **CONFIRMED ON 3/3 CROSSINGS (1071 episodes).** All three use pose 15, none uses pose 14
 or 16/17, and every one of the 15 pose-15 frames sits at exactly y = 62:
 
