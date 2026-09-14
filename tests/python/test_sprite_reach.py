@@ -193,3 +193,93 @@ def test_sprite_mode_fires_at_each_anchor_but_on_a_NARROWER_x_window():
         modal_ram = (modal_px - 8) // 4
         if abs(modal_ram - wx) >= 2:
             assert not sprite_overlaps((wx, wy), modal_ram, wy)
+
+
+def test_sprite_is_the_default_reach_mode_everywhere():
+    """Pin the 2026-09-11 default flip, in every place that carries its own default.
+
+    Nothing pinned the previous "box" default, so a silent revert would have been
+    invisible -- the exact failure already on record for the `Low2_launch` anchor fix,
+    which a wholesale revert removed while its comment kept asserting it. There are
+    three independent defaults (config, reward params, trainer) and they MUST agree:
+    the reach test is shared so detection, marking and eval cannot drift apart.
+    """
+    import inspect
+
+    from retro_ai.training import rewards
+    from retro_ai.training.run_config import CurriculumConfig
+
+    assert CurriculumConfig().waypoint_reach_mode == "sprite"
+    # the reward reads it out of params with its own fallback
+    src = inspect.getsource(rewards)
+    assert (
+        'params.get("waypoint_reach_mode", "sprite")' in src
+    ), "rewards.py's fallback must match CurriculumConfig's default"
+
+
+def test_level4_sprite_regions_do_not_overlap_where_the_agent_can_stand():
+    """The reason the default flipped: tolerance boxes collide, sprite regions do not.
+
+    Measured on L4 with the shipped tolerances (6 for jump, 2 for ladder waypoints),
+    12 pairs of capture boxes overlap at a position the agent can actually occupy --
+    up to 33 px wide, covering the whole Hi chain plus `Lhi_down_bot`+`Low2` and
+    `Lclimb1_top`+`Rope1_launch`. Where two regions overlap, one grounded frame credits
+    two waypoints and a capture can land in the wrong pool, which makes per-waypoint
+    counts uninterpretable.
+
+    Under sprite overlap the acceptance region for the sprite CENTRE is 14 px wide
+    (centre-6..centre+7) by 18 tall, instead of 49x13, and no two L4 anchors are close
+    enough to collide. This test pins that property so a future anchor move cannot
+    quietly reintroduce the ambiguity.
+    """
+    from retro_ai.games import yeti as y
+    from retro_ai.training.targets import SPRITE_H, SPRITE_W
+    from retro_ai.training.yeti_map import get_level_map, jump_waypoints
+
+    lvl = get_level_map(4)
+    wps = y.waypoints(4)
+    jump = set(jump_waypoints(lvl))
+    stand = [(p.x_min, p.x_max, p.y) for p in lvl.platforms]
+
+    def standable(x0, x1, y0, y1):
+        return any(y0 <= sy <= y1 and x0 <= sx1 and sx0 <= x1 for sx0, sx1, sy in stand)
+
+    def sprite_region(ax, ay):
+        apx = ax * 4 + 8
+        return (
+            apx - (SPRITE_W // 2 - 1),
+            apx + SPRITE_W // 2,
+            ay - (SPRITE_H - 1),
+            ay,
+        )
+
+    def box_region(ax, ay, tol):
+        apx = ax * 4 + 8
+        return (apx - tol * 4, apx + tol * 4, ay - tol, ay + tol)
+
+    def overlaps(regions):
+        names = sorted(regions)
+        out = []
+        for i, a in enumerate(names):
+            for b in names[i + 1 :]:
+                ra, rb = regions[a], regions[b]
+                x0, x1 = max(ra[0], rb[0]), min(ra[1], rb[1])
+                y0, y1 = max(ra[2], rb[2]), min(ra[3], rb[3])
+                if x0 <= x1 and y0 <= y1 and standable(x0, x1, y0, y1):
+                    out.append((a, b))
+        return out
+
+    sprite_bad = overlaps({n: sprite_region(ax, ay) for n, (ax, ay, _f) in wps.items()})
+    assert not sprite_bad, f"sprite regions overlap on standable ground: {sprite_bad}"
+
+    # and the box tolerances DO collide -- this is the defect being retired, asserted so
+    # the test above cannot be dismissed as vacuous
+    box_bad = overlaps(
+        {
+            n: box_region(ax, ay, 6 if n in jump else 2)
+            for n, (ax, ay, _f) in wps.items()
+        }
+    )
+    assert (
+        len(box_bad) >= 8
+    ), f"expected the shipped boxes to overlap on standable ground; got {box_bad}"

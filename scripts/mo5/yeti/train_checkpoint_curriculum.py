@@ -46,7 +46,7 @@ from retro_ai.training.run_manifest import (
     RunManifest,
     seed_everything,
 )
-from retro_ai.training.targets import reaches, within_tol
+from retro_ai.training.targets import reaches
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -1337,7 +1337,9 @@ class CheckpointCurriculumEnv(gym.Env):
         self._wp_enabled = bool(getattr(cur, "waypoints", False)) if cur else False
         # Geometry of the reach test for DETECTION only (capture stays box+grounded).
         # Forced into the reward params too, in the runner, so they cannot disagree.
-        self._wp_reach_mode = str(getattr(cur, "waypoint_reach_mode", "box") or "box")
+        self._wp_reach_mode = str(
+            getattr(cur, "waypoint_reach_mode", "sprite") or "sprite"
+        )
         self._wp_tol = int(getattr(cur, "waypoint_tolerance", 2)) if cur else 2
         # Random no-op start (see the block in reset()). 0 = off.
         self._noop_start_max = int(getattr(cur, "noop_start_max", 0)) if cur else 0
@@ -1720,8 +1722,15 @@ class CheckpointCurriculumEnv(gym.Env):
         #   detection -- geometry from `waypoint_reach_mode`; pose gate is the grounded
         #                allowlist in "box" mode (byte-identical to before) and the
         #                fail-open blocklist in "sprite" mode.
-        #   capture   -- ALWAYS grounded + the box test, i.e. exactly what shipped, so
-        #                seeds stay pinned where they are.
+        #   capture   -- grounded + the SAME geometry as detection (2026-09-11). It used
+        #                to be pinned to the box test unconditionally, on the reasoning
+        #                that unpinning the pools was a separate lever. The consequence
+        #                was that the flag's 3-seed A/B could not change pool
+        #                composition and did not, so the defect it targeted -- boxes
+        #                that overlap where the agent stands, and launch pads whose
+        #                tol-6 box fires on the PREDECESSOR's seed 16-24 px away -- was
+        #                never actually under test. Capture keeps the GROUNDED gate
+        #                either way: a seed has to be a state the agent can act from.
         if self._wp_enabled:
             _grounded = ctx.pose in SEED_POSES
             _pose_ok_detect = (
@@ -1757,7 +1766,9 @@ class CheckpointCurriculumEnv(gym.Env):
                 # would reload fine (verified frame-identical) but hands the agent a
                 # committed trajectory, and unpinning the pools is a separate lever from
                 # changing detection.
-                if _grounded and within_tol((wx, wy), x, y, _tol):
+                if _grounded and reaches(
+                    (wx, wy), x, y, _tol, mode=self._wp_reach_mode
+                ):
                     # Defer: capture the state + frame-stack now (the grounded
                     # moment) but score/admit at episode end via the survival
                     # gate (see the _pending_wp_saves flush). At most once per

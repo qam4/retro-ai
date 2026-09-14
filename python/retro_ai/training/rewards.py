@@ -1022,7 +1022,7 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     wp_tol = int(params.get("waypoint_reward_tol", 2))
     # Geometry of the reach test; forced to match the curriculum by the trainer.
     # See CurriculumConfig.waypoint_reach_mode.
-    wp_reach_mode = str(params.get("waypoint_reach_mode", "box"))
+    wp_reach_mode = str(params.get("waypoint_reach_mode", "sprite"))
     segment_shaping = bool(params.get("ladder_segment_shaping", False))
     # When segment shaping is on, the escalator RIDE pose (13) is a controlled
     # vertical traversal, not a fall, so it counts as on-surface (un-frozen) so

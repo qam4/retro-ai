@@ -310,7 +310,22 @@ class CurriculumConfig:
     # same traversal"). Switching to sprite mode therefore also silently fixes four
     # milestones that currently mark early; that is a reward change riding along with a
     # detection change, so it is called out rather than discovered later.
-    waypoint_reach_mode: str = "box"
+    #
+    # DEFAULT FLIPPED TO "sprite" (2026-09-11). The tolerance is a free parameter with
+    # no physically correct value, and the L4 box audit showed both ends of that bind at
+    # once: 12 pairs of waypoint boxes OVERLAP where the agent can stand (up to 33 px --
+    # the whole Hi chain, plus `Lhi_down_bot`+`Low2` and `Lclimb1_top`+`Rope1_launch`),
+    # so one grounded frame credits two waypoints; while a box narrow enough not to
+    # overlap misses genuine arrivals (anchor 28 on `Rope1` scored 0.00 against a policy
+    # landing 4 px off). Under sprite overlap the same audit gives ZERO standable
+    # overlaps, because the acceptance region is the sprite's own 14x18 rather than
+    # 49x13.
+    #
+    # This also switches CAPTURE, not just detection. The flag used to move detection
+    # only, with capture pinned to the box so "seeds stay pinned where they are" -- so
+    # the 3-seed A/B of this flag could not produce a pool change and did not: the
+    # defect it targeted was structurally out of its reach.
+    waypoint_reach_mode: str = "sprite"
     # Partition episode starts as reset | MANDATORY | OTHER instead of
     # reset | rungs | one waypoint group. A rung pool is not a distinct kind of
     # start -- "N mandatory targets done" is "standing at waypoint X" -- and it is
