@@ -1335,7 +1335,8 @@ class CheckpointCurriculumEnv(gym.Env):
         # positions. Capture is grounded-only, once per waypoint per episode,
         # and never re-captures the waypoint an episode was seeded from.
         self._wp_enabled = bool(getattr(cur, "waypoints", False)) if cur else False
-        # Geometry of the reach test for DETECTION only (capture stays box+grounded).
+        # Geometry of the reach test, for BOTH detection and capture (see the block in
+        # step() -- capture used to be pinned to the box and no longer is).
         # Forced into the reward params too, in the runner, so they cannot disagree.
         self._wp_reach_mode = str(
             getattr(cur, "waypoint_reach_mode", "sprite") or "sprite"
@@ -1762,10 +1763,11 @@ class CheckpointCurriculumEnv(gym.Env):
                     self._reached_wps_this_ep.add(wp_id)
                 if wp_id == self._start_wp or wp_id in self._captured_wps:
                     continue
-                # CAPTURE: grounded + box, unconditionally. A pool of mid-jump states
-                # would reload fine (verified frame-identical) but hands the agent a
-                # committed trajectory, and unpinning the pools is a separate lever from
-                # changing detection.
+                # CAPTURE: grounded + the configured geometry. The GROUNDED gate is what
+                # keeps mid-jump states out of the pools -- those reload fine (verified
+                # frame-identical) but hand the agent a committed trajectory. The
+                # geometry itself now follows `waypoint_reach_mode`, so a pool is built
+                # from the same test that decides the waypoint was reached.
                 if _grounded and reaches(
                     (wx, wy), x, y, _tol, mode=self._wp_reach_mode
                 ):
