@@ -1,0 +1,102 @@
+# L4 v15 — 2M, COLD, sprite + AIRBORNE MILESTONE MARKING. One lever against v14.
+#
+# THE LEVER: reward milestone marking moved ABOVE the airborne early return in
+# rewards.py, keeping the {11 fall, 12 death-anim} blocklist. Everything else is byte
+# identical to v14, including the cold start, seed 42 and sprite reach mode -- so v14 is
+# a genuine control.
+#
+# WHY. Only MANDATORY targets are summed in the reward, and all five of L4's mandatory
+# jump landings (Fr1, Rope1, Spring, Step, Low2) are points the agent FLIES through. The
+# marking loop used to sit after `if airborne: return reward`, so it never saw those
+# frames. Measured on v14's own policy, 120 from-reset episodes:
+#
+#     target    sprite test fires   marked BEFORE   marked AFTER
+#     Rope1          107/120            2/120         107/120
+#     Spring          95/120           14/120          95/120
+#     Step             3/120            1/120           3/120
+#
+# An unmarked group stays in the potential's sum and keeps pulling toward itself. On
+# floor 12 the unmarked backward terms outweigh the forward ones and REVERSE the
+# gradient: sum 984 at px 184 vs 888 at px 232 (away from the rope-2 gap), where with
+# groups 0-7 marked it is 320 vs 368 (toward it). That is the wall this run tests.
+#
+# NOT CHANGED: the airborne shaping FREEZE. Returning Phi=None while airborne deleted the
+# return-leg debt and paid a farmable +Phi per approach-then-jump-back cycle, which PPO
+# exploited for 15M steps (H-AH). Marking moved; crediting did not. A mid-air mark cannot
+# pay by itself -- it changes the target set, and the resulting active_wp change
+# rebaselines on the next grounded frame, the same discipline a fruit pickup uses.
+#
+# WHAT TO READ. v14 stalled at Spring 0.55, Step 0.01, Lclimb3_top 0.00 with the deep
+# route empty. The question is whether Step/Lclimb3_top move. It CANNOT establish
+# "better": one cold seed at 2M, and v6 seed 42 is a known 1-in-4 outlier.
+#
+# NOT bundled: a new OR-group [Low2_launch f12, Hi2 f16] to give the low route a
+# mid-course milestone. Measured to double floor 12's gradient (48 -> 96) and to stay
+# route-neutral (the members swap nearness at f11 px 296, where route B's ladder is), but
+# it is a second reward change with no measured failure behind it. Separate lever.
+training:
+  timesteps: 2_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v15_airmark_cold_2m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # NO resume and NO resume_pools, deliberately. See the header.
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+# Identical to v13's curriculum block except for waypoint_reach_mode, so the only
+# intentional difference between this run and the v13 lineage is the reach geometry (plus
+# the cold start, which is forced by the question -- see the header).
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  # The lever. Default is now "sprite"; stated explicitly so this config records what it
+  # ran under rather than depending on the default of the day.
+  waypoint_reach_mode: sprite
+  # `admit_requires_grounded` stays OFF: measured at 3 seeds x 2M with no effect on pool
+  # composition and its behaviour is not understood (H-AW).

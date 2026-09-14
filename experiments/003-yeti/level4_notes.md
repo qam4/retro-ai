@@ -1768,6 +1768,148 @@ Tools added: `debug/l4_pad_reward.py` (trainer-identical reward on a pad),
 `debug/l4_low2_landing.py`, `debug/l4_rope_compare.py`, `debug/l4_rope2_runup.py`,
 `debug/l4_platform_audit.py` (note its hold is too short, see above).
 
+## PLAN OF RECORD (2026-09-14): THE REWARD CANNOT MARK A JUMP LANDING
+
+### What led here
+
+`de21939` made sprite overlap the default reach test for BOTH detection and capture. The
+tolerance box had no correct value: 12 pairs of L4 capture boxes overlapped where the agent
+can stand (up to 33 px -- the whole Hi chain, plus `Lhi_down_bot`+`Low2` and
+`Lclimb1_top`+`Rope1_launch`), so one grounded frame credited two waypoints; and a box
+narrow enough not to overlap missed real arrivals. Sprite overlap gives ZERO standable
+overlaps because the region is the sprite's own 14x18 instead of 49x13.
+
+**v14 (cold, 2M, sprite, seed 42, 57m34s) confirms sprite capture works.** It is the first
+L4 run with no inherited weights and no inherited pools, so it is the first observation of
+where sprite capture actually puts seeds. Every pool lands on its anchor:
+
+```
+                    v13 (box capture)              v14 (sprite capture)
+Fr1_launch      px 208, y 162  (24 px off, ladder)   px 228, y 158  (4 px)
+Rope1_launch    px  32, y 122  (24 px off, ladder)   px  52, y 118  (4 px)
+Rope1           px 124         (16 px off)           px 112         (4 px)
+Step            px 256         (16 px off)           px 268         (4 px)
+Fr2             px 308         (12 px off)           px 300         (4 px)
+```
+
+Max |dx| is 4 px for every one of the 14 pools it filled. Reach held to `Spring` 0.55, then
+`Step` 0.01 and `Lclimb3_top` 0.00; the deep route stayed empty, as predicted for a cold
+2M run. Figure: `debug/l4_v14_seeds/v14_anchors_and_seed_heads.png`.
+
+### The defect
+
+Only MANDATORY targets are summed in the reward, as eleven OR-groups. All five mandatory
+JUMP LANDINGS -- `Fr1`, `Rope1`, `Spring`, `Step`, `Low2` -- are points the agent flies
+through. Measured over 120 from-reset episodes with v14's policy, comparing what the sprite
+test fires on against what the reward actually marks:
+
+```
+target   px,y       sprite fires   reward marks   poses at which it fires
+Rope1   108,118      107/120          2/120       9(jump-right)x126, grounded x5
+Spring  212, 94       95/120         14/120       9(jump-right)x321, 10(jump-left)x53
+Step    272,102        3/120          1/120       9(jump-right)x20
+```
+
+`Rope1` is inside the agent's body in 107 of 120 episodes and marked in 2. The cause is
+that the marking loop sits AFTER the airborne early return, so it only ever sees frames in
+the reward's own `SURFACE_POSES`; 576/576 observed marks were on a grounded pose. A landing
+is precisely when the agent is airborne. The comment claiming marking is "UNGATED on
+purpose" is true of the loop and false of the code path.
+
+**Consequence, computed on floor 12 (the rope-2 launch platform):**
+
+```
+                       px 184    px 232     the shaping pulls
+groups 0-7 marked         320       368     LEFT, toward rope 2 and the princess
+4,6,7 unmarked (real)     984       888     RIGHT, back the way it came
+```
+
+Four backward terms (`Rope1` 320, `Spring` 200, `Step` 144, `Lclimb3_top` 96 at px 184)
+outweigh the two forward ones. So an agent on the rope-2 pad is pulled AWAY from the gap by
+milestones it physically passed but never got credited for. That is a better explanation of
+the floor-12 wall than anything else measured, and it fits the otherwise-odd finding that
+the only positive shaped reward on that pad was +0.12 for a single leftward step.
+
+Note this is the same failure already on record for `Fr1` and `Step` -- "a MANDATORY
+milestone that had never been markable since v4, so its distance term never switched off"
+(`dc8e5a0`) -- reappearing for a different reason.
+
+### The three steps, in order
+
+1. **Move marking above the airborne early return.** Keep the `{11, 12}` blocklist so a
+   FALL past a waypoint does not mark it (measured: `BLOCKLIST` and `ANY` are identical for
+   every mandatory target, so the blocklist costs nothing). Leave the shaping freeze
+   completely untouched -- returning `Phi=None` while airborne deleted the return-leg debt
+   and PPO farmed it for 15M steps (H-AH). Only marking moves.
+2. **Verify WITHOUT training.** Re-run `debug/l4_reward_marks.py` against v14's own policy.
+   The marking rates are near-deterministic, so this settles whether the mechanism works,
+   for ~5 minutes instead of ~55. Expect `Rope1` 2 -> ~107/120 and `Spring` 14 -> ~95/120.
+   If it does not move, the fix is wrong and no run is justified.
+3. **Then one training run**: cold, 2M, seed 42, identical to v14 except the fix, so v14 is
+   a genuine control -- same cold start, same sprite mode, same seed, ONE lever. It will
+   show whether the agent now gets past `Spring`/`Step`. It CANNOT establish "better": one
+   cold seed, and v6 seed 42 is a known 1-in-4 outlier.
+
+### Deliberately NOT in this change
+
+A new OR-group with one member per route -- `Low2_launch` (px 188, f12) and `Hi2` (px 224,
+f16) -- to give the low route a mid-course milestone. Measured: it doubles floor 12's
+leftward gradient (48 -> 96 across the platform), and it does NOT force a route, because
+the two members swap which is nearer at f11 px 296, exactly where route B's `Lhi_up` ladder
+is. It is a REWARD change with no measured failure behind it, so it is a separate lever
+after the marking fix is judged.
+
+Also settled while looking: **floor 12 has no mandatory target by necessity, not oversight.**
+Route B (f11 -> f14 -> Hi chain -> f13) never touches f12, so mandating it would force
+route A. That is what group 9's OR `[J12_13_b, Lhi_down_bot]` exists to avoid. An earlier
+reading of this as an omission is withdrawn.
+
+### v15 RESULT (2026-09-14) — THE FIX WORKS AND THE RUN IS WORSE
+
+Step 3 ran: cold, 2M, seed 42, byte-identical to v14 except marking moved above the
+airborne return. 58m34s, exit 0. v14 is a true one-lever control.
+
+```
+matched at 2M          v14 reach   v15 reach   delta    v14 pool  v15 pool
+Lfruit_top                  0.95        0.91   -0.04        100       100
+Fr1                         0.92        0.79   -0.13        100       100
+Lascent_top                 0.72        0.55   -0.17        100       100
+Lclimb1_top                 0.71        0.53   -0.18        100       100
+Rope1                       0.65        0.25   -0.40         88       100
+Lclimb2_top                 0.61        0.16   -0.45        100       100
+Spring                      0.55        0.08   -0.47        100        50
+Step                        0.01        0.00   -0.01         54         3
+Lclimb3_top                 0.00        0.00    0.00          9         —
+```
+
+Not noise on one waypoint: a MONOTONE decline that widens with depth, -0.04 at the top to
+-0.47 at `Spring`. `Step`'s pool fell 54 -> 3 and `Lclimb3_top`'s 9 -> empty.
+
+So the mechanism did exactly what it was built to do and the outcome went the other way.
+`Rope1` marking went 2/120 -> 107/120 (verified on v14's own policy before the run) and
+`Rope1` reach fell 0.65 -> 0.25.
+
+**Both of these are true at once, and neither cancels the other:**
+
+* The defect is real. An unmarked group stays in the sum and reverses floor 12's gradient
+  (984 at px 184 vs 888 at px 232, i.e. away from the gap).
+* Removing the defect made this run worse at every depth.
+
+**NOT explained.** A candidate, recorded as a hypothesis and NOT as a finding: marking now
+happens mid-jump, so the `active_wp` change forces the rebaseline onto the LANDING frame,
+discarding that landing's shaping delta. Before, mark and landing coincided on one grounded
+frame. On the shared trunk the five ladder groups and `Fr1` were ALREADY marking fine at
+111-117/120, so the fix bought them nothing while possibly moving their rebaselines — and
+the trunk is exactly where the decline starts. Untested.
+
+**What this run does NOT test.** Neither v14 nor v15 reached `Spring` in a state where the
+fix could pay off, and neither reached floor 12 at all. So it measures only the collateral
+cost on the trunk, never the benefit it was built for. A cold 2M run cannot reach the wall
+the fix targets; testing that needs a warm start from a policy that already holds
+`Low1`/`Low2_launch`, which is what v13's lineage had and this cold pair does not.
+
+Also one cold seed, and seed 42 is a known 1-in-4 outlier, so "worse" here is one sample.
+
 ## Open questions, in priority order
 
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300 for v6's

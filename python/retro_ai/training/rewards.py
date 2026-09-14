@@ -972,6 +972,15 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
 # table: experiments/003-yeti-training.md "run 3".
 SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
 
+# Poses at which a waypoint may NOT be marked reached: 11 = fall, 12 = death anim.
+# Falling PAST a waypoint is not reaching it. Everything else counts, INCLUDING the
+# jump poses 9/10 -- see the marking block for why that matters.
+#
+# Kept as a local constant rather than importing yeti (this module stays game-agnostic,
+# same as SURFACE_POSES above). test_reward_mark_blocklist_matches_yeti pins it equal to
+# yeti.NON_TRAVERSAL_POSES so the two cannot drift.
+MARK_BLOCKED_POSES = frozenset({11, 12})
+
 
 @register("fruit_bonus_path_progress_pbrs_grounded")
 def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> RewardFn:
@@ -1232,6 +1241,44 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             pose = getattr(ctx, "pose", -1)
             airborne = pose is not None and pose >= 0 and pose not in _surf
 
+            # MILESTONE MARKING, ahead of the airborne return (2026-09-14).
+            #
+            # This used to live below, after `if airborne: return reward`, which made it
+            # unreachable on airborne frames however "ungated" the loop itself looked.
+            # Every mandatory L4 target that is a JUMP LANDING is therefore nearly
+            # unmarkable, because a landing is exactly when the agent is airborne.
+            # Measured over 120 from-reset episodes: the sprite test contains `Rope1`
+            # (px 108, y 118) in 107 episodes, almost all in pose 9, and the reward
+            # marked it in 2. `Spring` was 95 against 14.
+            #
+            # The cost is not just a missing credit: an unmarked group stays in the sum
+            # and keeps pulling. On floor 12 the four unmarked backward terms outweigh
+            # the two forward ones and REVERSE the gradient -- sum 984 at px 184 against
+            # 888 at px 232, i.e. the shaping pushes the agent AWAY from the rope-2 gap.
+            # With groups 0-7 marked it is 320 against 368, pulling toward the gap.
+            #
+            # Only MARKING moves. The airborne freeze below is untouched: returning
+            # Phi=None while airborne rebaselined prev_phi, deleted the return-leg debt
+            # and gave a free +Phi per approach-then-jump-back cycle, which PPO farmed
+            # for 15M steps (H-AH). A mid-air mark cannot pay anything by itself: it
+            # only changes the target set, and the resulting `active_wp` change
+            # rebaselines on the next grounded frame -- the same discipline a fruit
+            # pickup uses, and required, or the potential jumps when a term leaves.
+            if _wp_groups and not ctx.died and pose not in MARK_BLOCKED_POSES:
+                for gi, members in enumerate(_wp_groups):
+                    if gi in self._reached_wp:
+                        continue
+                    for _ident, wx, wy in members:
+                        if reaches(
+                            (wx, wy),
+                            ctx.curr_x,
+                            ctx.curr_y,
+                            wp_tol,
+                            mode=wp_reach_mode,
+                        ):
+                            self._reached_wp.add(gi)
+                            break
+
             # (D2) Airborne: no credit, HOLD prev_phi (don't sample/rebaseline)
             # and HOLD the deferred-fruit baseline (don't sample it either).
             if airborne:
@@ -1273,29 +1320,13 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                 ladder = seg_ladder
                 if floor is None and ladder is None:
                     floor = self._base.last_floor
-                for gi, members in enumerate(_wp_groups):
-                    if gi in self._reached_wp:
-                        continue
-                    for _ident, wx, wy in members:
-                        # Shared reach test (retro_ai.training.targets.reaches) -- the
-                        # SAME comparison AND the same geometry mode the curriculum
-                        # uses, so the two cannot drift. NOTE the tolerances still
-                        # differ in "box" mode: this passes `waypoint_reward_tol` (2)
-                        # while the curriculum passes 6 for jump waypoints. In "sprite"
-                        # mode the tolerance is ignored entirely, which removes that
-                        # divergence as a side effect.
-                        if reaches(
-                            (wx, wy),
-                            ctx.curr_x,
-                            ctx.curr_y,
-                            wp_tol,
-                            mode=wp_reach_mode,
-                        ):
-                            self._reached_wp.add(gi)
-                            break
-                # Reach-marking above is UNGATED on purpose: a group the agent
-                # genuinely stood on stays done, whatever phase it happened in.
-                # Only the SUM is phase-gated.
+                # Marking now happens ABOVE, before the airborne return, so that a jump
+                # LANDING can be credited. The reach test there is the shared
+                # retro_ai.training.targets.reaches -- the SAME comparison and geometry
+                # mode the curriculum uses, so the two cannot drift. NOTE the tolerances
+                # still differ in "box" mode: the reward passes `waypoint_reward_tol`
+                # (2) while the curriculum passes 6 for jump waypoints; in "sprite" mode
+                # the tolerance is ignored entirely, removing that divergence.
                 fruits_left = bool(ctx.fruits_present) and any(ctx.fruits_present)
                 wp_sum = 0
                 active = set()
