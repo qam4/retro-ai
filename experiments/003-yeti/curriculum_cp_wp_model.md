@@ -368,7 +368,7 @@ snapshot is n=1; the sweep evaluates all of them, so use its spread.
 
 ## DETECTION vs frame_skip: why WP placement must be "where the agent RESTS"
 
-Measured on L3 (`debug/l3_lesc_boarding.py`), and the reason `Lesc_top` reads
+Measured on L3 (`scripts/mo5/yeti/diag/l3_lesc_boarding.py`), and the reason `Lesc_top` reads
 reach 0.4% while the point just PAST it (`Ldown_bot`) reads 78% from reset — the
 agent obviously crosses it, we just don't see it.
 

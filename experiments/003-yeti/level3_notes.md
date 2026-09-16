@@ -31,7 +31,7 @@
 
 ## L3 UNMARKABLE MILESTONES — measured 2026-08-24, NOT yet fixed
 
-`debug/yeti_validate_targets.py --level 3 --measure --episodes 8 --models
+`scripts/mo5/yeti/diag/yeti_validate_targets.py --level 3 --measure --episodes 8 --models
 <l3_v6_15M>,<l3_v12_base>`. Two tiers: a static check (does the anchor's box contain
 any position that resolves to the target's own floor, via the same
 `agent_floor_from_pixel_xy` the reward uses) and a measured check (does the box ever
@@ -220,7 +220,7 @@ escalator.
 Completed, exit 0. **SOLVED THE ESCALATOR** (the v1 hard wall) after pose-13
 seeding + the escalator crossing discovery (run right + jump into wall at
 x32 -> pose 13 ride down y94->158 -> jump right at ride_y~146-158 -> land
-ELAND; verified in `debug/escalator_crossing.mp4`). From the goat platform
+ELAND; verified in `experiments/003-yeti/evidence/escalator_crossing.mp4`). From the goat platform
 the agent crossed the escalator ~81%. BUT the policy OSCILLATED (n_steps=16,
 no target_kl = the L1/L2 destructive-update pattern): a from-reset snapshot
 sweep showed BR/Lsc1 reachable ~62% at the 10.5M snapshot but ~1% at the
@@ -285,12 +285,12 @@ as L2's L34, notes section 22.1). Verified end-to-end:
 - Reward gradient is CORRECT (not a bug): graph path-distance to princess
   decreases monotonically SN1 448 -> SN2-left 400 -> SN2-at-ladder(x70) 352 ->
   SN3 328 -> A1 216. Shaping pulls right-then-up; going back down `Lsc3`
-  is against the gradient. (`debug/l3_sn2_gradient.py`.)
+  is against the gradient. (`scripts/mo5/yeti/diag/l3_sn2_gradient.py`.)
 - Snowball is DODGEABLE, not the wall (user confirmed from the video: the
   agent jumps the snowball, survives, then walks PAST the ladder and even
   climbs back down `Lsc3`).
 - **The wall is the mount mechanic.** Driving the model to the ladder alive
-  then forcing UP (`debug/l3_lsc4_mount.py`, exact-x match, 150 eps each):
+  then forcing UP (`scripts/mo5/yeti/diag/l3_lsc4_mount.py`, exact-x match, 150 eps each):
   x68 0/19, x69 0/4, **x70 4/4 (3 straight to SN3 y86)**, x71 0/3, x72 0/6.
   So the ladder mounts ONLY at exactly ram x=70; one pixel off, UP is a
   no-op. While dodging the snowball the agent almost never stops on that
@@ -346,7 +346,7 @@ fruit on A4 -> A5). Evidence:
   48px; it crept 64->48px over the run then plateaued. So it gets partway up
   A1..A5 but never near the top, and never grabs the fruit.
 
-Incentive is NOT the problem (verified `debug/l3_ascent_gradient.py`): graph
+Incentive is NOT the problem (verified `scripts/mo5/yeti/diag/l3_ascent_gradient.py`): graph
 path-distance to princess decreases monotonically every rung SN3 304 -> A1
 212 -> A2 180 -> A3 144 -> A4/fruit 92 -> A5 44. Each successful step up pays
 positive PBRS. The blocker is that A1-A5 are tiny platforms (A1 = 4px wide)
@@ -385,14 +385,14 @@ Root-cause dig (v8 champion, seed from `Lsc4_top`/SN3, faithful restore):
   heading LEFT toward the A1 jump-off (SN3 has its own snowball; `Lsc4_top`
   reject count r46943 corroborates: most SN3 arrivals die fast). A few fall off.
 - Scripted brute-force (walk to SN3 left edge ram48-56 then jump-left, several
-  delays; `debug/l3_sn3_a1_feasible.py`): 0/25 land A1 under EVERY plan
+  delays; `scripts/mo5/yeti/diag/l3_sn3_a1_feasible.py`): 0/25 land A1 under EVERY plan
   (best_y stays 86). Crude scripts failed on the SN2 snowball too (where the
   model COULD dodge), so this isn't proof of impossibility — but neither 15M of
   training nor brute-force has landed a single A1.
 - Geometry: SN3 floor10 ram50-77 y86; A1 floor11 ram42-45 (4px) y78; jump edge
   is a small up-LEFT hop from SN3's left edge (~ram48) to A1's right edge
   (~ram44), Δ~16px left + 8px up, onto a 4px platform, past an SN3 snowball.
-- Video for eyeballing: `debug/l3_sn3_a1_best.mp4` (longest SN3 survivor).
+- Video for eyeballing: `experiments/003-yeti/evidence/l3_sn3_a1_best.mp4` (longest SN3 survivor).
 
 Takeaway: SN3->A1 is the wall — a precise up-left jump onto a 4px platform
 while dodging an SN3 snowball, AND unseedable (can't capture A1 without first
@@ -507,7 +507,7 @@ Candidate v11 levers (undecided):
 
 ## CORRECTION + real diagnosis (post-v10 link measurements)
 Two earlier claims in this file were WRONG; the per-link measurements
-(`debug/l3_link_matrix.py`, `debug/l3_link_over_snapshots.py`) correct them:
+(`scripts/mo5/yeti/diag/l3_link_matrix.py`, `scripts/mo5/yeti/diag/l3_link_over_snapshots.py`) correct them:
 
 1. **"v9 acquired the ENTIRE upper level" — WRONG.** That read pool sizes +
    goal_scores. In truth the goal_scores (A4 0.45 / A5 0.50 / Lprincess 0.95)
@@ -534,7 +534,7 @@ Pattern: WALKING links are fine (60-95%); the JUMP links (`X_launch -> X`) are
 
 **KEY MEASUREMENT — the jumps are trivially EXECUTABLE, so this is a
 credit/exploration problem, not a mechanics problem.**
-`debug/l3_a1_jump_bruteforce.py`: from A1_launch seeds, an immediate jump-left
+`scripts/mo5/yeti/diag/l3_a1_jump_bruteforce.py`: from A1_launch seeds, an immediate jump-left
 lands A1 **10/10** for EVERY hold length (2/4/6/8), and 9/10 even after a 5-step
 wait. So no precise timing is required — yet the policy only manages 5-20%.
 
@@ -591,7 +591,7 @@ A ~200x gap at the same location.
 ### SN3 debugged properly (several of my hypotheses refuted)
 - **Save/restore is faithful.** Capturing a WP state live, reloading it and
   replaying the IDENTICAL action list gives identical survival: 0/27 mismatches
-  (`debug/l3_capture_replay.py`). Seeding works as advertised.
+  (`scripts/mo5/yeti/diag/l3_capture_replay.py`). Seeding works as advertised.
 - **The seeds are survivable.** Random action search from `Lsc4_top` seeds
   survives the full 30-step gate in 14-22 of 300 tries (~5-7%). So the admission
   gate is HONEST and there is no seeding bug — the earlier "these seeds are

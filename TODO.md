@@ -268,7 +268,7 @@ FOLLOW-UPS
   Verified: SN3->fruit and ->princess finite + monotonic; L1/L2 byte-identical.
   The compressor on A3 stays an unmodelled visual hazard (like the snowballs).
 - **Waypoint detection vs `frame_skip` — placement rule + unit asymmetry.**
-  (Measured, `debug/l3_lesc_boarding.py`; full write-up in
+  (Measured, `scripts/mo5/yeti/diag/l3_lesc_boarding.py`; full write-up in
   experiments/003-yeti/curriculum_cp_wp_model.md "DETECTION vs frame_skip".)
   Detection runs once per gym STEP = 4 emulator frames, so the tol-box is
   sampled in 4px jumps; and because WPs are `(x_ram, y_px)` with ONE `tol`, the

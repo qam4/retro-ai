@@ -222,7 +222,7 @@ on f12. Both boxes need auditing, not just `Low1_launch`.
 
 ## THE WALLS (measured 2026-08-24)
 
-Ran `debug/l4_low_route_probe.py --n 20 --skip-poses` and
+Ran `scripts/mo5/yeti/diag/l4_low_route_probe.py --n 20 --skip-poses` and
 `debug/l4_low1_jump_bruteforce.py --pool Low1_launch --n-seeds 12` against v4's
 pools. Both scripts already existed (written 2026-08-19/20) with explicit decision
 rules; their results had never been recorded.
@@ -293,7 +293,7 @@ SNOWBALLS = {"P7": (28, 29), "P10": (46, 53)}
 
 `P10` is **floor 13 — rope-2's landing platform** — and it spans cols 0–15, i.e.
 px 0–127, the platform's full width. Visually confirmed in
-`debug/shots/l4_f12_launch_44_70.png`.
+`experiments/003-yeti/evidence/shots/l4_f12_launch_44_70.png`.
 
 This is the asymmetry that explains why rope 1 is easy (reach 0.82 in v4) and rope 2
 is a 0/300 wall: **rope 1's landing platform (P17, floor 7) has no snowball; rope 2's
@@ -301,7 +301,7 @@ does.** So rope 2 is not just a harder rope, it is a rope whose landing must be 
 against a hazard that traverses the entire target platform. Any fix that treats it as
 a pure locomotion problem is attacking the wrong constraint.
 
-Supporting evidence from v6 (`debug/l4_v6_rope2_videos/`, 6 episodes): 5/6 end in
+Supporting evidence from v6 (`experiments/003-yeti/evidence/l4_v6_rope2_videos/`, 6 episodes): 5/6 end in
 death pose 11 (FALL); ep3 hits max_steps stuck at (44, 74) in **pose 17** on the
 launch pad, never departing. Training counters at the same rung: arrives 61%,
 `prog` 0.00, **5,559 precarious rejections**.
@@ -333,7 +333,7 @@ for L3's escalator ride). Consequences:
 blocks rope 2.** An earlier version of this file ranked "ropes modelled as plain
 jump_edges + pose 14 frozen" as L4's top blocker. That is refuted by L4's own data:
 
-* L4 has TWO ropes, per the authored route in `debug/l4_route_check.py` —
+* L4 has TWO ropes, per the authored route in `scripts/mo5/yeti/diag/l4_route_check.py` —
   `("rope", 92, 93)` = ROPE 1 (f6->f7), and `("rope", 54, 53)` = ROPE 2 (f12->f13,
   the wall). Plus `("spring", 74, 75)`.
 * `jump_edges` contains BOTH `(6,7)` and `(12,13)`, and pose 14 is outside
@@ -411,7 +411,7 @@ accident. Equivalence to the old inline logic is pinned exhaustively in
 regression test. Verified: 432 tests pass; a warm-started 40k L3 run marks reaches
 normally (`reset_reach` 0.86 on rungs 1-6, `route[8]: 6/19`).
 
-**Validation, done 2026-08-24: `debug/yeti_validate_targets.py`.** Two tiers, because
+**Validation, done 2026-08-24: `scripts/mo5/yeti/diag/yeti_validate_targets.py`.** Two tiers, because
 they catch different failures:
 
 * STATIC (no emulator): does the anchor's box contain any position that resolves to
@@ -497,7 +497,7 @@ L4 route points: 33 -> 30.
    from the jump-edge structure (`J{fa}_{fb}_b` is the arrival, `_a` the launch pad),
    so it survives anchor moves. Pinned by a test asserting 14 on both L3 and L4.
 
-**Verification.** 434 tests pass. `debug/yeti_validate_targets.py --level 4 --measure`
+**Verification.** 434 tests pass. `scripts/mo5/yeti/diag/yeti_validate_targets.py --level 4 --measure`
 now reports "no unmarkable targets found" where it previously found five. L3 marking
 spot-checked unchanged at `Lsc4_top`, `Lsc1_top`, `A1`.
 
@@ -568,7 +568,7 @@ airborne so it is a non-issue today, but it returns the moment a waypoint is pla
 on a carried/moving segment, or a moving pose is added to `SEED_POSES` (as L3 did
 with escalator ride 13).
 
-Visual: `debug/l4_climb_visual/rest_at_66_82_zoom.png` (via `debug/l4_climb_shot.py`)
+Visual: `experiments/003-yeti/evidence/l4_climb_visual/rest_at_66_82_zoom.png` (via `debug/l4_climb_shot.py`)
 draws the current tol-2 box and the proposed tol_x1/tol_y2 box on a real frame, with
 the RAM reference point crosshaired. Conventions verified in that render: `x_ram*4+8`
 is the sprite CENTRE (the crosshair lands on the ladder's `centre_x`), and
@@ -607,7 +607,7 @@ nothing** — 0/100 last 40 gym steps, median 10 (clean) and 15 (ladder). Contra
 `Low2_launch`, where 20/20 survive 150 frames. f11 offers no safe dwell, so there is
 no "wait for a gap" option of the kind that cracked `Step`. Whether the remaining
 65% failure from clean seeds is policy skill or kangaroo phase baked into each seed
-is exactly what `debug/l4_seed_determinism.py` was written to separate, and it has
+is exactly what `scripts/mo5/yeti/diag/l4_seed_determinism.py` was written to separate, and it has
 not been run.
 
 Note: `debug/l4_low1_jump_bruteforce.py --n-seeds 100` was killed by the sidecar's
@@ -617,7 +617,7 @@ the n=12 grid already gave per-class feasibility.
 
 ## Q0 ANSWERED (2026-08-24) — f11 is NOT phase-determined; the pool is real practice
 
-`debug/l4_seed_determinism.py --pools Low1_launch,Lclimb3_top --clean-only
+`scripts/mo5/yeti/diag/l4_seed_determinism.py --pools Low1_launch,Lclimb3_top --clean-only
 --model 14000000 --n 25 --repeats 10` (v4 pools; two small edits made to the script:
 a `--model` option, because it hardcoded the degraded `final_model.zip` and a bad
 policy loses everywhere and fakes a phase-determined verdict; and `--clean-only`,
@@ -708,7 +708,7 @@ foot row spans centre-6 .. centre+2, i.e. ~9 px, narrower than the sprite
 
 The convention is asymmetric — centre in x, top in y — which is easy to get wrong.
 
-### How to measure a standable span (`debug/l4_edge_limit.py`)
+### How to measure a standable span (`scripts/mo5/yeti/diag/l4_edge_limit.py`)
 
 Naive probes do NOT work, because of the doomed frame. The method that does:
 
@@ -944,7 +944,7 @@ for the whole history of this project, is the manoeuvre L4's wall is made of.
 
 Identified from the first rope-2 crossing ever recorded on video: v13's champion, from
 reset, episode 236 of a 1500-episode hunt (`debug/l4_rope2_video.py`, clip
-`debug/l4_rope2_video/crossing_1_ep236_neither.mp4` — the filename says "neither"
+`experiments/003-yeti/evidence/l4_rope2_video/crossing_1_ep236_neither.mp4` — the filename says "neither"
 because the script's classifier only knew pose 14 at the time). User-confirmed on the
 video.
 
@@ -1548,7 +1548,7 @@ train from, so the 7 seeds v6 banked were dead weight.
 Read `yeti_map.py`'s comment above `jump_waypoint_pos` FIRST. It already says, in full:
 
 > `Low2_launch edge 44 -> 45. px 184 -> 188. Floor 12's tile edge is 184 but the agent
-> CANNOT stand there... Measured left limit is 188 = x_min + 4 (debug/l4_edge_limit.py,
+> CANNOT stand there... Measured left limit is 188 = x_min + 4 (scripts/mo5/yeti/diag/l4_edge_limit.py,
 > which confirms a stance by reloading it and holding NOOP). This is why all 100
 > Low2_launch seeds were doomed -- the capture box was centred one step past the edge, so
 > the pool taught falling instead of the rope-2 crossing, and the agent never attempted
@@ -1621,8 +1621,8 @@ concludes this is fixed. See method rule 10 (revert surgically, never wholesale)
 
 Tools: `debug/l4_crossing_trace.py` (per-step reward trace + video),
 `debug/l4_low2launch_fix_visual.py`, `debug/l4_pull_direction.py`.
-Figure `debug/l4_rope2_geom/low2launch_fix_v2.png`;
-clip `debug/l4_rope2_fromreset/rope2_failed_ep0.mp4`.
+Figure `experiments/003-yeti/evidence/l4_rope2_geom/low2launch_fix_v2.png`;
+clip `experiments/003-yeti/evidence/l4_rope2_fromreset/rope2_failed_ep0.mp4`.
 
 
 ## v13 RESULT (2026-09-11) — PASS as "not worse", and there is now a champion for current code
@@ -1763,10 +1763,10 @@ Method traps hit while measuring this, worth not repeating:
   design. Diffing them against measured standable spans does not reveal bugs; an
   apparent 13-floor mismatch built this way was meaningless and is withdrawn.
 
-Tools added: `debug/l4_pad_reward.py` (trainer-identical reward on a pad),
+Tools added: `scripts/mo5/yeti/diag/l4_pad_reward.py` (trainer-identical reward on a pad),
 `debug/l4_pad_wait_sweep.py`, `debug/l4_pad_hold_length.py`, `debug/l4_pad_phase_seed.py`,
 `debug/l4_low2_landing.py`, `debug/l4_rope_compare.py`, `debug/l4_rope2_runup.py`,
-`debug/l4_platform_audit.py` (note its hold is too short, see above).
+`scripts/mo5/yeti/diag/l4_platform_audit.py` (note its hold is too short, see above).
 
 ## PLAN OF RECORD (2026-09-14): THE REWARD CANNOT MARK A JUMP LANDING
 
@@ -1794,7 +1794,7 @@ Fr2             px 308         (12 px off)           px 300         (4 px)
 
 Max |dx| is 4 px for every one of the 14 pools it filled. Reach held to `Spring` 0.55, then
 `Step` 0.01 and `Lclimb3_top` 0.00; the deep route stayed empty, as predicted for a cold
-2M run. Figure: `debug/l4_v14_seeds/v14_anchors_and_seed_heads.png`.
+2M run. Figure: `experiments/003-yeti/evidence/l4_v14_seeds/v14_anchors_and_seed_heads.png`.
 
 ### The defect
 
@@ -2072,13 +2072,39 @@ Everything before it is at 84.7%.
 6. Run the scripted jump grid on exactly the 9 ALWAYS-lose clean seeds (see Q0). If
    a script wins from them, the f11 shortfall is entirely the policy's and nothing
    about those states needs changing.
-7. Fix the depth proposer in `debug/yeti_validate_targets.py`: it proposes anchors at
+7. Fix the depth proposer in `scripts/mo5/yeti/diag/yeti_validate_targets.py`: it proposes anchors at
    transient positions (it suggested `Rope1`→(34,110), mid-rope-carry, and
    `Low1_launch`→(66,86), mid-climb). Constrain suggestions to the floor's standing y.
 
+## Where the diagnostics went (2026-09-16)
+
+`debug/` was gitignored with zero tracked files, so every diagnostic in this project was
+one `git clean` from gone along with 836M of stale run data. It is now scratch only —
+safe to wipe at any time — and anything that backs a claim lives somewhere durable:
+
+| what | where now |
+|---|---|
+| diagnostic tools (19) | `scripts/mo5/yeti/diag/` (tracked) |
+| figures/videos a note cites (24 files) | `experiments/003-yeti/evidence/` (tracked) |
+| run scripts for the A/Bs (5) | `experiments/003-yeti/runs/` (tracked) |
+| monitor logs for cited runs (13) | `output/monitor/<job-id>/` |
+| everything else | deleted |
+
+Paths in these notes were rewritten to match. **83 scripts were retired**, and because
+`debug/` was never in git they are NOT recoverable — sections above still name about 25 of
+them (`l4_reward_marks.py`, `l4_pad_wait_sweep.py`, `l4_gate_admitted_proof.py`,
+`l4_crossing_trace.py`, and so on). Those names are kept as provenance for how a number
+was obtained; the number itself is in these notes, which is the record. Two tools replace
+most of them: `diag/record.py` for video and `diag/figure.py` for annotated frames, both
+parameterised over source, actor and overlay.
+
+Retired for a stated reason, not by age: superseded by a decision already taken (sprite
+reach is the default, so all the box/tolerance tooling is moot), superseded by those two
+tools, or a one-shot investigation whose answer is written above.
+
 ## Method notes
 
-* `debug/l4_low_route_probe.py` scripts through a raw `BaseEnv` (`go_explore.make_env`),
+* `scripts/mo5/yeti/diag/l4_low_route_probe.py` scripts through a raw `BaseEnv` (`go_explore.make_env`),
   i.e. **1 emulator frame per step**. `l4_low1_jump_bruteforce.py` uses the gym
   stack at frame_skip 4, matching training. A move scriptable only at 1-frame
   granularity may still be out of reach for a policy acting every 4 frames; prefer

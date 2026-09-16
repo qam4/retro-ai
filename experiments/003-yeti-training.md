@@ -1314,7 +1314,7 @@ alone doesn't resolve the over-concentration.
   rises above the control's 0.02. FAIL: still 0 starts (the gate was not the binding
   constraint), or starts non-zero with reach still ~0.02 (not learnable from these
   seeds). Read at matched HEALTHY steps, 600-850k — the control collapses from 900k on.
-  Config `experiments/003-yeti/configs/l4_predgate_1200k.yaml`, log `debug/l4_predgate/`.
+  Config `experiments/003-yeti/configs/l4_predgate_1200k.yaml`, log `output/monitor/l4_predgate/`.
   Unit-pinned in `tests/python/test_wp_predecessor_gate.py`, including a test that
   asserts the OLD rule locks out the frontier.
 - [x] **H-AP — champion on current code (DONE. v12 = 15M. NOT worse than v6 once v6
@@ -1362,7 +1362,7 @@ alone doesn't resolve the over-concentration.
   reward collapses to ~3 and recovers in every arm, so single L4 runs are unreliable.
   Seed 43 deliberately -- rerunning seed 42 on identical code reproduces v6 and measures
   nothing. Worktree `/tmp/wt_a0` at bc85424; config
-  `experiments/003-yeti/configs/l4_v6repro_s43_15m.yaml`; log `debug/l4_v6repro_s43/`.
+  `experiments/003-yeti/configs/l4_v6repro_s43_15m.yaml`; log `output/monitor/l4_v6repro_s43/`.
   **RESULT: FAIL, decisively.** bc85424's own code on three fresh seeds, all truncated at
   2M so it is apples to apples with v12:
   ```
@@ -1452,7 +1452,7 @@ alone doesn't resolve the over-concentration.
   disproved (see method rule 12): "the agent recovered so end_pose was a surface pose" and
   "the end_pose lookup falls out of range". Neither holds.
   PROVEN by filmstrip (`debug/l4_gate_admitted_proof.py`,
-  `debug/l4_rope2_geom/gate_admitted_seed_falls.png`): a px-184 seed from a gate-ON pool
+  `experiments/003-yeti/evidence/l4_rope2_geom/gate_admitted_seed_falls.png`): a px-184 seed from a gate-ON pool
   that is absent from v4's pool, reloaded and held NOOP, falls -- pose 5 grounded at t+0,
   pose 11 FALL by t+3, y 70 -> 126.
   ALSO MEASURED: one earlier reading of "40 seeds at px 184" was inflated to 40 from 34 by
@@ -1511,8 +1511,8 @@ alone doesn't resolve the over-concentration.
   **NEXT, before any GPU:** from px 188 sweep scripted jump timings and ask whether ANY
   sequence crosses. If none does, the anchor is not the binding constraint. Tools:
   `debug/l4_crossing_trace.py`, `debug/l4_low2launch_fix_visual.py`,
-  `debug/l4_pull_direction.py`. Figure `debug/l4_rope2_geom/low2launch_fix_v2.png`;
-  clip `debug/l4_rope2_fromreset/rope2_failed_ep0.mp4`.
+  `debug/l4_pull_direction.py`. Figure `experiments/003-yeti/evidence/l4_rope2_geom/low2launch_fix_v2.png`;
+  clip `experiments/003-yeti/evidence/l4_rope2_fromreset/rope2_failed_ep0.mp4`.
 - [x] **H-AQ (original proposal; superseded by the entry above, which has the result).**
   Retires the anchor-placement bug class instead of fixing instances. Detection
   currently asks "is the agent's POSITION inside a tolerance box"; ask instead "does
@@ -2200,7 +2200,7 @@ right after load and then freezes meets the validator's drop=2 rule
 (pass) and C++'s consecutive-10-unchanged rule (fail within ~19 frames).
 
 Hard case we traced: a CP2 seed saved from segment_2to3_v2's
-episodes.csv (`debug/short_cp2_episodes/episode_0_state.pkl`). Player
+episodes.csv (`experiments/003-yeti/evidence/short_cp2_episodes/episode_0_state.pkl`). Player
 is mid-jump into a snowball; jump resolves post-load, snowball hits,
 bonus freezes. Validator said "viable" (+2 drop over 30 frames), C++
 fired done at frame 19. Training env saw the state pass validation,
@@ -2565,7 +2565,7 @@ pixel-y sits strictly above the agent's pixel-y. Direction-gated +
 target-gated.
 
 Measured fruit pixel centres (from a CP0 screenshot with grid +
-user verification, commits `e85ba92` / debug/cp0_fruits_annotated.png):
+user verification, commits `e85ba92` / experiments/003-yeti/evidence/cp0_fruits_annotated.png):
 
   fruit 1: ( 184, 184 )  floor 1 (spawn)
   fruit 2: (  80, 150 )  floor 2
@@ -2668,8 +2668,8 @@ Ladders (UL pixel x, 16 px wide, 32 px tall):
   L45  x=200
 Princess UL (304, 48), sprite 16x24 (at x=312 centre, y=60).
 
-Verified artefacts: `debug/cp0_fruits_annotated.png`,
-`debug/cp0_ladders_annotated.png`, `debug/cp0_nav_graph.png`.
+Verified artefacts: `experiments/003-yeti/evidence/cp0_fruits_annotated.png`,
+`experiments/003-yeti/evidence/cp0_ladders_annotated.png`, `experiments/003-yeti/evidence/cp0_nav_graph.png`.
 
 #### 18.1. Graph model
 
