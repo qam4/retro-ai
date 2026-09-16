@@ -11,17 +11,38 @@ Rules for any long-running training script (anything using
 ## Launching
 
 - Use `kiro-monitor` per the long-running-tasks rules.
-- Write `status.json` and `output.log` into the run's own output
-  directory (the path from `training.output` in the config). Do not
-  create a parallel `output/kiro-monitor/` tree. Example:
+- **Monitor output goes in ONE place: `output/monitor/<job-id>/`.** Pass it
+  explicitly, and pass `--job-id` so the path is predictable:
 
   ```
-  nohup kiro-monitor <training.output> <timeout_min> -- \
-    <cmd>
+  nohup kiro-monitor output/monitor/<job-id> <timeout_min> --job-id <job-id> -- \
+    <cmd> > /dev/null 2>&1 &
   ```
 
-- Make the output directory fresh before launch (`rm -rf` + `mkdir -p`)
-  unless the run is a resume.
+  This applies to everything monitored — training runs, sweeps, evals,
+  diagnostics — so there is one directory to look in and one naming scheme.
+
+- **Never put monitor output inside a run's own output directory.**
+
+  This reverses an earlier version of this rule, which said to write
+  `status.json`/`output.log` into `training.output` and explicitly forbade a
+  central tree. Two failures killed it:
+
+  1. It contradicted the freshness rule below. A launch script that did
+     `rm -rf "$training_output"` deleted the monitor's own `status.json` and
+     `output.log` while the monitor was writing them. This is not
+     hypothetical: it was caught mid-flight on the v16c run, ~3 minutes
+     before the `rm -rf` would have fired.
+  2. It disagreed with `kiro-monitor.md`, which sends output to
+     `<runs_dir>/<job-id>` when the directory is omitted. With two rules
+     giving two answers, monitor logs ended up scattered across
+     `debug/<name>/` for diagnostics and `output/mo5/.../<run>/` for
+     training, and finding a given run's log meant guessing which.
+
+- Make the RUN's output directory fresh before launch (`rm -rf` + `mkdir -p`)
+  unless the run is a resume. Do this in the launching command, BEFORE
+  starting the monitor — never inside the monitored script, which cannot
+  clear a directory it is being watched from.
 
 ## TensorBoard
 
@@ -96,7 +117,8 @@ never read `reset_reach`. The signal was legible at 90k.
 python3 scripts/mo5/yeti/smoke_train.py --config <cfg> --timesteps 100000 --min-chain 6
 
 # or judge a log a run already produced (no emulator needed)
-python3 scripts/mo5/yeti/smoke_train.py --check-log <run>/output.log --min-chain 6
+python3 scripts/mo5/yeti/smoke_train.py \
+  --check-log output/monitor/<job-id>/output.log --min-chain 6
 ```
 
 Exit code is 1 on regression, so it can gate the long run. Set `--min-chain` to
