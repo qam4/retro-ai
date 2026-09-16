@@ -21,7 +21,33 @@ import pickle
 
 import pytest
 
-STATE_PATH = "debug/death_fresh/state_at_death.pkl"
+# The death state this test loads. It used to be a hand-made file at
+# debug/death_fresh/state_at_death.pkl -- a GITIGNORED scratch directory. That made the
+# test silently skippable forever: clearing debug/ deleted the fixture, pytest reported
+# SKIPPED rather than FAILED, and nothing said the regression guard had stopped running.
+# (That is exactly what happened on 2026-09-16 during a debug/ cleanup.)
+#
+# It is now GENERATED on demand instead, into an ignored cache that can be thrown away
+# safely, because the state is reproducible: reset seed 0 on yeti_fruit and hold NOOP
+# until the death flag flips. A generated fixture cannot go missing without the test
+# noticing, and there is no binary blob to keep in sync with the emulator.
+STATE_PATH = "output/fixtures/yeti_l1_state_at_death.pkl"
+DEATH_SEARCH_FRAMES = 2000
+
+
+def _make_death_state(base, path):
+    """Hold NOOP from reset until the death flag flips; pickle that state."""
+    from retro_ai.games import yeti
+
+    base.reset(seed=0)
+    for _ in range(DEATH_SEARCH_FRAMES):
+        base.step([0, 0, 0])
+        if yeti.is_dead(base._interface):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                pickle.dump(base.save_state(), f)
+            return True
+    return False
 
 
 @pytest.fixture
@@ -35,8 +61,6 @@ def env():
     # Skip if the ROM env isn't set up; this is an integration test.
     if not os.environ.get("RETRO_AI_ROM_DIR"):
         pytest.skip("RETRO_AI_ROM_DIR not set")
-    if not os.path.exists(STATE_PATH):
-        pytest.skip(f"missing fixture: {STATE_PATH}")
 
     env_cfg = EnvConfig(
         profile="yeti_fruit",
@@ -47,6 +71,13 @@ def env():
     )
     stack = build_training_env("yeti_fruit", env_cfg)
     base = stack.base
+    if not os.path.exists(STATE_PATH) and not _make_death_state(base, STATE_PATH):
+        # A hard failure, not a skip: if the agent no longer dies while holding NOOP on
+        # level 1, either the death flag or the level changed, and this guard is void.
+        pytest.fail(
+            f"could not reach a death within {DEATH_SEARCH_FRAMES} frames holding NOOP "
+            "on yeti_fruit seed 0, so the fixture cannot be generated"
+        )
     base.reset(seed=0)
     return base
 
