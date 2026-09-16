@@ -1,0 +1,101 @@
+# v16b markair cold 6m — 6M, COLD, seed 42. Arm B (the fix) of a two-arm A/B on ONE lever.
+#
+# THE LEVER: `reward.params.mark_airborne`.
+#   false = marking sits AFTER the airborne early return (the placement from before
+#           2026-09-14), so it only ever sees frames in the reward's SURFACE_POSES
+#   true  = marking sits BEFORE it, so a jump LANDING can be marked
+# Everything else is identical between the arms, including the cold start and seed 42.
+#
+# WHY 6M AND NOT 2M. The 2M pair (v14/v15) could not be read. Reach is an oscillating EMA
+# and both arms were mid-swing at 2M: v14 peaked at 1.25M (Rope1 0.79, Spring 0.50),
+# collapsed to 0.04 at 1.75M and recovered to 0.65 by 2M, while v15 broke through ~1M
+# steps later and was still ACCELERATING when the budget ran out (final 250k: Rope1
+# 0.04 -> 0.25, Lclimb2_top 0 -> 0.16, Spring 0 -> 0.08). Comparing one endpoint off two
+# oscillating curves is not a comparison -- this file already records that endpoints are
+# not verdicts, and it was done anyway. 6M gives each arm ~3x the budget it took v14 to
+# reach its first peak, so peaks can be compared instead of endpoints.
+#
+# WHY COLD, NOT WARM. A warm start from v13 would carry a policy trained under the OLD
+# reward, so its behaviour is adapted to a different landscape and the comparison would
+# conflate the two. (Separately: "DO NOT WARM-START FROM A CHAMPION" already cost a 6.5h
+# run -- a champion is selected as the best of ~150 snapshots, i.e. selected for being an
+# outlier.)
+#
+# HOW TO READ IT. Peak and distribution across snapshots, NOT the final number. The
+# question is whether Step and Lclimb3_top move: v14 at 2M had Step 0.01 with a 54-state
+# pool and Lclimb3_top 0.00 with 9 states; v15 had 3 and empty.
+#
+# WHAT IT STILL MAY NOT SHOW. If neither arm reaches floor 12, the run measures only the
+# collateral cost on the shared trunk and never the benefit the fix targets -- the
+# reversed gradient (sum 984 at px 184 vs 888 at px 232) is a floor-12 phenomenon. That
+# was the flaw in the 2M pair and 6M does not guarantee it is fixed.
+#
+# One cold seed per arm. Seed 42 is a known 1-in-4 outlier on this level.
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v16b_markair_cold_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # NO resume and NO resume_pools, deliberately. See the header.
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    # THE LEVER for this A/B.
+    mark_airborne: true
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+# Identical to v13's curriculum block except for waypoint_reach_mode, so the only
+# intentional difference between this run and the v13 lineage is the reach geometry (plus
+# the cold start, which is forced by the question -- see the header).
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  # The lever. Default is now "sprite"; stated explicitly so this config records what it
+  # ran under rather than depending on the default of the day.
+  waypoint_reach_mode: sprite
+  # `admit_requires_grounded` stays OFF: measured at 3 seeds x 2M with no effect on pool
+  # composition and its behaviour is not understood (H-AW).

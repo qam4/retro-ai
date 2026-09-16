@@ -1910,6 +1910,127 @@ the fix targets; testing that needs a warm start from a policy that already hold
 
 Also one cold seed, and seed 42 is a known 1-in-4 outlier, so "worse" here is one sample.
 
+## v16 (2026-09-15/16): THE v15 HYPOTHESIS WAS RIGHT, AND FIXING IT BREAKS THE WALL
+
+The v15 section above closes with an untested candidate: *marking now happens mid-jump, so
+the `active_wp` change forces the rebaseline onto the LANDING frame, discarding that
+landing's shaping delta.* That is now measured, and it was the whole story.
+
+### v16a vs v16b — the A/B at 6M, one lever (`mark_airborne`)
+
+Cold, 6M, seed 42, sprite reach, configs identical but for that flag. Final `reset_reach`,
+and the mean/max over the 4M–6M window (401 progress lines per arm):
+
+```
+                        idx7        idx8 Spring   idx9 Step    idx10 Lclimb3_top
+v16a mark_airborne 0   0.64/0.81   0.62/0.81     0.10/0.25    0.00/0.02
+v16b mark_airborne 1   0.57/0.84   0.03/0.10     0.01/0.05    0.00/0.00
+```
+
+Trunk matched within ~0.05; `Spring` collapsed 0.62 → 0.03. So marking a jump landing is
+harmful ALONE, which is what v15 saw at 2M, replicated at 6M with room to peak.
+
+### The mechanism, measured rather than argued
+
+Method: record ONE trajectory from v16a's policy, then replay the identical action
+sequence through two reward instances differing only in `mark_airborne`
+(`scripts/mo5/yeti/diag/l4_spring_trace.py`). Same states, same order, so any divergence
+is the lever. 40 episodes, 29 of which cross climb2 → Spring:
+
+```
+floor-9 arrival (climb2 -> Spring)   +3.200 -> 0.000    29/29, zero variance
+floor-7 arrival (Rope1)              -5.120
+floor-10 arrival (Spring -> Step)    unchanged
+```
+
+Three rules collide, each sane alone:
+
+1. Reward pays the CHANGE in summed distance to targets still on the list.
+2. The D2 freeze pays nothing airborne and HOLDS `prev_phi`, so the landing frame pays
+   everything covered since take-off.
+3. A target-set change skips that frame's payment (it cannot tell earned progress from an
+   entry leaving the sum) and only rebaselines.
+
+Marking mid-air hits `if airborne: return reward` BEFORE `_prev_active_wp` is updated, so
+the change is first noticed on the next grounded frame — the LANDING. Rule 3 therefore
+eats the single most valuable frame of the episode. Under the old placement the mark lands
+on an ordinary walking frame worth ~0.2 (measured: step 335 of the traced episode paid
++0.000 against −0.200 unskipped, i.e. the skip was worth ±0.2, not 3.2).
+
+**climb2 → Spring is the worst possible frame to lose.** It is not a jump: floor 8 (y 94,
+px 120–168) and floor 9 (y 94, px 200–232) are separated by a gap at px 168–200 with the
+trampoline (floor 24, y 142) directly beneath, and the route goes OVER it. Measured: 29/29
+crossings contain a trampoline pose (16/17), and the arc is 61 steps of frozen shaping
+banked into one frame.
+
+### The fix: `pay_on_target_change` (default False)
+
+Price a frame whose waypoint list changed against the list it STARTED with
+(`_prev_active_wp`, measured at the CURRENT position, so only movement is charged), then
+rebaseline to the new list. Nothing is paid for a deletion, nothing earned is lost, and
+marking POSITION stops mattering. Scope: the waypoint arm of the D3 `if` only — death,
+fruit pickup, deferred-fruit credit and princess still skip, because pricing the old
+fruit set means reconstructing which fruits were uncollected.
+
+Same harness, both arms marking airborne so the new flag is the only difference:
+floor-9 arrival **0.000 → +3.920, 29/29**, and only **3 frames of 359** differ from v16b.
+Pinned by `tests/python/test_reward_airborne_marking.py`: the landing pays exactly what a
+run that never marks the group pays (+0.3200 in the synthetic case), which is the real
+property — paid for movement, never for the deletion.
+
+### v16c (6M) — the wall at `Step` → `Lclimb3_top` breaks
+
+`mark_airborne: true` + `pay_on_target_change: true`, otherwise identical. Final route
+table, reach from reset:
+
+```
+route point      v16a   v16b   v16c
+Rope1            0.69   0.61   0.69
+Lclimb2_top      0.64   0.59   0.55
+Spring           0.62   0.04   0.52
+Step             0.15   0.01   0.48
+Lclimb3_top      0.00   0.00   0.39     <- never reached by ANY cold run before
+Low1             0.00   0.00   0.00
+route depth        13     13     17
+```
+
+4M–6M means: `Spring` 0.55, `Step` 0.40, `Lclimb3_top` 0.19 (peak 0.51). `Lclimb3_top`
+first exceeded 0.05 at step **4,845,000** and the sweep's champion is
+`model_5000000_steps.zip` — the run was still climbing when the budget ended and the best
+snapshot IS the breakthrough, not a plateau.
+
+### But it is NOT yet as good as v6/v13
+
+Champion re-eval, n=300 stochastic from reset, same start state, same script as the
+v13/v6 pair above:
+
+```
+champion              mean rung   >= rung 10
+v6-restick 15M warm    8.52/13    226/300  75.3%
+v13        15M warm    8.49/13    190/300  63.3%
+v16c        6M cold    7.91/13    135/300  45.0%
+```
+
+Not like-for-like, all three ways against v16c: 6M vs 15M, cold vs warm, and best-of-60
+snapshots vs best-of-150. **v13's 15M also sits on top of v4's 15M of weights**, so
+matching v13's total training is nearer 30M than 15M.
+
+### Three differences from v6/v13 that ride under every v16 number
+
+* **warm vs cold** — v6/v13 both `resume:`; the v16 series is cold (deliberate: a warm
+  policy was trained under the old reward and would conflate the comparison).
+* **box vs sprite** — v6/v13 ran the box reach test.
+* **`target_kl: 0.07`** — set in v6 AND v13, **absent from all three v16 configs**. Not
+  dropped on purpose by any decision recorded here; it was already missing from v16a/v16b.
+  UNEXPLAINED, and its own lever.
+
+### In flight
+
+`yeti_curriculum_l4_v16c_payonchange_cold_15m` — v16c's config with ONE line changed
+(`timesteps`), which also yields 150 snapshots and so removes the selection handicap. At
+40% it is already past where the 6M run finished: `Lclimb3_top` 0.47 vs 0.39, `Spring`
+0.77, `Step` 0.68. `Low1` still 0.00.
+
 ## Open questions, in priority order
 
 The single wall is now **rung 10 → 11 = reach floor 13**, measured at 0/300 for v6's

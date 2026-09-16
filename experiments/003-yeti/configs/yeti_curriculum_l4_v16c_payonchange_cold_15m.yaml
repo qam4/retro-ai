@@ -1,0 +1,102 @@
+# v16c payonchange cold 15M — v16c's 6M run extended, ONE variable: timesteps.
+#
+# WHY. v16c at 6M repaired v16b's collapse and opened a route point neither v16a nor v16b
+# ever touched (`Lclimb3_top` 0.00 -> 0.39 final, 0.19 mean / 0.51 peak over 4M-6M), but
+# its champion still lands short of the incumbents on the shared 300-episode stick:
+#
+#   champion (n=300 stochastic, from reset, same start state)   mean rung   >= rung 10
+#     v6-restick  15M warm                                       8.52/13   226/300  75.3%
+#     v13         15M warm                                       8.49/13   190/300  63.3%
+#     v16c         6M cold                                       7.91/13   135/300  45.0%
+#
+# `Lclimb3_top` first crossed 0.05 at step 4,845,000 and the sweep's champion is
+# model_5000000_steps.zip, i.e. the run was still climbing when the budget ended and the
+# best snapshot is the breakthrough itself, not a plateau. So the 0.6-rung gap has two
+# candidate explanations -- the reward change, or 9M fewer steps -- and 6M cannot separate
+# them. This run removes the step-count one.
+#
+# WHAT IS DELIBERATELY UNCHANGED. Everything except `timesteps` and `output`. Not the PPO
+# block, not the curriculum, not the reward. In particular `snapshot_freq_steps` stays at
+# 100_000, which at 15M yields 150 snapshots -- the same selection strength v6 and v13's
+# champions were picked with (best of 150), so the best-of-60 handicap in the table above
+# disappears without touching anything else.
+#
+# WHAT THIS STILL WILL NOT SETTLE. Matching the step count does NOT make this comparable
+# to v6/v13. Three differences remain, all inherited from v16a/v16b rather than chosen
+# here:
+#   warm vs cold     -- v6/v13 both `resume:` from an earlier run; the v16 series is cold.
+#                       v13's 15M sits on top of v4's 15M of weights, so v13's total
+#                       training is nearer 30M than 15M and 15M here does not match it.
+#   box vs sprite    -- v6/v13 ran the box reach test; the v16 series runs sprite.
+#   target_kl        -- v6/v13 set 0.07; it is ABSENT from all three v16 configs. Not
+#                       dropped by this file: it was already missing from v16a/v16b, so
+#                       every v16-vs-v13 number carries it. Its own lever, not this run's.
+# Attributing the reward change AT 15M needs v16a extended too; that was costed (~7h more)
+# and declined for now in favour of a single run.
+#
+# Expected wall clock ~7h: v16c's 6M took 2h49m (20:49:42 -> 23:38:49 UTC, measured).
+#
+# Same cold seed 42, a known 1-in-4 outlier on this level.
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v16c_payonchange_cold_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # NO resume and NO resume_pools. Resuming v16c's 6M would save ~3h but inserts a
+  # discontinuity at 6M (curriculum EMAs and optimizer state restart) that a straight run
+  # does not have, and this run exists to be comparable.
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite

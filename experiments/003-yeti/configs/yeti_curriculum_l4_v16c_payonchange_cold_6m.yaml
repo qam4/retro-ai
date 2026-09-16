@@ -1,0 +1,115 @@
+# v16c payonchange cold 6m — 6M, COLD, seed 42. The RECONCILIATION arm for v16a/v16b.
+#
+# WHAT THIS RUN IS FOR. v16a (mark_airborne false) and v16b (mark_airborne true) were a
+# two-arm A/B whose result was unambiguous and bad: identical trunk, then
+#
+#   reset_reach index 8 (Spring): v16a 0.61  vs  v16b 0.04
+#   reset_reach index 9 (Step):   v16a 0.15  vs  v16b 0.01
+#
+# The cause was found offline, not guessed. Marking a waypoint mid-air changes the
+# waypoint list on an AIRBORNE frame, where the reward returns early and cannot record
+# the change; it is therefore first noticed on the next grounded frame, which is the
+# LANDING. The pre-existing guard for a list change is to skip that frame's payment (it
+# cannot tell earned progress from a target simply leaving the sum), and the D2 freeze
+# has banked the entire jump into exactly that frame. So the skip lands on the most
+# valuable frame of the episode.
+#
+# Measured by replaying ONE trajectory through both reward variants (v16a's policy,
+# 40 episodes, 29 of which cross climb2 -> Spring):
+#
+#   floor-9 arrival (climb2 -> Spring, over the trampoline)  +3.200 -> 0.000   29/29
+#   floor-7 arrival (Rope1)                                  -5.120
+#   floor-10 arrival (Spring -> Step)                         unchanged
+#
+# climb2 -> Spring is a 61-step airborne arc (it MUST go over the trampoline at
+# px 168..200, y 142, which sits under the floor-8/floor-9 gap), so it is the single
+# largest banked payment on the route, and v16b deleted all of it.
+#
+# THE LEVER: `reward.params.pay_on_target_change`. A frame whose waypoint list changed is
+# priced against the list it STARTED with (measured at the CURRENT position, so only
+# movement is charged) and then rebaselines to the new list. Nothing is paid for a
+# deletion and nothing earned is lost, so WHERE marking happens stops mattering.
+# Verified offline on the same 40 episodes: the floor-9 arrival goes 0.000 -> +3.920,
+# 29/29, and only 3 frames of 359 differ from v16b.
+#
+# HOW TO READ IT. Against v16a, index 8 and index 9. `mark_airborne: true` is kept from
+# v16b, so if the mechanism above is the whole story this run should land at or above
+# v16a (0.61 / 0.15) rather than v16b (0.04 / 0.01). Peak and distribution across
+# snapshots, not the final number -- reach is an oscillating EMA.
+#
+# HONEST NOTE ON ATTRIBUTION. This is TWO flags away from v16a (mark_airborne AND
+# pay_on_target_change) and one flag away from v16b. That is deliberate: v16b already
+# isolated mark_airborne and showed it is harmful ALONE, so the question now is whether
+# the pair is safe. v16b is the control for this run; v16a is the bar to clear.
+#
+# WHAT IT STILL WILL NOT SHOW. Whether any of this HELPS. Both v16a and v16b wall at
+# Step -> Lclimb3_top (index 9 -> 10, 0.15 -> 0.00), and the benefit airborne marking was
+# meant to buy -- the reversed floor-12 gradient -- is a floor-12 phenomenon that no cold
+# run has ever reached. This run can show the collapse is repaired; it cannot show the
+# repair is worth anything.
+#
+# One cold seed. Seed 42 is a known 1-in-4 outlier on this level.
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v16c_payonchange_cold_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # NO resume and NO resume_pools, deliberately -- cold, exactly like v16a/v16b.
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    # Kept from v16b: a jump LANDING can be marked at all.
+    mark_airborne: true
+    # THE LEVER for this run: do not let that marking delete the landing's payment.
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+# Byte-identical to v16a/v16b below this line.
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
