@@ -23,19 +23,38 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "scripts"
+# Where the training scripts actually live. `8486325` ("move 51 Yeti/MO5 scripts to
+# scripts/mo5/yeti/") moved train_segment.py out of scripts/ and this loader kept the
+# old path, so the test below raised FileNotFoundError instead of checking anything.
+# It went unnoticed for the same reason it is easy to miss again: the test is gated on
+# RETRO_AI_ROM_DIR, CI does not set it, so CI SKIPS rather than fails. Searching the
+# known roots keeps it working across the next move too.
+SCRIPT_ROOTS = (SCRIPTS, SCRIPTS / "mo5" / "yeti")
+
+
+def _script_path(name: str):
+    for root in SCRIPT_ROOTS:
+        p = root / f"{name}.py"
+        if p.exists():
+            return p
+    raise FileNotFoundError(
+        f"{name}.py not found under {[str(r) for r in SCRIPT_ROOTS]} -- if it moved "
+        "again, add its new home to SCRIPT_ROOTS rather than letting this test skip"
+    )
 
 
 def _load_script_module(name: str):
-    """Import a scripts/X.py module without making scripts a package."""
-    sys.path.insert(0, str(SCRIPTS))
+    """Import a training script by name, wherever under scripts/ it currently lives."""
+    path = _script_path(name)
+    sys.path.insert(0, str(path.parent))
     try:
-        spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
+        spec = importlib.util.spec_from_file_location(name, path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         return mod
     finally:
-        if str(SCRIPTS) in sys.path:
-            sys.path.remove(str(SCRIPTS))
+        if str(path.parent) in sys.path:
+            sys.path.remove(str(path.parent))
 
 
 def _build_two_envs(make_env_factory):
