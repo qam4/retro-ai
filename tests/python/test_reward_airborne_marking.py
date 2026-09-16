@@ -137,3 +137,150 @@ def test_reward_mark_blocklist_matches_yeti():
     drift from yeti's. If a pose is added to one, add it to the other."""
     assert rw.MARK_BLOCKED_POSES == yeti.NON_TRAVERSAL_POSES
     assert games is not None  # import guard: yeti must be importable for the comparison
+
+
+def test_mark_airborne_false_reproduces_the_old_placement():
+    """The control arm must be a CONFIG, not a git checkout.
+
+    v14 (marking after the airborne return) and v15 (before it) are an A/B whose
+    control has to be reproducible, so `mark_airborne: false` restores the old
+    placement: marking is then only reachable on frames in the reward's SURFACE_POSES,
+    which is what made a jump landing nearly unmarkable.
+    """
+    gi = _group_of("J6_7_b")
+
+    off = _fresh(mark_airborne=False)
+    off(_ctx(ROPE1_X, ROPE1_Y, JUMP_RIGHT))
+    assert gi not in off._reached_wp, "mark_airborne=False must not mark mid-jump"
+
+    # ...but it still marks on a grounded frame, so the control arm is the OLD behaviour
+    # and not simply "marking disabled".
+    off2 = _fresh(mark_airborne=False)
+    off2(_ctx(ROPE1_X, ROPE1_Y, WALK_RIGHT))
+    assert gi in off2._reached_wp
+
+    on = _fresh(mark_airborne=True)
+    on(_ctx(ROPE1_X, ROPE1_Y, JUMP_RIGHT))
+    assert gi in on._reached_wp
+
+
+def test_default_is_mark_airborne():
+    """Pin the default, in the same spirit as the reach-mode default: nothing pinned the
+    previous placement, so a silent revert would have been invisible."""
+    gi = _group_of("J6_7_b")
+    fn = _fresh()  # no mark_airborne key at all
+    fn(_ctx(ROPE1_X, ROPE1_Y, JUMP_RIGHT))
+    assert gi in fn._reached_wp
+
+
+# ---------------------------------------------------------------------------
+# pay_on_target_change (D6): marking a landing mid-air must not DELETE the
+# landing's payment.
+#
+# Marking while airborne was necessary (above) but not sufficient. The shaping
+# freeze banks a whole jump into the landing frame -- prev_phi is held while
+# airborne, so the landing pays everything covered since take-off. A mid-air
+# mark changes the waypoint list, and the code cannot see that until the next
+# grounded frame, which IS the landing. The pre-existing guard for a list change
+# is to skip the frame, so the skip lands on the most valuable frame of the run.
+#
+# Measured on L4 climb2 -> Spring (v16a policy, 29/29 crossings, one trajectory
+# replayed through both variants): the floor-9 arrival pays +3.200 when marking
+# happens on the ground and exactly 0.000 when it happens in the air; the floor-7
+# Rope1 arrival loses 5.120 the same way. With pay_on_target_change the same
+# arrival pays +3.920 and only 3 frames of 359 differ from the broken arm.
+#
+# The property these tests pin is that marking POSITION stops mattering: a frame
+# is priced against the list it started with, so it is paid for movement and
+# never for a deletion.
+# ---------------------------------------------------------------------------
+
+# floor 7 spans px 104..168, i.e. x_ram 24..40. The Rope1 anchor is px 108 and its
+# sprite test fires for x_ram 24..26, so x_ram 30/34 are on the same floor and clear
+# of it -- a grounded frame there marks nothing.
+F7_A, F7_B = 30, 34
+
+
+def _run(fn, seq):
+    """Feed ``seq`` of (x_ram, y, pose) and return the reward of the LAST frame."""
+    r = 0.0
+    for step, (x, y, pose) in enumerate(seq, start=1):
+        r = fn(_ctx(x, y, pose, step=step))
+    return r
+
+
+def _land_after_airborne_mark():
+    """grounded -> airborne ON the Rope1 anchor -> grounded elsewhere on floor 7."""
+    return [
+        (F7_A, ROPE1_Y, WALK_RIGHT),  # settles the baseline
+        (ROPE1_X, ROPE1_Y, JUMP_RIGHT),  # mid-air, on the anchor
+        (F7_B, ROPE1_Y, WALK_RIGHT),  # the landing frame
+    ]
+
+
+def test_airborne_mark_deletes_the_landing_payment_by_default():
+    """Pins the defect, so the fix below is measured against something real."""
+    gi = _group_of("J6_7_b")
+    fn = _fresh(mark_airborne=True)  # pay_on_target_change absent => today's skip
+    r = _run(fn, _land_after_airborne_mark())
+    assert gi in fn._reached_wp, "precondition: the mid-air frame must mark the group"
+    assert r == 0.0, (
+        f"the landing frame paid {r}; without pay_on_target_change the list change is "
+        "expected to swallow it -- if this now pays, the default changed"
+    )
+
+
+def test_pay_on_target_change_restores_the_landing_payment():
+    """The landing pays again, and pays exactly what movement earned.
+
+    The reference is a run where the group is never marked at all
+    (``mark_airborne=False`` plus a landing clear of the anchor), so the landing is
+    an ordinary shaping frame with the full list. Equality with that is the real
+    property: the frame is priced for MOVEMENT, not for the deletion, so where the
+    mark happened stops affecting the total.
+    """
+    gi = _group_of("J6_7_b")
+    fixed = _fresh(mark_airborne=True, pay_on_target_change=True)
+    r_fixed = _run(fixed, _land_after_airborne_mark())
+    assert gi in fixed._reached_wp
+
+    never = _fresh(mark_airborne=False)
+    r_never = _run(never, _land_after_airborne_mark())
+    assert gi not in never._reached_wp, "reference must leave the group on the list"
+
+    assert r_fixed > 0.0, "the landing frame must be paid"
+    # Exact: path distances are ints, so both sums are integer-exact before scaling.
+    assert r_fixed == r_never, (
+        f"landing paid {r_fixed} but movement alone is worth {r_never}: the frame is "
+        "being paid for the list change, not just for moving"
+    )
+
+
+def test_pay_on_target_change_is_a_noop_when_the_list_is_unchanged():
+    """No list change => phi_pay is phi, so the flag cannot alter anything."""
+    seq = [(F7_A, ROPE1_Y, WALK_RIGHT), (F7_B, ROPE1_Y, WALK_RIGHT)]
+    off = _fresh(mark_airborne=True)
+    on = _fresh(mark_airborne=True, pay_on_target_change=True)
+    r_off = _run(off, seq)
+    r_on = _run(on, seq)
+    assert (
+        off._reached_wp == on._reached_wp
+    ), "precondition: neither run marked anything"
+    assert r_off == r_on, f"flag changed an unchanged-list frame: {r_off} vs {r_on}"
+
+
+def test_default_is_off():
+    """Byte-identical to the shipped reward unless a run opts in."""
+    fn = _fresh(mark_airborne=True)
+    explicit = _fresh(mark_airborne=True, pay_on_target_change=False)
+    assert _run(fn, _land_after_airborne_mark()) == _run(
+        explicit, _land_after_airborne_mark()
+    )
+
+
+def test_airborne_frames_still_pay_nothing_with_the_flag_on():
+    """The freeze (H-AH) must survive the new flag: mid-air frames still pay 0."""
+    fn = _fresh(mark_airborne=True, pay_on_target_change=True)
+    fn(_ctx(F7_A, ROPE1_Y, WALK_RIGHT, step=1))
+    r = fn(_ctx(ROPE1_X, ROPE1_Y, JUMP_RIGHT, step=2))
+    assert r == 0.0, f"an airborne frame paid {r}; shaping must stay frozen"

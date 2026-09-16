@@ -1032,6 +1032,40 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     # Geometry of the reach test; forced to match the curriculum by the trainer.
     # See CurriculumConfig.waypoint_reach_mode.
     wp_reach_mode = str(params.get("waypoint_reach_mode", "sprite"))
+    # Where milestone marking happens. See the marking block in __call__. Default True
+    # (mark while airborne, so a jump landing counts). False reproduces the placement
+    # from before 2026-09-14, and exists so the A/B's control arm is a config rather
+    # than a git checkout.
+    mark_airborne = bool(params.get("mark_airborne", True))
+    # (D6) PRICE A FRAME AGAINST THE LIST IT STARTED WITH.
+    #
+    # The waypoint term is a sum of distances to the groups still on the list. When a
+    # group is marked reached it leaves the list, so the sum drops for a reason that is
+    # not movement, and paying that drop would pay for bookkeeping. Today's guard is to
+    # skip the frame entirely (the ``active_wp != _prev_active_wp`` arm of the D3 `if`).
+    #
+    # WHY THAT GUARD IS NOT FREE. The D2 freeze banks a whole jump into the landing
+    # frame: shaping is suppressed while airborne and ``prev_phi`` is held, so the
+    # landing pays the entire distance covered since take-off. If the waypoint is marked
+    # mid-air, the code cannot notice the list change until the next grounded frame --
+    # which IS the landing -- so the skip lands on the most valuable frame of the
+    # episode. Measured on L4 climb2 -> Spring (v16a policy, 29/29 crossings, replaying
+    # one trajectory through both variants): the floor-9 arrival pays +3.200 with
+    # marking on the ground and exactly 0.000 with marking in the air. The f7 `Rope1`
+    # arrival loses 5.120 the same way. That is what sank v16b (`Spring` mean reach
+    # 0.63 -> 0.03) -- not the marking itself, but the skip landing on the landing.
+    #
+    # THE FIX. Split the frame in two: pay it against the set it STARTED with
+    # (``_prev_active_wp``, priced at the CURRENT position, so only movement is
+    # charged), then rebaseline to the set it ENDS with. Nothing is paid for a deletion
+    # and nothing earned is lost, so marking position stops mattering. When the list did
+    # not change the two sets are equal and this is arithmetically a no-op.
+    #
+    # SCOPE. Only the waypoint arm. The other arms of that `if` (death, fruit pickup,
+    # deferred-fruit credit, princess) still skip: pricing the old set there means
+    # reconstructing which fruits were uncollected, which is a bigger change with no
+    # measured failure behind it. Default False = today's skip, byte-identical.
+    pay_on_target_change = bool(params.get("pay_on_target_change", False))
     segment_shaping = bool(params.get("ladder_segment_shaping", False))
     # When segment shaping is on, the escalator RIDE pose (13) is a controlled
     # vertical traversal, not a fall, so it counts as on-surface (un-frozen) so
@@ -1241,6 +1275,15 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             pose = getattr(ctx, "pose", -1)
             airborne = pose is not None and pose >= 0 and pose not in _surf
 
+            # MILESTONE MARKING. `mark_airborne` selects WHERE this happens; the test
+            # itself is identical either way, so the two arms differ in one thing only.
+            #   True  (default) -- here, BEFORE the airborne return, so a jump LANDING
+            #                      can be marked.
+            #   False           -- after `phi`, where it used to be, i.e. only on frames
+            #                      in the reward's SURFACE_POSES. Kept ONLY so the v14
+            #                      control arm is reproducible from a config instead of
+            #                      from a git checkout.
+            #
             # MILESTONE MARKING, ahead of the airborne return (2026-09-14).
             #
             # This used to live below, after `if airborne: return reward`, which made it
@@ -1264,20 +1307,22 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             # only changes the target set, and the resulting `active_wp` change
             # rebaselines on the next grounded frame -- the same discipline a fruit
             # pickup uses, and required, or the potential jumps when a term leaves.
-            if _wp_groups and not ctx.died and pose not in MARK_BLOCKED_POSES:
+            def _mark(c, p):
+                """Mark every group the agent is currently within reach of."""
+                if not _wp_groups or c.died or p in MARK_BLOCKED_POSES:
+                    return
                 for gi, members in enumerate(_wp_groups):
                     if gi in self._reached_wp:
                         continue
                     for _ident, wx, wy in members:
                         if reaches(
-                            (wx, wy),
-                            ctx.curr_x,
-                            ctx.curr_y,
-                            wp_tol,
-                            mode=wp_reach_mode,
+                            (wx, wy), c.curr_x, c.curr_y, wp_tol, mode=wp_reach_mode
                         ):
                             self._reached_wp.add(gi)
                             break
+
+            if mark_airborne:
+                _mark(ctx, pose)
 
             # (D2) Airborne: no credit, HOLD prev_phi (don't sample/rebaseline)
             # and HOLD the deferred-fruit baseline (don't sample it either).
@@ -1309,7 +1354,18 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             # (grounded, alive) is within tol of any member. active_wp = the
             # reachable-and-unreached groups; a change means the target set
             # changed -> rebaseline (same discipline as a fruit pickup).
+            if not mark_airborne:
+                # v14 control arm: marking only on frames that reach this point, i.e.
+                # the reward's SURFACE_POSES. This is what made every mandatory jump
+                # LANDING nearly unmarkable (Rope1 2/120 against 107/120 touched).
+                _mark(ctx, pose)
+
             active_wp: frozenset = frozenset()
+            # (D6) phi_pay is what THIS frame is paid against; phi is what the NEXT
+            # frame is measured from. They differ only on a frame where the waypoint
+            # list changed and the old list could be priced -- see pay_on_target_change.
+            phi_pay = phi
+            pay_old = False
             if _wp_groups and phi is not None and not ctx.died:
                 agent_pix_x = int(ctx.curr_x) * 4 + 8
                 # Reuse the SAME segment the base _potential just resolved, so
@@ -1328,30 +1384,59 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                 # (2) while the curriculum passes 6 for jump waypoints; in "sprite" mode
                 # the tolerance is ignored entirely, removing that divergence.
                 fruits_left = bool(ctx.fruits_present) and any(ctx.fruits_present)
-                wp_sum = 0
+
+                def _dist(gi):
+                    """Path distance to group ``gi``'s nearest member, from here."""
+                    return min(
+                        _wp_nav.path_distance_from_pos(
+                            floor, ladder, agent_pix_x, seg_y, ident
+                        )
+                        for ident, _wx, _wy in _wp_groups[gi]
+                    )
+
+                # dist: every group priced AT THIS POSITION, so the old and the new
+                # list can be summed from the same measurements.
+                dist: dict = {}
                 active = set()
                 for gi, members in enumerate(_wp_groups):
                     if gi in self._reached_wp:
                         continue
                     if _wp_after_fruit[gi] and fruits_left:
                         continue  # not this phase yet
-                    dmin = min(
-                        _wp_nav.path_distance_from_pos(
-                            floor, ladder, agent_pix_x, seg_y, ident
-                        )
-                        for ident, _wx, _wy in members
-                    )
+                    dmin = _dist(gi)
                     if dmin < _WP_UNREACHABLE:
-                        wp_sum += dmin
+                        dist[gi] = dmin
                         active.add(gi)
-                phi = phi - progress_scale * wp_sum
+                phi_base = phi
+                phi = phi_base - progress_scale * sum(dist[gi] for gi in active)
                 active_wp = frozenset(active)
+                phi_pay = phi
+
+                # (D6) The list changed: price the frame against the list it STARTED
+                # with. Groups that just left are still measurable from here -- being
+                # marked reached does not move the agent -- so this charges movement
+                # only. If any of them has become UNREACHABLE this frame there is no
+                # honest price for the old list, so fall through to today's skip.
+                if pay_on_target_change and active_wp != self._prev_active_wp:
+                    for gi in self._prev_active_wp - active_wp:
+                        dmin = _dist(gi)
+                        if dmin < _WP_UNREACHABLE:
+                            dist[gi] = dmin
+                    if all(gi in dist for gi in self._prev_active_wp):
+                        phi_pay = phi_base - progress_scale * sum(
+                            dist[gi] for gi in self._prev_active_wp
+                        )
+                        pay_old = True
 
             # (D3) death gate + standard PBRS rebaseline on discontinuities
             # (episode start: prev_phi None; unresolved floor: phi None;
             # fruit pickup / princess / a WP target-set change: the summed
             # target set changes -- sparse terms cover those). Shaping resumes
             # on the next grounded, alive step.
+            #
+            # ``pay_old`` (D6) exempts the waypoint arm: the frame HAS an honest price
+            # against the list it started with, so it is paid instead of skipped and
+            # only the rebaseline is kept. The other arms are unchanged.
             if (
                 ctx.died
                 or picked
@@ -1359,7 +1444,7 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                 or ctx.princess_touched
                 or self.prev_phi is None
                 or phi is None
-                or active_wp != self._prev_active_wp
+                or (active_wp != self._prev_active_wp and not pay_old)
             ):
                 # (D5) UNIFIED CREDIT RULE (opt-in via
                 # ``credit_requires_survival``): credit only for progress you
@@ -1387,7 +1472,12 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
                 self._prev_active_wp = active_wp
                 return reward
 
-            shaped = gamma * phi - self.prev_phi
+            # PBRS, with both sides of the comparison measured against the SAME target
+            # list: prev_phi was recorded under the old list, so phi_pay prices this
+            # position under the old list too. The baseline then moves to phi, which is
+            # the new list -- that is where the list change is absorbed, unpaid.
+            # phi_pay is phi whenever the list did not change (pay_old False).
+            shaped = gamma * phi_pay - self.prev_phi
             reward += shaped
             self._shaping_acc += shaped
             self.prev_phi = phi
