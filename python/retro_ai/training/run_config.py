@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field, fields
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 try:
     import yaml  # type: ignore
@@ -326,6 +326,29 @@ class CurriculumConfig:
     # the 3-seed A/B of this flag could not produce a pool change and did not: the
     # defect it targeted was structurally out of its reach.
     waypoint_reach_mode: str = "sprite"
+    # Waypoints to EXCLUDE from seeding: no states captured there, no episodes started
+    # there. Detection and any reward term are untouched -- this is only about whether a
+    # spot is used as practice material.
+    #
+    # WHY THIS IS A CONFIG AND NOT A MAP EDIT. `Target.seedable` lives in the map, so
+    # turning it off there changes every run at once and leaves no control arm that a
+    # config alone can reproduce. That is the mistake `mark_airborne` and
+    # `pay_on_target_change` were both added to avoid. Default empty = no change.
+    #
+    # THE CASE THAT MOTIVATED IT (L4 `Lclimb3_top`, floor 11, measured 2026-09-18).
+    # Floor 11 is exposed -- no ceiling, on the kangaroo path -- and holding NOOP there
+    # dies in 3-13 frames, always. `admit_requires_survival` therefore admits only the
+    # arrivals that happened to land in a benign hazard phase: pool seeds survive a
+    # median of 8 NOOP frames while the policy's own arrivals from reset survive 3. So
+    # the pool is 2.7x easier than reality AND starting episodes there hands the agent a
+    # survivable phase for free, which is precisely the decision it needs to learn. The
+    # approach to the floor-12 jump needs 8 steps, so a 3-frame arrival is doomed
+    # whatever it does; v6/v13, which crossed, arrive with 12.
+    #
+    # Excluding such a waypoint pushes practice back to the previous safe spot (here
+    # `Step`, same px one floor down, off the patrol route) so the timed climb happens
+    # INSIDE the episode. See experiments/003-yeti/level4_notes.md, v16c section.
+    seed_waypoint_skip: List[str] = field(default_factory=list)
     # Partition episode starts as reset | MANDATORY | OTHER instead of
     # reset | rungs | one waypoint group. A rung pool is not a distinct kind of
     # start -- "N mandatory targets done" is "standing at waypoint X" -- and it is

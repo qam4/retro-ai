@@ -1,0 +1,99 @@
+# v17 noseed climb3 — 15M, COLD, seed 42. ONE lever vs v16c: seed_waypoint_skip.
+#
+# THE LEVER: `curriculum.seed_waypoint_skip: [Lclimb3_top]`. No states captured there, no
+# episodes started there. Detection is unchanged and `Lclimb3_top` REMAINS a reward
+# milestone (group 8) — this is about practice material, not credit.
+#
+# WHY. Measured 2026-09-18, see level4_notes.md "v16c AT 15M":
+#
+#   * floor 11 is the only exposed ground in that stretch — no ceiling, on the kangaroo
+#     path. Holding NOOP at `Lclimb3_top` dies in 3-13 frames in EVERY sampled state,
+#     while floor 10 (`Step`) and floor 12 (`Low1`) only die to the bonus timer.
+#   * `admit_requires_survival` therefore admits only arrivals that landed in a benign
+#     hazard phase. Same position, two phase distributions: pool seeds survive a median
+#     of 8 NOOP frames, the policy's OWN arrivals from reset survive 3.
+#   * the approach to the floor-12 jump needs 8 steps, so a 3-frame arrival is doomed
+#     whatever the agent does. v6/v13, which got past this, arrive with 12.
+#   * so the level turns on ARRIVAL TIMING, and seeding at `Lclimb3_top` hands the agent
+#     a survivable phase for free — it never has to make that decision.
+#
+# Excluding it pushes practice back to `Step`: same px (272), one floor down, off the
+# patrol route, and its pool and reset arrivals are IDENTICAL (both survive the bonus
+# timer), so it is both safe and representative. The timed climb then happens inside the
+# episode.
+#
+# WHAT THIS CAN AND CANNOT SHOW. It can show whether representative practice alone is
+# enough to learn arrival timing. It adds NO signal that timing matters — no reward term
+# rewards arriving survivably — so it may simply reproduce v16c. That is a real possible
+# outcome and not a reason to skip the run: three reward-side levers were refuted by
+# measurement (floor-12 milestone, credit_requires_survival, flat death penalty), and
+# this is the one that survived.
+#
+# READ IT ON: `Lclimb3_top` reach (does dropping its pool cost the trunk?), `Low1` pool
+# size (8 in v16c, 100 in v6/v13), and arrival survivability from reset — the quantity
+# that actually separates the runs, measurable with
+# diag/l4_seed_determinism.py --noop-safety --vs-reset.
+#
+# Everything else is byte-identical to v16c's 15M config. Same cold seed 42.
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v17_noseed_climb3_cold_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
+  # THE LEVER.
+  seed_waypoint_skip: [Lclimb3_top]

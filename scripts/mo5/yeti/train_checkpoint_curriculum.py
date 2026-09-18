@@ -1365,6 +1365,40 @@ class CheckpointCurriculumEnv(gym.Env):
         )
         # {wp_id: (x_ram, y_px, floor)} detection targets from the tilemap.
         self._waypoints = yeti.waypoints(_level) if self._wp_enabled else {}
+        # (2026-09-18) Waypoints excluded from SEEDING by config. Removing them here --
+        # from the detection dict the capture loop and the start sampler both read --
+        # means no states are captured there and no episodes start there. Any reward
+        # term is unaffected: the reward keeps its own group list from LevelMap.
+        #
+        # The case this exists for is an EXPOSED spot. Seeding at L4 `Lclimb3_top` hands
+        # the agent a hazard phase it did not have to earn (pool seeds survive a median
+        # 8 NOOP frames against 3 for its own arrivals), so the timing decision the
+        # level actually turns on never gets practised. See CurriculumConfig.
+        # IT MUST STAY IN `self._waypoints`. That dict drives DETECTION, the
+        # closest-approach display and `wp_reach_ema`, as well as capture. Dropping it
+        # here (the first attempt) silently stopped tracking the waypoint: the route
+        # table went from 30 rows to 29, so the one number the run exists to read --
+        # does removing the pool cost its reach? -- became unobservable, and
+        # `gate_waypoints_by_predecessor` lost the predecessor its successors gate on.
+        # The exclusion is applied at CAPTURE instead (see step()): no captures means no
+        # pool, and starts are sampled from pools.
+        self._wp_seed_skip = frozenset(
+            tuple(getattr(cur, "seed_waypoint_skip", ()) or ()) if cur else ()
+        )
+        if self._wp_seed_skip:
+            unknown = sorted(w for w in self._wp_seed_skip if w not in self._waypoints)
+            if unknown:
+                # Fail loudly: a typo would otherwise silently seed the waypoint it was
+                # meant to exclude, and the run would look like the control.
+                raise SystemExit(
+                    f"seed_waypoint_skip names unknown waypoints {unknown}; "
+                    f"level {_level} has {sorted(self._waypoints)}"
+                )
+            print(
+                f"[curriculum] seed_waypoint_skip: {sorted(self._wp_seed_skip)} will "
+                "be DETECTED and tracked but never captured or seeded from",
+                flush=True,
+            )
         # Which waypoints are jump-edge ones (landings and launch pads), so they
         # get _wp_jump_tol instead of the ladder tolerance.
         if self._wp_enabled:
@@ -1761,7 +1795,15 @@ class CheckpointCurriculumEnv(gym.Env):
                 # the reset-origin wp_reach_ema; capture below is more selective.
                 if detected:
                     self._reached_wps_this_ep.add(wp_id)
-                if wp_id == self._start_wp or wp_id in self._captured_wps:
+                # `seed_waypoint_skip` bites HERE and only here: detection and the
+                # reach/approach bookkeeping above still run, so the waypoint stays
+                # visible in the route table and usable as a predecessor gate; it just
+                # never enters a pool, and therefore never starts an episode.
+                if (
+                    wp_id == self._start_wp
+                    or wp_id in self._captured_wps
+                    or wp_id in self._wp_seed_skip
+                ):
                     continue
                 # CAPTURE: grounded + the configured geometry. The GROUNDED gate is what
                 # keeps mid-jump states out of the pools -- those reload fine (verified
