@@ -112,9 +112,23 @@ def parse_plan(spec):
 
 
 class Want:
-    """A predicate over one episode's trace. Absent => every episode matches."""
+    """A predicate over one episode's trace. Absent => every episode matches.
+
+    Several predicates can be joined with ``+``, meaning ALL must hold. That is what
+    makes "the interesting failures" expressible: `reach=Lclimb3_top+died` selects
+    episodes that got to floor 11 and then died, which `died` alone cannot -- nearly
+    every episode dies somewhere, so the unqualified predicate selects noise.
+
+    For a conjunction the reported match step is the LAST of the parts, so `--pre`
+    measures backwards from the death and the clip shows the run-up that caused it.
+    """
 
     def __init__(self, expr, level):
+        if expr is not None and "+" in expr:
+            self.parts = [Want(p.strip(), level) for p in expr.split("+") if p.strip()]
+            self.expr = expr
+            return
+        self.parts = None
         self.expr, self.target = expr, None
         if expr is None:
             return
@@ -136,6 +150,14 @@ class Want:
 
     def match(self, trace, died):
         """``trace`` is a list of (t, action, px, y, pose, x_ram)."""
+        if getattr(self, "parts", None):
+            steps = []
+            for p in self.parts:
+                ok, at = p.match(trace, died)
+                if not ok:
+                    return False, 0
+                steps.append(at)
+            return True, max(steps)
         if self.expr is None:
             return True, 0
         if self.kind == "died":
@@ -205,6 +227,15 @@ def main(argv=None) -> int:
     ap.add_argument("--keep", type=int, default=5, help="max clips written")
     ap.add_argument("--pre", type=int, default=30, help="frames kept before the match")
     ap.add_argument("--fps", type=int, default=10)
+    ap.add_argument(
+        "--filmstrip",
+        type=int,
+        default=0,
+        metavar="N",
+        help="also write a PNG contact sheet of the last N frames of each clip. A "
+        "still strip can be read in a chat or a note; an mp4 cannot, and the frames "
+        "that matter for a death are the last handful.",
+    )
     ap.add_argument("--out", default="output/monitor/record")
     args = ap.parse_args(argv)
 
@@ -280,6 +311,14 @@ def main(argv=None) -> int:
             import imageio.v2 as imageio
 
             imageio.mimsave(p, frames, fps=args.fps)
+            if args.filmstrip:
+                strip = frames[-args.filmstrip :]
+                h, w = strip[0].shape[:2]
+                sheet = Image.new("RGB", (w * len(strip), h), (0, 0, 0))
+                for k, fr in enumerate(strip):
+                    sheet.paste(Image.fromarray(fr), (k * w, 0))
+                sheet.save(p.with_suffix(".png"))
+                print(f"           filmstrip: {p.with_suffix('.png')}")
             written += 1
             print(
                 f"  ep {ep:>4} {label}: matched at step {at}, {len(frames)} frames"

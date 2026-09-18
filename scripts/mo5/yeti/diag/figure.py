@@ -74,10 +74,38 @@ def anchor_px(x_ram, y):
     return int(x_ram) * 4 + 8, int(y) + 8
 
 
+# WAYPOINT CLASSES. A target's flags decide what it actually DOES, and the two roles are
+# independent -- which is not obvious from a map where every anchor looks alike:
+#
+#   reward spine  in LevelMap.reward_waypoints, so the shaping potential sums distance
+#                 to it and the agent is actively pulled toward it.
+#   seed-only     seedable but NOT in the reward. The curriculum saves states here and
+#                 restarts episodes from them, but the reward never aims at it. On L4
+#                 this includes every launch pad and `Low1`, the floor-12 landing.
+#   trigger       mandatory but not reached by geometry (`F1` is an event, `princess` a
+#                 flag), so a positional box for them means nothing.
+#
+# Colours are deliberately not a gradient: these are kinds, not degrees.
+CLASS_COLOUR = {
+    "reward spine": (255, 220, 0),  # yellow
+    "seed-only": (255, 110, 210),  # magenta
+    "trigger": (255, 255, 255),  # white
+}
+
+
+def classify(t, reward_idents):
+    ident = getattr(t, "node_ident", None)
+    if t.id in reward_idents or ident in reward_idents:
+        return "reward spine"
+    if t.trigger != "position":
+        return "trigger"
+    return "seed-only"
+
+
 def draw(img, level, targets, heads, kinds, caption):
     """Scale ``img`` and draw the requested overlays. ``heads`` = [(x_ram, y), ...]."""
     img = img.resize((img.width * SCALE, img.height * SCALE), Image.NEAREST)
-    canvas = Image.new("RGB", (img.width, img.height + 34), (0, 0, 0))
+    canvas = Image.new("RGB", (img.width, img.height + 48), (0, 0, 0))
     canvas.paste(img, (0, 0))  # caption BELOW, never folded into the resize
     img = canvas
     d = ImageDraw.Draw(img)
@@ -109,18 +137,21 @@ def draw(img, level, targets, heads, kinds, caption):
     # ANCHORS BEFORE HEADS. Drawn the other way round, a single yellow anchor hides the
     # cyan heads underneath it -- which is the one thing a seed figure exists to show.
     if "anchors" in kinds:
+        reward_idents = {i for g in get_level_map(level).reward_waypoints for i in g}
         for i, t in enumerate(targets):
             ax, ay = anchor_px(t.pos[0], t.pos[1])
-            r = 3
+            cls = classify(t, reward_idents)
+            col = CLASS_COLOUR[cls]
+            r = 4 if cls == "reward spine" else 3
             d.ellipse(
                 [ax * s - r, ay * s - r, ax * s + r, ay * s + r],
-                fill=(255, 220, 0),
+                fill=col,
                 outline=(0, 0, 0),
             )
             # Stagger labels: L4 has 32 targets and several sit within a few px of each
             # other (Fr1/Fr1_launch, Hi4/Hi3_launch), so a fixed offset overprints them.
             dy = -5 if i % 2 == 0 else 4
-            d.text((ax * s + 5, ay * s + dy), t.id, fill=(255, 220, 0))
+            d.text((ax * s + 5, ay * s + dy), t.id, fill=col)
 
     if "heads" in kinds:
         # Seeds coincide heavily -- 100 Low2_launch seeds are all at px 184 -- so a
@@ -139,15 +170,22 @@ def draw(img, level, targets, heads, kinds, caption):
             if n > 1:
                 d.text((hx * s + r + 1, hy * s - 4), str(n), fill=(0, 220, 220))
 
-    d.text((5, img.height - 30), caption, fill=(255, 255, 255))
-    legend = ["yellow=anchor"]
+    d.text((5, img.height - 44), caption, fill=(255, 255, 255))
+    if "anchors" in kinds:
+        x = 5
+        for cls, col in CLASS_COLOUR.items():
+            d.ellipse([x, img.height - 27, x + 7, img.height - 20], fill=col)
+            d.text((x + 11, img.height - 29), cls, fill=col)
+            x += 12 + 7 * len(cls)
+    extra = []
     if "heads" in kinds:
-        legend.append("cyan=agent head (number = seeds at that pixel)")
+        extra.append("cyan=agent head, number = seeds at that pixel")
     if "boxes" in kinds:
-        legend.append("red=sprite box")
+        extra.append("red=sprite box")
     if "floors" in kinds:
-        legend.append("blue=floor line (spans gaps: it is a logical extent)")
-    d.text((5, img.height - 16), "  ".join(legend), fill=(150, 150, 150))
+        extra.append("blue=floor line (spans gaps: a logical extent)")
+    if extra:
+        d.text((5, img.height - 14), "   ".join(extra), fill=(150, 150, 150))
     return img
 
 
@@ -165,20 +203,34 @@ def load_source(spec, args, cfg, iface, env):
         if not args.run:
             raise SystemExit("pool:... needs --run")
         pool = pickle.load(open(Path(args.run) / "checkpoints.pkl", "rb"))
-        if val not in pool["waypoints"]:
-            raise SystemExit(
-                f"no pool {val!r}; have: {', '.join(sorted(pool['waypoints']))}"
-            )
-        entries = pool["waypoints"][val][0]
-        if not entries:
-            raise SystemExit(f"pool {val!r} is empty")
-        # READ POSITIONS AS SAVED -- do not step the env first. Measured: 15 of 1251
-        # seeds report a different position after even one step.
-        for e in entries[: args.seeds]:
-            iface.load_state(bytes(e[2]))
-            heads.append(yeti.read_pos(iface))
-        iface.load_state(bytes(entries[args.seed_index or 0][2]))
-        label = f"{val} (n={len(heads)} seeds)" if args.seeds > 1 else val
+        pools = pool["waypoints"]
+        # `pool:*` plots the heads of EVERY pool at once. That is the view that answers
+        # "where did this run's seeds actually end up", which one pool cannot -- and it
+        # is how you see a pool whose seeds sit nowhere near its own anchor.
+        names = sorted(pools) if val == "*" else [val]
+        if val != "*" and val not in pools:
+            raise SystemExit(f"no pool {val!r}; have: {', '.join(sorted(pools))}")
+        first = None
+        for nm in names:
+            entries = pools[nm][0]
+            if not entries:
+                continue
+            # READ POSITIONS AS SAVED -- do not step the env first. Measured: 15 of 1251
+            # seeds report a different position after even one step.
+            for e in entries[: args.seeds]:
+                iface.load_state(bytes(e[2]))
+                heads.append(yeti.read_pos(iface))
+            if first is None:
+                first = entries[args.seed_index or 0][2]
+        if first is None:
+            raise SystemExit(f"every pool in {val!r} is empty")
+        iface.load_state(bytes(first))
+        n_pools = sum(1 for nm in names if pools[nm][0])
+        label = (
+            f"ALL {n_pools} non-empty pools (n={len(heads)} seeds)"
+            if val == "*"
+            else (f"{val} (n={len(heads)} seeds)" if args.seeds > 1 else val)
+        )
     else:
         raise SystemExit("--from must be reset | pool:WAYPOINT | state:PATH")
 

@@ -8,7 +8,10 @@
 # uses num_envs 8, so running them together would halve each one's throughput and make
 # the wall-clock numbers meaningless.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+# Repo root is three levels up from experiments/003-yeti/runs/. These scripts lived in
+# debug/ until 4fde329, where ".." WAS the repo root; moving them silently broke every
+# relative path below until this was fixed.
+cd "$(dirname "$0")/../../.."
 
 for arm in v16a_markground_cold_6m v16b_markair_cold_6m; do
   echo "=============================================================="

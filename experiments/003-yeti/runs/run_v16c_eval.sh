@@ -18,10 +18,17 @@
 # of 150. A weaker selection is the honest comparison for a shorter run; inflating it by
 # snapshotting more often would not make the policy better.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+# Repo root is three levels up from experiments/003-yeti/runs/. These scripts lived in
+# debug/ until 4fde329, where ".." WAS the repo root; moving them silently broke every
+# relative path below until this was fixed.
+cd "$(dirname "$0")/../../.."
 
 TRAIN=output/mo5/yeti/training
-RUN="$TRAIN/yeti_curriculum_l4_v16c_payonchange_cold_6m"
+# Takes a run directory so the SAME stick can be applied to any run; defaults to the 6M
+# arm it was written for. The whole point is that these numbers are comparable, so the
+# eval settings below must not be edited per-run -- pass a different run instead.
+RUN="${1:-$TRAIN/yeti_curriculum_l4_v16c_payonchange_cold_6m}"
+TAG="$(basename "$RUN")"
 
 SWEEP=(--episodes 12 --profile yeti_fruit_level4 --fruits-total 1 --level 4
        --start-state output/mo5/yeti/level4/level4_start.sav
@@ -31,7 +38,7 @@ EVAL=(--episodes 300 --stochastic --profile yeti_fruit_level4 --fruits-total 1
       --stall-threshold 40 --max-steps 1500)
 
 echo "=============================================================="
-echo "STAGE 1/2: keep_best_sweep over v16c's 60 snapshots (n=12)"
+echo "STAGE 1/2: keep_best_sweep over $TAG ($(ls "$RUN/snapshots"/*.zip 2>/dev/null | wc -l) snapshots, n=12)"
 echo "=============================================================="
 python3 scripts/mo5/yeti/keep_best_sweep.py \
   --snapshots-dir "$RUN/snapshots" "${SWEEP[@]}"
@@ -48,7 +55,7 @@ echo "=============================================================="
 echo "STAGE 2/2: re-eval the champion at n=300 (same stick as v6/v13)"
 echo "=============================================================="
 python3 scripts/mo5/yeti/eval_from_reset.py --model "$CHAMP" \
-  --out debug/l4_champ300_v16c.json "${EVAL[@]}"
+  --out "output/monitor/champ300_${TAG}.json" "${EVAL[@]}"
 echo "eval exit: $?"
 echo
 echo "V16C EVAL DONE"

@@ -21,7 +21,10 @@
 # error before spending ~3h. A cold run at 100k is only at route[4]: 2-3/30 (measured on
 # both v16 arms), so the gate is deliberately weak: it fails a run that produces nothing.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+# Repo root is three levels up from experiments/003-yeti/runs/. These scripts lived in
+# debug/ until 4fde329, where ".." WAS the repo root; moving them silently broke every
+# relative path below until this was fixed.
+cd "$(dirname "$0")/../../.."
 
 CFG=experiments/003-yeti/configs/yeti_curriculum_l4_v16c_payonchange_cold_6m.yaml
 OUT=output/mo5/yeti/training/yeti_curriculum_l4_v16c_payonchange_cold_6m

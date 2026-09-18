@@ -14,7 +14,10 @@
 # Eval settings match those recorded in v6's _eval.json: 12 episodes, 1 fruit,
 # level 4, the level-4 start state. stall/max-steps follow v13's training env.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+# Repo root is three levels up from experiments/003-yeti/runs/. These scripts lived in
+# debug/ until 4fde329, where ".." WAS the repo root; moving them silently broke every
+# relative path below until this was fixed.
+cd "$(dirname "$0")/../../.."
 
 TRAIN=output/mo5/yeti/training
 COMMON=(--episodes 12 --profile yeti_fruit_level4 --fruits-total 1 --level 4
