@@ -2076,6 +2076,138 @@ Everything before it is at 84.7%.
    transient positions (it suggested `Rope1`→(34,110), mid-rope-carry, and
    `Low1_launch`→(66,86), mid-climb). Constrain suggestions to the floor's standing y.
 
+## v16c AT 15M: pay_on_target_change VALIDATED, and the wall is ARRIVAL TIMING (2026-09-18)
+
+### The champion result — a cold run matches the warm incumbents
+
+`keep_best_sweep` over 150 snapshots then `eval_from_reset` at 300 stochastic episodes,
+the same stick as the v6/v13 pair above:
+
+```
+champion                 mean rung   >= rung 10    training
+v6-restick  15M warm      8.52/13    226/300 75.3%  15M on top of earlier weights
+v13         15M warm      8.49/13    190/300 63.3%  15M on top of v4's 15M
+v16c        15M COLD      8.49/13    219/300 73.0%  15M from scratch
+v16c         6M cold      7.91/13    135/300 45.0%
+```
+
+So the 0.6-rung gap reported at 6M was STEP COUNT, not the reward change. v16c cold now
+equals v13 on mean rung, beats it on the rung-10 rate, and does it with roughly half the
+cumulative training. Champion is `model_9300000_steps.zip`; the run peaked over 9M-12M
+(`Lclimb3_top` 0.49 mean / 0.77 max) and DECAYED to 0.39 by 15M, so the final route table
+understates it badly — read the window, not the endpoint.
+
+### THE WALL IS NOT THE JUMP. It is when the agent arrives on floor 11.
+
+Measured, in this order, each step killing the previous explanation:
+
+**The jump is easy.** `diag/jump_bruteforce.py` sweeps scripted plans (approach A steps,
+wait W, hold jump H) from `Lclimb3_top` seeds. Best plan lands floor 12 in **12/20 = 60%**:
+walk left 8 steps, then jump left immediately. `hold` is irrelevant (2/4/6/8/10 all give
+12/20) so the jump commits at takeoff; `wait=2` collapses it to 3/20. Takeoff is px 252,
+inside floor 11's declared edge, landing at px 224 — exactly `Low1`'s anchor.
+
+**No policy comes close.** Three champions on the IDENTICAL 20 seeds, 8 repeats:
+v6 0.14, v13 0.07, v16c 0.03, and **not one always-win seed in 60 pairs**. Variance is
+mostly WITHIN-seed, so the policy has agency; the skill is learnable and unlearned.
+
+**Floor 11 is lethal ground and nothing else nearby is.** NOOP survival (hold NOOP, count
+frames to death) with the cap raised past the bonus timer:
+
+```
+                        exposure                  NOOP frames
+Step         floor 10   not on the patrol route   ~1200 (the timer)
+Lclimb3_top  floor 11   exposed, no ceiling       3-13   ALWAYS dies
+Low1         floor 12   landing zone, sheltered   ~1170 (the timer)
+Low1 at px 228          right edge, NOT sheltered 11     kangaroo reaches it
+```
+
+**And here is the mechanism.** Arrival survivability on floor 11 from reset, per champion:
+
+```
+          NOOP frames of life at the moment of arrival
+v6        min  9   median 12   max 15
+v13       min  0   median 12   max 14
+v16c      min  0   median  3   max  7
+```
+
+The approach needs 8 steps. v6/v13 arrive with 12 frames and can execute it; v16c arrives
+with 3 and is DOOMED ON LANDING whatever it does. That is the entire difference between
+walling at rope 2 and walling at floor 11. **The skill is timing the ladder climb**, and
+arrival survivability is the quantity to track — with a hard threshold at 8.
+
+Confirmed on video: from reset the champion tops the ladder at step 368 and is crushed at
+step 372, at px 264, grounded, mid-walk, 12 px short of takeoff. 31 of 40 episodes reach
+floor 11 and then die. Clips + filmstrips via `diag/record.py --want "reach=X+died"`.
+
+### The seed pool at Lclimb3_top is 2.7x easier than reality
+
+Same position, pool seeds vs the policy's own reset arrivals:
+
+```
+POOL    n=40   median 8 NOOP frames
+RESET   n=27   median 3 NOOP frames
+```
+
+`admit_requires_survival` only admits states the agent SURVIVED, so it keeps the benign
+hazard phases and discards exactly the hard ones. Practising there under-trains the
+situation the policy meets, and lets it skip the decision that matters. This is the one
+like-for-like comparison in this section (same position, two phase distributions); do NOT
+compare NOOP numbers ACROSS positions, see the next subsection.
+
+### THREE DIFFERENT THINGS, and I conflated them for an afternoon
+
+* **exposure / safety** — structural: does geometry shelter this spot, is it on a hazard's
+  path? A property of the map, timeless.
+* **survivability** — a property of a STATE: position PLUS where the hazard is right now.
+  NOOP survival measures only this. An exposed spot scores the cap whenever the hazard
+  happens to be far away, so a HIGH number proves nothing about safety; only a LOW number
+  is informative ("this state was doomed"). And any cap shorter than the hazard cycle
+  truncates: a bimodal result (a few early deaths, the rest at exactly the cap) means the
+  cap is too small. The ~1150-1210 cluster is the BONUS TIMER, not a hazard.
+* **admission ratio** (`cap/rej` in the route table) — did the agent survive 30 steps
+  ONWARD, which includes danger at LATER waypoints. `Step` scores 10.4% while being
+  completely safe, because the agent climbs the ladder and dies on floor 11 inside the
+  window. That is correct behaviour for seed admission and useless as a safety index.
+
+### Levers refuted by measurement, not opinion
+
+* **A reward milestone on the floor-12 landing** (the deferred `[Low2_launch, Hi2]`
+  OR-group). The median reset arrival cannot survive long enough to depart for floor 12,
+  so this pays more for something unreachable. Note the shaping ALREADY pays the jump:
+  +0.48 walking `Lclimb3_top` -> the edge, +0.64 for the landing, and g9's nearer member
+  is the low route at every position on floor 11.
+* **`credit_requires_survival`**. Under `gamma: 1.0` shaping telescopes to
+  Phi(end) - Phi(start), so refunding it on death zeroes shaping for every episode that
+  dies. L3 v14 did this: 17,024 of 17,033 episodes, chain collapsed, princess 89 -> 9.
+* **A flat death penalty.** Measured: the death frame pays exactly 0.000 and a fatal
+  episode still banks +66.300, so dying IS free. But 99.5% of episodes end in death
+  (74,612 of 75,015), so a constant terminal penalty is a per-episode constant and PPO
+  normalises it away. The only residual is PPO's 0.99 discount making LATE deaths cheaper,
+  which rewards dawdling on safe ground — a worse failure than the one it fixes.
+
+### What survives
+
+Stop seeding `Lclimb3_top`; let `Step` carry that segment. `Step` is the same px (272) one
+floor down, measured safe, and its pool and reset arrivals are identical — so the timed
+climb happens INSIDE the episode instead of being skipped. One curriculum line, no reward
+risk. It makes practice representative; it adds no signal that arrival timing matters, so
+whether it is sufficient is unknown.
+
+Minor, same class: `Low1`'s sprite window spans 14 px (~px 217-230). The right end is
+outside the shelter, so a seed captured at px 228 is dead on load whatever it does (1 of 8
+in this pool). `admit_requires_survival` missed it because the agent walked left off 228
+inside the 30 steps.
+
+### STILL OPEN: what gave v6/v13 the arrival timing?
+
+They arrive with 12 frames, v16c with 3, and the map and reward are IDENTICAL —
+`Low1_launch` was skipped before all three runs (`bc85424`, 2026-08-27, predating v6 on
+08-28 and v13 on 09-10), so no launch pad, no floor-12 milestone and free death in every
+case. Three candidates remain, none isolated: **warm vs cold** (v6/v13 both `resume:`, so
+they inherited weights that had already practised this), **box vs sprite** reach geometry,
+and **`target_kl: 0.07`** which v6/v13 set and all three v16 configs omit.
+
 ## Where the diagnostics went (2026-09-16)
 
 `debug/` was gitignored with zero tracked files, so every diagnostic in this project was
