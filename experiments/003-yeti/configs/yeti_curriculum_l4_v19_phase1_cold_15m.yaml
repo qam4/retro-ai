@@ -51,9 +51,11 @@
 # phase-1 configs used 0.01, but matching v16c keeps this to ONE lever) and the absence of
 # `target_kl` (already absent in v16c, and phase 1 wants it absent anyway).
 #
-# THROUGHPUT WARNING: n_steps 16 x num_envs 8 = a 128-step rollout against v16c's 4096, so
-# ~32x more optimiser updates per environment step. Wall clock per timestep will be worse
-# than v16c's 7h/15M. Measure it on the smoke before trusting the budget below.
+# THROUGHPUT: n_steps 16 x num_envs 8 is a 128-step rollout against v16c's 4096, i.e. ~32x
+# more optimiser updates per environment step, so this looked like it would be much slower.
+# MEASURED, 50k each back to back with nothing else running: v19 2335 emu_fps against
+# v16c's 2271. Marginally FASTER -- the emulator is the bottleneck, not the optimiser -- so
+# 15M costs about the same ~7h as v16c and the budget below needs no adjustment.
 training:
   timesteps: 15_000_000
   output: output/mo5/yeti/training/yeti_curriculum_l4_v19_phase1_cold_15m
