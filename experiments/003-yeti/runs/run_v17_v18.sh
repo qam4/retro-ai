@@ -22,7 +22,7 @@
 #        destroys it and box-vs-sprite or the absent target_kl is next.
 #
 # WHAT TO READ AFTERWARDS, for both:
-#   * champion on the shared stick: experiments/003-yeti/runs/run_v16c_eval.sh <run>
+#   * champion on the shared stick: experiments/003-yeti/runs/run_champion_eval.sh <run>
 #     (v6 8.52/75.3%, v13 8.49/63.3%, v16c 8.49/73.0%)
 #   * arrival survivability from reset, the quantity that separates the runs:
 #     diag/l4_seed_determinism.py --pools Lclimb3_top --noop-safety --vs-reset 30 \

@@ -79,6 +79,105 @@ def _quantiles(v):
     return s[0], s[n // 4], s[n // 2], s[(3 * n) // 4], s[-1]
 
 
+def arrival_trend(args, stack, ifc, wps, models):
+    """Track ARRIVAL SURVIVABILITY across a run's snapshots.
+
+    THE QUESTION THIS SETTLES. L4 stops at one transition: the agent reaches floor 11
+    and is crushed before it can start the floor-12 jump. The jump needs an 8-step
+    approach, and what decides the outcome is how many frames of life the agent has WHEN
+    IT ARRIVES -- measured by holding NOOP from the arrival state. Cold runs arrive with
+    3-5 frames; the runs that got past floor 11 arrived with 12.
+    That leaves a fork worth real compute:
+        would a cold run get there if we simply ran it LONGER?
+    A 15M run costs ~7h, and the warm alternative carries ~60M of cumulative training
+    across four chained runs, so the honest comparison is expensive. This is the cheap
+    version: if the quantity is CLIMBING across snapshots the skill is being acquired
+    and more steps plausibly reach the threshold; if it is FLAT the run is not acquiring
+    it and no amount of scaling will.
+    Companion to l3_link_over_snapshots.py, which does the same across-snapshots trick
+    for a link's reach. The final snapshot is routinely a trough on these runs, so a
+    single endpoint cannot answer this.
+    """
+    from retro_ai.training.targets import build_targets
+
+    tg = {t.id: t for t in build_targets(4)}
+    snaps = sorted(
+        Path(args.run).glob("snapshots/model_*_steps.zip"),
+        key=lambda p: int(p.stem.split("_")[1]),
+    )
+    if not snaps:
+        raise SystemExit(f"no snapshots under {args.run}/snapshots")
+    step = max(1, len(snaps) // args.over_snapshots)
+    picked = snaps[::step][: args.over_snapshots]
+    if snaps[-1] not in picked:
+        picked.append(snaps[-1])
+    pool = [p.strip() for p in args.pools.split(",")][0]
+    floor = tg[pool].floor
+    y_t = {p.floor: p.y for p in get_level_map(4).platforms}[floor]
+    start_bytes = Path("output/mo5/yeti/level4/level4_start.sav").read_bytes()
+    print(f"\n  arrival survivability at {pool} (floor {floor}), from reset")
+    print("  NOOP frames of life on arrival; the floor-12 approach needs 8\n")
+    print(f"  {'step':>12} {'n':>4} {'min':>4} {'median':>7} {'max':>4}")
+    from stable_baselines3 import PPO
+
+    trend = []
+    for sp in picked:
+        model = PPO.load(str(sp), device="cpu")
+        arrivals = []
+        for _ep in range(args.vs_reset or 25):
+            ifc.load_state(start_bytes)
+            stack.preprocessed.notify_state_loaded()
+            obs, *_ = stack.gym.step([0, 0, 0])
+            for _s in range(900):
+                a, _ = model.predict(obs, deterministic=False)
+                obs, *_rest = stack.gym.step([int(v) for v in a])
+                if (
+                    ifc.read_ram_byte(yeti.Y_ADDR) == y_t
+                    and ifc.read_ram_byte(yeti.POSE_ADDR) in yeti.SURFACE_POSES
+                ):
+                    arrivals.append(stack.base.save_state())
+                    break
+                if yeti.is_dead(ifc):
+                    break
+        st = int(sp.stem.split("_")[1])
+        if not arrivals:
+            print(f"  {st:>12,} {0:>4}   -- never reached floor {floor} --")
+            continue
+        v = [noop_survival(stack, ifc, s, args.noop_cap) for s in arrivals]
+        lo, _q1, med, _q3, hi = _quantiles(v)
+        trend.append((st, med))
+        print(f"  {st:>12,} {len(v):>4} {lo:>4} {med:>7} {hi:>4}", flush=True)
+    if len(trend) >= 4:
+        # FIRST-vs-LAST IS THE WRONG TEST and printed a misleading verdict once. On a
+        # cold run the early snapshots cannot reach the waypoint at all, so the first
+        # measurable point is near zero and any plateau above it reads as "rising".
+        # v16c went 0 (3.7M) -> 5 (5.5M) -> 3 for the remaining 10M steps: acquired
+        # early, then flat for two thirds of the run, nowhere near the threshold.
+        # Compare the LAST THIRD against the middle third instead, and say plainly
+        # whether the plateau clears the bar.
+        half = len(trend) // 3
+        early = sorted(m for _s, m in trend[half : 2 * half]) or [trend[0][1]]
+        late = sorted(m for _s, m in trend[-half:]) or [trend[-1][1]]
+        e, la = early[len(early) // 2], late[len(late) // 2]
+        best = max(m for _s, m in trend)
+        print(
+            f"\n  median over the middle third {e}, over the last third {la}, "
+            f"best single snapshot {best}."
+        )
+        if la > e:
+            print(
+                "  STILL RISING: the skill is being acquired; a longer run may reach "
+                "the threshold."
+            )
+        else:
+            print(
+                f"  PLATEAUED at ~{la}: the run stopped improving on this well before "
+                "the end, so\n  scaling it cannot reach the threshold. The difference "
+                "must come from elsewhere."
+            )
+    return None
+
+
 def noop_safety(args, stack, ifc, wps, models):
     """Is the seed pool as dangerous as what the policy actually arrives into?
 
@@ -193,6 +292,17 @@ def main() -> None:
         "and may be systematically easier than reality.",
     )
     ap.add_argument(
+        "--over-snapshots",
+        type=int,
+        default=0,
+        metavar="N",
+        help="sweep N snapshots evenly across the run and report --vs-reset arrival "
+        "survivability for each, i.e. IS THE RUN LEARNING THIS AT ALL. Answers 'would "
+        "more steps get there?' without spending them: a rising trend means the skill "
+        "is being acquired slowly and a longer run is worth trying; a flat trend means "
+        "it is not being acquired and scaling the run cannot help.",
+    )
+    ap.add_argument(
         "--noop-cap",
         type=int,
         default=150,
@@ -257,6 +367,8 @@ def main() -> None:
         models.append((label, PPO.load(p, device="auto")))
     print(f"seeds come from: {args.run}")
 
+    if args.over_snapshots:
+        return arrival_trend(args, stack, ifc, wps, models)
     if args.noop_safety:
         return noop_safety(args, stack, ifc, wps, models)
 
