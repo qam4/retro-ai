@@ -2208,6 +2208,134 @@ case. Three candidates remain, none isolated: **warm vs cold** (v6/v13 both `res
 they inherited weights that had already practised this), **box vs sprite** reach geometry,
 and **`target_kl: 0.07`** which v6/v13 set and all three v16 configs omit.
 
+## v17 / v18 (2026-09-19): v18 IS CHAMPION, AND EVERY COLD RUN WAS MIS-SPECIFIED
+
+Two 15M runs, each ONE lever from v16c's 15M, launched together because they answered
+DIFFERENT questions -- v17 was the candidate fix, v18 the diagnostic. They are not two
+arms of one comparison and must not be compared to each other.
+
+```
+v17 = v16c + curriculum.seed_waypoint_skip: [Lclimb3_top]        (cold, as v16c)
+v18 = v16c + resume: <v13>/final_model.zip, warmstart_weights_only  (warm)
+```
+
+### v18 IS THE CHAMPION, on the shared stick
+
+`run_champion_eval.sh` (sweep 150 snapshots at n=12, then eval_from_reset n=300
+stochastic from the L4 start state -- do not edit those flags, they are what make these
+numbers comparable):
+
+```
+champion                 mean rung   >= rung 10    princess
+v6-restick  15M warm      8.52/13    226/300 75.3%   0/300
+v13         15M warm      8.49/13    190/300 63.3%   0/300
+v16c        15M cold      8.49/13    219/300 73.0%   0/300
+v18         15M warm      8.96/13    243/300 81.0%   0/300   <-- best on both
+```
+
+Best mean rung and best rung-10 rate on this level, +0.44 rung over the previous best,
+and **the only policy that reaches floor 12 from reset at all**: `Low1` reach 0.42 and
+`Low2_launch` 0.40 against 0.00 for every other run. `Lclimb3_top`'s `prog` -- the
+hand-off that was 0.00 in v16c -- is 0.95. Pools: `Low1` 100, `Low2` 11,
+`Lhi_down_bot` 100, and `Lprincess_top` 13, i.e. seeds at the princess ladder for the
+first time. Princess itself still 0/300.
+
+### v18 did NOT learn the arrival timing. It arrived holding it.
+
+`diag/l4_seed_determinism.py --over-snapshots`, arrival survivability at `Lclimb3_top`
+(NOOP frames of life on arrival; the floor-12 approach needs 8):
+
+```
+v18 (warm)    100k: 10   1.9M: 11   3.7M: 11   7.3M: 11   10.9M: 10   15M: 9
+v16c (cold)   3.7M:  0   5.5M:  5   7.3M:  3    9.1M:  3   12.7M:  3   15M: 3
+```
+
+v18 is at 10 frames at its FIRST snapshot, before it has trained, and its own 15M adds
+nothing (10 -> 9). So the skill came entirely from v13's weights. **That kills the
+"warm just means more training" reading** -- which mattered, because the chain is
+v18 <- v13 <- v4 <- v3 at 15M each, i.e. ~60M cumulative, and volume was the obvious
+alternative explanation.
+
+v16c reaches its ceiling of 3-5 by 5.5M and sits there for the remaining TEN MILLION
+steps. Two thirds of the run spent flat, well short of the threshold.
+
+### v17: NO VERDICT. Its apparent negative is inside the noise.
+
+v17 looked worse than v16c (`Low1` pool 8 -> 2, `Lclimb3_top` 9M-12M window mean
+0.49 -> 0.28, arrival survivability 5 -> 0) and I reported that as a clean negative.
+It is not supported. Measured run-to-run variance at FIXED seed 42, two runs identical
+but for `timesteps` (v16c's 6M and 15M, over their shared first 6M):
+
+```
+                        v16c-6M   v16c-15M
+Lclimb3_top  4M-6M         0.19       0.35     <- pure nondeterminism
+Lclimb3_top  0-6M          0.06       0.16
+```
+
+The noise band is the size of the effect. And level3_notes.md already says so: *"a
+single 600k control on L3 proves nothing. 1 in 3 seeds collapses"* -- three seeds, no
+change at all, princess 70.3% / 0.0% / 69.6% -- ending *"this invalidates every n=1
+verdict taken this session"*. I had read that section the same afternoon.
+
+**So `seed_waypoint_skip`'s direction is unknown, not refuted.** Treat any single-run
+reach difference below ~0.16 as no signal.
+
+### THE ROOT CAUSE OF THE COLD PLATEAU: every cold run used a recipe known to fail
+
+```
+config                      n_steps  target_kl  start
+v14/v15/v16a/v16b/v16c/v17    512     ABSENT    COLD
+v13, v6                       512     0.07      warm
+```
+
+experiments/003-yeti-training.md already documents this exact shape as unable to learn
+from scratch, and names the run that proved it
+(`yeti_curriculum_v16_coldsteady.yaml`, n_steps 512 + target_kl 0.05, cold, 20M):
+*"every snapshot scored princess 0.0 AND reach4 0.0 ... the steady recipe cannot learn
+from scratch; the big-step phase-1 was doing essential exploration"*, with the rule
+*"never start cold-steady"*.
+
+Its interpretation is annealing on the policy:
+
+* **phase 1** `n_steps: 16`, no `target_kl` = HIGH temperature. Small rollouts give
+  large, noisy, sometimes destructive updates (measured KL up to 68) that can stumble
+  across a behavioural plateau. Crossing one needs a whole new skill chunk, so small
+  greedy steps cannot -- nothing nearby improves the return.
+* **phase 2** `n_steps: 512`, `target_kl: 0.05` = LOW temperature, settles into the
+  basin without destroying it.
+
+L4's floor-11 wall is exactly a behavioural plateau, and the flat 3-5 arrival
+survivability across ten million steps is that rule being demonstrated. **Roughly 50h
+of cold compute (v14-v17) went into a configuration already recorded as unable to learn
+cold.** The L2/L3 phase-1 configs (`l2_v1/v2/v3`, `l3_v1/v2`) all use n_steps 16;
+phase 2 (`v15_phase2`, `l2_v10`) uses n_steps 512 + target_kl 0.05 warm.
+
+Also checked and NOT the explanation: `target_kl` does not damp the oscillation. From
+tb, `reach/from_0/ge_10` mean |step-to-step| is 0.007 (v6), 0.006 (v13), 0.005 (v16c),
+0.006 (v18) -- the two with `target_kl: 0.07` are if anything slightly noisier. The
+notes say the instability and the oscillation are the SAME mechanism, so equal jitter
+refutes nothing; it is consistent with v6/v13 having had their exploration phase
+earlier in the chain.
+
+### v19: phase 1 for L4 (running)
+
+One lever from v16c, `n_steps: 512 -> 16`, cold, 15M. Throughput measured rather than
+assumed: 2335 emu_fps against v16c's 2271, so ~32x more optimiser updates cost nothing
+and 15M is still ~7h.
+
+**Read it on arrival survivability, not reach.** The question is only whether
+high-temperature exploration finds the floor-11 timing from scratch. Rising toward 8
+means phase 2 (`n_steps: 512`, `target_kl: 0.05`, warm from v19) should anneal it,
+which would give a CONFIG-ONLY path to a champion instead of an unreproducible
+four-run chain. Flat at 3-5 means `n_steps` is not the missing piece either.
+
+### THE STANDING PROBLEM
+
+v18 is the best policy and we cannot reproduce it. Its skill was inherited from a chain
+of four runs under four different code states, and it was already complete at v18's
+first snapshot. Until a cold recipe acquires arrival timing, every improvement built on
+v18 inherits that irreproducibility.
+
 ## Where the diagnostics went (2026-09-16)
 
 `debug/` was gitignored with zero tracked files, so every diagnostic in this project was

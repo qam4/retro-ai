@@ -1,0 +1,115 @@
+# v20 PHASE 2 — 5M, warm from v19 (phase 1). The anneal half of the documented recipe.
+#
+# DO NOT RUN THIS UNTIL v19 HAS BEEN READ. It is written now because its shape is fixed
+# by the recipe, not because it is ready: the `resume` line below points at v19's
+# final_model and MAY NEED CHANGING to a specific snapshot. See "WHICH SNAPSHOT" below.
+#
+# THE RECIPE (experiments/003-yeti-training.md, the v15/v16 L1 analysis):
+#   phase 1  n_steps 16,  no target_kl     HIGH temperature: large, noisy, sometimes
+#            (= v19)                       destructive updates that can stumble across a
+#                                          behavioural plateau. Crossing one needs a new
+#                                          skill chunk, so small greedy steps cannot.
+#   phase 2  n_steps 512, target_kl 0.05   LOW temperature: KL-bounded steps that settle
+#            (= this file)                 into the basin without destroying it.
+#   "Practical rule: never start cold-steady -- use phase-1 exploration (or warm-start
+#    past the early walls) to find the basin, then anneal."
+#
+# Precedent for these exact phase-2 numbers: `yeti_curriculum_v15_phase2.yaml` (L1, 5M,
+# warm from the v14 champion) and `yeti_curriculum_l2_v10_deferfruit_10m.yaml` (L2, 10M,
+# warm from the l2_v9 champion). Both n_steps 512 + target_kl 0.05. 5M chosen to match
+# the L1 precedent; at ~2300 emu_fps that is ~2h20m.
+#
+# WHY IT MATTERS. v18 is the champion (8.96/13, 81.0% at rung 10) and is the only policy
+# that reaches floor 12 from reset -- but its arrival-timing skill was already complete at
+# its FIRST snapshot, inherited from a chain v18 <- v13 <- v4 <- v3 spanning four code
+# states. We cannot reproduce it from a config. v19 + v20 is the attempt to get the same
+# capability from a recipe: two configs, cold, no inherited weights.
+#
+# WHICH SNAPSHOT TO RESUME FROM. Phase 1 is DESTRUCTIVE by design, so its final weights
+# are routinely a trough -- v16c peaked over 9M-12M and decayed by 15M. Before running
+# this, read v19's arrival-survivability trend
+#
+#   diag/l4_seed_determinism.py --run <v19> --pools Lclimb3_top --over-snapshots 8 \
+#     --noop-cap 40 --vs-reset 25 --models <v19>/final_model.zip
+#
+# and resume from the snapshot where arrival survivability is HIGHEST, not from
+# final_model, unless the final happens to be the peak. The threshold that matters is 8
+# frames (the floor-12 approach needs 8 steps); v16c plateaued at 3-5, v18 inherited 10.
+# Note `resume` also loads pools from dirname(resume), so a snapshot resume needs the
+# pools handled explicitly -- check `resume_pools` if the snapshot lives in snapshots/.
+#
+# WHAT WOULD COUNT AS SUCCESS. Arrival survivability at or above 8 and HOLDING (phase 2
+# should stop the oscillation, not just reach a peak), plus `Low1` reach above the noise
+# band. Judge on the snapshot trend, not the endpoint, and treat any reach difference
+# below ~0.16 as no signal -- measured run-to-run variance at fixed seed 42 is 0.19 vs
+# 0.35 on `Lclimb3_top`.
+#
+# Everything below except `n_steps`, `target_kl` and the resume lines is identical to v19
+# and v16c.
+training:
+  timesteps: 5_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v20_phase2_5m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # CHECK THIS BEFORE RUNNING -- see "WHICH SNAPSHOT TO RESUME FROM" above.
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v19_phase1_cold_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  # PHASE 2: long rollouts, so updates are averaged over much more experience.
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  # PHASE 2: bound the policy step. This is the anneal -- it is what stops the
+  # exploration phase from destroying the basin it just found.
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
