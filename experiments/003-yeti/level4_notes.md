@@ -2336,6 +2336,121 @@ of four runs under four different code states, and it was already complete at v1
 first snapshot. Until a cold recipe acquires arrival timing, every improvement built on
 v18 inherits that irreproducibility.
 
+## ROPE 2 IS AN EXPECTED-VALUE PROBLEM, AND THAT IS WHERE +1.0 COMES FROM (2026-09-22)
+
+DECIDED: pay **+1.0, once per episode, for the rope carry (pose 15)**. NOT YET
+IMPLEMENTED. This section is the derivation, so the number can be argued with instead of
+re-guessed.
+
+### What each option on the pad actually banks
+
+Measured with `scripts/mo5/yeti/diag/l4_pad_reward.py`, which rebuilds the trainer's own
+`RewardContext` per step and calls `reward_fn(ctx)` — the gym's reward is NOT what the
+trainer uses, and an earlier attempt through `gym.step` returned 0.00 for everything.
+Seeds are the 65 of 100 `Low2_launch` states on safe ground (px >= 188), 90 steps each,
+under v22's reward params (`mark_airborne: true`, `pay_on_target_change: true`, gamma 1):
+
+```
+  behaviour                                        banked
+  hold still on the pad                             0.000
+  walk LEFT off the edge                           +0.075
+  jump and miss the rope                            0.000
+  COMPLETED CROSSING  (NOOP:20,JUMP_LEFT:70)       +2.940   median 2.920, n=6
+```
+
+**The ordering was already correct** — a crossing pays 39x the cliff-walk. The failure is
+the expected value:
+
+```
+  walk off the edge      +0.075  CERTAIN
+  attempt the rope       ~1% x 2.940 = +0.029 expected, and 0.000 on every miss
+```
+
+0.075 > 0.029, so stepping off the cliff is the better bet and the agent takes it. This is
+NOT an exploration failure and not a bad policy; the arithmetic favours the fall. Nothing
+in the reward pays anything for a failed attempt, and the whole +2.94 arrives on landing
+(the first 6 steps pay 0.000).
+
+Holding still costs nothing, so there is no gradient pushing the agent to leave early.
+There is only a gradient pulling it left if it walks.
+
+### Scale, so the magnitude is not picked out of the air
+
+Per-episode `total_reward` from `episodes.csv`:
+
+```
+  run          n        min     median    p75      max
+  v22 (1M)     3628    -5.96     6.80    57.16    70.39
+  v21 (6M)    24416    -7.20    13.72    57.16    70.51
+```
+
+### Why NOT +10 (the first proposal)
+
++10 for the grab is **3.4x the entire value of the crossing** and 1.5x a median episode.
+The ordering would survive (grab-and-fail +10, complete +12.94) so it would change the
+choice, but it says touching the rope matters more than what touching it achieves, which
+is the shape of reward that gets exploited. It also MUST be once-per-episode either way:
+the recorded crossings show pose 15 in two bursts (crossing 1: `[4,10,15,10,15,10,5]`), so
+a per-frame +10 banks +20..50 for one manoeuvre, up to 70% of a maximum episode.
+
+### Why +1.0
+
+```
+  walk off the edge      +0.075
+  grab and fail          +1.000    13x the cliff-walk -> the choice flips
+  complete the crossing  +3.940    4x a grab          -> finishing still dominates
+```
+
+Both margins are wide and both come from the measurements above. The risk that remains,
+and it is real: a signal on an event that currently fires ~1% of the time may do nothing
+measurable in 6M steps. If +1.0 produces no change, the next step is the magnitude, not a
+different mechanism.
+
+### The crossing plan this was priced with
+
+`NOOP:18..22` then `JUMP_LEFT` held, from a px-188 seed. 6/6 recorded clips crossed the
+gap, USER-CONFIRMED ON VIDEO. The mp4s were deleted as too heavy to commit; the PNG
+filmstrips are kept at `experiments/003-yeti/evidence/l4_rope2_carry/wait{18,20,22}/` and
+the pad seeds either side of the lethal pixel at
+`experiments/003-yeti/evidence/l4_rope2_seed_compare/px{184,188}/`. Regenerate any clip
+with `record.py --from pool:Low2_launch --seed-index 0 --plan "NOOP:20,JUMP_LEFT:60"`.
+This matches the scripted sweep already recorded in `l4_pad_reward.py`'s header (40
+crossings / 3312 trials, working departure window wait 17..23) and the behavioural half
+(v13 pressed LEFT+FIRE in 34/34 episodes but departed at wait 0-3 in 33/34). The input is
+right; the timing is wrong; the reward pays for the wrong timing.
+
+### Corrections this session, all of them mine
+
+* **`jump_bruteforce.py --from-pool Low2_launch --land-on Low2` returned 0/20 over 75
+  plans and I read it as "the crossing is impossible".** Wrong twice: the tool holds a
+  jump input and a rope carry needs a release and a re-jump timed to a moving rope, and
+  its top plans used wait 2 and 5, nowhere near the 17..23 window that works. That 0/20
+  reproduced the ~700-trial negative already documented above; it is not a feasibility
+  result. I also proposed deleting jump edge (12,13) on the strength of it, which would
+  have removed a real route.
+* **"87% of the `Low2_launch` pool is poisoned" was a correlate, not a cause.** Under the
+  policy, 90 steps from every seed: px 184 dies 80% (n=35), px 188 dies 95% (n=44), px 192
+  dies 81% (n=21), with identical longest-airborne runs and identical leftmost reach. The
+  px-188 seeds are H-AU's 8/8-survivable pixel and they die MORE. Pool composition is not
+  the lever, so `admit_requires_grounded` and offline pool cleaning were both aimed at the
+  wrong thing.
+* **Airborne duration cannot separate the two failures.** Fall-to-spring and
+  jump-and-miss look the same in the air, confirmed on video. Longest consecutive airborne
+  run does separate an ordinary jump (Spring, median 15 frames) and the legitimate
+  trampoline route to Spring (`Lclimb2_top`, 59, 0 deaths) from the rope-2 fall (82-83) —
+  but it is useless for ADMISSION because ~90% of `Low2_launch` captures are followed by
+  death regardless, so any survival-based gate empties the pool.
+* **The policy's pose-15 rate is lower than I claimed.** I measured 1/100 in one pass;
+  a 400-episode hunt (`record.py --want pose=15`) found 0/400. Treat 1/100 as a single
+  lucky event. This is why the crossing was priced with the scripted plan, not the policy.
+
+### Control arm when this is run
+
+v21 (`ent_coef: 0.01`, warm from v13's `final_model`), NOT a fresh cold run. The +2.94
+arrives entirely on landing, so a grab reward changes WHEN credit arrives as well as how
+much — and on this level that class of change has a history (`mark_airborne`,
+`pay_on_target_change`). One lever, one control.
+
 ## Where the diagnostics went (2026-09-16)
 
 `debug/` was gitignored with zero tracked files, so every diagnostic in this project was

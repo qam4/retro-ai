@@ -162,6 +162,150 @@ end-of-doc "Summary" consolidates everything.
 
 ---
 
+## TRAINING MANAGEMENT PLAN (2026-09-21)
+
+Reward shaping, seeds and map geometry are exhausted as levers on L4: 45 runs,
+0 princess touches. This plan changes how training is MANAGED rather than what
+it optimises. Four steps, each one lever with a control, each with a stopping
+rule so a dead arm costs hours instead of a day.
+
+### The retrospective it rests on
+
+Measured across the 94 run directories that carry a `curriculum_diag.csv`
+reaching at least 200k steps, by `scripts/mo5/yeti/diag/run_retrospective.py`:
+
+| factor | ever reached princess | never |
+|---|---|---|
+| warm start | 18 | 52 |
+| **cold start** | **0** | **24** |
+| `n_steps: 512` | 16 | 57 |
+| **`n_steps: 16`** | **0** | **15** |
+| `timesteps <= 1M` | 13 | 6 |
+| `timesteps >= 10M` | 4 | 37 |
+
+By level: L1 3 win / 5 lose, L2 1/10, L3 14/16, **L4 0/45**.
+
+Two things that table hides:
+
+* 13 of the 14 L3 wins are 600k children of one parent. Exactly ONE run in the
+  repo's history went from an ancestor that never finished to one that did:
+  `yeti_curriculum_l3_v15_gatewp_15m`, warm from `yeti_ctrlC_gatewp_600k`
+  (princess 0.000, depth 9), reaching 0.953. It found it at **2.275M of 15M**
+  and then oscillated — 0.855, 0.000, 0.231, 0.006, 0.801 — for the remaining
+  12.7M steps without improving.
+* The `timesteps <= 1M` row is confounded by exactly those 600k children. It is
+  not evidence that short runs are better; it is evidence that stopping a warm
+  run before it regresses preserves what it inherited.
+
+Policy entropy, measured by `scripts/mo5/yeti/diag/policy_health.py` on a fixed
+observation batch per level (joystick `[3,3,2]`, maximum entropy 2.8904 nats):
+
+| run | level | princess | entropy, % of max |
+|---|---|---|---|
+| `yeti_curriculum_v15_phase2` | 1 | 0.998 | **2.0 - 6.0%** |
+| `yeti_curriculum_l2_v10_deferfruit_10m` | 2 | 0.993 | **6.0 - 16.6%** |
+| `yeti_curriculum_l3_v15_gatewp_15m` | 3 | 0.953 peak | 52.6 - 63.1% |
+| `yeti_curriculum_l4_v18_warm_v13_15m` | 4 | 0.000 | 52.5 - 64.5% |
+| `yeti_curriculum_l4_v16c_payonchange_cold_15m` | 4 | 0.000 | 71.8 - 89.8% |
+| `yeti_curriculum_l4_v19_phase1_cold_15m` | 4 | 0.000 | 24 - 32% |
+
+The levels we finish RELIABLY run committed policies at near-zero entropy. L3
+at 53-63% reaches the princess but cannot hold it, which is what its swinging
+rate looks like. L4 has never gone below ~52% except v19, which committed
+inside 1M steps to a route worth nothing.
+
+`ent_coef` is 0.01 in both reliably-finished levels and **0.02 in all 49 L4
+runs**. No L4 run has ever used 0.01, and none has ever used `target_kl: 0.05`.
+
+Direction of causation is NOT established: a policy that found a reliable route
+sharpens on its own, so low entropy may be the signature of success rather than
+its cause. Two observations argue it is not purely a readout — v16c at its peak
+`reach10` of 0.77 sits at 72% while v18 at the same `reach10` sits at 64%, and
+v19 reached 24% having found nothing. Step 1 is what settles it.
+
+### Ruled out, do not spend runs on these
+
+* **Normalisation layers / churn-reduction losses.** Dormant feature units:
+  L2 winner 0.82-0.86, L3 winner 0.72-0.77, v18 0.64-0.67, v16c 0.04-0.12. The
+  runs with the most dead capacity are the ones that win, so capacity loss is
+  not the binding constraint. (There is no `LayerNorm`, `GroupNorm` or
+  `BatchNorm` anywhere in `python/`, and on this evidence none is needed.)
+* **`n_steps: 16` as an exploration phase.** It is the COLDEST configuration we
+  have, not the hottest: entropy 24-32% against 512's 70-77%. It commits before
+  it has found anything. 0 princess in 15 runs. The "phase 1 explores"
+  description elsewhere in this document is contradicted by the measurement.
+
+### Step 1 — `ent_coef` 0.02 -> 0.01 (config only, ~3h)
+
+`yeti_curriculum_l4_v21_ent01_warm_v13_6m.yaml`. Identical to v18 except
+`ent_coef` and a 6M budget, warm from the SAME parent v18 used
+(v13's `final_model.zip`), so **v18's own snapshots from 0 to 6M are the
+control arm** and no new control run is needed.
+
+Deliberately NOT bundled with `target_kl: 0.05`, even though the L1/L2 winners
+set both. One lever per run; `target_kl` is step 1b.
+
+* **Stop rule:** entropy below 30% of max by 2M. Still above 50% at 2M means the
+  coefficient is not enough on its own — kill it and go to step 3.
+* **Success:** `Low1` holds at or above v18's 0.743 AND something appears past
+  floor 12 (`Low2_launch` onward), judged over the snapshot distribution, not
+  the final model and not the champion.
+
+### Step 1b — `target_kl: 0.05` (config only, ~3h)
+
+Same shape, second lever, run only after step 1 reads out. The L1/L2 winners set
+0.05; v13's lineage set 0.07; the whole v16 series and v18 set none.
+
+### Step 2 — 6M default instead of 15M (config only, no new run)
+
+v18's best snapshot is at 900k of 15M. v16c's is at 9.3M of 15M. The L3
+breakthrough peaked at 2.275M of 15M. Tail steps have never produced a champion
+on this project. Spend the saved ~4h per run on more arms and more seeds.
+
+### Step 3 — entropy setpoint controller (~20 lines, only if step 1 is partial)
+
+`PPO.train()` reads `self.ent_coef` on every update and SB3 2.7.1 types it as a
+plain float with no schedule support, so a callback that mutates
+`model.ent_coef` gives a schedule with no fork. Track a target walking from ~70%
+of max down to ~10%, adjusting the coefficient to hit it. A fixed coefficient
+cannot do this: the same 0.02 produced 90% entropy in v16c and 24% in v19, so the
+coefficient is not the quantity worth specifying — the entropy is. Compare
+[Adaptive Entropy Regularization](https://arxiv.org/abs/2510.10959), which uses
+an anchored entropy target for LLM RL, and SAC's automatic temperature tuning.
+
+Build it only if step 1 moves entropy but not far enough, or overshoots early.
+
+### Step 4 — revert-on-regression, referee first
+
+**The referee is the blocker and must be fixed before the revert.**
+`keep_best_sweep.py` selects on 12 episodes, where bootstrapping the 300-episode
+champion distributions gives `mean_rung` an sd of 0.75-0.82 against a real
+v16c-vs-v18 difference of 0.47. It has been picking champions at random. Replace
+with the reach RATE of the frontier target — the deepest mandatory target with a
+nonzero rate, discovered per run so nothing level-specific is baked in — at ~30
+episodes, where that rate has sd 0.078.
+
+Then: evaluate from reset every 500k, and when the frontier rate regresses past a
+margin for 2-3 consecutive evals, reload the best weights into the LIVE model and
+continue. Note this is different from what `keep_best_sweep.py` already does —
+that only decides which file to archive and never touches training.
+[Recovering from Instability in Reinforcement Learning](https://arxiv.org/abs/1910.03732)
+is the published form, and it is model-agnostic. Every piece exists except the
+feedback edge.
+
+Do this last: if steps 1-3 stop the sawtooth, it may be unnecessary.
+
+### Why PPO does this at all
+
+TRPO and PPO inherit their monotonic-improvement story from tabular conservative
+policy iteration, and under function approximation those guarantees fail, giving
+divergence, oscillation or convergence to something suboptimal — see
+[Monotone and Conservative Policy Iteration Beyond the Tabular Case](https://arxiv.org/abs/2506.07134v2).
+PPO's monotonicity is a heuristic, not a promise, and this project is a case
+where the heuristic does not hold. (Sources paraphrased.)
+
+---
+
 ## Experimental method (adopted after v7)
 
 We kept changing several variables at once (v5->v6->v7 each moved
