@@ -1,0 +1,87 @@
+# yeti_curriculum L3 v2 — mandatory-waypoint reward targets + corrected map.
+#
+# SAME from-scratch phase-1 recipe as v1 (n_steps=16, no target_kl, WP
+# curriculum, defer_fruit) so this is a clean A/B against v1: the ONLY change
+# is the reward. v1 (70b275a) reached the goat platform but crossed the
+# escalator 0 times in 15M; the path-progress shaping gave no signal toward
+# the pre-escalator chokepoints and actively discouraged the post-escalator
+# down-detour.
+#
+# What changed in the code since v1 (commit dedaab0):
+#  - LevelMap.reward_waypoints (L3): the grounded path-progress reward now
+#    SUMS graph path-distance to the not-yet-reached MANDATORY waypoint groups
+#    (unordered, like fruits), min over an OR-group's members, DROPPING any
+#    group unreachable in the nav graph. So the agent now gets dense shaping +
+#    a sparse chokepoint reward toward: the goat platform (either goat ladder),
+#    then — once across the escalator — Ldown_bot and the snowball-climb tops,
+#    then Lprincess_top. The escalator gap and the final 5-platform jump are
+#    INF in the graph (sparse by design): NO shaping crosses them; they must
+#    be learned by exploration + the sparse reward for REACHING the next
+#    chokepoint (Ldown_bot re-enters the sum once reachable).
+#  - Unified ladder-node naming across levels, which FIXED L3's *_top reward
+#    waypoints resolving to the wrong platforms. Verified: arrival waypoints
+#    now sit on the correct platforms; L1/L2 reward byte-identical (champion
+#    L2 still 10/10 princess).
+#
+# EXPECTATION (recorded up front): v2 should reach the goat platform / top of
+# the pre-escalator ladder MORE RELIABLY than v1 (dense shaping there now), and
+# populate strong seed pools right before the escalator. It is NOT expected to
+# solve the escalator — that gap is unshaped. The escalator is the next problem
+# to crack out-of-the-box (human demo / euclidean-in-the-gap / segment training
+# from the ladder top / something else).
+#
+# CAVEAT (unchanged from v1): path-progress floor resolution is unreliable on
+# L3 (8px-apart platforms); the WP-target distances share that limitation but
+# the sparse reach reward + tol-box detection do not.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v2_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500          # L3's route is long (escalator ride etc.)
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2   # tol-box for marking a WP group reached (= waypoint_tolerance)
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16              # phase-1 exploration (destructive/exploratory)
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  # no target_kl (phase-1)
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2

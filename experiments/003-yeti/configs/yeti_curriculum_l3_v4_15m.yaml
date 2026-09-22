@@ -1,0 +1,78 @@
+# yeti_curriculum L3 v4 — escalator modelled as a ladder (crossing shaping).
+#
+# Same from-scratch phase-1 recipe as v3 (n_steps=16, no target_kl, WP
+# curriculum, defer_fruit). From RESET (not warm-started): v3 showed the agent
+# reliably reaches the goat platform from scratch (Lgoat pools saturated by
+# ~26%, first captures early), so the WP curriculum re-bootstraps goat-reaching
+# on its own, and this stays a clean A/B — the only change from v3 is the map.
+#
+# What changed since v3 (commit e08d138):
+#  - The ESCALATOR is now a ladder (Lesc) connecting GOAT (y94) <-> ELAND
+#    (y158) at the descent column. The route is graph-connected across it (no
+#    INF gap), so the path-progress reward SHAPES the crossing:
+#      * gradient off the goat platform toward the jump-off point,
+#      * credit for landing the jump ON (~+1.2) and the jump OFF / land at
+#        ELAND (~+4.6); the passive ride between is frozen (nothing to reward;
+#        an early jump-off falls -> death gate).
+#    Frame-precise on/off timing is learned from pixels (like dodging a
+#    snowball) — not in the reward.
+#  - Escalator top/bottom are SEED-ONLY waypoints (captured mid-crossing ->
+#    reverse-curriculum seeds), not reward targets.
+#
+# EXPECTATION: v3 reliably reached the goat platform but crossed the escalator
+# 0 times (INF gap = no guidance). v4 now has a gradient toward + across the
+# escalator, so watch for the FIRST escalator crossings: Lesc_top/Lesc_bot
+# capture counts rising in wp_near, then Ldown_bot / Lsc*_top (post-escalator)
+# distances shrinking and captures appearing. The final ascending climb
+# (SN3->A1..A5) stays sparse; not expected to fully solve L3 yet.
+
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v4_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 16
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
