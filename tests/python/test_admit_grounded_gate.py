@@ -115,3 +115,70 @@ def test_grounded_requirement_also_overrides_the_reached_next_shortcut():
     m = _mgr(mod, admit_requires_grounded=True)
     assert m._admit_by_play(90, True, end_pose=WALK) == "reached"
     assert m._admit_by_play(90, True, end_pose=TRAMPOLINE_L) == "rejected"
+
+
+# --- THE WIRING ------------------------------------------------------------------
+#
+# Everything above calls `_admit_by_play` directly and passes, because the gate's own
+# logic was always right. What was never exercised is whether the CALLERS forward the
+# pose they compute: `save_waypoint` and `save_scored` each take an `end_pose` argument,
+# and each called `_admit_by_play(survived_steps, reached_next)` without it, so the
+# parameter defaulted to None inside the gate and `admit_requires_grounded` could never
+# fire. The env computes it (`_pose_at_window_end`) and passes it in at both call sites,
+# the docstrings describe the criterion and quote its measured blast radius, and the one
+# line that uses it was missing.
+#
+# Measured cost: L4 v22 ran 1M steps with the flag ON and rejected 238 of 1385
+# `Low2_launch` captures -- 17.2%, against 17.9% per 1M for v21 with the flag OFF, i.e.
+# no effect at all, while 35 of its 100 pooled seeds still sat on the lethal px 184.
+# Under v22's own policy those seeds end the 30-step window airborne 28 times in 30.
+#
+# These tests go through the public entry points, so they fail if the forwarding is
+# dropped again.
+
+
+def test_save_waypoint_forwards_end_pose_to_the_gate():
+    mod = _mod()
+    m = _mgr(mod, admit_requires_survival=True, admit_requires_grounded=True)
+    # Alive far beyond the window, but airborne on a trampoline when it closed.
+    m.save_waypoint("Low2_launch", b"state", 90, False, end_pose=TRAMPOLINE_L)
+    assert (
+        "Low2_launch" not in m.waypoints
+    ), "a bouncing capture was pooled: save_waypoint dropped end_pose"
+    assert m.wp_rejected_precarious.get("Low2_launch") == 1
+
+
+def test_save_waypoint_still_admits_a_grounded_capture():
+    mod = _mod()
+    m = _mgr(mod, admit_requires_survival=True, admit_requires_grounded=True)
+    m.save_waypoint("Low2_launch", b"state", 90, False, end_pose=WALK)
+    assert len(m.waypoints["Low2_launch"]) == 1
+
+
+def test_save_scored_forwards_end_pose_to_the_gate():
+    mod = _mod()
+    m = _mgr(mod, admit_requires_survival=True, admit_requires_grounded=True)
+    m.save_scored(1, b"state", 90, False, 0, 0, end_pose=TRAMPOLINE_L)
+    assert (
+        len(m.checkpoints[1]) == 0
+    ), "a bouncing capture was pooled: save_scored dropped end_pose"
+    assert m.stats["rejected_precarious"][1] == 1
+
+
+def test_save_scored_still_admits_a_grounded_capture():
+    mod = _mod()
+    m = _mgr(mod, admit_requires_survival=True, admit_requires_grounded=True)
+    m.save_scored(1, b"state", 90, False, 0, 0, end_pose=WALK)
+    assert len(m.checkpoints[1]) == 1
+
+
+def test_rejections_are_attributable_to_the_grounded_check():
+    """Why this counter exists: the bug above was invisible for a whole run because the
+    only rejection tally lumps every reason together, so a gate that never fires and a
+    gate with nothing to reject read identically."""
+    mod = _mod()
+    m = _mgr(mod, admit_requires_survival=True, admit_requires_grounded=True)
+    m.save_waypoint("Low2_launch", b"s1", 90, False, end_pose=TRAMPOLINE_L)  # airborne
+    m.save_waypoint("Low2_launch", b"s2", 5, False, end_pose=WALK)  # too short
+    assert m.wp_rejected_airborne.get("Low2_launch") == 1
+    assert m.wp_rejected_precarious.get("Low2_launch") == 2

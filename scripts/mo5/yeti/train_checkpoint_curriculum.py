@@ -415,6 +415,11 @@ class CheckpointManager:
             # How many snapshots we rejected for being too precarious
             # (died too soon under the policy, didn't reach next CP).
             "rejected_precarious": [0] * (self.N_RUNGS + 1),
+            # Of those, how many were disqualified by the GROUNDED half of the gate
+            # rather than by the step count. Split out because a lumped tally cannot
+            # tell a gate that never fires from a gate with nothing to reject -- which
+            # is how `admit_requires_grounded` stayed dead through a whole 1M run.
+            "rejected_airborne": [0] * (self.N_RUNGS + 1),
             # Admission breakdown (H-R instrumentation): of the snapshots
             # offered to save_scored, how many were admitted because the
             # episode reached the next CP (reached_next) vs admitted only
@@ -434,6 +439,8 @@ class CheckpointManager:
         self.wp_admit_reached: dict = {}
         self.wp_admit_survived: dict = {}
         self.wp_rejected_precarious: dict = {}
+        # Subset of the above: rejected for ending the survival window airborne.
+        self.wp_rejected_airborne: dict = {}
         self.segment_attempts = [0] * (self.N_RUNGS + 1)
         self.segment_successes = [0] * (self.N_RUNGS + 1)
 
@@ -680,13 +687,15 @@ class CheckpointManager:
         #   survived-only -> didn't reach next, but stayed alive >= min
         #   rejected      -> neither (the "collected fruit then died fast"
         #                    states the H-O fix started filtering out)
-        verdict = self._admit_by_play(survived_steps, reached_next)
+        verdict = self._admit_by_play(survived_steps, reached_next, end_pose=end_pose)
         if verdict == "reached":
             self.stats["admit_reached"][fruits_collected] += 1
         elif verdict == "survived":
             self.stats["admit_survived"][fruits_collected] += 1
         else:
             self.stats["rejected_precarious"][fruits_collected] += 1
+            if self._airborne_at_window_end(end_pose):
+                self.stats["rejected_airborne"][fruits_collected] += 1
             return
         self._insert(fruits_collected, source_cp, bonus, state_bytes, stack, reached)
 
@@ -755,14 +764,27 @@ class CheckpointManager:
         25/25. Concentrated exactly where intended, so it is safe global rather than
         per-level.
         """
-        if self.admit_requires_grounded and end_pose is not None:
-            if int(end_pose) not in SEED_POSES:
-                return "rejected"
+        if self._airborne_at_window_end(end_pose):
+            return "rejected"
         if reached_next and not self.admit_requires_survival:
             return "reached"
         if survived_steps >= self.min_survival_steps:
             return "survived"
         return "rejected"
+
+    def _airborne_at_window_end(self, end_pose) -> bool:
+        """Whether the GROUNDED half of the gate is what disqualifies this capture.
+
+        Callers use it to attribute a rejection, so `_admit_by_play` can keep returning
+        the three verdicts its callers already switch on. `end_pose is None` means the
+        episode ended before the window closed, which the step-count test already
+        handles -- the gate must not reject on missing information.
+        """
+        return bool(
+            self.admit_requires_grounded
+            and end_pose is not None
+            and int(end_pose) not in SEED_POSES
+        )
 
     def save_waypoint(
         self,
@@ -789,7 +811,7 @@ class CheckpointManager:
         admitted capture and shares StartPool's reset-origin retention.
         ``stack`` is the frame-stack blob captured with the state (H-AB).
         """
-        verdict = self._admit_by_play(survived_steps, reached_next)
+        verdict = self._admit_by_play(survived_steps, reached_next, end_pose=end_pose)
         if verdict == "reached":
             self.wp_admit_reached[wp_id] = self.wp_admit_reached.get(wp_id, 0) + 1
         elif verdict == "survived":
@@ -798,6 +820,10 @@ class CheckpointManager:
             self.wp_rejected_precarious[wp_id] = (
                 self.wp_rejected_precarious.get(wp_id, 0) + 1
             )
+            if self._airborne_at_window_end(end_pose):
+                self.wp_rejected_airborne[wp_id] = (
+                    self.wp_rejected_airborne.get(wp_id, 0) + 1
+                )
             return
         pool = self.waypoints.get(wp_id)
         if pool is None:
@@ -1108,7 +1134,11 @@ class CheckpointManager:
           prog      order-free progress EMA       -> is this hand-off healthy?
           pool      seed pool size                -> exploration frontier
           near      closest grounded approach px  -> got near but never landed?
-          cap/rej   admitted vs precarious-rejected captures
+          cap/rej   admitted vs precarious-rejected captures, and of those
+                    rejections how many were for ending the window AIRBORNE
+                    (`air`). Without that split a gate that never fires and a
+                    gate with nothing to reject read identically, which is how
+                    `admit_requires_grounded` stayed dead through a 1M run.
         ``route_order`` is display-only (LevelMap.route_order); unlisted points
         are appended in a stable order so nothing is ever hidden.
         """
@@ -1118,7 +1148,7 @@ class CheckpointManager:
         if not ids:
             return ""
         lines = [
-            "  route                reach   prog   pool   near   cap/rej",
+            "  route                reach   prog   pool   near   cap/rej(air)",
         ]
         for wid in ids:
             pool = self.waypoints.get(wid)
@@ -1126,7 +1156,7 @@ class CheckpointManager:
             prog = self.progress_ema.get(wid)
             near = self.wp_closest.get(wid)
             lines.append(
-                "  {:<18s} {:>6s} {:>6s} {:>6s} {:>6s}   {}/{}".format(
+                "  {:<18s} {:>6s} {:>6s} {:>6s} {:>6s}   {}/{}({})".format(
                     wid,
                     "—" if reach is None else f"{reach:.2f}",
                     "—" if prog is None else f"{prog:.2f}",
@@ -1134,6 +1164,7 @@ class CheckpointManager:
                     "—" if near is None else str(near),
                     self.wp_captures.get(wid, 0),
                     self.wp_rejected_precarious.get(wid, 0),
+                    self.wp_rejected_airborne.get(wid, 0),
                 )
             )
         return "\n".join(lines)
