@@ -124,6 +124,21 @@ class PadReward:
         return float(self.fn(ctx)), cur
 
 
+def _load_record():
+    """record.py's plan vocabulary, imported rather than retyped.
+
+    The two scripts must agree on what "JUMP_LEFT:40" means or a reward trace cannot be
+    compared with the clip it came from -- which is the whole point of measuring the
+    scripted crossing.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "_yeti_record", Path(__file__).resolve().parent / "record.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def roll(env, iface, pr, state, reached, plan, n):
     """Load ``state`` and apply ``plan`` for ``n`` steps, logging reward."""
     iface.load_state(bytes(state))
@@ -133,8 +148,14 @@ def roll(env, iface, pr, state, reached, plan, n):
     obs, _, _, _, _ = env.gym.step(NOOP)
     prev = pr.snapshot()
     rows = []
+    # `plan` is either ONE action held for n steps, or a per-step sequence (from
+    # --plan). A sequence is what the rope-2 crossing needs: the working departure is a
+    # wait of 18-22 steps and then a held jump-left, and holding either alone never
+    # crosses.
+    seq = isinstance(plan[0], (list, tuple))
     for t in range(n):
-        obs, _, te, tr, _ = env.gym.step(plan)
+        act = plan[min(t, len(plan) - 1)] if seq else plan
+        obs, _, te, tr, _ = env.gym.step(act)
         died = yeti.is_dead(iface)
         r, prev = pr.reward(prev, t + 1, died)
         x, y = yeti.read_pos(iface)
@@ -164,10 +185,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=("output/mo5/yeti/training/yeti_curriculum_l4_v13_anchors_15m"),
     )
     ap.add_argument("--waypoint", default="Low2_launch")
+    ap.add_argument(
+        "--plan",
+        default=None,
+        help='record.py plan syntax, e.g. "NOOP:20,JUMP_LEFT:60". Replaces the three '
+        "held-input plans. Use it to price a trajectory you have a clip of.",
+    )
     ap.add_argument("--steps", type=int, default=26)
     ap.add_argument("--seeds", type=int, default=12)
     ap.add_argument("--out", default="debug/l4_rope2_geom/pad_reward.png")
     args = ap.parse_args(argv)
+
+    plans = dict(PLANS)
+    if args.plan:
+        plans = {args.plan: _load_record().parse_plan(args.plan)}
+        args.steps = max(args.steps, len(plans[args.plan]))
 
     tcc = _load_trainer()
     cfg = RunConfig.from_yaml(args.config)
@@ -199,13 +231,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             safe.append(e)
     print(f"reward: {cfg.reward.name}  params={dict(cfg.reward.params)}")
     print(f"{len(safe)}/{len(entries)} {args.waypoint} seeds on safe ground (px>=188)")
-    print(f"measuring {args.steps} steps under {len(PLANS)} fixed plans\n")
+    print(f"measuring {args.steps} steps under {len(plans)} plan(s)\n")
 
-    totals = {k: [] for k in PLANS}
-    firsts = {k: [] for k in PLANS}
-    curves = {k: [] for k in PLANS}
+    totals = {k: [] for k in plans}
+    firsts = {k: [] for k in plans}
+    curves = {k: [] for k in plans}
     for e in safe[: args.seeds]:
-        for name, plan in PLANS.items():
+        for name, plan in plans.items():
             rows = roll(env, iface, pr, e[2], e[4], plan, args.steps)
             totals[name].append(sum(r["r"] for r in rows))
             firsts[name].append(sum(r["r"] for r in rows[:6]))
@@ -217,7 +249,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     n = len(safe[: args.seeds])
     print(f"{'plan':>16} {'mean total':>11} {'median':>9} {'mean 1st 6':>11}")
-    for name in PLANS:
+    for name in plans:
         print(
             f"{name:>16} {statistics.fmean(totals[name]):>11.3f} "
             f"{statistics.median(totals[name]):>9.3f} "
@@ -226,7 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"\n(n={n} seeds, {args.steps} steps each)")
 
     print("\nper-step reward, seed 0:")
-    for name, plan in PLANS.items():
+    for name, plan in plans.items():
         rows = roll(env, iface, pr, safe[0][2], safe[0][4], plan, 12)
         s = " ".join(f"{r['r']:+.3f}" for r in rows)
         print(f"  {name:>16}: {s}")
@@ -245,7 +277,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "walk LEFT": "tab:orange",
             "jump-LEFT held": "tab:red",
         }
-        for name in PLANS:
+        for name in plans:
             for i, c in enumerate(curves[name]):
                 ax.plot(
                     range(len(c)),
