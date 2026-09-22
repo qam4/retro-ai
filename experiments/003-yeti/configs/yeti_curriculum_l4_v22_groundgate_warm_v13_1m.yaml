@@ -1,0 +1,155 @@
+# v22 — 1M, seed 42. ONE lever vs v21: `admit_requires_grounded` False -> True.
+#
+# WHAT IT TESTS: whether the survival gate's missing half stops the `Low2_launch` pool
+# from filling with seeds that fall on load. Measured by loading every seed and reading
+# its position as saved:
+#
+#   v13's pool (the parent both runs inherit)   33/100 on px 184
+#   v21 after 6M with the gate OFF             87/100 on px 184
+#
+# px 184 is floor 12's tile edge: the agent reads grounded for one frame, then falls, and
+# the trampoline underneath bounces it for a median of 82 steps before it dies. Against
+# `min_survival_steps: 30` that admits every one of them -- measured, the survival gate
+# rejects 0/100. The pose at step 30 is 17 (the trampoline's lift), which is not in
+# SEED_POSES, so `admit_requires_grounded` rejects 90/100 and keeps the 10 that live.
+#
+# WHY THE POOL MATTERS: traced 150 steps from the px-184 seeds under NOOP, hold-left,
+# hold-right and left+jump, nothing ever gets past px 176 while floor 13's edge is px 128.
+# The fall-bounce loop cannot reach the landing, so 87% of seeded attempts at rope 2 are
+# practising the fall. px 188 is standable 8/8, which is what gives the agent time to wait
+# for the rope's swing phase -- and all three recorded crossings used the rope (pose 15),
+# never the trampoline (16/17).
+#
+# CONTROL ARM: v21's first 1M. Same parent, same seed, same everything else -- verified by
+# diffing the parsed YAML, which shows only `admit_requires_grounded`, `timesteps` and
+# `output`.
+#
+# READ IT ON: the `Low2_launch` pool's px histogram at 1M vs v21's at 1M. v21 drifted
+# 33% -> 87% poisoned over 6M; if the gate works this should not drift up.
+#
+# NOT CLAIMED: that this makes rope 2 easier. It is a ~0.3% two-catch manoeuvre either
+# way. This only decides whether seeded attempts start somewhere the crossing is possible.
+#
+# --- inherited from v21 (unchanged) --------------------------------------------------
+# v21's lever was `ent_coef` 0.02 -> 0.01, kept here at 0.01.
+#
+# THE QUESTION. Entropy measured on a fixed observation batch
+# (scripts/mo5/yeti/diag/policy_health.py, joystick [3,3,2], max 2.8904 nats):
+#
+#   L1 yeti_curriculum_v15_phase2            princess 0.998    H  2.0 - 6.0% of max
+#   L2 yeti_curriculum_l2_v10_deferfruit_10m princess 0.993    H  6.0 - 16.6%
+#   L3 yeti_curriculum_l3_v15_gatewp_15m     princess 0.953    H 52.6 - 63.1%
+#   L4 v18 (this run's parent config)        princess 0.000    H 52.5 - 64.5%
+#   L4 v16c cold                             princess 0.000    H 71.8 - 89.8%
+#   L4 v19 n_steps 16                        princess 0.000    H   24 - 32%
+#
+# The two levels finished RELIABLY run committed policies near zero entropy, and both
+# used `ent_coef: 0.01`. All 49 L4 runs to date used 0.02 and none has gone below ~52%
+# except v19, which committed inside 1M steps to a route worth nothing. L4's wall is a
+# transition needing an 8-step approach executed inside a 10-frame window on floor 11 —
+# precision a 60%-entropy policy cannot deliver even when it knows the route.
+#
+# NOT CLAIMED: that low entropy CAUSES finishing. A policy that found a reliable route
+# sharpens on its own, so the correlation above is compatible with entropy being the
+# signature of success rather than its cause. What argues against pure readout: v16c at
+# its peak reach10 of 0.77 sits at 72% while v18 at the same reach10 sits at 64%, and v19
+# reached 24% having found nothing. This run is the test.
+#
+# CONTROL ARM: v18's own snapshots from 0 to 6M. Nothing else in this file differs from
+# yeti_curriculum_l4_v18_warm_v13_15m.yaml except `ent_coef`, `timesteps` and `output`,
+# and truncating the budget is safe to compare against because nothing here is scheduled
+# on training progress — `learning_rate` and `clip_range` are passed to PPO as plain
+# floats (train_checkpoint_curriculum.py, the PPO(...) call), so 6M is v18's first 6M
+# with one coefficient changed.
+#
+# WHY NOT ALSO `target_kl: 0.05`. The L1/L2 winners set both, and no L4 run has ever set
+# target_kl to 0.05. It is a second lever and gets its own run (step 1b of the plan in
+# experiments/003-yeti-training.md), because with both moved a null result would be
+# unattributable — the mistake level4_notes.md's RUN PROTOCOL exists to prevent.
+#
+# WHY v13's final_model, NOT v18's. Two reasons. It keeps the warm-start SOURCE identical
+# to v18's, which is what makes v18 a control rather than a loose comparison. And
+# level4_notes.md records "DO NOT WARM-START FROM A CHAMPION" with a measured control arm
+# behind it (A0: starting policy 9.55 -> 1.20 -> 2.43 -> 7.53 -> 1.03 within 1M), so
+# v18's 900k champion is exactly the wrong thing to continue from.
+#
+# STOP RULE: entropy below 30% of max by 2M. Still above 50% at 2M means the coefficient
+# alone is not enough — kill the run and build the entropy controller (plan step 3)
+# rather than paying for the remaining 4M.
+#
+# READ IT ON, judged over the snapshot DISTRIBUTION and not the final model or the
+# champion: entropy trajectory via policy_health.py; `Low1` at or above v18's 0.743; and
+# whether anything appears past floor 12 (`Low2_launch` onward), which no L4 run has done.
+
+training:
+  timesteps: 1_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v22_groundgate_warm_v13_1m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # v13's weights AND v13's pools (checkpoints.pkl is loaded from dirname(resume)) —
+  # byte-identical to v18's warm start.
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v13_anchors_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  # THE LEVER. v18 used 0.02, as did every other L4 run. Both reliably-finished levels
+  # used 0.01.
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  # THE LEVER vs v21. Rejects a capture that does not END its survival window in
+  # SEED_POSES. Measured on v21's Low2_launch pool: the px-184 seeds survive the 30-step
+  # window (death comes at a median of 82 steps, via the trampoline) but read pose 17 --
+  # the trampoline lift -- at step 30, so this rejects 90/100 and keeps the 10 that live.
+  # `min_survival_steps` alone rejects 0/100.
+  admit_requires_grounded: true
+  waypoint_reach_mode: sprite
