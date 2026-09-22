@@ -90,3 +90,18 @@ screenshots/
 test_retro_ai_repro
 videopac_benchmark
 debug/
+
+# Video. Clips are cheap to regenerate and expensive to store: `record.py --filmstrip`
+# writes a PNG contact sheet alongside every clip, and the still strip is the artefact
+# worth keeping -- it can be read in a note or a review, an mp4 cannot. Cite the
+# filmstrip and the command that made the clip, not the clip.
+#
+# NOTE 10 mp4s were committed before this rule and stay tracked; gitignore does not
+# untrack. Leave them: `l4_rope2_video/crossing_1_ep236_neither.mp4` is the only
+# recorded evidence of a policy crossing rope 2 from reset.
+*.mp4
+
+# Agent scratch. Short-lived command output and intermediate artefacts live here so they
+# never land in a project directory (a previous session buried 41 real documents under
+# ~550 strays). Anything worth keeping is promoted to experiments/<id>/evidence/.
+.kiro/tmp/
