@@ -286,3 +286,88 @@ def test_l3_goat_climb_reward_not_penalised():
     ]
     total = sum(fn(ctx(x, y, pose)) for (x, y, pose) in traj)
     assert total >= 0.0
+
+
+def test_jump_node_inset_stays_off():
+    """Jump-graph nodes sit ON the tile edge. `edge_inset` is 0 everywhere, and stays 0.
+
+    THIS IS A NEGATIVE RESULT, PINNED. Setting L4's `edge_inset` to 4 looks obviously
+    right -- the node is what the PBRS potential aims at, and the tile edge is a pixel
+    the agent falls off -- and it is wrong. The node marks where the agent JUMPS FROM,
+    and a jump departs the edge in motion. You cannot stand on the edge; you must leave
+    from it.
+
+    Measured on every L4 jump edge at inset 4: the last step onto the departure edge
+    went from +0.04 to -0.04, all 12 flipped, so the shaping punished the departure of
+    every jump on the level -- including rope 1, which the agent crosses ~53% of the
+    time. Run v25 against v24 as control (6M, n=30, 60 snapshots): mean `Low2_launch`
+    rate 0.195 vs 0.349, frontier collapsed in 23/60 evals vs 8/56, and per-waypoint
+    reach down a FLAT 0.12-0.13 from `Lclimb1_top` through `Low2_launch` -- a constant
+    offset, so the loss is incurred early and inherited, not a rope-2 effect.
+
+    `test_departing_a_jump_edge_pays` pins the mechanism. This pins the setting.
+    """
+    from retro_ai.training.yeti_map import build_navigation_map, get_level_map
+
+    for level in (3, 4):
+        lvl = get_level_map(level)
+        assert lvl.edge_inset == 0, (
+            f"L{level} edge_inset is {lvl.edge_inset}; 4 was measured harmful "
+            f"(see this test's docstring and LEVEL4's edge_inset comment)"
+        )
+        pf = {p.floor: p for p in lvl.platforms}
+        for n in build_navigation_map(level).nodes:
+            if n.kind != "jump":
+                continue
+            p = pf[n.floor]
+            assert n.x in (p.x_min, p.x_max) or p.x_min < n.x < p.x_max, (
+                f"{n.ident} at px {n.x} is outside floor {n.floor} "
+                f"[{p.x_min}, {p.x_max}]"
+            )
+
+
+def test_departing_a_jump_edge_pays():
+    """Walking ONTO a jump's departure edge must shorten the path, at every L4 jump.
+
+    This is the property `edge_inset=4` broke. The agent has to reach the edge to jump,
+    so the shaping must pay for getting there; insetting the node makes the final step
+    onto the edge cost the same amount it used to pay. Fails if the inset returns.
+    """
+    import dataclasses
+
+    from retro_ai.training.yeti_map import LEVELS, build_navigation_map, get_level_map
+
+    lvl = get_level_map(4)
+    pf = {p.floor: p for p in lvl.platforms}
+
+    def step_onto_edge(nav, fa, fb):
+        """Distance saved by the last step onto f{fa}'s edge facing f{fb}."""
+        pa, pb = pf[fa], pf[fb]
+        cb = (pb.x_min + pb.x_max) / 2
+        edge = pa.x_min if cb <= pa.x_min else (pa.x_max if cb >= pa.x_max else None)
+        if edge is None:
+            return None
+        inner = edge + 4 if edge == pa.x_min else edge - 4
+        tgt = f"J{fa}_{fb}_b"
+        return nav.path_distance_from_agent(
+            fa, inner, tgt
+        ) - nav.path_distance_from_agent(fa, edge, tgt)
+
+    nav = build_navigation_map(4)
+    edges = [(a, b) for a, b in lvl.jump_edges if step_onto_edge(nav, a, b) is not None]
+    assert len(edges) == 12
+    for a, b in edges:
+        assert step_onto_edge(nav, a, b) > 0, (
+            f"stepping onto f{a}'s departure edge for the {a}->{b} jump does not pay; "
+            f"the agent must reach the edge to jump from it"
+        )
+
+    # Show the test discriminates: at inset 4 every one of the 12 flips sign.
+    key = max(LEVELS) + 1
+    LEVELS[key] = dataclasses.replace(lvl, edge_inset=4)
+    try:
+        bad = build_navigation_map(key)
+        flipped = sum(1 for a, b in edges if step_onto_edge(bad, a, b) < 0)
+        assert flipped == 12, f"expected all 12 to flip at inset 4, got {flipped}"
+    finally:
+        del LEVELS[key]

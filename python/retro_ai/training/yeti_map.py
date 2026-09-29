@@ -159,15 +159,69 @@ class LevelMap:
     # platform, and the ladder anchor is exact while the launch pad's wide box also
     # caught a stalled climb 24 px away and reported it as an arrival.
     jump_waypoint_skip: Optional[List[str]] = None
+    # Px to pull each JUMP-GRAPH NODE inside its platform's tile edge, so the PBRS
+    # potential aims at a position the agent can stand on. See EDGE_INSET_PX for the
+    # measurement and `_jump_graph` for why only the nodes move, never the curriculum
+    # anchors.
+    #
+    # PER-LEVEL AND DEFAULT 0 ON PURPOSE. The mechanic is universal -- 8x8 tiles, 4-px
+    # steps -- so the right value is EDGE_INSET_PX everywhere. The opt-in is about blast
+    # radius, not about geometry: this moves a reward target, and L3 is the only level
+    # this project finishes reliably (14 of 16 runs reach the princess). Perturbing L3's
+    # shaping to fix L4's rope-2 pad would put the one working level at risk for no
+    # measured benefit, and it would break the seeder/shaping agreement that
+    # test_l3_jump_waypoints_on_ascent pins there. Turn it on for L3 only with its own
+    # control arm, after L4 has read out.
+    edge_inset: int = 0
     # Optional DISPLAY-ONLY route order: route-point ids bottom-of-route first.
     # Carries NO semantics — the reward still sums over ALL not-yet-reached
-    # targets, unordered (settled decision #5 in curriculum_cp_wp_model.md), and
-    # nothing gates on this. It exists solely so the route TABLE in the training
-    # log reads top-to-bottom in travel order instead of being sorted three
-    # different ways by three different metrics. Levels that branch (L2 has two
-    # ladders per floor) can list any one representative order, or omit it —
+    # targets, unordered (settled decision #5 in curriculum_cp_wp_model.md). It began
+    # as display order for the route TABLE in the training log, instead of it being
+    # sorted three different ways by three different metrics. Levels that branch (L2 has
+    # two ladders per floor) can list any one representative order, or omit it —
     # rendering falls back to a stable arbitrary order.
+    #
+    # NO LONGER DISPLAY-ONLY, AND THIS COMMENT USED TO SAY IT WAS. Two consumers now
+    # depend on the ORDER and on MEMBERSHIP:
+    #
+    #   * `train_checkpoint_curriculum._wp_predecessor` / `_wp_eligible` — the start
+    #     gate's predecessor rule. A pool absent from this list has no predecessor, and
+    #     the `prev is None` branch reads that as "not on the route" and refuses it.
+    #   * `keep_best_sweep._frontier` and its scoring — the frontier is the deepest
+    #     listed point still reached, and `(index + 1) / len(route_order)` is the depth
+    #     term in the champion score. Inserting or removing an entry therefore rescales
+    #     every stored score and breaks comparability across runs.
+    #
+    # The stale "nothing gates on this" is what made it look safe to add a start pool
+    # whose id is absent here. Measured cost on L4: the `F1` fruit pool held 100 seeds,
+    # logged 10439 captures and was sampled ZERO times in a 6M run, against 925 starts
+    # for the same seeds a run earlier. Fixed at the reach-table call site, NOT by
+    # editing this list, precisely to keep the evaluator's scores comparable — see
+    # tests/python/test_start_pool_reach_universe.py.
     route_order: Optional[List[str]] = None
+
+
+# One 4-px step: the distance from a platform's tile edge to the last sprite centre
+# that can actually STAND there. Measured 2026-09-24 and uniform, which it has to be --
+# tiles are 8x8 and the agent moves in 4-px units, so the collision mechanic cannot vary
+# by platform. Evidence, on L4:
+#
+#   * The tilemap (40x25 tile-ids at 0x2C27, floor ids 5-8) confirms all 24 declared
+#     `Platform` extents EXACTLY, once ladder-through-floor tiles (ids 3/4) are counted
+#     as floor. Nothing is mis-transcribed, so the tile edge is the real edge.
+#   * Reload-and-hold at the tile edge FELL on 6 of 6 floors whose right edge a walk
+#     reached, and 4 of 5 on the left, with the limit one 4-px step inside each time.
+#   * The one apparent exception, floor 10's px 248 reading standable while floor 11's
+#     px 248 fell, was a MEASUREMENT error: both rows carry tile id 7 (LEFT-end) at
+#     column 31, and a direct NOOP trace at px 248 on floor 11 is pose 11 (falling) from
+#     frame 0, dropping 4 px/frame straight THROUGH floor 10's standing y without
+#     landing. So px 248 holds on neither, and the mechanic is uniform after all.
+#
+# Earlier per-floor insets of +8/+16/+20/+24 in `standable_span`'s docstring and in
+# l4_platform_audit output are walk artifacts -- a walk that stops short reports where
+# it gave up, not where the platform ends. Do NOT reintroduce a per-floor table: read
+# the extent from the TILEMAP and apply this constant.
+EDGE_INSET_PX = 4
 
 
 # Level 1 — original climb-up layout (floor 1 = bottom/spawn, 5 = princess).
@@ -776,6 +830,36 @@ LEVEL4 = LevelMap(
     #   Low1_launch    floor 11 -> Lclimb3_top is exact; the launch pad's tol-6 box
     #                             also caught the y82 ladder stall 24 px away
     jump_waypoint_skip=["Spring_launch", "Step_launch", "Low1_launch"],
+    # 0 = nodes stay ON the tile edge. MEASURED HARMFUL AT 4, DO NOT RAISE IT.
+    #
+    # The idea was that a node on the tile edge aims the potential at a pixel the agent
+    # falls off, so pulling it one step in would stop the shaping paying to step onto
+    # L4 floor 12's px 184 (which kills 12/12 agents that walk there and stop, and was
+    # the pad's only positive shaped reward at +0.12). That reasoning confuses two
+    # opposite things: the node marks where the agent JUMPS FROM, and a jump departs the
+    # edge in motion. You cannot stand on the edge; you can and must leave from it.
+    #
+    # WHAT 4 ACTUALLY DID, measured on every L4 jump edge: the last step onto the
+    # departure edge went from +0.04 to -0.04. All 12 flipped sign, so the shaping
+    # punished the departure of every jump on the level, including rope 1 (which the
+    # agent crosses ~53% of the time) and including rope 2 itself -- the notes record a
+    # real crossing that departs px 184 with leftward momentum.
+    #
+    # Run v25 (6M, warm from v23, empty pools, evaluator at n=30 over 60 snapshots)
+    # against v24 as control:
+    #
+    #     mean Low2_launch rate   0.195 vs 0.349      median 0.17 vs 0.37
+    #     frontier collapsed in   23/60 vs 8/56 evals
+    #     per-waypoint from-reset reach: flat -0.12 to -0.13 from Lclimb1_top all the
+    #     way to Low2_launch -- a constant offset, i.e. loss incurred EARLY and
+    #     inherited downstream, not a rope-2 effect
+    #
+    # v25 bundled this with the rewards.SURFACE_POSES fix, so the split is not proven;
+    # but only this change has a mechanism that predicts a uniform whole-route offset.
+    # Kept as a field rather than deleted so the arm is reproducible from data, not from
+    # a git checkout, per the control-arm rule in experiments/003-yeti-training.md.
+    # test_jump_node_inset_stays_off pins it.
+    edge_inset=0,
 )
 
 LEVELS: Dict[int, LevelMap] = {1: LEVEL1, 2: LEVEL2, 3: LEVEL3, 4: LEVEL4}
@@ -819,25 +903,55 @@ class Node:
 # ---------------------------------------------------------------------------
 
 
-def _edge_px(p: "Platform", toward_x: float) -> int:
+def _edge_px(p: "Platform", toward_x: float, inset: int = 0) -> int:
     """The x (px) on platform ``p``'s edge nearest ``toward_x`` — the jump-off /
     landing point. Mirrors annotate_level3_map._edge_pt (platform extents here
-    are already pixels, so no ram->px scaling)."""
+    are already pixels, so no ram->px scaling).
+
+    ``inset`` pulls the result that many px INSIDE the platform, for callers that need a
+    position the agent can stand on rather than the tile boundary. Default 0 keeps every
+    existing caller byte-identical; only `_jump_graph` passes it (see EDGE_INSET_PX).
+
+    WHICH SIDE the other platform is on is decided against the REAL extent, so the
+    inset moves the returned point without changing the geometry of the choice. The
+    third branch (the platforms overlap in x, so the nearest point is not on an edge at
+    all) clamps rather than insets: there is no edge to step back from. That branch
+    never fires on L4 -- all 24 endpoints hit a left or right clamp -- so the inset
+    applies uniformly there.
+    """
+    lo, hi = p.x_min + inset, p.x_max - inset
+    if lo > hi:  # platform narrower than 2*inset: collapse to its centre
+        lo = hi = (p.x_min + p.x_max) // 2
     if toward_x <= p.x_min:
-        return p.x_min
+        return lo
     if toward_x >= p.x_max:
-        return p.x_max
-    return int(toward_x)
+        return hi
+    return min(max(int(toward_x), lo), hi)
 
 
 def _jump_graph(lvl: LevelMap):
     """Nodes + edges contributed by ``lvl.jump_edges``.
 
     Returns (nodes, edge_specs) where edge_specs are (identA, identB, cost).
-    Each jump-edge (fa, fb) gets an endpoint node on each platform placed at
-    that platform's edge nearest the other (so shaping pulls toward the
-    jump-off point on wide platforms), joined by a jump edge of cost
+    Each jump-edge (fa, fb) gets an endpoint node on each platform placed
+    ``EDGE_INSET_PX`` inside that platform's edge nearest the other (so shaping pulls
+    toward the jump-off point on wide platforms), joined by a jump edge of cost
     |Δx| + |Δy|. Empty unless the level defines both jump_edges and platforms.
+
+    WHY INSET, AND WHY ONLY HERE (2026-09-24). These nodes are what the PBRS potential
+    measures distance to, so their position decides which pixel the shaping walks the
+    agent to. Placed on the tile boundary they name a pixel the agent falls off, which
+    contradicts this docstring's own word "jump-off point". On L4 floor 12 that was not
+    academic: `J12_13_a` sat on px 184, the step 188 -> 184 was the ONLY positive shaped
+    reward anywhere on the rope-2 pad (+0.12 over three live targets), and px 184 kills
+    12/12 agents that walk there and stop. Inset, the same step pays about -0.12.
+
+    `jump_waypoints` deliberately does NOT inset, even though it derives its defaults
+    from the same function. Those feed DETECTION and CAPTURE, a different subsystem with
+    its own history -- e667206 moved anchors, regressed `Rope1`, and was reverted
+    wholesale, taking a correct `Low2_launch` fix with it. Moving them is a separate
+    lever with a separate control arm; `test_jump_nodes_inset_curriculum_anchors_not`
+    pins the split.
     """
     if not lvl.jump_edges or not lvl.platforms:
         return [], []
@@ -848,7 +962,8 @@ def _jump_graph(lvl: LevelMap):
         pa, pb = pf[fa], pf[fb]
         ca = (pa.x_min + pa.x_max) / 2.0
         cb = (pb.x_min + pb.x_max) / 2.0
-        xa, xb = _edge_px(pa, cb), _edge_px(pb, ca)
+        xa = _edge_px(pa, cb, inset=lvl.edge_inset)
+        xb = _edge_px(pb, ca, inset=lvl.edge_inset)
         ia, ib = f"J{fa}_{fb}_a", f"J{fa}_{fb}_b"
         nodes.append(Node(floor=fa, x=xa, kind="jump", ident=ia))
         nodes.append(Node(floor=fb, x=xb, kind="jump", ident=ib))
