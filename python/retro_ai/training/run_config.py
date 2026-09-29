@@ -413,12 +413,34 @@ class CurriculumConfig:
     # loop instead. Raising the threshold is not the fix: it would only have to beat one
     # particular bounce cycle.
     #
-    # BLAST RADIUS, measured over existing pools (debug/l4_survival_gate_blast.py): L4
-    # rejects 23 of 415 seeds (6%, ALL in `Low2_launch`); L3 rejects 5 of 463 (1%) and
-    # keeps 25/25 of `Lesc_top`. An earlier draft of the criterion used SURFACE_POSES
-    # and
-    # required y to be unchanged, which rejected all 25 escalator rides -- pose 13 is a
-    # legitimate seed state and the y test fails an escalator by construction.
+    # BLAST RADIUS. The figures that used to sit here -- "L4 rejects 23 of 415 seeds
+    # (6%, ALL in `Low2_launch`); L3 rejects 5 of 463 (1%) and keeps 25/25 of
+    # `Lesc_top`" -- cited `debug/l4_survival_gate_blast.py`. That file exists nowhere
+    # in the tree and was never added in any commit on any branch, so none of those
+    # numbers can be reproduced. DO NOT quote them.
+    #
+    # Re-measured 2026-09-29 on v23's pool with `scripts/mo5/yeti/diag/
+    # pool_revalidate.py --only Low2_launch --window 30`, which applies this exact
+    # criterion:
+    #
+    #     Low2_launch  100 -> 39   dropped 61   died_in_window 0
+    #        dropped by px {184: 60, 188: 1}    end_pose {17: 61}
+    #
+    # `died_in_window 0` is the point: every rejected seed is ALIVE at step 30 because
+    # the spring catches it, so `admit_requires_survival` alone sees none of them. The
+    # end-pose test is what catches them, all 61 finishing in pose 17, the trampoline
+    # rise. Note the px-184 fraction is a property of the RUN, not of the pool name --
+    # 33/100 in v13, 87/100 in v21, 60/100 in v23 -- so do not carry one figure
+    # forward as "the" number.
+    #
+    # L3 IS UNMEASURED under this criterion. Run `pool_revalidate.py --only` on an L3
+    # pool before enabling it there; its docstring records that the related NOOP
+    # filter drops 100/100 of L4's healthy `Fr1_launch`, so blast radius here is not
+    # safe to assume.
+    #
+    # An earlier draft of the criterion used SURFACE_POSES and required y to be
+    # unchanged, which rejected all 25 escalator rides -- pose 13 is a legitimate seed
+    # state and the y test fails an escalator by construction.
     admit_requires_grounded: bool = False
     # RANDOM NO-OP START: draw 0..N extra no-op gym steps after the start state is
     # loaded, to decorrelate arrival phase from the route. 0 = off (current
