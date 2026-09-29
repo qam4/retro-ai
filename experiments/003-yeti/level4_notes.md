@@ -971,7 +971,12 @@ shows pose 14; rope 2 is crossed LEFTWARD and shows 15, never 14. Every pose-15 
 the crossing sits at exactly y = 62 — the rope's height — while px keeps advancing, which
 is precisely 14's documented signature, "lateral motion while held".
 
-### ROPE 2 IS A TWO-CATCH TRAVERSE. THAT IS WHY IT IS NOT ROPE 1.
+### ROPE 2 IS A ROPE TRAVERSE, TWO CATCHES IN 2 OF THE 3 OBSERVED CROSSINGS
+
+(Heading corrected 2026-09-29. It read "ROPE 2 IS A TWO-CATCH TRAVERSE. THAT IS WHY IT IS
+NOT ROPE 1." — which the body of this very section contradicts: crossing 2 crossed with
+ONE catch. Two catches is the mode, not the rule, and the heading was being read as the
+rule.)
 
 User-confirmed on the videos for crossings 1 and 3: the agent jumps, CATCHES THE ROPE,
 swings left a little, jumps left again, CATCHES A ROPE AGAIN, then jumps onto the
@@ -1001,17 +1006,44 @@ does not support it"). Crossing 2's single catch is also unexplained.
 **Compare rope 1, which the agent clears at 0.68-0.83 reach:** ONE catch — pose 14 carry
 for ~5 gym steps (px 60 -> 72, y 118 -> 110), then a pose 9 arc landing at px 116. So the
 answer to "why isn't rope 2 as easy as rope 1" is not gap width (52 px vs 60 px, nearly
-equal) and not the anchor. Rope 1 is one timed catch; rope 2 is two timed catches on
-moving ropes, in sequence. At ~0.3% end to end, that is consistent with each catch being
-individually unlikely.
+equal) and not the anchor. Rope 1 is one timed catch; rope 2 is usually two, in sequence —
+but NOT always, and the difference is not the number of catches. Crossing 2 used one catch
+and crossed. Measured 2026-09-29 with scripted input from px 188, the launch window for
+rope 2 is 10 of every 31 steps against rope 1's 3 of 31, i.e. rope 2 is the more forgiving
+of the two to TIME (see the 2026-09-29 section below). Whatever makes rope 2 hard, it is
+not a narrower launch window.
 
-**This is why every scripted plan failed.** Three plan families, ~700 trials, all built
-on HOLDING a jump input — and a held input can never do this: it needs a release and a
-re-jump timed to a moving rope, twice. Holding just marches the agent off floor 12's edge,
-which is why every scripted "crossing" landed at px 88 via the trampoline. The scripted
-falsification's conclusion (the anchor is not the binding constraint) stands, but the
-reason is now positive rather than an absence: the manoeuvre is a two-catch rope sequence,
-not a jump of any timing.
+**RETRACTED 2026-09-29 — a held input DOES cross rope 2, and the px-88 landings were
+real crossings.** This paragraph used to claim that all ~700 scripted trials failed
+because they HELD a jump input, that "a held input can never do this: it needs a release
+and a re-jump timed to a moving rope, twice", and that every scripted px-88 landing was
+the trampoline. All three are false. From a `Low2_launch` seed at px 188, the plan
+`wait W noops, then hold JUMP_LEFT` crosses for every W in 12..21, and the per-step trace
+is the rope, not the trampoline:
+
+```
+frame  16   px 188  y 70  pose  4    standing on the pad
+frame  18   px 184  y 66  pose 10    launch
+frame  26   px 168  y 62  pose 15    CATCH 1
+frame  30   px 160  y 62  pose 15
+frame  32   px 156  y 58  pose 10    hop between catches
+frame  40   px 132  y 62  pose 15    CATCH 2
+frame  57   px  88  y 70  pose  4    standing on floor 13
+```
+
+Pose sequence `4, 10, 15, 10, 15, 10, 4`, identical to crossings 1 and 3 above. Both
+catches sit at y 62, inside the two clusters this section already recorded (px 156..172
+and px 132..136). Pose 16 and 17 never appear and y never approaches the trampoline's
+142, so this is not the fall-bounce loop.
+
+WHY ONE HELD INPUT SUFFICES, which is the part nobody had worked out: both catches are
+phase-locked to ABSOLUTE time, not to the release. The landing frame is 57 for every
+winning W — 44 airborne steps at W=12, 36 at W=21. So the agent does not have to time two
+things. It has to launch inside one window and the ropes do the rest.
+
+What survives: the scripted falsification's conclusion that **the anchor is not the
+binding constraint** still stands, on its own evidence. What does not: the reason given
+for it, and any use of "no script can express this manoeuvre" as an argument.
 
 **CONFIRMED ON 3/3 CROSSINGS (1071 episodes).** All three use pose 15, none uses pose 14
 or 16/17, and every one of the 15 pose-15 frames sits at exactly y = 62:
@@ -1710,20 +1742,49 @@ B  hold jump-left K steps, then neutral             nothing reaches floor 13 bel
 C  run-up: N (0..14) left steps from Low1, then     0 crossings. jump-left and
    hold jump-left / jump-upleft / jump-up           jump-upleft died 6/6 at EVERY N,
                                                     including N=0 from px 224
+                                                    <-- RETRACTED, see below
 ```
 
-`pose 14` (the rope carry) occurred **0 times in ~700 trials**. Every floor-13 arrival
-was the documented trampoline loop, not the rope: walk off floor 12, land on
-`Platform(24, 142, 168, 200)`, rise in pose 17 at constant x, drift left, land floor 13
-at px 88. C's result is the giveaway — holding a jump input just marches the agent off
-floor 12's left edge, which is why every "crossing" this file's earlier sweeps produced
-landed at px 88.
+`pose 14` (the rope carry) occurred **0 times in ~700 trials**.
 
-The real crossing DOES land in the window: the 11 genuine `Low2` captures sit at
-px 104..124, y 66..70. And it demonstrably happens in training — 21 episodes that
-started UPSTREAM of rope 2 were credited `Low2` (9 of them from reset), and one reached
-`Lprincess_top` from reset at step 1,607,256 (633 steps, reward 63.59). So the
-manoeuvre is real and reproducible by the policy, just not by any script tried here.
+**RETRACTED 2026-09-29 — that was the wrong pose to look for, and both conclusions drawn
+from it are false.** Pose 14 is the RIGHTWARD carry, which is rope 1. Rope 2's carry is
+pose **15**, and on 2026-09-11 pose 15 was still uncatalogued — the trainer was reporting
+it as `UNCATALOGUED POSES 15x5901` on every status line. So "0 occurrences of pose 14" was
+never evidence about rope 2 at all, and it was used to conclude two things that are both
+wrong:
+
+* *"Every floor-13 arrival was the trampoline loop, not the rope."* No. Re-measured from a
+  px-188 seed: the arrival shows pose 15 twice at y 62 with px running 188 -> 88, and
+  poses 16/17 never appear. It is the rope. Family A's 80-of-89 px-88 landings were real
+  crossings, discarded only because px 88 falls outside `Low2`'s credit window px 104..152.
+* *"C's result is the giveaway — holding a jump input just marches the agent off floor 12's
+  left edge."* No. Family C's grid swept run-up length N but had **no wait term**, so it
+  never swept the rope's phase, and N=0..14 could not reach the launch pixel anyway: the
+  leftward walk cycle stalls (dx in {-4, 0}), so from `Low1`'s px 220 it takes **12** steps
+  to reach px 188, and 14 steps walks off the edge. Re-measured with a phase sweep, the
+  run-up crosses: **26 of 136 plans**, run-up 11..13 then wait 16..24 then hold jump-left,
+  from a `Low1` seed at px 220.
+
+HOW THE ZERO SURVIVED SCRUTINY, worth not repeating: an approach that overshoots the edge
+does not fail loudly. It falls onto the spring, which delays death to a median of step 82,
+so the attempt spends most of its budget bouncing and then reports a death like any
+mistimed jump. Nothing in `jump_bruteforce`'s output distinguished "the jump missed" from
+"the agent was never on the pad". It now prints the launch pixel of every plan, and
+re-running the misleading grid says `launch pixels this grid actually used: {196: 34,
+200: 68}` — visibly never 188. A zero from this tool is only meaningful once you have
+checked WHERE the plan actually jumped from.
+
+The 11 genuine `Low2` captures sit at px 104..124, y 66..70 — inside the credit window,
+but they are captured AFTER the agent walks right from its landing, not at touchdown (the
+three observed crossings touched down at px 88, 92 and 120, so only one was credited on
+landing). An earlier version of this sentence read "the real crossing DOES land in the
+window", which those three landings do not support; corrected 2026-09-29.
+
+It demonstrably happens in training — 21 episodes that started UPSTREAM of rope 2 were
+credited `Low2` (9 of them from reset), and one reached `Lprincess_top` from reset at
+step 1,607,256 (633 steps, reward 63.59). This sentence used to end "just not by any
+script tried here"; scripts DO reproduce it, see the retraction above.
 Earlier wording in this session's analysis claimed the crossing "never happened"; that
 was wrong and is retracted.
 
@@ -2499,3 +2560,160 @@ tools, or a one-shot investigation whose answer is written above.
   unchanged, but **pass it always**. `keep_best_sweep.py` gained `--level` and
   forwards it. Any pre-2026-08-24 L3/L4 eval output that mentions waypoints or floors
   should be re-run, not trusted.
+
+## BOTH ROPES RE-MEASURED (2026-09-29), AND WHY THE EARLIER NUMBERS WERE WRONG
+
+Every rope window number in this file before today came out of
+`scripts/mo5/yeti/diag/jump_bruteforce.py`, which had two defects that between them
+produced a false "the two ropes have different periods" and a false "a long sweep and a
+short sweep disagree, so the tool is non-reproducible". Both are fixed. The defects first,
+because the numbers are only worth reading once you know they are gone:
+
+1. **The report printed `results[:10]`.** A 131-plan wait sweep with 14 winners had its
+   four LOWEST winning waits cut off, because the list is sorted descending. That is the
+   whole of the "short sweep says waits 1,2,3,32,33,34 and long sweep says 34,64,65,66,..."
+   mystery — the long sweep's answer was the top ten of a set that also contained the low
+   windows. It now prints every plan that landed.
+2. **`EnvConfig.max_steps` bounded the whole sweep, not the attempt.** `attempt` reloads a
+   save-state per plan but never resets the gym, so the env's own step counter accumulated
+   across all plans; truncation fired partway through and every later plan ran in a
+   truncated env. Now `max_steps=10**6` with the per-attempt bound in the loop.
+
+An order-dependence test after the fixes: wait=1 run three times inside one sweep,
+including once after an intervening 190-step plan, gives 1/1 every time. There is no state
+leak, which is what the two defects had been masquerading as.
+
+### The two ropes have the SAME period. Rope 2's launch window is WIDER.
+
+Scripted, one seed each, `--approaches 0 --holds 60 --max-steps 400`, waits swept 0..130:
+
+```
+             winning waits                                  period   width
+rope 1   0-1, 30-32, 62-64, 93-95, 125-127                   31.25     3
+   (px 52 seed, Rope1_launch -> Rope1)
+rope 2   12-21, 44-52, 75-84, 106-115                        31.3     9-10
+   (px 188 seed, Low2_launch -> Low2)
+```
+
+The user said from the start that the ropes oscillate at the same rate and that a claim of
+"rope 2's period is 62" made no sense. Correct: 62 was the `[:10]` truncation deleting the
+middle window. Both ropes run at ~31.3 agent steps.
+
+Rope 2 is the more forgiving of the two to TIME — 10 launch phases in 31 against rope 1's
+3. Any argument of the form "rope 2 is harder because the timing is tighter" is dead. The
+mechanism, from per-step traces (`.kiro/tmp/rope_trace.py`):
+
+* **rope 1 is a graze.** Airborne 18-19 steps, pose 14 present for only 1-2 frames,
+  landing frame = launch + 18, landing px 112 or 116. A launch one step early lands one
+  step early somewhere else: the phase error stays in the arc, so the window is ~3.
+* **rope 2 is a carry.** Pose 15 for 4-7 frames at y 62 while px runs 188 -> 88. The
+  landing frame is **57 for every winning wait 12..21** — 44 airborne steps at wait 12,
+  36 at wait 21. The rope absorbs the launch error and deposits the agent at the same
+  place at the same absolute frame, so the window is as wide as the catchable interval.
+
+### What actually blocks rope 2 is the DEPARTURE PIXEL, not the phase
+
+Same sweep, per departure px, waits 0..33 (a full period), one seed each:
+
+```
+px 184   0 of 34 plans cross      60 of v23's 100 Low2_launch seeds sit here
+px 188   10 of 34 cross (12..21)  18 seeds
+px 192    8 of 34 cross (14..21)  22 seeds
+```
+
+And px 184 is not merely a bad launch pixel, it is a dead state when loaded at rest.
+120 NOOP steps from v23's own pool seeds: px 184 dies at step 82 (pose 11, falling, never
+gets past px 176 while floor 13's edge is px 128); px 188 and px 192 survive the full 120.
+`min_survival_steps` is 30, so the current gate admits all of them.
+
+Measured with `scripts/mo5/yeti/diag/pool_revalidate.py --only Low2_launch --window 30` on
+v23's pool, which is what `admit_requires_grounded` would reject going forward:
+
+```
+Low2_launch   100 -> 39   dropped=61   died_in_window=0
+   dropped by px: {184: 60, 188: 1}   end_pose: {17: 61}
+```
+
+`died_in_window=0` is the point: every one of the 61 is ALIVE at step 30 because the spring
+catches it, so the survival-only gate cannot see them. They are caught by the end-pose test
+instead — all 61 end in pose 17, the trampoline rise.
+
+This supersedes the run_config comment's "L4 rejects 23 of 415 seeds (6%)", which cited
+`debug/l4_survival_gate_blast.py`. That file does not exist in the tree or anywhere in git
+history, so its number cannot be reproduced and should not be used.
+
+### Starting from `Low1` instead of the pad is executable
+
+Tested because of the proposal to drop `Low2_launch` and let the agent train from `Low1`
+(mechanism: add it to `jump_waypoint_skip`, which L4 already uses for `Spring_launch`,
+`Step_launch` and `Low1_launch`). `Low1`'s pool is healthy — 95 of 100 seeds at px 220, on
+safe ground — and `Low2_launch` is not in `reward_waypoints`, so removing it does not touch
+the reward's mandatory milestones.
+
+From a px-220 `Low1` seed: **26 of 136 plans cross**, run-up 11..13 left steps then wait
+16..24 then hold jump-left. The run-up length matters because the leftward walk cycle
+stalls: 8 steps reach px 200, 9 reach 196, **12 reach 188**, 13 reaches 184, 14 is already
+falling.
+
+NOT yet checked, and it should be before any run: `Low2_launch` is in `route_order`, and
+`_wp_eligible` refuses any pool absent from that list, so `route_order` carries
+start-eligibility semantics despite its "DISPLAY-ONLY" comment. Removing the waypoint
+without removing its `route_order` entry is untested.
+
+### The crossing can succeed and not be credited
+
+Landings from the three policy crossings were px 88, 92 and 120; every scripted crossing
+from px 188 lands at px 88. `Low2`'s credit window is px 104..152. So the most reproducible
+version of this manoeuvre — the one a script finds and the one the policy performed twice
+of three times — deposits the agent 16 px short of being credited for it, and only earns
+`Low2` after walking right. That is a reward-side problem, independent of pools and
+independent of the launch pixel, and it has not been acted on.
+
+## v25's "REGRESSION": RE-DERIVED 2026-09-29, AND STILL OPEN
+
+Earlier in this session the v24-vs-v25 gap was declared to be inside the noise. **That
+verdict is retracted.** It compared a difference of RUN MEANS against the within-run
+wander of 1.2M-step block means (sd 0.106), which is the wrong reference distribution. The
+right one is the spread of run means at FIXED config, and that has never been measured on
+L4.
+
+What the runs actually are. v24, v25, v26 and v27 all resume from the same parent
+(`yeti_curriculum_l4_v23_ropebonus_warm_v13_6m/final_model.zip`), all with
+`resume_pools: output/mo5/yeti/pools/empty.pkl`, all `seed: 42`. Identical starting
+conditions:
+
+```
+run   mean Low2_launch rate   carries rewards.SURFACE_POSES = {0..8}?
+v24          0.349             no   (control)
+v25          0.195             yes  + LEVEL4.edge_inset=4 (since reverted)
+v26          0.209             yes  alone
+v27          0.223             yes  + the reach-universe fix
+```
+
+So this was never a v25 regression. It is v24 against three runs that agree with each other
+to a spread of 0.014 against a gap of 0.129, and the one change present in all three and
+absent from v24 is `rewards.SURFACE_POSES` gaining the leftward-walk poses 6 and 7.
+
+**The "very nearly inert" defence is measured on the wrong quantity.** `850f7ae`'s message,
+and v25/v26/v27's config headers, all argue the change cannot matter because 12 replayed
+episodes give identical totals and "at gamma 1.0 the PBRS sum telescopes". That gamma 1.0
+is the REWARD's, under `reward.params`. PPO trains with `gamma: 0.99, gae_lambda: 0.95`,
+and telescoping does not preserve a discounted return. Re-measured on the same 12 episodes
+(`.kiro/tmp/price_surface_poses.py`, extended to report per-step and discounted figures):
+
+```
+mean UNDISCOUNTED   old 60.717   new 60.717   delta -0.000
+mean DISCOUNTED     old 11.142   new 11.159   delta +0.017   (+0.2%)
+per-step rewards differ on 59 of 6475 steps, max per-step |delta| 0.400
+```
+
+So the change is NOT inert: per-step rewards differ, and the objective PPO optimises moves.
+But +0.2% is small and it moves in the POSITIVE direction, so this does not explain a 38%
+relative drop either. The suspect is un-ruled-out, not convicted.
+
+**Why it cannot be settled with what we have.** v23 warm-started from v13, not from itself,
+so v24 is the only run with this parent that lacks the change — group "without" is n=1.
+"v24 was the lucky draw" fits the data exactly as well as "SURFACE_POSES costs 0.13". The
+only thing that separates them is replicates at fixed config: the same yaml at two or three
+different seeds, both with and without the change. That has not been run, and until it is,
+no attribution of the 0.129 to any lever is supportable.
