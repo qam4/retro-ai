@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -179,6 +180,33 @@ def _frontier(rates, route_order, floor=0.05):
         if r >= floor:
             best = (wid, r)
     return best
+
+
+def _rate_ci(rate, n, z=1.96):
+    """95% Wilson interval half-width for a rate seen over ``n`` episodes.
+
+    WHY EVERY EVAL NEEDS THIS PRINTED NEXT TO IT. A frontier rate is a proportion over
+    independent from-reset episodes, so how well it is known depends entirely on ``n``,
+    and nothing in this project's logs ever said so. At the n=30 this tool defaults to,
+    a rate near 0.7 is known to about +-0.16 -- wider than most differences that have
+    been argued over, including the 0.125 between v24 and v25 that cost three 6M runs.
+    At n=300 the same rate is +-0.05.
+
+    Wilson rather than the textbook sqrt(p(1-p)/n): our rates sit AT 0 and 1 regularly
+    (a collapsed frontier reads 1.00 on a shallow point), where the textbook form gives
+    a nonsensical +-0.00 and would report a one-episode certainty.
+
+    Returns the half-width only -- the interval is clipped to [0, 1] by construction, so
+    a single number is the honest summary for a log line.
+    """
+    if not n:
+        return 0.0
+    p = min(max(float(rate), 0.0), 1.0)
+    d = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = (z / d) * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    lo, hi = max(0.0, centre - half), min(1.0, centre + half)
+    return (hi - lo) / 2.0
 
 
 def main() -> None:
@@ -364,9 +392,14 @@ def main() -> None:
             )
             state["evaluated"][name]["regressed"] = regressed
             state["evaluated"][name]["regress_margin"] = margin
+            # How well is that rate known? A proportion over `episodes` independent
+            # from-reset episodes, so print the interval beside it -- at n=30 a rate
+            # near 0.7 is +-0.16, which is wider than most differences this project has
+            # argued about.
+            fci = _rate_ci(frate, args.episodes)
             msg = (
                 f"[keep-best] step {step}: princess={princess:.3f} "
-                f"frontier={fwid or '-'}@{frate:.2f} "
+                f"frontier={fwid or '-'}@{frate:.2f}+-{fci:.2f} "
                 f"rung={mean_rung:.2f}/{n_rungs} "
                 f"(best={best_score():.4f}{' REGRESSED' if regressed else ''})"
             )
@@ -402,7 +435,12 @@ def main() -> None:
                         "step": step,
                         "frontier": fwid,
                         "frontier_rate": frate,
+                        # 95% half-width on the rate above, from `n_eval` episodes.
+                        # Any consumer comparing two of these MUST check that the
+                        # difference exceeds the two half-widths before calling it real.
+                        "frontier_rate_ci95": fci,
                         "princess": princess,
+                        "princess_ci95": _rate_ci(princess, args.episodes),
                         "mean_rung": mean_rung,
                         "n_eval": args.episodes,
                         "regressed": regressed,
