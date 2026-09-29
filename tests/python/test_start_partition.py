@@ -75,7 +75,17 @@ def tcc():
     spec = importlib.util.spec_from_file_location("tcc_partition", _SRC)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["tcc_partition"] = mod
-    spec.loader.exec_module(mod)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as exc:  # pragma: no cover - native/ML deps absent
+        # SKIP, do not ERROR. The trainer imports stable_baselines3, and CI's
+        # python-test job installs only numpy/pytest/gymnasium/pyyaml -- so without
+        # this the whole module errors at fixture setup and turns the build red.
+        # This file was added 2026-08-17 and CI had not run since 2026-06-30, so it
+        # never once passed there; the breakage surfaced the next time anything was
+        # pushed. Every other test module that loads the trainer already guards this
+        # way, which is why only this one failed.
+        pytest.skip(f"trainer module not importable here: {exc}")
     return mod
 
 
