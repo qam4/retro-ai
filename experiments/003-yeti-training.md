@@ -275,25 +275,144 @@ an anchored entropy target for LLM RL, and SAC's automatic temperature tuning.
 
 Build it only if step 1 moves entropy but not far enough, or overshoots early.
 
-### Step 4 — revert-on-regression, referee first
+### Step 4a — the referee and the parallel evaluator. DONE (2026-09-23)
 
-**The referee is the blocker and must be fixed before the revert.**
-`keep_best_sweep.py` selects on 12 episodes, where bootstrapping the 300-episode
-champion distributions gives `mean_rung` an sd of 0.75-0.82 against a real
-v16c-vs-v18 difference of 0.47. It has been picking champions at random. Replace
-with the reach RATE of the frontier target — the deepest mandatory target with a
-nonzero rate, discovered per run so nothing level-specific is baked in — at ~30
-episodes, where that rate has sd 0.078.
+`keep_best_sweep.py` ranked on `mean_rung` at 12 episodes, where bootstrapping the
+300-episode champion distributions gives it an sd of 0.75-0.82 against a real
+v16c-vs-v18 difference of 0.47. Every champion this project ever selected was picked on a
+measurement noisier than the thing it was measuring.
 
-Then: evaluate from reset every 500k, and when the frontier rate regresses past a
-margin for 2-3 consecutive evals, reload the best weights into the LIVE model and
-continue. Note this is different from what `keep_best_sweep.py` already does —
-that only decides which file to archive and never touches training.
+It now ranks on the **frontier reach rate**: the deepest route point the policy still
+reaches at >= 5%, and how reliably. That is a Bernoulli mean, so its noise is knowable and
+small -- sd 0.078 at n=30 against `mean_rung`'s 0.75 at n=12. Nothing names a waypoint:
+the frontier is discovered per snapshot from the level's `route_order`, so it moves
+outward as the agent improves and works on any level.
+
+Regression is flagged when the frontier moves BACKWARDS along the route, or its rate falls
+more than `--regress-margin` (default 3x the binomial sd at the chosen episode count, so
+the flag means "more than the measurement can explain"). Written to
+`<run>/best/eval_status.json` after every eval, with `consecutive_regressions` as the
+patience counter a caller needs.
+
+Runs in its own process against a live run (`--watch`), on CPU. **Measured cost: 56 s per
+snapshot at n=30 while training runs**, so a 6M run emitting a snapshot every ~50 s is
+tracked with a small lag and the GPU is untouched.
+
+FIRST OUTPUT, v24 (6M, 56 snapshots at n=30):
+
+```
+     step   frontier         rate    rung   regressed
+   100000   Low2_launch      0.17    3.87
+   600000   Low2_launch      0.73    8.33
+  1100000   Low2_launch      0.23    4.30   YES
+  2600000   Low2_launch      0.40    6.90   YES
+  4100000   Low2_launch      0.63    7.97
+  4600000   Lfruit_bot       1.00    1.13   YES   <- frontier COLLAPSED to route pos 5
+  5600000   Low2_launch      0.40    5.77   YES
+  best: step 3800000, Low2_launch@0.73, rung 8.70
+  final: Low2_launch@0.40
+```
+
+**34 of 56 evals were measurably worse than the best already seen.** The run ended 45%
+below its own peak, and at 4.6M the frontier fell all the way back to `Lfruit_bot`. That
+is the sawtooth, quantified, for the first time.
+
+### Step 4b — what to DO about it. NOT BUILT. This is the open question.
+
+**Reverting to the best weights alone does not work, and it is measured here.** Control
+arm A0 (see level4_notes.md "DO NOT WARM-START FROM A CHAMPION") took v6's champion at
+mean depth 9.55 and continued training with nothing else changed:
+
+```
+start  9.55
+250k   1.20
+500k   2.43
+750k   7.53
+1M     1.03
+```
+
+A best snapshot is the outlier of a wide distribution. Put it back and the distribution
+has not changed, so it walks straight out again -- revert, regress, revert, forever.
+
+So the action has to be **revert AND narrow the distribution**, together:
+
+1. reload the best weights
+2. tighten one exogenous parameter, and never loosen it again
+
+The ratchet is the point. It turns regression into an annealing schedule driven by
+measurement instead of by step count, and it terminates because tightening only goes one
+way.
+
+**Tighten the learning rate first.** It directly bounds how far one update can move, it is
+the standard mechanism, and it does not touch exploration. Halve on each trigger, with a
+floor; at the floor, stop reverting and end the run. `ent_coef` is the second candidate --
+v21 measured 0.02 -> 0.01 moving entropy from 64% to 39% of maximum, so it is a real lever
+-- but it changes what the policy explores, and one lever at a time.
+
+Trigger: `consecutive_regressions >= 3` from `eval_status.json`. One dip is noise.
+
+**THE CHEAPER ALTERNATIVE, and it is the control arm.** Just STOP the run on the same
+trigger. This project's own numbers say the tail never produces the champion: v18's best
+snapshot was at 900k of 15M, v21 matched v18 in 6M instead of 15M, and v24 above ended 45%
+below its peak. Early stopping loses nothing measured, and it saves hours per run.
+
+The difference: stopping ACCEPTS that progress does not compound. Revert-and-tighten tries
+to MAKE it compound, and that is unproven on this game -- A0 tells us why the naive version
+fails, but nobody has run the tightening version.
+
+Build both behind one flag with three settings, `off | stop | revert`, so `stop` is the
+control arm for `revert` and `off` is the control for both.
 [Recovering from Instability in Reinforcement Learning](https://arxiv.org/abs/1910.03732)
-is the published form, and it is model-agnostic. Every piece exists except the
-feedback edge.
+is the published form of the revert half, and it is model-agnostic.
 
-Do this last: if steps 1-3 stop the sawtooth, it may be unnecessary.
+### Step 4a readout: five 6M arms, one referee, no attributable answer (2026-09-29)
+
+All scored the same way -- `Low2_launch` reach rate per eval, 0 when the frontier
+collapsed shallower, since no run has ever passed `Low2_launch`.
+
+| run | evals | mean | median | collapsed | fruit-seed starts | lever |
+|---|---|---|---|---|---|---|
+| v23 | 60 | 0.327 | 0.30 | 17/60 | 7.4% | carry bonus |
+| **v24** | 56 | **0.349** | 0.37 | 8/56 | 3.8% | unified capture (CONTROL) |
+| v25 | 60 | 0.195 | 0.17 | 23/60 | 0.0% | SURFACE_POSES + edge_inset=4 |
+| v26 | 60 | 0.209 | 0.20 | 22/60 | 0.0% | SURFACE_POSES only |
+| v27 | 60 | 0.223 | 0.20 | 15/60 | 3.6% | + reach-universe fix |
+
+princess 0.000 in every eval of every run. `Low2` 0.00 in every eval of every run.
+
+**Read the DISTRIBUTION, not the peak.** The peak is a max over ~60 noisy draws, so it
+mostly measures how many draws you took: v23 peaks at 0.97 inside a run whose mean is
+0.327. Every champion comparison in this file that quotes a peak is comparing order
+statistics.
+
+**What was measured and came back inert.** `SURFACE_POSES` is provably zero-change on
+episode totals (12 episodes replayed through both versions, identical to three decimals;
+at gamma 1.0 the PBRS sum telescopes, so the gate moves only WHEN credit lands).
+`edge_inset=4` was actively harmful and is reverted. The `F1` start-pool bug was real --
+100 seeds sampled zero times for a whole run -- and worth 0.014 of the 0.13 gap.
+
+**So v23/v24 at ~0.34 versus v25/v26/v27 at ~0.20 is unexplained.** Two live
+possibilities, and nothing on disk separates them:
+
+1. Something else changed between v24 and v25 that has not been found. The audit covered
+   `run_config.py`, the trainer, `rewards.py` and `yeti_map.py`, but the trainer was
+   uncommitted at the time so its hunks could not be bisected by date.
+2. It is a two-cluster accident. The two v25 attempts ran identical config, code and
+   seed 42 and diverged sharply (`Lfruit_bot@1.00` vs `Low2_launch@0.13` at 100k), so
+   run-to-run variance here is large and has never been measured.
+
+**REPLICATES, NOT LENGTH, IS THE NEXT SPEND.** Three seeds at ~1.5M per arm is ~2.5h and
+gives a variance estimate; a sixth single 6M arm gives another un-attributable number.
+This is method note 8 in this file, which was written after the same mistake and then not
+followed for five runs.
+
+**Method debt this exposed.** `start_frac` in curriculum_diag.csv counts reset and
+CHECKPOINT starts only, so it reads ~1.00 while two thirds of episodes are seeded from
+waypoint pools -- it was misread here as "the reverse curriculum is off". `wp_start_counts`
+is incremented and never read anywhere, so the metric that would have shown the `F1` bug
+directly has been dead the whole time. Same shape as `self.frontier`. Per-episode
+`start_key` in episodes.csv is the only trustworthy source for where starts come from.
+
 
 ### Why PPO does this at all
 

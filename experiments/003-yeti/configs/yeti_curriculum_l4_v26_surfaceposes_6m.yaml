@@ -1,0 +1,126 @@
+# v26 — 6M, seed 42. ONE lever: rewards.SURFACE_POSES.
+#
+# Same parent (v23/final_model.zip) and same empty-pool start as v24, so v24's 56-eval
+# referee curve is the control arm. The only active difference from v24 is FIX 1 below.
+#
+# THE LEVER. `rewards.py` kept its own 7-pose copy of SURFACE_POSES from `aa587d9`
+# (2026-07-02) while `f2d37cb` admitted the leftward-walk poses 6 and 7 to
+# `yeti.SURFACE_POSES` on 2026-08-28. So the shaping gate FROZE on frames that
+# detection, capture and floor crediting all credited. Measured on v24's best model,
+# 40 episodes from reset, 7872 grounded frames: 11.7% of LEFTWARD walk frames frozen,
+# 0.0% rightward, concentrated on floors 2 (37.5%) and 11 (32.7%); floor 12 lost 2 of
+# 153, so the 54% quoted in level4_notes.md does not reproduce and this is a correctness
+# fix rather than the rope-2 lever the backlog bills it as.
+#
+# WHY IT IS ALONE THIS TIME. v25 bundled it with LEVEL4.edge_inset=4 and came out worse
+# than v24 (mean Low2_launch rate 0.195 vs 0.349, frontier collapsed in 23/60 evals vs
+# 8/56). The inset is now REVERTED and pinned off: it flipped the sign of the last step
+# onto the departure edge at all 12 L4 jump edges, +0.04 -> -0.04, punishing the
+# departure of every jump on the level. A node marks where the agent JUMPS FROM, and a
+# jump leaves the edge in motion -- "you cannot stand there" does not mean "do not go
+# there". v25's per-waypoint reach was down a flat 0.12-0.13 from Lclimb1_top through
+# Low2_launch, a constant offset consistent with that mechanism and not with a
+# rope-2-specific effect. See test_departing_a_jump_edge_pays.
+#
+# So v25 does NOT tell us whether this fix helps or hurts. That is what this run is for.
+#
+# READ IT ON the DISTRIBUTION, not the peak: the peak is a max over ~60 noisy draws and
+# mostly measures how many draws you took (v23 peaks at 0.97 in a run whose mean is
+# 0.327). Compare mean and median Low2_launch rate, and the count of evals where the
+# frontier collapsed to something shallower.
+#
+# CAVEAT ON THE CONTROL, and it is load-bearing: v24 is n=1. The two v25 attempts ran
+# identical config, code and seed 42 and still diverged (Lfruit_bot@1.00 vs
+# Low2_launch@0.13 at 100k), so 8 subprocess envs plus torch means the seed buys no
+# determinism. A gap under ~0.1 in the means should not be called from one run per arm;
+# the fix for that is replicates at ~1.5M, not more steps on one seed.
+#
+# STOP RULE: off. This is an A/B and stopping truncates the curve being compared.
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v26_surfaceposes_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # v13's weights AND v13's pools (checkpoints.pkl is loaded from dirname(resume)) —
+  # byte-identical to v18's warm start.
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v23_ropebonus_warm_v13_6m/final_model.zip
+  # NO INHERITED SEEDS. Points at a deliberately empty pool file so the policy comes
+  # across warm while every pool rebuilds from this run's own captures. Reasons: 140 of
+  # 1790 inherited seeds (8%) sit at positions today's sprite test rejects -- including
+  # ALL of Hi5 and Hi1_launch and 10 of the 11 Low2 states, captured under v13's box
+  # geometry with the jump tolerance of 6 -- and rung numbering has changed, so a rung
+  # recorded in an old seed no longer means the same thing.
+  resume_pools: output/mo5/yeti/pools/empty.pkl
+  warmstart_weights_only: true
+  # OFF for this run: it is an A/B and stopping truncates the curve being compared.
+  # See the STOP RULE note in the header. QUOTED deliberately -- YAML 1.1 reads a bare
+  # `off` as the BOOLEAN False, so the field would stop being the documented enum
+  # ("off" | "stop", with "revert" to come). It happens to behave correctly today
+  # because the trainer compares str(value) == "stop", but a bare `on` would become
+  # True and any future three-way comparison on this field would misfire.
+  on_regression: "off"
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+    # THE LEVER vs v21. Flat +1.0, once per episode, for the leftward rope carry
+    # (pose 15) -- the manoeuvre rope 2 is made of. Derivation in level4_notes.md
+    # "ROPE 2 IS AN EXPECTED-VALUE PROBLEM": walking off the edge banks +0.075 CERTAIN
+    # while attempting the rope is ~1%% x 2.940 = +0.029 expected and 0.000 on a miss,
+    # so the agent correctly takes the worse outcome. +1.0 flips that (13x the
+    # cliff-walk) and still leaves a completed crossing worth 4x a grab (+3.94).
+    carry_pose_bonus: 1.0
+    carry_pose_ids: [15]
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  # THE LEVER. v18 used 0.02, as did every other L4 run. Both reliably-finished levels
+  # used 0.01.
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
