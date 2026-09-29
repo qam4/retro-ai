@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import random
 import threading
@@ -277,7 +278,7 @@ class CheckpointManager:
         reach_threshold: float = 0.15,
         segment_floor: float = 0.0,
         n_rungs: int = 4,
-        mandatory_ids=None,
+        mandatory_groups=None,
         gate_waypoints: bool = False,
         gate_waypoints_by_predecessor: bool = False,
         split_mandatory: bool = False,
@@ -299,15 +300,15 @@ class CheckpointManager:
         # turns 1 step into 12, which is the curriculum granularity that
         # plausibly made waypoints work on L2 in the first place.
         #
-        # ``mandatory_ids`` is the set of target ids (plus graph aliases, since a
-        # jump landing is "A1" to the curriculum and "J10_11_b" to the graph)
-        # that count toward a rung. None => fall back to fruit-count keying.
-        # Ladder steps, excluding the terminal princess. Passed explicitly rather
-        # than derived from ``mandatory_ids``, whose size would double-count: it
-        # holds BOTH names of an aliased target (the curriculum's "A1" and the
-        # graph's "J10_11_b") so a seed naming either form still counts.
+        # ``mandatory_groups`` is a list of frozensets: one per route STEP, each
+        # holding every name that satisfies it -- alternative routes to the same
+        # place, plus the graph alias a jump landing carries (the curriculum's
+        # "A1", the graph's "J10_11_b"). A step is done when ANY member is
+        # reached, so nothing double-counts. None => fall back to fruit-count
+        # keying. See `_progress_ladder` for the L4 cases that forced this.
+        self.mandatory_groups = [frozenset(g) for g in (mandatory_groups or [])]
+        self.mandatory_ids = {name for g in self.mandatory_groups for name in g}
         self.N_RUNGS = int(n_rungs)
-        self.mandatory_ids = set(mandatory_ids or ())
         # ANCHOR PROVENANCE for waypoint pools: wp_id -> (x_ram, y_px) as the level
         # defined it when these states were captured. Persisted, and compared on load
         # so a pool captured around an OLD anchor is discarded rather than inherited.
@@ -846,16 +847,19 @@ class CheckpointManager:
             self.wp_closest[wp_id] = dist
 
     def rung_of(self, reached) -> int:
-        """Which progress pool a state belongs to: how many MANDATORY targets it
-        has behind it.
+        """How many route STEPS a state has behind it.
 
-        The one keying rule, for every level. On levels without waypoint
-        milestones the mandatory targets are exactly the fruits, so this is the
-        fruit count — no special case. The reached-set is already stored on every
-        seed (added so a seeded episode stops re-targeting milestones behind it),
-        so nothing has to be recaptured.
+        A step is a GROUP, satisfied by any one of its members, so alternative
+        routes to the same place and the two names a jump landing carries each
+        count once. Counting ids instead double-counted both -- see
+        `_progress_ladder` for the measured L4 cases.
+
+        The reached-set is already stored on every seed (added so a seeded
+        episode stops re-targeting milestones behind it), so nothing has to be
+        recaptured.
         """
-        return len({r for r in (reached or ()) if r in self.mandatory_ids})
+        got = set(reached or ())
+        return sum(1 for g in self.mandatory_groups if got & g)
 
     def _maybe_advance_frontier(self):
         while (
@@ -1067,7 +1071,6 @@ class CheckpointManager:
         return key, state, stack, reached
 
     def summary(self):
-        sizes = [len(self.checkpoints[i]) for i in range(self.N_RUNGS + 1)]
         rates = []
         for i in range(self.N_RUNGS + 1):
             if self.segment_attempts[i] > 0:
@@ -1075,12 +1078,21 @@ class CheckpointManager:
                 rates.append(f"{i}->{i+1}:{pct:.0f}%")
             else:
                 rates.append(f"{i}->{i+1}:N/A")
-        rej = self.stats.get("rejected_precarious", [0] * (self.N_RUNGS + 1))
         reach = "[" + ", ".join(f"{r:.2f}" for r in self.reset_reach_ema) + "]"
         gscore = "[" + ", ".join(f"{p.goal_score:.2f}" for p in self.checkpoints) + "]"
+        # SEEDS, not "cp". Every seedable target -- fruits included -- owns a pool keyed
+        # by NAME, so the old rung-keyed `cp=[...]` is gone. It printed N_RUNGS+1 slots
+        # and could only ever fill the one a fruit pickup landed in: on L4 that was a
+        # single slot out of fourteen, while `Lclimb3_top` (mandatory, rung 9) reported
+        # zero forever because its states lived in a name-keyed pool. Two numbers that
+        # cannot mislead: how many pools hold anything, and the total states held. The
+        # per-pool detail is in route_table(), route-ordered.
+        _pools = {k: len(v) for k, v in self.waypoints.items() if len(v)}
         base = (
-            f"cp={sizes} saves={self.stats['saves']} "
-            f"rejected={rej} success=[{', '.join(rates)}] "
+            f"seeds={sum(_pools.values())} in {len(_pools)} pools "
+            f"rejected={sum(self.wp_rejected_precarious.values())} "
+            f"(air {sum(self.wp_rejected_airborne.values())}) "
+            f"success=[{', '.join(rates)}] "
             f"reset_reach={reach} gscore={gscore}"
         )
         # Loudly, on every status line, if the run has seen a pose we cannot name.
@@ -1470,6 +1482,9 @@ class CheckpointCurriculumEnv(gym.Env):
         }
         self._start_wp = None  # the WP this episode was seeded from (skip re-save)
         self._captured_wps: set = set()  # WPs already captured this episode
+        # WPs detected but still awaiting a grounded frame to save from. Mirrors
+        # `_grounded_snap_due` on the fruit path; see the capture site.
+        self._wp_snap_due: set = set()
 
         self.env_id = env_id
         self.episode_logger = episode_logger
@@ -1555,6 +1570,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # waypoint we were seeded at.
         self._start_wp = level if isinstance(level, str) else None
         self._captured_wps = set()
+        self._wp_snap_due = set()
         # Milestones this seed had ALREADY banked when captured. Restored into
         # the reward below so they stop being summed as pending targets — else
         # the potential pulls a seeded episode BACKWARD (it is minimised behind
@@ -1751,26 +1767,27 @@ class CheckpointCurriculumEnv(gym.Env):
             self._fruits_collected_this_ep += self._prev_fruits - fruits
             collected_total = self._current_rung(ctx.fruits_present)
             self._max_cp_this_ep = max(self._max_cp_this_ep, collected_total)
-            self._grounded_snap_due = collected_total
-        # Take any deferred snapshot once the agent is on a surface. If the
-        # agent dies before grounding (a fatal fall), no snapshot is taken.
-        if self._grounded_snap_due is not None and ctx.pose in SEED_POSES:
-            self._pending_saves.append(
-                (
-                    self._grounded_snap_due,
-                    self.base._interface.save_state(),
-                    self._step_count,
-                    bonus,
-                    # Frame stack at the SAME moment as the save-state, so the
-                    # seed restores the real motion history on load (H-AB).
-                    self.preprocessed.export_frame_stack(),
-                    # Milestones banked AS OF THIS MOMENT (inherited from this
-                    # episode's own seed + reached since) — transitive, so the
-                    # set stays complete along a reverse-curriculum chain.
-                    self._inherited_wps | self._reached_wps_this_ep,
-                )
-            )
-            self._grounded_snap_due = None
+            # SEED THE FRUIT AS A WAYPOINT. A fruit is a route target like any
+            # other -- same Target class, same `mandatory` and `seedable` flags,
+            # counted by the same `rung_of`. Only its TRIGGER differs: the game's
+            # presence byte decides it was collected, where a waypoint is decided by
+            # sprite overlap. Nothing about seeding should follow from that, and it
+            # used to: fruits captured into a pool keyed by RUNG NUMBER while
+            # waypoints captured into pools keyed by NAME.
+            #
+            # What that cost, visible on every L4 status line: `cp` printed 13 slots
+            # and only ever filled ONE. A rung-keyed capture can only happen at a
+            # fruit pickup, L4 has one fruit, so one slot. `Lclimb3_top` is mandatory
+            # and is rung 9, but its states went to a name-keyed pool, so slot 9 read
+            # zero forever. And only 1880 of 25522 episodes in v23 ever started from
+            # the rung pool, against 15438 from named pools -- so the structure was
+            # near-vestigial as well as misleading.
+            #
+            # Now the fruit joins the same deferred path: remember it, save at the next
+            # grounded frame, admit on survival, into a pool named for the fruit.
+            for _i, _present in enumerate(ctx.fruits_present or (), 1):
+                if not _present and f"F{_i}" not in self._captured_wps:
+                    self._wp_snap_due.add(f"F{_i}")
 
         # Waypoint capture (H-AI): snapshot a GROUNDED state when the agent
         # is within tolerance of a computed waypoint position, at most once
@@ -1836,32 +1853,57 @@ class CheckpointCurriculumEnv(gym.Env):
                     or wp_id in self._wp_seed_skip
                 ):
                     continue
-                # CAPTURE: grounded + the configured geometry. The GROUNDED gate is what
-                # keeps mid-jump states out of the pools -- those reload fine (verified
-                # frame-identical) but hand the agent a committed trajectory. The
-                # geometry itself now follows `waypoint_reach_mode`, so a pool is built
-                # from the same test that decides the waypoint was reached.
-                if _grounded and reaches(
-                    (wx, wy), x, y, _tol, mode=self._wp_reach_mode
-                ):
-                    # Defer: capture the state + frame-stack now (the grounded
-                    # moment) but score/admit at episode end via the survival
-                    # gate (see the _pending_wp_saves flush). At most once per
-                    # waypoint per episode.
-                    self._pending_wp_saves.append(
-                        (
-                            wp_id,
-                            self.base._interface.save_state(),
-                            self._step_count,
-                            bonus,
-                            self.preprocessed.export_frame_stack(),
-                            # Milestones banked as of this capture (see the CP
-                            # snapshot above) — includes this WP itself, since
-                            # `_reached_wps_this_ep` was updated just above.
-                            self._inherited_wps | self._reached_wps_this_ep,
-                        )
-                    )
-                    self._captured_wps.add(wp_id)
+                # CAPTURE, deferred to the next GROUNDED frame -- the same rule the
+                # fruit path has always used, and the reason it has always worked.
+                #
+                # THE BUG THIS FIXES. Capture used to require grounded AND in-reach in
+                # the SAME frame. A waypoint touched in mid-air was therefore never
+                # captured unless the agent also landed within sprite range of the
+                # anchor. Measured on L4 `Low2`, the rope-2 landing: its anchor is
+                # px 128 and floor 13's extent is [0..128), so the anchor is OFF the
+                # platform and NO standable position reaches it -- the nearest is
+                # px 120, 8 px away, and the sprite reaches 6 px to the right. So a
+                # crossing registers `Low2` mid-flight (a 5-frame window at px
+                # 124-132) and then lands a few pixels past it, and nothing is ever
+                # saved. v4 banked ONE `Low2` state in the project's history; v13
+                # grew that to 11 by re-capturing from it.
+                #
+                # `Rope1` escapes only by luck: its anchor is px 108 and floor 7
+                # starts at px 104, so it sits 4 px inside and exactly one standable
+                # spot (px 112) reaches it.
+                #
+                # Deferring removes the coincidence. The grounded rule itself stays
+                # -- a mid-jump seed hands the agent a committed trajectory -- but it
+                # now says WHEN to save, not WHETHER, as it does for fruits.
+                if detected:
+                    self._wp_snap_due.add(wp_id)
+
+        # ONE CAPTURE PATH, for fruits and waypoints alike. Anything detected this
+        # episode and still awaiting a surface is saved here, from the SAME state.
+        #
+        # Deliberately outside the `_wp_enabled` block: a fruit is seeded through this
+        # path too, and L1 runs with `curriculum.waypoints` off, so gating this on
+        # waypoints being enabled would silently stop capturing fruits there.
+        #
+        # A detection on a grounded frame reaches here in the same step, so grounded
+        # captures behave exactly as before; an airborne one waits for the landing. If
+        # the agent dies before grounding, nothing is saved -- which is the rule the
+        # fruit path has always had.
+        if ctx.pose in SEED_POSES and self._wp_snap_due:
+            _state = self.base._interface.save_state()
+            # Frame stack at the SAME moment as the save-state, so the seed restores
+            # the real motion history on load (H-AB).
+            _stack = self.preprocessed.export_frame_stack()
+            # Milestones banked AS OF THIS MOMENT (inherited from this episode's own
+            # seed + reached since) — transitive, so the set stays complete along a
+            # reverse-curriculum chain.
+            _reached = self._inherited_wps | self._reached_wps_this_ep
+            for _tid in sorted(self._wp_snap_due):
+                self._pending_wp_saves.append(
+                    (_tid, _state, self._step_count, bonus, _stack, _reached)
+                )
+                self._captured_wps.add(_tid)
+            self._wp_snap_due.clear()
 
         # Princess touch ends the episode and counts as a success.
         if princess_touched:
@@ -1940,11 +1982,45 @@ class CheckpointCurriculumEnv(gym.Env):
             if self._start_wp is not None:
                 new_points = new_points - {self._start_wp}
             progressed = bool(new_points) or reached_level > start_level
+            # THE REACH UNIVERSE MUST COVER EVERY POOL THE START GATE JUDGES.
+            #
+            # `wp_reach_ema` is what `_wp_eligible` consults to decide whether a pool
+            # may be a start state. It used to be built from `self._waypoints` -- the
+            # POSITIONAL DETECTOR universe -- while the gate judges the START-POOL
+            # universe. Those are different sets, and any pool in the second but not the
+            # first could never get a row, so it read 0.0 reach, failed the gate, fell
+            # through to the `route_order` predecessor rule, was absent from THAT too,
+            # and was refused forever.
+            #
+            # Measured on L4, where the two sets differ by exactly `F1` (the fruit pool,
+            # introduced when fruit seeds moved out of the rung-keyed checkpoint slots):
+            # v24 started 925 episodes from those seeds via the rung gate (3.8% of
+            # 24121); v26 started 0 of 28137 from the identical seeds, with the pool
+            # holding 100 of them and 10439 captures. Every downstream waypoint lost
+            # share to the fruit chain and per-waypoint from-reset reach fell a flat
+            # 0.08-0.12 across the route.
+            #
+            # Fruits are not special here. The rule is that the reach table is keyed by
+            # what is gated, so a pool named anything other than a positional waypoint
+            # is tracked automatically instead of being silently frozen out.
+            #
+            # `_reached_targets` already folds collected fruits in as F1/F2/...; passing
+            # `_reached_wps_this_ep` instead withheld the evidence, so even a row would
+            # have decayed to 0. The union keeps never-reached DETECTORS in the table
+            # so they still decay toward 0 -- the block signal the log wants to show.
+            # `_reached_targets` only folds fruits in when handed the presence bytes, so
+            # read them here exactly as `_current_rung` does a few lines above.
+            _fp = tuple(
+                self.iface.read_ram_byte(self._fruit_addrs[i]) != 0
+                for i in self._fruit_ids
+            )
+            _pool_ids = set(getattr(_manager, "waypoints", {}) or {})
+            _reach_universe = set(self._waypoints.keys()) | _pool_ids
             _manager.record_episode(
                 start_key,
                 reached_level,
-                reached_wps=self._reached_wps_this_ep,
-                all_wps=set(self._waypoints.keys()) if self._wp_enabled else None,
+                reached_wps=self._reached_targets(_fp),
+                all_wps=_reach_universe if self._wp_enabled else None,
                 progressed=progressed,
                 start_rung=self._start_rung,
             )
@@ -2103,30 +2179,71 @@ def _level_of(cfg) -> int:
 
 
 def _progress_ladder(cfg):
-    """``(mandatory_ids, n_rungs)`` — the progress ladder for this level.
+    """``(mandatory_groups, n_rungs)`` — the progress ladder for this level.
 
-    A rung is "one more MANDATORY target done": the fruits, plus the waypoint
-    milestones on levels that define them. The terminal princess is excluded (it
-    is the rung above the top). This is uniform across levels — on L1/L2 the
-    mandatory targets are exactly the fruits, so the ladder is the fruit count
-    it always was, with no special case.
+    A rung is one STEP of the route, and a step is satisfied by ANY member of a
+    group. Most groups hold one target; a group holds several when the level
+    offers alternative ways to make the same step, plus the graph alias a jump
+    landing carries (the curriculum calls it "A1", the nav graph calls the same
+    point "J10_11_b", and a seed may record either).
 
-    ``mandatory_ids`` also carries graph aliases, because a jump landing has two
-    names for one point (the curriculum's "A1", the graph's "J10_11_b") and a
-    seed may record either; ``n_rungs`` counts DISTINCT targets, so it is passed
-    separately rather than derived from the id set.
+    WHY GROUPS AND NOT A FLAT ID SET. Counting ids double-counted, two ways, and
+    both were live on L4:
+
+        reached Low2 (low route to floor 13)          -> rung 11   correct
+        reached Lhi_down_bot (high route, same floor) -> rung 11   correct
+        reached BOTH                                  -> rung 12   WRONG
+        reached Low2 and its own alias J12_13_b       -> rung 12   WRONG
+
+    `Lhi_down_bot` sits at px 104 and `Low2` landings at px 88-120, so an agent
+    that crosses rope 2 and walks a few pixels left registers both and gains two
+    rungs for one step. The rung COUNT was already protected against this (it
+    was passed in rather than derived from the id set); the function that assigns
+    a state TO a rung was not.
+
+    The grouping is the level map's own `reward_waypoints`, so the curriculum and
+    the reward cannot disagree about what one step is. Targets the reward does
+    not group -- the fruits, which are paid by the fruit term -- each become a
+    group of one.
     """
     from retro_ai.training.targets import build_targets
+    from retro_ai.training.yeti_map import get_level_map
 
-    targets = [
-        t for t in build_targets(_level_of(cfg)) if t.mandatory and t.kind != "princess"
-    ]
-    ids = set()
+    level = _level_of(cfg)
+    targets = [t for t in build_targets(level) if t.mandatory and t.kind != "princess"]
+
+    # Alias -> canonical, so a group can be found by either name a target has.
+    groups: list = []
+    claimed: set = set()
+    try:
+        reward_groups = get_level_map(level).reward_waypoints or []
+    except (ValueError, KeyError):
+        reward_groups = []
+    by_any_name = {}
     for t in targets:
-        ids.add(t.id)
+        by_any_name[t.id] = t
         if t.node_ident:
-            ids.add(t.node_ident)
-    return ids, len(targets)
+            by_any_name[t.node_ident] = t
+    for members in reward_groups:
+        names: set = set()
+        for ident in members:
+            t = by_any_name.get(ident)
+            if t is None:
+                continue
+            names.add(t.id)
+            if t.node_ident:
+                names.add(t.node_ident)
+        if names:
+            groups.append(frozenset(names))
+            claimed |= names
+    # Anything mandatory the reward does not group (the fruits) is its own rung.
+    for t in targets:
+        if t.id in claimed:
+            continue
+        names = {t.id} | ({t.node_ident} if t.node_ident else set())
+        groups.append(frozenset(names))
+        claimed |= names
+    return groups, len(groups)
 
 
 def _route_order_for(cfg) -> list:
@@ -2172,6 +2289,77 @@ class PoolSaveCallback(BaseCallback):
         if self.num_timesteps - self._last_save >= self._save_freq:
             self._last_save = self.num_timesteps
             _manager.save_to_disk(self._path)
+        return True
+
+
+class NoOpCallback(BaseCallback):
+    """Placeholder so the callback list keeps a fixed shape when a feature is off."""
+
+    def _on_step(self) -> bool:
+        return True
+
+
+class RegressionStopCallback(BaseCallback):
+    """End the run when the parallel evaluator says the policy has got worse.
+
+    Reads `<output>/best/eval_status.json`, which keep_best_sweep.py --watch rewrites
+    after every snapshot eval. Acts only on `consecutive_regressions`, so one dip is
+    ignored -- a single eval at n=30 can false-flag, three in a row does not.
+
+    WHY A FILE AND NOT AN IN-PROCESS EVAL. The Crayon emulator keeps in-process global
+    state, so evaluation must not share a process with training; keep_best_sweep already
+    shells out per snapshot for that reason. A file is also the honest boundary: the
+    evaluator runs whether or not training is watching, and training degrades to a no-op
+    if the evaluator is not running.
+
+    DELIBERATELY ONLY STOPS. Reverting weights is the next increment and needs this
+    as its control arm -- see experiments/003-yeti-training.md step 4b for why
+    reverting ALONE is measured not to work (control arm A0: a champion at mean depth
+    9.55 put back into training read 1.20 / 2.43 / 7.53 / 1.03 over the next 1M).
+    """
+
+    def __init__(self, status_path, patience, check_freq=10_000, verbose=0):
+        super().__init__(verbose)
+        self.status_path = status_path
+        self.patience = int(patience)
+        self.check_freq = int(check_freq)
+        self._last_check = 0
+        self._last_seen_step = None
+
+    def _on_step(self) -> bool:
+        if self.num_timesteps - self._last_check < self.check_freq:
+            return True
+        self._last_check = self.num_timesteps
+        try:
+            with open(self.status_path) as fh:
+                st = json.load(fh)
+        except (OSError, ValueError):
+            return True  # evaluator not running, or mid-write: no-op
+        n = int(st.get("consecutive_regressions") or 0)
+        step = st.get("step")
+        if step != self._last_seen_step:
+            self._last_seen_step = step
+            if n:
+                print(
+                    f"  [regression] eval @ {step}: {n} consecutive "
+                    f"(patience {self.patience}) "
+                    f"frontier={st.get('frontier')}@"
+                    f"{(st.get('frontier_rate') or 0):.2f} "
+                    f"best={st.get('best_frontier')}@"
+                    f"{(st.get('best_frontier_rate') or 0):.2f}",
+                    flush=True,
+                )
+        if n >= self.patience:
+            print(
+                f"\nSTOPPING: {n} consecutive regressing evals "
+                f"(>= patience {self.patience}). "
+                f"Best was step {st.get('best_step')} at "
+                f"{st.get('best_frontier')}@"
+                f"{(st.get('best_frontier_rate') or 0):.2f}, kept at "
+                f"{st.get('best_model')}.",
+                flush=True,
+            )
+            return False
         return True
 
 
@@ -2365,7 +2553,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
 
     seed = seed_everything(cfg.training.seed)
 
-    _ladder_ids, _ladder_rungs = _progress_ladder(cfg)
+    _ladder_groups, _ladder_rungs = _progress_ladder(cfg)
     _manager = CheckpointManager(
         max_states_per_checkpoint=cfg.curriculum.max_states_per_checkpoint,
         min_states_to_advance=cfg.curriculum.min_states_to_advance,
@@ -2376,7 +2564,7 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         reach_threshold=cfg.curriculum.reach_threshold,
         segment_floor=cfg.curriculum.segment_floor,
         # Progress ladder: pools keyed by how many MANDATORY targets are done.
-        mandatory_ids=_ladder_ids,
+        mandatory_groups=_ladder_groups,
         n_rungs=_ladder_rungs,
         gate_waypoints=cfg.curriculum.gate_waypoints,
         gate_waypoints_by_predecessor=cfg.curriculum.gate_waypoints_by_predecessor,
@@ -2592,6 +2780,17 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
                 ),
                 EpisodeMetricsCallback(episode_logger, log_interval=10_000),
                 snapshot_cb,
+                # End the run when the parallel evaluator reports the policy has got
+                # worse. A no-op unless training.on_regression is set AND
+                # keep_best_sweep.py --watch is running against this run.
+                (
+                    RegressionStopCallback(
+                        os.path.join(cfg.training.output, "best", "eval_status.json"),
+                        patience=getattr(cfg.training, "regression_patience", 3),
+                    )
+                    if str(getattr(cfg.training, "on_regression", "off")) == "stop"
+                    else NoOpCallback()
+                ),
                 # Persist pools periodically so an early stop keeps captured
                 # seeds (pools were previously saved only on normal completion).
                 PoolSaveCallback(

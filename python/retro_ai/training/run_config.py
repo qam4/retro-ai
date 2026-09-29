@@ -68,6 +68,27 @@ class TrainingConfig:
     # hyperparameters, silently ignoring the new ones. Default False
     # preserves the original full-state resume behavior.
     warmstart_weights_only: bool = False
+    # WHAT TO DO WHEN THE POLICY GETS WORSE. Read from the parallel evaluator's
+    # `<output>/best/eval_status.json`, written by keep_best_sweep.py --watch.
+    #
+    #   "off"   (default) ignore it -- every existing run is unchanged
+    #   "stop"  end training once `consecutive_regressions` hits the patience
+    #
+    # WHY STOPPING IS DEFENSIBLE AND NOT JUST CHEAP. The tail of a run has never
+    # produced the champion on this project: v18's best snapshot was at 900k of 15M,
+    # v21 matched v18 in 6M instead of 15M, and v24 -- measured by the evaluator over
+    # 56 snapshots at n=30 -- was below its own best in 34 of them and ended 45% below
+    # its peak, with the frontier collapsing to route position 5 at 4.6M. Stopping at
+    # the peak loses nothing anyone has measured here and returns hours per run.
+    #
+    # It is also the CONTROL ARM for the revert-and-tighten variant (see
+    # experiments/003-yeti-training.md step 4b), which is why this is an enum rather
+    # than a bool: "revert" belongs here next, and `stop` is what it must beat.
+    on_regression: str = "off"
+    # Consecutive regressing evals before acting. One dip is noise -- the evaluator's
+    # own margin is 3x the binomial sd, but a single eval at n=30 still has a ~2%
+    # chance of a false flag, and three in a row do not.
+    regression_patience: int = 3
     # Where to inherit the curriculum's seed pools from. Default (None) is
     # ``dirname(resume)/checkpoints.pkl``, which assumes the weights and the pools sit
     # in the same directory. They often do not: a keep-best sweep writes the champion to

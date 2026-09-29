@@ -51,23 +51,23 @@ WP_GOAL_SCORES = {
     "Step": 0.643,
 }
 # L4's mandatory position waypoints (from build_targets), plus graph aliases.
-MANDATORY = {
-    "Lfruit_top",
-    "Fr1",
-    "J2_3_b",
-    "Lascent_top",
-    "Lclimb1_top",
-    "Rope1",
-    "J6_7_b",
-    "Lclimb2_top",
-    "Spring",
-    "J8_9_b",
-    "Step",
-    "J9_10_b",
-    "Lclimb3_top",
-    "Lhi_down_bot",
-    "Lprincess_top",
-}
+# One frozenset per route STEP. A jump landing carries two names (the curriculum's
+# `Fr1`, the graph's `J2_3_b`) and they are the same step, so they share a group --
+# see test_progress_rungs_are_groups.py for why counting ids instead double-counted.
+MANDATORY_GROUPS = [
+    frozenset({"Lfruit_top"}),
+    frozenset({"Fr1", "J2_3_b"}),
+    frozenset({"Lascent_top"}),
+    frozenset({"Lclimb1_top"}),
+    frozenset({"Rope1", "J6_7_b"}),
+    frozenset({"Lclimb2_top"}),
+    frozenset({"Spring", "J8_9_b"}),
+    frozenset({"Step", "J9_10_b"}),
+    frozenset({"Lclimb3_top"}),
+    frozenset({"Lhi_down_bot"}),
+    frozenset({"Lprincess_top"}),
+]
+MANDATORY = {name for g in MANDATORY_GROUPS for name in g}
 
 
 @pytest.fixture(scope="module")
@@ -88,7 +88,7 @@ def _mgr(tcc, split, rung3_gs=0.55, reset_gs=0.55):
         earlier_fraction=0.0,
         reach_threshold=0.15,
         n_rungs=13,
-        mandatory_ids=MANDATORY,
+        mandatory_groups=MANDATORY_GROUPS,
         gate_waypoints=True,
         split_mandatory=split,
     )
@@ -180,6 +180,6 @@ def test_default_is_legacy(tcc):
         frontier_fraction=0.0,
         earlier_fraction=0.0,
         n_rungs=4,
-        mandatory_ids=set(),
+        mandatory_groups=[],
     )
     assert m.split_mandatory is False
