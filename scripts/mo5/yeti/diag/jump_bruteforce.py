@@ -76,12 +76,43 @@ def destination(level, land_on):
     return p.y, (p.x_min - 8) // 4, (p.x_max - 8) // 4, tgt.floor
 
 
-def attempt(stack, ifc, state, plan, approach, land, max_steps):
+def attempt(stack, ifc, state, plan, approach, land, max_steps, jump_at):
+    """(outcome, launch_px, launch_pose) for one scripted plan.
+
+    ``outcome`` is LANDED, DIED or NO_RESOLVE. ``jump_at`` is the plan index at
+    which the JUMP input first appears, so the caller learns WHERE the agent
+    actually was when it launched.
+
+    WHY THE LAUNCH PIXEL IS RETURNED, not just a yes/no. A jump's executability is
+    a property of the departure pixel, and the APPROACH does not move the agent a
+    predictable distance: the walk cycle stalls (dx in {-4, 0}), so on L4 nine left
+    steps from px 220 reach px 196 and it takes twelve to reach px 188. A sweep
+    over approach lengths that looks like it brackets the launch pixel may never
+    touch it. Measured: `--approaches 7,8,9` from `Low1` launched from px
+    200/200/196 and scored 0 of 102 plans, which was read as "this jump cannot be
+    done from here"; `--approaches 11,12,13` crosses on 26 of 136.
+
+    HOW THAT ZERO HID. An approach that overshoots floor 12's edge does not fail
+    loudly: it falls onto the spring at `Platform(24, 142, 168, 200)`, which delays
+    death to a measured median of step 82, so the attempt spends most of its budget
+    bouncing and then reports DIED like any mistimed jump. Nothing in the old
+    output distinguished "the jump missed" from "the agent was never on the pad".
+    That is how family C's "0 crossings" in level4_notes.md stood for weeks.
+
+    NO_RESOLVE means alive at the end of ``max_steps`` without ever standing on the
+    target. It is reported separately because it is a bad budget rather than a
+    failed jump; it did not fire in the L4 grids measured on 2026-09-29, where
+    every failure died.
+    """
     y_t, xlo, xhi, _ = land
     ifc.load_state(bytes(state))
     stack.preprocessed.notify_state_loaded()
     stack.gym.step(NOOP)
+    launch_px = launch_pose = None
     for i in range(max_steps):
+        if i == jump_at:
+            launch_px = ifc.read_ram_byte(yeti.X_ADDR) * 4 + 8
+            launch_pose = ifc.read_ram_byte(yeti.POSE_ADDR)
         # after the scripted plan runs out, keep walking the approach direction so a
         # landing just short of the platform still resolves rather than hanging
         stack.gym.step(plan[i] if i < len(plan) else WALK[approach])
@@ -89,10 +120,10 @@ def attempt(stack, ifc, state, plan, approach, land, max_steps):
         y = ifc.read_ram_byte(yeti.Y_ADDR)
         pose = ifc.read_ram_byte(yeti.POSE_ADDR)
         if pose in SURF and abs(y - y_t) <= 2 and xlo <= x <= xhi:
-            return True
+            return "LANDED", launch_px, launch_pose
         if yeti.is_dead(ifc):
-            return False
-    return False
+            return "DIED", launch_px, launch_pose
+    return "NO_RESOLVE", launch_px, launch_pose
 
 
 def main(argv=None) -> int:
@@ -136,7 +167,20 @@ def main(argv=None) -> int:
     cfg = EnvConfig(
         profile=profile,
         action_mode="joystick",
-        max_steps=args.max_steps + 20,
+        # NEVER let the env truncate. `attempt` reloads a save-state per plan but
+        # does NOT reset the gym, so the env's own step counter accumulates across
+        # the whole sweep; a per-plan bound here would cut later attempts short and
+        # make a result depend on a plan's POSITION in the sweep. `--max-steps`
+        # still bounds each attempt in the loop below, so this only stops the env
+        # cutting one short.
+        #
+        # An earlier version of this comment blamed this for a 40-plan and a
+        # 131-plan sweep disagreeing about the rope-1 window. That was wrong: the
+        # cause was the report slicing to `results[:10]`, which dropped the lowest
+        # winning waits. Re-tested after both fixes -- wait=1 three times in one
+        # sweep, including after an intervening 190-step plan, gives 1/1 each time,
+        # so there is no order dependence to explain.
+        max_steps=10**6,
         stall_threshold=10**9,
         resize=(84, 84),
     )
@@ -200,22 +244,61 @@ def main(argv=None) -> int:
         for w in waits:
             for h in holds:
                 plan = [WALK[approach]] * a + [NOOP] * w + [JUMP[approach]] * h
-                ok = sum(
-                    attempt(stack, ifc, e[2], plan, approach, land, args.max_steps)
+                outs = [
+                    attempt(
+                        stack, ifc, e[2], plan, approach, land, args.max_steps, a + w
+                    )
                     for e in seeds
-                )
-                results.append((ok, a, w, h))
-    results.sort(reverse=True)
+                ]
+                ok = sum(1 for o, _, _ in outs if o == "LANDED")
+                unresolved = sum(1 for o, _, _ in outs if o == "NO_RESOLVE")
+                launched = collections.Counter(px for _, px, _ in outs)
+                results.append((ok, a, w, h, unresolved, launched))
+    # Sort on the numeric fields only; the Counter is not orderable and two plans
+    # can tie on (ok, a, w, h) when a wait or hold is repeated on the command line.
+    results.sort(key=lambda r: r[:4], reverse=True)
     n = len(seeds)
-    print(f"  top plans (landed/{n}, approach steps, wait, hold):")
-    for ok, a, w, h in results[:10]:
-        print(f"    {ok:>3}/{n}   approach={a:<2} wait={w:<2} hold={h}")
+    # Print EVERY plan that landed, not the top 10. A wide wait sweep is how a
+    # rope's period gets measured, and that needs the full set of winning waits. A
+    # 131-plan sweep with 14 winners had its four lowest cut off by a `[:10]`
+    # slice, which read as the short and long sweeps disagreeing about the window
+    # position, and cost a session hunting a state leak that was not there.
+    shown = [r for r in results if r[0]] or results[:10]
+    print(f"  plans that landed (of {n} seeds; approach steps, wait, hold):")
+    for ok, a, w, h, unres, launched in shown:
+        px_note = ",".join(
+            f"{k}x{v}" for k, v in sorted(launched.items()) if k is not None
+        )
+        tail = f"  launch_px {px_note or '?'}"
+        if unres:
+            tail += f"  never-resolved {unres}"
+        print(f"    {ok:>3}/{n}   approach={a:<2} wait={w:<3} hold={h:<3}{tail}")
+    if len(shown) > 10:
+        print(f"    ({len(shown)} winning plans)")
+
     best = results[0][0]
+    all_launched: collections.Counter = collections.Counter()
+    all_unres = 0
+    for _ok, _a, _w, _h, unres, launched in results:
+        all_launched.update({k: v for k, v in launched.items() if k is not None})
+        all_unres += unres
     print(f"\n  BEST {best}/{n} = {100 * best / n:.0f}%  over {len(results)} plans")
+    print(
+        "  launch pixels this grid actually used: "
+        f"{dict(sorted(all_launched.items()))}"
+    )
+    if all_unres:
+        print(
+            f"  {all_unres} attempt(s) ended ALIVE at the step budget without ever\n"
+            "  standing on the target -- raise --max-steps before reading those as\n"
+            "  misses."
+        )
     print(
         "  reading: a high best rate means the manoeuvre is executable and the policy\n"
         "  simply has not learned it (shape/seed/practise it). A low best rate means\n"
-        "  the window is narrow and no reward change will fix it."
+        "  the window is narrow and no reward change will fix it -- BUT check the\n"
+        "  launch pixels above first. A zero from a grid that never launched from\n"
+        "  the departure pixel you meant to test says nothing about the jump."
     )
     return 0
 
