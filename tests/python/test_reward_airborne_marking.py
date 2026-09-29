@@ -139,6 +139,25 @@ def test_reward_mark_blocklist_matches_yeti():
     assert games is not None  # import guard: yeti must be importable for the comparison
 
 
+def test_reward_surface_poses_matches_yeti():
+    """The allowlist half of the same invariant, which had no guard and duly drifted.
+
+    `f2d37cb` added the leftward-walk poses 6 and 7 to `yeti.SURFACE_POSES` on
+    2026-08-28. This module's copy kept the 7-pose set from `aa587d9` (2026-07-02) for
+    another four weeks, so the shaping gate froze on frames that detection and capture
+    credited -- 11.7% of leftward walk frames, 0% rightward. `level4_notes.md` recorded
+    the fix as shipped, naming this constant, while the code did not contain it.
+
+    The blocklist above had a drift guard from the start and never drifted. This is that
+    guard for the allowlist, so the next pose added to either set fails here instead of
+    silently changing the reward in one direction only.
+    """
+    assert rw.SURFACE_POSES == yeti.SURFACE_POSES
+    # The escalator ride (13) is added at use-site under `ladder_segment_shaping`, not
+    # baked in, so the two sets must match EXACTLY rather than up to that pose.
+    assert 13 not in rw.SURFACE_POSES
+
+
 def test_mark_airborne_false_reproduces_the_old_placement():
     """The control arm must be a CONFIG, not a git checkout.
 

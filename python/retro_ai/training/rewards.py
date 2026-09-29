@@ -970,7 +970,27 @@ def _fruit_bonus_path_progress_pbrs(params: Mapping[str, Any]) -> RewardFn:
 # other code (jump 9/10, fall 11, death-anim 12, and any unseen code) is
 # treated as airborne/off-surface -> shaping frozen (fails safe). Measured
 # table: experiments/003-yeti-training.md "run 3".
-SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 8})
+#
+# POSES 6 AND 7 WERE MISSING HERE UNTIL 2026-09-24, four weeks after f2d37cb added them
+# to `yeti.SURFACE_POSES`. They are the second half of the LEFTWARD walk cycle, so the
+# shaping gate froze on them while detection, capture and floor crediting -- which read
+# yeti's set -- credited them. `level4_notes.md` ("FIXED (v9)") asserted the shaping
+# half was fixed too, naming this file and this constant; it was not, and nothing broke.
+# The blocklist below had a drift guard from the start; the allowlist did not. It does
+# now: test_reward_surface_poses_matches_yeti.
+#
+# SIZE OF THE DEFECT, measured 2026-09-24 (v24 best model, 40 episodes from reset,
+# 7872 grounded frames, .kiro/tmp/pose67_census.py): 200 frames frozen = 2.5% of all
+# grounded frames, 11.7% of LEFTWARD walk frames, 0.0% rightward. Concentrated on floors
+# 2 (37.5%) and 11 (32.7%); floor 12, where L4's rope-2 crossing departs, lost 2 of 153.
+# The 54% quoted in level4_notes.md and in yeti.py's comment does NOT reproduce, so this
+# is a correctness fix, not the rope-2 lever the backlog bills it as. Floor 13 produced
+# no leftward frames in that sample, so the princess stretch is unmeasured.
+#
+# It is still a REWARD change: more frames sample the potential, so the shaping
+# trajectory differs and a critic fit to the old signal is mismatched. Champions from
+# before this date are not clean warm starts for runs after it.
+SURFACE_POSES = frozenset({0, 1, 2, 3, 4, 5, 6, 7, 8})
 
 # Poses at which a waypoint may NOT be marked reached: 11 = fall, 12 = death anim.
 # Falling PAST a waypoint is not reaching it. Everything else counts, INCLUDING the
@@ -1066,6 +1086,42 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     # reconstructing which fruits were uncollected, which is a bigger change with no
     # measured failure behind it. Default False = today's skip, byte-identical.
     pay_on_target_change = bool(params.get("pay_on_target_change", False))
+    # CARRY BONUS: a flat, once-per-episode payment for being in a named pose.
+    #
+    # WHY IT EXISTS. L4's rope 2 is an EXPECTED-VALUE problem, not an exploration one.
+    # Measured on the `Low2_launch` pad with l4_pad_reward.py, through this very reward:
+    #
+    #   hold still                                    0.000
+    #   walk LEFT off the edge                       +0.075   CERTAIN
+    #   jump and miss the rope                        0.000
+    #   completed crossing (NOOP:20,JUMP_LEFT:70)    +2.940   median 2.920, n=6
+    #
+    # The ordering was already right -- a crossing pays 39x the cliff-walk -- but
+    # attempting it is worth ~1% x 2.940 = +0.029 expected against a certain +0.075,
+    # and the whole +2.94 arrives on LANDING. So the agent takes the better bet and
+    # steps off the edge, and nothing pays anything for a real attempt. This puts a
+    # non-zero gradient on the attempt itself.
+    #
+    # ONCE PER EPISODE, not per frame. The recorded crossings show the carry pose in two
+    # bursts (crossing 1: poses [4,10,15,10,15,10,5]), so a per-frame payment banks 2-5x
+    # its face value for one manoeuvre. At +1.0 per frame that is up to 70% of a maximum
+    # episode (episodes.csv: median 6.8, p75 57.2, max 70.5).
+    #
+    # SIZING. +1.0 keeps the ordering intact: cliff-walk +0.075, grab-and-fail +1.0
+    # (13x, so the choice flips), completed crossing +3.94 (4x a grab, so finishing
+    # still dominates). +10 was proposed first and rejected: it is 3.4x the entire value
+    # of the crossing, i.e. it would say touching the rope matters more than what
+    # touching it achieves. See level4_notes.md "ROPE 2 IS AN EXPECTED-VALUE PROBLEM".
+    #
+    # PAID BEFORE THE AIRBORNE RETURN, deliberately. The carry pose IS airborne, so
+    # a payment placed after the (D2) freeze is unreachable -- the same defect that
+    # made every jump-landing milestone unmarkable until 2026-09-14. This adds to
+    # `reward` only; it does not touch the potential, so telescoping and the freeze are
+    # unchanged.
+    #
+    # Default 0.0 = OFF, so every level and every existing config is byte-identical.
+    carry_bonus = float(params.get("carry_pose_bonus", 0.0))
+    carry_poses = frozenset(int(p) for p in (params.get("carry_pose_ids") or (15,)))
     segment_shaping = bool(params.get("ladder_segment_shaping", False))
     # When segment shaping is on, the escalator RIDE pose (13) is a controlled
     # vertical traversal, not a fall, so it counts as on-surface (un-frozen) so
@@ -1228,6 +1284,9 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             # step (a change => target set changed => rebaseline).
             self._reached_wp: set = set()
             self._prev_active_wp: frozenset = frozenset()
+            # Carry bonus already paid this episode (once-per-episode, see
+            # `carry_pose_bonus` above).
+            self._paid_carry: bool = False
             # (D5) shaping paid so far this episode, refunded on death when
             # ``credit_requires_survival`` is on.
             self._shaping_acc: float = 0.0
@@ -1239,6 +1298,7 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
             self._reached_wp = set()
             self._prev_active_wp = frozenset()
             self._shaping_acc = 0.0
+            self._paid_carry = False
 
         def restore_reached_waypoints(self, idents) -> None:
             """Mark milestone groups containing any of ``idents`` as reached.
@@ -1323,6 +1383,20 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
 
             if mark_airborne:
                 _mark(ctx, pose)
+
+            # CARRY BONUS (see `carry_pose_bonus` above). Must be paid HERE, above the
+            # airborne return, because the carry pose is itself airborne. Once per
+            # episode, and never on a death frame -- paying a fatal grab would reward
+            # exactly the failure this is meant to replace, the same rule (D3)/(D4)
+            # apply to shaping and fruit.
+            if (
+                carry_bonus
+                and not self._paid_carry
+                and not ctx.died
+                and pose in carry_poses
+            ):
+                reward += carry_bonus
+                self._paid_carry = True
 
             # (D2) Airborne: no credit, HOLD prev_phi (don't sample/rebaseline)
             # and HOLD the deferred-fruit baseline (don't sample it either).
