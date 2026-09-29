@@ -82,6 +82,18 @@ def walk_edge(env, iface, state, direction, limit=80, hold=10):
     y0 = yeti.read_pos(iface)[1]
     if not _grounded(iface):
         return None
+    # The STARTING px needs the same idle-hold test as every px we walk onto.
+    # Without this the seed's own position was accepted untested, so a pool full of
+    # doomed states reported its own brink as standable: floor 12 read `meas min 184`
+    # purely because a `Low2_launch` seed sits on px 184, reads a surface pose for one
+    # frame after load, and falls. `walk_edge` then stepped LEFT off the platform and
+    # returned that same 184 as the limit. Measured: this changes floor 12 from 184 to
+    # 188 (and drops `Low2_launch` from the floor's contributors, because none of its
+    # seeds stand); all 14 other L4 floors are unchanged, so the artifact hit exactly
+    # the floor whose pool is poisoned. 188 is independently what l4_edge_limit.py
+    # reports for floor 12, which is the agreement this bug was hiding.
+    if not _holds(env, iface, y0, hold):
+        return None
     last = _px(iface)
     for _ in range(limit):
         env.gym.step(direction)

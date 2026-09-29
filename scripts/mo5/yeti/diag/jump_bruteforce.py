@@ -42,6 +42,7 @@ Examples
 from __future__ import annotations
 
 import argparse
+import collections
 import pickle
 import sys
 from pathlib import Path
@@ -103,6 +104,24 @@ def main(argv=None) -> int:
     ap.add_argument("--n-seeds", type=int, default=10)
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--approach", default="", help="left|right; default: from geometry")
+    # The default grid is sized for a PLATFORM-TO-PLATFORM hop. A rope is a different
+    # timescale: the agent must wait for the rope to swing within reach and then hold
+    # the carry for the whole traverse. L4's rope 2 crosses under `wait 20, hold 70`,
+    # which the default grid (wait <= 5, hold <= 10) cannot express -- so it scored
+    # 0/12 at px 188/192, a departure pixel independently measured to cross. A zero
+    # from a grid that excludes the known-good plan says nothing about the jump.
+    ap.add_argument("--approaches", default="0,2,4,6,8")
+    ap.add_argument("--waits", default="0,2,5")
+    ap.add_argument("--holds", default="2,4,6,8,10")
+    ap.add_argument(
+        "--seed-px",
+        default="",
+        help="comma-separated departure px to keep (e.g. 184). Pools are MIXED -- L4's "
+        "`Low2_launch` holds 70 seeds on px 184 and 30 on px 188..224 -- and a jump's "
+        "executability is a property of the departure pixel, so a pooled rate averages "
+        "two different questions. Without this the tool reports the mixture and prints "
+        "the departure px only of seeds[0], which reads as if the pool were uniform.",
+    )
     args = ap.parse_args(argv)
 
     land = destination(args.level, args.land_on)
@@ -111,7 +130,7 @@ def main(argv=None) -> int:
     pool = pickle.load(open(Path(args.run) / "checkpoints.pkl", "rb"))["waypoints"]
     if args.from_pool not in pool or not pool[args.from_pool][0]:
         raise SystemExit(f"pool {args.from_pool!r} missing or empty in {args.run}")
-    seeds = list(pool[args.from_pool][0])[: args.n_seeds]
+    all_seeds = list(pool[args.from_pool][0])
 
     profile = f"yeti_fruit_level{args.level}" if args.level > 1 else "yeti_fruit"
     cfg = EnvConfig(
@@ -125,22 +144,61 @@ def main(argv=None) -> int:
     ifc = stack.base._interface
     stack.base.reset(seed=0)
 
+    # Read every seed's departure px, so the selection and the report are both honest
+    # about a mixed pool rather than extrapolating from seeds[0].
+    px_of = []
+    for e in all_seeds:
+        ifc.load_state(bytes(e[2]))
+        px_of.append(ifc.read_ram_byte(yeti.X_ADDR) * 4 + 8)
+    want = {int(v) for v in args.seed_px.split(",") if v.strip()}
+    picked = [(e, px) for e, px in zip(all_seeds, px_of) if not want or px in want]
+    if not picked:
+        raise SystemExit(
+            f"no {args.from_pool} seed at px {sorted(want)}; pool has "
+            f"{dict(sorted(collections.Counter(px_of).items()))}"
+        )
+    picked = picked[: args.n_seeds]
+    seeds = [e for e, _ in picked]
+    hist = collections.Counter(px for _, px in picked)
+
     # Infer the direction from where the seeds actually are, not from the anchor: the
     # pool is what the run captured, and it is the position a policy would jump from.
     ifc.load_state(bytes(seeds[0][2]))
     x0 = ifc.read_ram_byte(yeti.X_ADDR)
     approach = args.approach or ("left" if (xlo + xhi) / 2 < x0 else "right")
-    print(f"  {len(seeds)} {args.from_pool} seeds at x_ram {x0} (px {x0 * 4 + 8})")
+    print(
+        f"  pool {args.from_pool}: {len(all_seeds)} seeds, px "
+        f"{dict(sorted(collections.Counter(px_of).items()))}"
+    )
+    print(
+        f"  using {len(seeds)} seeds, px {dict(sorted(hist.items()))} "
+        f"(x_ram {x0} = px {x0 * 4 + 8})"
+    )
     print(
         f"  must land on floor {floor_t}: y {y_t}, x_ram {xlo}..{xhi} "
         f"(px {xlo * 4 + 8}..{xhi * 4 + 8})"
     )
     print(f"  approach/jump direction: {approach}\n")
 
+    def _ints(s):
+        return [int(v) for v in s.split(",") if v.strip()]
+
+    approaches, waits, holds = (
+        _ints(args.approaches),
+        _ints(args.waits),
+        _ints(args.holds),
+    )
+    longest = max(approaches) + max(waits) + max(holds)
+    if longest > args.max_steps:
+        raise SystemExit(
+            f"--max-steps {args.max_steps} is shorter than the longest plan "
+            f"({longest} steps); the plan would be cut off mid-jump"
+        )
+
     results = []
-    for a in (0, 2, 4, 6, 8):
-        for w in (0, 2, 5):
-            for h in (2, 4, 6, 8, 10):
+    for a in approaches:
+        for w in waits:
+            for h in holds:
                 plan = [WALK[approach]] * a + [NOOP] * w + [JUMP[approach]] * h
                 ok = sum(
                     attempt(stack, ifc, e[2], plan, approach, land, args.max_steps)

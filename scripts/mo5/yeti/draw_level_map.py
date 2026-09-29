@@ -10,9 +10,27 @@ human able to spot that in seconds.
 Shows:
   platforms   walkable extents, at the floor's surface, labelled with floor id
   ladders     vertical spans between the floors they claim to connect
-  jump edges  launch -> landing, dashed
+  jump edges  launch -> landing, dashed, between the WAYPOINT positions
   waypoints   MANDATORY reward targets filled red, optional ones hollow yellow
   fruit       magenta, princess cyan
+  graph nodes violet diamonds ON the surface line, with the graph's own edges
+
+WHY THE GRAPH NODES ARE DRAWN SEPARATELY, AND WHY THEY WERE THE MISSING HALF.
+The reward does not measure distance to a waypoint. It measures distance to a
+NAV-GRAPH NODE, and the two are placed by different rules: a node goes at the
+declared platform EDGE nearest the other platform (``_jump_graph``), while a
+waypoint can carry a MEASURED anchor from ``jump_waypoint_pos``. Where a level
+supplies such an anchor the two separate, and nothing on this map showed it.
+
+L4's rope 2 is the case that matters: ``Low2_launch`` was moved to the measured
+px 188 in September, but ``J12_13_a`` -- the point the potential actually aims at
+-- still sits on the declared edge at px 184, the pixel that kills 12/12 at rest.
+Four pixels, invisible unless both are drawn. Same on the landing side:
+``J12_13_b`` and the mandatory ``Low2`` both sit at px 128 while floor 13 is
+only standable to 124.
+
+So: violet diamonds are what the REWARD sees, coloured circles are what the
+CURRICULUM sees, and any place they do not coincide is worth explaining.
 
 Coordinate conventions (see yeti_map docstring): sprite centre is
 (x_ram*4 + 8, y + 8); a floor's visible surface is standing_y + 18.
@@ -31,7 +49,7 @@ import argparse
 from PIL import Image, ImageDraw, ImageFont
 from retro_ai.games import yeti
 from retro_ai.training.targets import build_targets
-from retro_ai.training.yeti_map import get_level_map
+from retro_ai.training.yeti_map import build_navigation_map, get_level_map
 
 FONT = "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono-Bold.ttf"
 SURFACE_DY = 18  # standing_y -> visible floor surface
@@ -44,6 +62,8 @@ MAND = (255, 40, 40)
 OPT = (250, 220, 70)
 FRUIT = (255, 80, 220)
 PRINCESS = (80, 240, 240)
+GNODE = (195, 165, 255)  # nav-graph node: what the REWARD measures distance to
+GEDGE = (145, 115, 240)  # the graph's own jump edge, node -> node
 
 
 def _font(size):
@@ -70,7 +90,7 @@ def _dashed(d, p0, p1, colour, width=2, dash=9, gap=6):
         )
 
 
-def draw(level, frame_path, out_path, scale=5):
+def draw(level, frame_path, out_path, scale=5, nodes=True):
     lvl = get_level_map(level)
     wps = yeti.waypoints(level)
     targets = {t.id: t for t in build_targets(level)}
@@ -144,6 +164,50 @@ def draw(level, frame_path, out_path, scale=5):
             stroke_fill=(0, 0, 0),
         )
 
+    # nav-graph nodes, drawn ON the surface line so they never sit on top of a
+    # waypoint marker (which is drawn at the sprite centre). A 4 px offset between
+    # a node and its waypoint is then 4*scale px apart and actually visible.
+    n_nodes = 0
+    if nodes:
+        nav = build_navigation_map(level)
+        by_ident = {n.ident: n for n in nav.nodes}
+        # The graph's OWN edges, between node positions. Compare against the orange
+        # dashed edge above, which is drawn between the waypoint positions.
+        for a, b in lvl.jump_edges:
+            na, nb = by_ident.get(f"J{a}_{b}_a"), by_ident.get(f"J{a}_{b}_b")
+            if na and nb:
+                _dashed(
+                    d,
+                    P(na.x, lvl.floor_top_y[na.floor] + SURFACE_DY),
+                    P(nb.x, lvl.floor_top_y[nb.floor] + SURFACE_DY),
+                    GEDGE,
+                    width=max(1, scale // 3),
+                    dash=4,
+                    gap=5,
+                )
+        rn = max(3, int(scale * 0.9))
+        for n in sorted(nav.nodes, key=lambda n: (n.floor, n.x)):
+            cx, cy = P(n.x, lvl.floor_top_y[n.floor] + SURFACE_DY)
+            d.polygon(
+                [(cx, cy - rn), (cx + rn, cy), (cx, cy + rn), (cx - rn, cy)],
+                fill=GNODE,
+                outline=(0, 0, 0),
+            )
+            n_nodes += 1
+            # Label the JUMP nodes only. Ladder/fruit/princess nodes coincide with a
+            # marker that is already labelled, so naming them again just adds clutter;
+            # the jump nodes are the ones with no other label on the map, and they are
+            # the ones whose placement rule differs from the waypoint's.
+            if n.kind == "jump":
+                d.text(
+                    (cx + rn + 1, cy + 1),
+                    n.ident,
+                    fill=GNODE,
+                    font=f_small,
+                    stroke_width=2,
+                    stroke_fill=(0, 0, 0),
+                )
+
     # fruit + princess
     for fid, (fx, fy) in lvl.fruit_centre_px.items():
         cx, cy = P(fx, fy + CENTRE_DY)
@@ -176,6 +240,7 @@ def draw(level, frame_path, out_path, scale=5):
         ("optional waypoint (^ = launch)", OPT),
         ("fruit", FRUIT),
         ("princess", PRINCESS),
+        ("nav-graph node (what the REWARD aims at)", GNODE),
     ]
     x = pad_l + 4
     for text, colour in legend:
@@ -183,7 +248,7 @@ def draw(level, frame_path, out_path, scale=5):
         d.text((x + 16, 11), text, fill=(230, 230, 230), font=f_small)
         x += 18 + int(len(text) * (3 * scale) * 0.62)
     canvas.save(out_path)
-    return out_path, len(wps), len(mand_wp)
+    return out_path, len(wps), len(mand_wp), n_nodes
 
 
 def main() -> None:
@@ -192,9 +257,16 @@ def main() -> None:
     ap.add_argument("--frame", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--scale", type=int, default=5)
+    ap.add_argument(
+        "--no-nodes",
+        action="store_true",
+        help="omit the nav-graph nodes (restores the pre-2026-09-24 drawing)",
+    )
     args = ap.parse_args()
-    path, n, m = draw(args.level, args.frame, args.out, args.scale)
-    print(f"wrote {path}  ({n} waypoints, {m} mandatory)")
+    path, n, m, g = draw(
+        args.level, args.frame, args.out, args.scale, nodes=not args.no_nodes
+    )
+    print(f"wrote {path}  ({n} waypoints, {m} mandatory, {g} graph nodes)")
 
 
 if __name__ == "__main__":
