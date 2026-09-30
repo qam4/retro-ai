@@ -1,0 +1,251 @@
+# ============================================================================
+# v28{a,b,c} — THREE REPLICATES OF ONE CONFIG. A MEASUREMENT, NOT A LEVER TEST.
+#
+# Byte-identical to v24's yaml except `training.output`. Same parent
+# (v23/final_model.zip), same `resume_pools: empty.pkl`, same `seed: 42`, run on
+# the same clean HEAD. Nothing is being varied on purpose.
+#
+# WHY. This project has never measured the run-to-run spread of a run mean at a
+# FIXED config, and every comparison it has made depends on that number. Five 6M
+# runs (~15h) were spent attributing a gap that may be inside it. Measured on the
+# four runs that share v24's parent and seed, mean_rung over all evals:
+#
+#     v24 5.65   v25 4.54   v26 4.38   v27 4.32
+#
+# and split into halves, the three low runs are low at different times and in
+# different directions:
+#
+#     run   levers                0-3M   3-6M   delta
+#     v24   none (control)        5.75   5.54   -0.21
+#     v25   SP + edge_inset=4     3.78   5.31   +1.53
+#     v26   SP alone              5.44   3.32   -2.12
+#     v27   SP + reach-universe   4.15   4.49   +0.33
+#
+# v26 swings 2.12 rungs between its own halves while the gap under investigation
+# is 1.24. A cause common to all three arms -- which `rewards.SURFACE_POSES`
+# is -- cannot produce three different trajectories. So the gap is not attributed
+# and cannot be until the spread is known.
+#
+# METRIC, FIXED BEFORE THE RUNS: `mean_rung` averaged over ALL referee evals. NOT
+# the "mean Low2_launch rate", which scores a collapsed eval as 0 and so mixes how
+# often the frontier got there with the rate once it did (v24: 0.857 and 0.407;
+# v26: 0.633 and 0.330). NOT the champion's headline, which is a max over ~60
+# noisy draws and measured 0.967 against 0.85 +-0.04 on a 300-episode recheck.
+#
+# DECISION RULE, ALSO FIXED FIRST. HEAD's default gate is v26's semantics, so
+# these three are replicates of v26, not of v24:
+#
+#   * if the three span both v26's 4.38 and v24's 5.65, the five-run readout is
+#     inside the noise, SURFACE_POSES is exonerated with no arm of its own, and
+#     the spread becomes the threshold every future L4 comparison is judged against.
+#   * if all three land near 4.38, the gap is real, and the next run is v24's gate
+#     restored via `reward.params.surface_pose_ids: [0, 1, 2, 3, 4, 5, 8]`.
+#
+# One thing that will NOT be settled either way: v24 is a single run, and it is
+# the only one of the four that held steady across its halves. These replicates
+# bound v26's config, not v24's.
+#
+# The original v24 header follows unchanged.
+# ============================================================================
+# v24 — 6M, seed 42. Warm POLICY from v23, and NO inherited seeds.
+#
+# WHAT IT TESTS: whether `Low2` -- the rope-2 landing, empty for the life of this level --
+# fills from our own captures once capture works.
+#
+# THE BUG IT FOLLOWS. Waypoint capture required the agent to be grounded AND within reach
+# of the anchor in the SAME frame, while the FRUIT path has always deferred the save to
+# the next grounded frame. `Low2`'s anchor is px 128 and floor 13's extent is [0..128),
+# so the anchor is off the platform and NO standable position reaches it: the nearest is
+# px 120, 8 px away, and the sprite reaches 6 px right of centre. Measured on a real
+# crossing, `Low2` registers for 5 frames MID-FLIGHT at px 124-132 and the agent then
+# lands a few pixels past it, so nothing was ever saved. `Rope1` escapes by luck -- its
+# anchor is 4 px inside floor 7, and exactly one standable spot (px 112) reaches it.
+# v4 banked ONE `Low2` state ever; v13 grew it to 11 by re-capturing from that one.
+#
+# TWO CODE CHANGES ride in this run, both in train_checkpoint_curriculum.py:
+#   * waypoint capture defers to the next grounded frame, like fruits
+#   * a rung is a GROUP, so the `Low2`/`Lhi_down_bot` OR pair and the graph aliases stop
+#     double-counting. L4 drops from 13 rungs to 12, so every reach index shifts and
+#     reach numbers are NOT comparable with v21/v23 column by column.
+#
+# WHY NO SEEDS. 140 of 1790 inherited seeds (8%) sit where today's sprite test rejects
+# them, concentrated exactly where it matters: all 70 of Hi5, all 3 of Hi1_launch, 10 of
+# the 11 Low2, 12 of Lhi_down_bot. They were captured under v13's BOX geometry with the
+# jump tolerance of 6. Rung renumbering makes the old `reached` sets misleading too.
+#
+# READ IT ON, in this order:
+#   1. does `Low2_launch` refill? if not, the chain never got that far and the run says
+#      nothing about rope 2
+#   2. does `Low2` fill? if yes, capture was the blocker
+#   3. if `Low2_launch` refills and `Low2` stays empty, crossings do not happen even from
+#      a pad seed, and the release is the problem
+#
+# NOT A ONE-LEVER RUN, stated plainly: two code changes plus the empty pools. v23 is not
+# a control for it. It is a diagnostic, and what it measures is a pool count, not a score.
+#
+# --- inherited from v23 (unchanged) --------------------------------------------------
+# v23's lever was `carry_pose_bonus: 1.0` on pose 15, kept here.
+#
+# THE QUESTION. Rope 2 is an EXPECTED-VALUE problem, not an exploration one. Measured on
+# the `Low2_launch` pad with l4_pad_reward.py, through the trainer's own reward:
+#
+#   hold still                                    0.000
+#   walk LEFT off the edge                       +0.075   CERTAIN
+#   jump and miss the rope                        0.000
+#   completed crossing (NOOP:20,JUMP_LEFT:70)    +2.940   median 2.920, n=6
+#
+# A crossing already pays 39x the cliff-walk, but ATTEMPTING it is worth ~1% x 2.940 =
+# +0.029 expected against a certain +0.075, and the whole +2.94 arrives on landing. The
+# agent is taking the better bet. This puts +1.0 on the attempt itself:
+#
+#   walk off the edge      +0.075
+#   grab and fail          +1.000   13x the cliff-walk -> the choice flips
+#   complete the crossing  +3.940   4x a grab          -> finishing still dominates
+#
+# WHY NOT +10 (proposed first): 3.4x the entire value of the crossing and 1.5x a median
+# episode, i.e. it would say touching the rope matters more than what touching it
+# achieves. Full derivation in level4_notes.md "ROPE 2 IS AN EXPECTED-VALUE PROBLEM".
+#
+# CONTROL ARM: v21. Verified by diffing the parsed YAML -- only `carry_pose_bonus`,
+# `carry_pose_ids` and `output` differ, so `ent_coef: 0.01` and the warm start from v13's
+# final_model are held fixed.
+#
+# READ IT ON: `Low2` reach (0/300 for the life of this level), pose-15 frequency, and
+# `Low2_launch` prog, which has been exactly 0.00 in every run so far.
+#
+# THE RISK, on the record: the term fires on an event the policy currently produces in
+# roughly 0 of 400 episodes, so it may be too weak a signal to bootstrap. If nothing
+# moves, the next lever is the MAGNITUDE, not the mechanism.
+#
+# --- inherited from v21 (unchanged) --------------------------------------------------
+# v21's own lever was `ent_coef` 0.02 -> 0.01, kept here at 0.01.
+#
+# THE QUESTION v21 ASKED. Entropy measured on a fixed observation batch
+# (scripts/mo5/yeti/diag/policy_health.py, joystick [3,3,2], max 2.8904 nats):
+#
+#   L1 yeti_curriculum_v15_phase2            princess 0.998    H  2.0 - 6.0% of max
+#   L2 yeti_curriculum_l2_v10_deferfruit_10m princess 0.993    H  6.0 - 16.6%
+#   L3 yeti_curriculum_l3_v15_gatewp_15m     princess 0.953    H 52.6 - 63.1%
+#   L4 v18 (this run's parent config)        princess 0.000    H 52.5 - 64.5%
+#   L4 v16c cold                             princess 0.000    H 71.8 - 89.8%
+#   L4 v19 n_steps 16                        princess 0.000    H   24 - 32%
+#
+# The two levels finished RELIABLY run committed policies near zero entropy, and both
+# used `ent_coef: 0.01`. All 49 L4 runs to date used 0.02 and none has gone below ~52%
+# except v19, which committed inside 1M steps to a route worth nothing. L4's wall is a
+# transition needing an 8-step approach executed inside a 10-frame window on floor 11 —
+# precision a 60%-entropy policy cannot deliver even when it knows the route.
+#
+# NOT CLAIMED: that low entropy CAUSES finishing. A policy that found a reliable route
+# sharpens on its own, so the correlation above is compatible with entropy being the
+# signature of success rather than its cause. What argues against pure readout: v16c at
+# its peak reach10 of 0.77 sits at 72% while v18 at the same reach10 sits at 64%, and v19
+# reached 24% having found nothing. This run is the test.
+#
+# CONTROL ARM: v18's own snapshots from 0 to 6M. Nothing else in this file differs from
+# yeti_curriculum_l4_v18_warm_v13_15m.yaml except `ent_coef`, `timesteps` and `output`,
+# and truncating the budget is safe to compare against because nothing here is scheduled
+# on training progress — `learning_rate` and `clip_range` are passed to PPO as plain
+# floats (train_checkpoint_curriculum.py, the PPO(...) call), so 6M is v18's first 6M
+# with one coefficient changed.
+#
+# WHY NOT ALSO `target_kl: 0.05`. The L1/L2 winners set both, and no L4 run has ever set
+# target_kl to 0.05. It is a second lever and gets its own run (step 1b of the plan in
+# experiments/003-yeti-training.md), because with both moved a null result would be
+# unattributable — the mistake level4_notes.md's RUN PROTOCOL exists to prevent.
+#
+# WHY v13's final_model, NOT v18's. Two reasons. It keeps the warm-start SOURCE identical
+# to v18's, which is what makes v18 a control rather than a loose comparison. And
+# level4_notes.md records "DO NOT WARM-START FROM A CHAMPION" with a measured control arm
+# behind it (A0: starting policy 9.55 -> 1.20 -> 2.43 -> 7.53 -> 1.03 within 1M), so
+# v18's 900k champion is exactly the wrong thing to continue from.
+#
+# STOP RULE: entropy below 30% of max by 2M. Still above 50% at 2M means the coefficient
+# alone is not enough — kill the run and build the entropy controller (plan step 3)
+# rather than paying for the remaining 4M.
+#
+# READ IT ON, judged over the snapshot DISTRIBUTION and not the final model or the
+# champion: entropy trajectory via policy_health.py; `Low1` at or above v18's 0.743; and
+# whether anything appears past floor 12 (`Low2_launch` onward), which no L4 run has done.
+
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v28a_v24repeat_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 100_000
+  route_table_freq_steps: 50_000
+  # v13's weights AND v13's pools (checkpoints.pkl is loaded from dirname(resume)) —
+  # byte-identical to v18's warm start.
+  resume: output/mo5/yeti/training/yeti_curriculum_l4_v23_ropebonus_warm_v13_6m/final_model.zip
+  # NO INHERITED SEEDS. Points at a deliberately empty pool file so the policy comes
+  # across warm while every pool rebuilds from this run's own captures. Reasons: 140 of
+  # 1790 inherited seeds (8%) sit at positions today's sprite test rejects -- including
+  # ALL of Hi5 and Hi1_launch and 10 of the 11 Low2 states, captured under v13's box
+  # geometry with the jump tolerance of 6 -- and rung numbering has changed, so a rung
+  # recorded in an old seed no longer means the same thing.
+  resume_pools: output/mo5/yeti/pools/empty.pkl
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+    # THE LEVER vs v21. Flat +1.0, once per episode, for the leftward rope carry
+    # (pose 15) -- the manoeuvre rope 2 is made of. Derivation in level4_notes.md
+    # "ROPE 2 IS AN EXPECTED-VALUE PROBLEM": walking off the edge banks +0.075 CERTAIN
+    # while attempting the rope is ~1%% x 2.940 = +0.029 expected and 0.000 on a miss,
+    # so the agent correctly takes the worse outcome. +1.0 flips that (13x the
+    # cliff-walk) and still leaves a completed crossing worth 4x a grab (+3.94).
+    carry_pose_bonus: 1.0
+    carry_pose_ids: [15]
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  # THE LEVER. v18 used 0.02, as did every other L4 run. Both reliably-finished levels
+  # used 0.01.
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
