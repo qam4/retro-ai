@@ -121,8 +121,27 @@ def _native_info() -> Dict[str, Any]:
     return info
 
 
-def _git_info() -> Dict[str, Any]:
-    """Capture git SHA, dirty flag, and branch. Best-effort, never raises."""
+def _git_info(dump_dir: Optional[str] = None) -> Dict[str, Any]:
+    """Capture git SHA, dirty flag, branch, and the uncommitted diff.
+
+    Best-effort, never raises.
+
+    WHY THE DIFF IS CAPTURED, not just the flag. A SHA plus ``dirty: true`` does not
+    identify the code a run used, and that is not a theoretical gap: L4's v24, v25, v26
+    and v27 -- four 6M runs, ~12h of compute, and the whole five-run readout the rope-2
+    work rests on -- ALL recorded commit b6cba78 with ``dirty: true``. Their sources are
+    not recoverable, so the difference between them cannot be established from the
+    artefacts, and a day went into arguing about which lever moved a 1.2-rung gap that
+    nothing on disk can attribute. Writing ``run_dirty.patch`` beside ``env.json``
+    makes a dirty run reconstructible with ``git apply``.
+
+    LIMIT, and it matters: ``git diff HEAD`` covers tracked files only. An UNTRACKED
+    new module is invisible to it, so untracked PATHS are listed separately and their
+    contents are deliberately NOT captured -- dumping arbitrary untracked files into a
+    run directory is how secrets and unrelated work in progress escape. A run with
+    untracked python under ``python/`` or ``scripts/`` is still not fully
+    reproducible, and ``untracked`` is there so you can see that rather than assume it.
+    """
     info: Dict[str, Any] = {
         "commit": None,
         "dirty": None,
@@ -141,6 +160,41 @@ def _git_info() -> Dict[str, Any]:
         info["dirty"] = bool(status.strip())
     except Exception:
         pass
+    if info["dirty"]:
+        try:
+            info["untracked"] = sorted(
+                p
+                for p in subprocess.check_output(
+                    ["git", "ls-files", "--others", "--exclude-standard"],
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                ).splitlines()
+                if p.strip()
+            )
+        except Exception:
+            pass
+        try:
+            diff = subprocess.check_output(
+                ["git", "diff", "HEAD"], stderr=subprocess.DEVNULL, text=True
+            )
+            info["diff_bytes"] = len(diff.encode("utf-8", "replace"))
+            info["diff_sha256"] = hashlib.sha256(
+                diff.encode("utf-8", "replace")
+            ).hexdigest()
+            if dump_dir and diff:
+                path = os.path.join(dump_dir, "run_dirty.patch")
+                with open(path, "w") as fh:
+                    fh.write(diff)
+                info["diff_file"] = "run_dirty.patch"
+            sys.stderr.write(
+                f"WARNING: launching from a DIRTY tree at {info['commit'][:9]}. "
+                f"{info.get('diff_bytes', 0)} bytes of tracked changes saved to "
+                f"{info.get('diff_file', '<not written>')}; "
+                f"{len(info.get('untracked') or ())} untracked path(s) recorded by "
+                "name only, so their contents are NOT reproducible.\n"
+            )
+        except Exception:
+            pass
     try:
         info["branch"] = subprocess.check_output(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -276,7 +330,9 @@ class RunManifest:
             ),
             "finished_at": None,
             "wall_clock_sec": None,
-            "git": _git_info(),
+            # Dumps `run_dirty.patch` beside this file when the tree is dirty, so a
+            # run launched from uncommitted work stays reconstructible. See _git_info.
+            "git": _git_info(dump_dir=self.output_dir),
             # Which EMULATOR produced these numbers. The git SHA cannot answer
             # that: the native module is unversioned and may be stale or ahead of
             # HEAD. See _native_info.

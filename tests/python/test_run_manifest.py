@@ -314,3 +314,81 @@ def test_manifest_records_native_alongside_git(tmp_path):
     env = json.loads((tmp_path / "env.json").read_text())
     assert "git" in env and "native" in env
     assert set(env["native"]) == {"path", "sha256", "size", "mtime"}
+
+
+def test_git_info_dumps_the_diff_when_dirty(tmp_path, monkeypatch):
+    """A SHA plus ``dirty: true`` does not identify the code a run used.
+
+    L4's v24, v25, v26 and v27 -- four 6M runs and the readout the rope-2 work rests on --
+    ALL recorded commit b6cba78 with ``dirty: true``, so they cannot be told apart from
+    their artefacts and a 1.2-rung gap between them cannot be attributed to any lever.
+    This pins the patch dump that makes a dirty run reconstructible, and the untracked
+    list that states what the patch CANNOT cover.
+    """
+    import subprocess as sp
+
+    from retro_ai.training.run_manifest import _git_info
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args):
+        sp.check_call(
+            ["git", "-C", str(repo), "-c", "commit.gpgsign=false", *args],
+            stdout=sp.DEVNULL,
+            stderr=sp.DEVNULL,
+        )
+
+    git("init", "-q")
+    (repo / "tracked.py").write_text("x = 1\n")
+    git("add", "tracked.py")
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "init")
+
+    (repo / "tracked.py").write_text("x = 2\n")
+    (repo / "untracked.py").write_text("secret = 3\n")
+
+    monkeypatch.chdir(repo)
+    out = tmp_path / "out"
+    out.mkdir()
+    info = _git_info(dump_dir=str(out))
+
+    assert info["dirty"] is True
+    assert info["diff_file"] == "run_dirty.patch"
+    patch = (out / "run_dirty.patch").read_text()
+    assert "tracked.py" in patch and "x = 2" in patch
+    assert info["diff_bytes"] == len(patch.encode())
+    assert info["untracked"] == ["untracked.py"]
+    # Untracked CONTENTS are deliberately not captured: dumping arbitrary untracked
+    # files into a run directory is how secrets and unrelated work in progress escape.
+    assert "secret = 3" not in patch
+
+
+def test_git_info_on_a_clean_tree_writes_no_patch(tmp_path, monkeypatch):
+    """The dump must be inert when there is nothing uncommitted."""
+    import subprocess as sp
+
+    from retro_ai.training.run_manifest import _git_info
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args):
+        sp.check_call(
+            ["git", "-C", str(repo), "-c", "commit.gpgsign=false", *args],
+            stdout=sp.DEVNULL,
+            stderr=sp.DEVNULL,
+        )
+
+    git("init", "-q")
+    (repo / "tracked.py").write_text("x = 1\n")
+    git("add", "tracked.py")
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "init")
+
+    monkeypatch.chdir(repo)
+    out = tmp_path / "out"
+    out.mkdir()
+    info = _git_info(dump_dir=str(out))
+
+    assert info["dirty"] is False
+    assert "diff_file" not in info
+    assert not list(out.iterdir())
