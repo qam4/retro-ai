@@ -1123,10 +1123,31 @@ def _fruit_bonus_path_progress_pbrs_grounded(params: Mapping[str, Any]) -> Rewar
     carry_bonus = float(params.get("carry_pose_bonus", 0.0))
     carry_poses = frozenset(int(p) for p in (params.get("carry_pose_ids") or (15,)))
     segment_shaping = bool(params.get("ladder_segment_shaping", False))
+    # Which poses count as ON A SURFACE for the shaping gate. Defaults to the module
+    # constant, so every existing config stays byte-identical.
+    #
+    # WHY IT IS A PARAM. The constant gained the leftward-walk poses 6 and 7 on
+    # 2026-09-24 (see SURFACE_POSES above), and the three 6M runs carrying that change
+    # read mean_rung 4.32-4.54 against the 5.65 of v24, the last run without it. v24
+    # CANNOT BE RE-RUN to check that: it and v25/v26/v27 all recorded commit b6cba78
+    # with `dirty: true`, so the code each used is not recoverable from git. Setting
+    # `surface_pose_ids: [0, 1, 2, 3, 4, 5, 8]` is the only way to put v24's gate back,
+    # and it makes that arm reproducible from data instead of from a git checkout --
+    # the same reason `mark_airborne` and `LEVEL4.edge_inset` are still here.
+    #
+    # NOT A RECOMMENDATION. Poses 6 and 7 are measurably grounded (100% of their frames
+    # sit on a floor's standing y), so the default is the correct set. This exists to
+    # ATTRIBUTE the drop, and the attribution is still open: on 12 replayed episodes the
+    # two sets give identical undiscounted totals but differ on 59 of 6475 steps, moving
+    # the gamma-0.99 return by +0.2% -- not inert, and not enough to explain 1.2 rungs.
+    # test_reward_surface_pose_ids_selects_the_gate pins the knob.
+    _base_surf = frozenset(
+        int(p) for p in (params.get("surface_pose_ids") or SURFACE_POSES)
+    )
     # When segment shaping is on, the escalator RIDE pose (13) is a controlled
     # vertical traversal, not a fall, so it counts as on-surface (un-frozen) so
     # the descent can be shaped. Off => shipped surface set (byte-identical).
-    _surf = (SURFACE_POSES | {13}) if segment_shaping else SURFACE_POSES
+    _surf = (_base_surf | {13}) if segment_shaping else _base_surf
     _WP_UNREACHABLE = 10**8  # path_distance sentinel is 10^9; treat >= as unreachable
     _lvl_map = get_level_map(level)
     _wp_nav = build_navigation_map(level)

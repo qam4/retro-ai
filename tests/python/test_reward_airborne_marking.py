@@ -303,3 +303,49 @@ def test_airborne_frames_still_pay_nothing_with_the_flag_on():
     fn(_ctx(F7_A, ROPE1_Y, WALK_RIGHT, step=1))
     r = fn(_ctx(ROPE1_X, ROPE1_Y, JUMP_RIGHT, step=2))
     assert r == 0.0, f"an airborne frame paid {r}; shaping must stay frozen"
+
+
+def test_reward_surface_pose_ids_selects_the_gate():
+    """v24's shaping gate must be reachable from a CONFIG, not a git checkout.
+
+    v24 is the last 6M L4 run whose gate lacked the leftward-walk poses 6 and 7, and
+    the three runs that carry them read mean_rung 4.32-4.54 against v24's 5.65. v24
+    cannot be re-run to attribute that: it and v25/v26/v27 all recorded commit b6cba78
+    with ``dirty: true``, so the source each used is not recoverable from git. Setting
+    ``surface_pose_ids`` is the only way to put that arm back, hence this test.
+
+    Pose 6 is the discriminator: grounded under the shipped set, airborne under v24's,
+    so the same leftward step is credited by one gate and frozen by the other.
+    """
+
+    def _pay(**over):
+        fn = _fresh(**over)
+        # Settle a baseline on a frame both sets call grounded, then take a leftward
+        # walk step, which is where the two sets disagree.
+        fn(_ctx(ROPE1_X + 8, ROPE1_Y, WALK_RIGHT, step=1))
+        return fn(_ctx(ROPE1_X + 2, ROPE1_Y, 6, step=2))
+
+    shipped = _pay()
+    legacy = _pay(surface_pose_ids=[0, 1, 2, 3, 4, 5, 8])
+    assert (
+        legacy == 0.0
+    ), f"under v24's gate a pose-6 frame is airborne and must be frozen, paid {legacy}"
+    assert shipped != legacy, (
+        "surface_pose_ids did not change the gate -- the v24 control arm is "
+        "unreproducible again"
+    )
+
+
+def test_reward_surface_pose_ids_default_is_the_module_constant():
+    """Omitting the param must be byte-identical to the shipped gate.
+
+    The knob exists to preserve an old arm, so it must not perturb the current one.
+    Every existing config omits it.
+    """
+    xs = [ROPE1_X + 8, ROPE1_X + 6, ROPE1_X + 4, ROPE1_X + 2]
+
+    def _run(**over):
+        fn = _fresh(**over)
+        return [fn(_ctx(x, ROPE1_Y, 6, step=i + 1)) for i, x in enumerate(xs)]
+
+    assert _run() == _run(surface_pose_ids=sorted(rw.SURFACE_POSES))
