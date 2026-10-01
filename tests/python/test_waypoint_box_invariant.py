@@ -120,11 +120,25 @@ def test_floor12_anchors_are_inside_the_MEASURED_usable_span():
     (0/8, both approach directions), so the right end is 224. This test exists because
     two anchors sat outside the span for weeks: `Low2_launch` on px 184 (which poisoned
     81 of its 100 seeds) and `Low1` on px 232 (which happened to be harmless).
+
+    Falls back to the ANCHOR SOURCE for a waypoint that is no longer emitted.
+    `Low2_launch` joined `jump_waypoint_skip` on 2026-10-01, to train the rope-2 crossing
+    from `Low1` instead, so it is gone from `yeti.waypoints(4)`. The skip is a curriculum
+    decision while this guard is about the MEASUREMENT, which outlives it -- reading only
+    the emitted set would have let the guard vanish silently with the waypoint.
     """
     lo, hi = 188, 224
+    emitted = yeti.waypoints(4)
+    lvl = get_level_map(4)
+    skipped = set(lvl.jump_waypoint_skip or ())
     for wid in ("Low2_launch", "Low1"):
-        x, _y, floor = yeti.waypoints(4)[wid]
-        assert floor == 12
+        if wid in emitted:
+            x, _y, floor = emitted[wid]
+            assert floor == 12, f"{wid} is on floor {floor}, not 12"
+        else:
+            assert wid in skipped, f"{wid} is neither emitted nor deliberately skipped"
+            x, y = lvl.jump_waypoint_pos[wid]
+            assert y == lvl.floor_top_y[12], f"{wid} anchor y {y} is not floor 12's"
         px = x * 4 + 8
         assert (
             lo <= px <= hi
@@ -141,11 +155,17 @@ def test_ladder_boxes_stay_inside_their_platform():
 
 
 def test_jump_boxes_DO_overflow_and_that_is_intended():
-    """Recorded, not deplored. 21 of 30 L4 boxes reach outside the standable span, and
-    all 21 are jump waypoints. Making this number 0 is what broke the level."""
+    """Recorded, not deplored. 20 of 29 L4 boxes reach outside the standable span, and
+    all 20 are jump waypoints. Making this number 0 is what broke the level.
+
+    Was 21 of 30 until 2026-10-01, when `Low2_launch` joined `jump_waypoint_skip`. The
+    count is a census of the current universe, not an invariant -- it is here so that a
+    change in WHICH boxes overflow has to be acknowledged, and dropping a waypoint is an
+    acknowledged change.
+    """
     bad = [w for w, _t, lo, hi, (slo, shi), _j in _boxes(4) if lo < slo or hi > shi]
     jump = set(jump_waypoints(get_level_map(4)))
-    assert len(bad) == 21
+    assert len(bad) == 20
     assert set(bad) <= jump
 
 

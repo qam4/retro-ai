@@ -595,7 +595,13 @@ LEVEL4 = LevelMap(
         "Step",
         "Lclimb3_top",
         "Low1",
-        "Low2_launch",
+        # `Low2_launch` was here until 2026-10-01, when it joined jump_waypoint_skip.
+        # It MUST go when the waypoint goes: with `gate_waypoints_by_predecessor`, a
+        # listed point that is never emitted gets no `wp_reach_ema` row, reads 0.0, and
+        # so refuses its SUCCESSOR as a start state forever. Leaving it would have made
+        # `Low2` -- the rope-2 landing, the pool this change exists to fill --
+        # permanently unseedable, the `F1` defect over again. `Low2`'s predecessor is
+        # now `Low1`, on the same platform, which is emitted and healthy.
         "Low2",
         "Lhi_up_top",
         "Hi1_launch",
@@ -829,7 +835,58 @@ LEVEL4 = LevelMap(
     #   Step_launch    floor 9  -> Spring marks fine there
     #   Low1_launch    floor 11 -> Lclimb3_top is exact; the launch pad's tol-6 box
     #                             also caught the y82 ladder stall 24 px away
-    jump_waypoint_skip=["Spring_launch", "Step_launch", "Low1_launch"],
+    #   Low2_launch    floor 12 -> Low1 is on the SAME platform (anchor px 224) and
+    #                             marks correctly. Added 2026-10-01; this one is a
+    #                             LEVER, not a tidy-up, see below.
+    #
+    # WHY Low2_launch GOES (2026-10-01). Its pool is mostly states you cannot play from.
+    # Measured with `pool_revalidate.py --only Low2_launch --window 30` on v23's pool,
+    # applying the `admit_requires_grounded` criterion:
+    #
+    #     Low2_launch  100 -> 39   dropped 61   died_in_window 0
+    #        dropped by px {184: 60, 188: 1}    end_pose {17: 61}
+    #
+    # 60 of the 100 sit on px 184, which dies at step 82 from rest under a NOOP hold
+    # (px 188 and 192 survive 120+). `died_in_window 0` is why the survival gate never
+    # caught them: the spring below the gap keeps every one alive past
+    # `min_survival_steps` 30, and they end the window in pose 17, the trampoline rise.
+    # So the pool meant to
+    # teach the rope-2 crossing has been teaching the fall-bounce loop.
+    #
+    # AND THE CROSSING IS EXECUTABLE FROM `Low1` INSTEAD: 26 of 136 scripted plans cross
+    # from a px-220 `Low1` seed -- run-up 11..13 left steps to px 188/192, then wait
+    # 16..24, then hold jump-left. (`Low1`'s pool is healthy: 95 of 100 seeds at px 220,
+    # on safe ground.) An earlier sweep recorded 0 crossings from `Low1` and that number
+    # is retracted -- it swept run-up length but not PHASE, and its N=0..14 could not
+    # reach px 188 anyway: the leftward walk cycle stalls, so 12 steps are needed.
+    #
+    # ALSO REMOVED FROM `route_order`, AND IT HAS TO BE. The first attempt kept the
+    # entry, to preserve champion-score comparability: depth is
+    # `(index + 1) / len(route_order)` in `keep_best_sweep`, so changing the length
+    # rescales every stored score. `test_route_order_matches_the_waypoint_universe`
+    # rejected that, correctly. With `gate_waypoints_by_predecessor` a listed point that
+    # is never emitted gets no `wp_reach_ema` row, reads 0.0, and refuses its SUCCESSOR
+    # forever -- so `Low2`, the rope-2 landing and the pool this whole change exists to
+    # fill, would have been permanently unseedable. That is the `F1` defect again.
+    #
+    # The price is real but small: champion `score` is not comparable across this commit
+    # (denominator 30 -> 29). Cross-run comparison here uses `mean_rung` and the
+    # frontier rate, not `score`, and `score` only picks the best snapshot WITHIN a run.
+    #
+    # The `jump_waypoint_pos` entry above does stay: the skip loop pops before the
+    # override loop, which is guarded by `if nm in out`, so it is inert, and the anchor
+    # is measured data worth keeping.
+    #
+    # CONTROL ARM: v28a/b/c at commit 723993e -- three replicates of the otherwise
+    # identical config, `mean_rung` 3.998 / 5.009 / 4.782. Judge this on whether `Low2`
+    # reach leaves 0.000, which it has been in all seven runs to date (~420 evals); do
+    # NOT judge it on a `mean_rung` shift, which needs 3 runs an arm to see 1.2 rungs.
+    jump_waypoint_skip=[
+        "Spring_launch",
+        "Step_launch",
+        "Low1_launch",
+        "Low2_launch",
+    ],
     # 0 = nodes stay ON the tile edge. MEASURED HARMFUL AT 4, DO NOT RAISE IT.
     #
     # The idea was that a node on the tile edge aims the potential at a pixel the agent
