@@ -138,3 +138,73 @@ labelled one-lever while carrying a whole refactor, and cost 6h of
 unattributable compute. When two things did move, run the baseline's semantics
 forward on current code first (a ~600k control is enough to answer
 "did we break it", never "did it help").
+
+## Trusting a number
+
+Confidence comes from averaging independent samples, and there are two levels of
+it. Both were ignored for five 6M runs (~15h) spent explaining a difference that
+was inside the error bars.
+
+**Judging one model — the samples are EPISODES.** The evaluator prints the 95%
+half-width next to every rate. At the default 30 episodes a rate near 0.5 is
+known to only **±0.17**:
+
+| rate | n=30 | n=100 | n=300 |
+|---|---|---|---|
+| 0.20 | ±0.14 | ±0.08 | ±0.05 |
+| 0.50 | ±0.17 | ±0.10 | ±0.06 |
+| 0.70 | ±0.16 | ±0.09 | ±0.05 |
+
+**Comparing two configs — the samples are RUNS, and the spread is MEASURED.**
+Three 6M replicates of one L4 config (identical yaml but the output dir, same
+parent, same empty pools, same `seed: 42`, same commit) gave:
+
+| metric | the three runs | sd | range |
+|---|---|---|---|
+| `mean_rung` | 3.998, 5.009, 4.782 | 0.530 | 1.011 |
+| headline frontier rate | 0.149, 0.219, 0.239 | 0.047 | 0.090 |
+
+So **two single runs cannot resolve a difference below 1.47 rungs or 0.131**, and
+3 runs per arm detects 1.21 rungs / 0.108. Minimum 3 runs per arm, or do not
+claim an effect. Five 6M runs (~15h) were spent attributing a gap of 1.24 rungs /
+0.129 — at the resolution floor, so unanswerable by construction.
+
+An earlier version of this section asserted the same 0.13 threshold but derived
+it from how much a single run wanders between its own 1.2M blocks. That is the
+wrong reference distribution for a difference of run means, the rule got
+retracted on that basis, and the measurement then vindicated the number. Keep the
+threshold; it now rests on the three runs above, not on that argument.
+
+**Do not read a run's own halves as signal.** Those three replicates swing −1.58,
++1.61 and +1.61 rungs between their first and second 3M. Slicing ONE run into
+chunks measures the same experiment repeatedly, not independent experiments. Runs
+are not reproducible even at a fixed seed (8 subprocess envs), so a genuine
+repeat is a genuine replicate.
+
+**The exception worth exploiting.** When an arm's readout is a quantity pinned at
+exactly 0 across every run so far, one run IS informative, because the null is
+"never happened". Spend replicates on mean shifts; spend single runs on
+does-this-ever-happen.
+
+**A champion's headline number is inflated.** We keep the best of ~60 snapshots
+scored on 30 episodes each, so the winner is partly the one that got lucky.
+Measured: v23's champion was selected at 0.967 and re-measures at **0.85 ±0.04**
+on 300 episodes. Re-measure a champion before quoting it, and assume every
+champion figure in older notes is high by ~0.1.
+
+## Do not gate a training run on "no improvement"
+
+Measured across five 6M runs, the gaps between successive new-bests (in 100k
+units) are `1 1 1 1 1 1 1 1 1 2 2 3 3 3 4 4 5 5 8 26 32 41`. Median 2.5, tail to
+**41 — 4.1M steps of nothing, then an improvement.** Three of the five runs found
+their champion after a dry spell of 2.6M+.
+
+So a safe patience exceeds ~45 evals, which on a 6M budget leaves nothing worth
+saving. `on_regression: stop` at the default patience 3 cut v25 off at 1.2M with
+a champion of 0.533; the same config run to 6M reached **0.700 at 5.7M**. Keep it
+off for training. It stays in the code as the control arm for the unbuilt
+`revert` variant, not as something to enable.
+
+A dry spell is indistinguishable from convergence until it ends, so for training:
+run to budget and keep the best. Stopping rules belong on EXPERIMENTS, where you
+want an average and extra steps on one seed buy almost nothing.

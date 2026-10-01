@@ -2669,7 +2669,10 @@ of three times — deposits the agent 16 px short of being credited for it, and 
 `Low2` after walking right. That is a reward-side problem, independent of pools and
 independent of the launch pixel, and it has not been acted on.
 
-## v25's "REGRESSION": RE-DERIVED 2026-09-29, AND STILL OPEN
+## v25's "REGRESSION": RE-DERIVED 2026-09-29 — CLOSED 2026-10-01, IT WAS NOISE
+
+(Heading amended. It read "AND STILL OPEN" for one day. The three replicates in the
+next section settle it: the gap is below what the design could resolve. Read both.)
 
 Earlier in this session the v24-vs-v25 gap was declared to be inside the noise. **That
 verdict is retracted.** It compared a difference of RUN MEANS against the within-run
@@ -2717,3 +2720,63 @@ so v24 is the only run with this parent that lacks the change — group "without
 only thing that separates them is replicates at fixed config: the same yaml at two or three
 different seeds, both with and without the change. That has not been run, and until it is,
 no attribution of the 0.129 to any lever is supportable.
+
+## THE RUN-TO-RUN SPREAD, MEASURED AT LAST (2026-10-01) — AND v25 CLOSED
+
+Three replicates of ONE config: v24's yaml with only `training.output` changed, same
+parent, same `empty.pkl` pools, same `seed: 42`, same commit 723993e, run sequentially
+on one machine. Verified identical by parsing all four configs and comparing the
+dataclasses. ~2.83h each, 60 snapshots each, referee at n=30, all six phases exit 0.
+
+```
+run    config                mean_rung   0-3M   3-6M   headline   princess
+v28a   REPLICATE                 3.998   4.79   3.21      0.149      0.000
+v28b   REPLICATE                 5.009   4.20   5.81      0.219      0.000
+v28c   REPLICATE                 4.782   3.98   5.59      0.239      0.000
+                        sd 0.530, range 1.011        sd 0.047, range 0.090
+
+v24    control, old gate         5.651   5.75   5.54      0.349      0.000
+v25    SP + edge_inset=4         4.543   3.78   5.31      0.195      0.000
+v26    SP alone                  4.378   5.44   3.32      0.209      0.000
+v27    SP + reach-universe       4.322   4.15   4.49      0.223      0.000
+```
+
+**Three identical runs span 1.011 rungs.** That is the number this project never had and
+every comparison in it depended on. Consequences, all arithmetic from the sd above:
+
+```
+                                        mean_rung    headline
+two SINGLE runs can resolve nothing below   1.470       0.131
+3 runs/arm detects (80% power)              1.213       0.108
+```
+
+The gap that five 6M runs were spent on is **1.24 rungs / 0.129 headline**. Both sit at
+or below the resolution of the design that produced them. v25, v26 and v27 land within
+0.52 sd of the replicate mean -- indistinguishable from draws of the same config. So
+there was never a v25 regression to find, and `rewards.SURFACE_POSES` is not implicated.
+
+**The half-run split was also noise.** v26's -2.12 and v25's +1.53 were read in this
+file as evidence that no common cause could explain all three arms. The replicates swing
+-1.58, +1.61, +1.61 on the same config. A run's own halves carry no signal; do not
+compare them.
+
+**What is NOT settled.** v24 is the highest of all seven, +1.99 sd on `mean_rung` and
++3.09 sd on headline. With n=3 the prediction interval for one new run is too wide to
+exclude it, so "v24 was a high draw" and "v24's gate is genuinely better" both survive.
+Deciding it needs 3 runs with `reward.params.surface_pose_ids: [0,1,2,3,4,5,8]`, ~9h,
+and that is not worth it ahead of rope 2: princess is 0.000 in all seven runs.
+
+**A retraction I got wrong in both directions.** The steering rule "with one run per side
+ignore any difference under ~0.13" was derived from within-run block wander, which is the
+wrong reference distribution. I retracted the rule on that basis. The measured resolution
+for two single runs is **0.131**. The number was right and the reasoning was not; the
+correct response to an unsupported derivation is to go and measure it, not to discard the
+conclusion. It now rests on these three runs.
+
+### Operating rule for every future L4 comparison
+
+Minimum 3 runs per arm. A single run per arm answers nothing about any lever whose effect
+is under ~1.2 rungs. Where an arm's readout is a quantity pinned at exactly 0 -- `Low2`
+reach, princess -- a single run IS informative, because the null is "never happened in
+420 evals across seven runs"; use that asymmetry rather than paying for replicates to
+detect a mean shift nobody needs.
