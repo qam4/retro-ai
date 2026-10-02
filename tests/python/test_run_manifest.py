@@ -354,7 +354,9 @@ def test_git_info_dumps_the_diff_when_dirty(tmp_path, monkeypatch):
 
     assert info["dirty"] is True
     assert info["diff_file"] == "run_dirty.patch"
-    patch = (out / "run_dirty.patch").read_text()
+    # Read back with the SAME encoding and no newline translation the writer used, so
+    # this assertion means "the bytes round-tripped" on Windows as well as here.
+    patch = (out / "run_dirty.patch").read_text(encoding="utf-8")
     assert "tracked.py" in patch and "x = 2" in patch
     assert info["diff_bytes"] == len(patch.encode())
     assert info["untracked"] == ["untracked.py"]

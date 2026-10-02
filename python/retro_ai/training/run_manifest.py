@@ -183,7 +183,12 @@ def _git_info(dump_dir: Optional[str] = None) -> Dict[str, Any]:
             ).hexdigest()
             if dump_dir and diff:
                 path = os.path.join(dump_dir, "run_dirty.patch")
-                with open(path, "w") as fh:
+                # utf-8 and newline="" on purpose: the default encoding is cp1252 on
+                # Windows, which raises on a diff containing any non-latin-1 byte, and
+                # the default newline translation would rewrite LF to CRLF and make the
+                # file disagree with `diff_bytes` and `diff_sha256`. A patch has to come
+                # back out byte-identical or `git apply` is not guaranteed to take it.
+                with open(path, "w", encoding="utf-8", newline="") as fh:
                     fh.write(diff)
                 info["diff_file"] = "run_dirty.patch"
             sys.stderr.write(
