@@ -14,6 +14,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
+RESIZE_MODES = frozenset({"nearest", "max"})
+
 
 class PreprocessingPipeline:
     """Apply preprocessing transformations to observations.
@@ -24,8 +26,19 @@ class PreprocessingPipeline:
         Convert RGB (H, W, 3) frames to grayscale (H, W, 1) using the
         luminance formula 0.299×R + 0.587×G + 0.114×B.
     resize : tuple of (int, int) or None
-        Target ``(height, width)`` for nearest-neighbour resizing.
-        ``None`` keeps the original dimensions.
+        Target ``(height, width)``. ``None`` keeps the original dimensions.
+    resize_mode : {"nearest", "max"}
+        How ``resize`` shrinks a frame. ``"nearest"`` (default, unchanged
+        behaviour) keeps ONE source pixel per output pixel. ``"max"`` keeps the
+        brightest pixel of the same block, so a feature one source pixel wide
+        survives wherever it crosses the block. Measured on Yeti L4: shrinking
+        320x200 to 84x84 with ``"nearest"`` keeps 0-4 pixels of rope 2 and in
+        some frames none at all, so the swinging rope the crossing must be timed
+        on can vanish from the observation; ``"max"`` keeps 12-15 every frame.
+        Changing it changes ~14% of every frame (all bright edges grow by up to
+        a pixel), and a policy trained under one mode does not survive the other:
+        the L4 v29 champion goes from mean rung 8.17 to 0.02. Train and evaluate
+        with the SAME mode.
     frame_stack : int
         Number of consecutive frames to stack along the channel axis.
         A value of 1 disables stacking.
@@ -44,14 +57,21 @@ class PreprocessingPipeline:
         augmentation: bool = False,
         aug_pad: int = 4,
         aug_jitter: int = 10,
+        resize_mode: str = "nearest",
     ) -> None:
         if not (1 <= frame_skip <= 16):
             raise ValueError(
                 f"frame_skip must be between 1 and 16 inclusive, got {frame_skip}"
             )
+        if resize_mode not in RESIZE_MODES:
+            raise ValueError(
+                f"resize_mode must be one of {sorted(RESIZE_MODES)}, "
+                f"got {resize_mode!r}"
+            )
 
         self.grayscale = grayscale
         self.resize = resize  # (target_height, target_width)
+        self.resize_mode = resize_mode
         self.frame_stack = frame_stack
         self.frame_skip = frame_skip
         self.crop = crop  # (y, x, height, width) — applied before grayscale/resize
@@ -135,13 +155,23 @@ class PreprocessingPipeline:
             gray = 0.299 * frame[..., 0] + 0.587 * frame[..., 1] + 0.114 * frame[..., 2]
             frame = np.expand_dims(gray.astype(np.uint8), axis=-1)
 
-        # Nearest-neighbour resize using pure NumPy  (Req 18.2)
+        # Resize using pure NumPy  (Req 18.2). Both modes use the SAME blocks:
+        # output pixel (i, j) covers source rows [i*sh//th, (i+1)*sh//th) and
+        # columns [j*sw//tw, (j+1)*sw//tw). "nearest" keeps the block's first
+        # pixel; "max" keeps its brightest. See ``resize_mode`` in the class doc.
         if self.resize is not None:
             target_h, target_w = self.resize
             src_h, src_w = frame.shape[0], frame.shape[1]
             row_idx = (np.arange(target_h) * src_h // target_h).astype(int)
             col_idx = (np.arange(target_w) * src_w // target_w).astype(int)
-            frame = frame[np.ix_(row_idx, col_idx)]
+            if self.resize_mode == "max" and src_h >= target_h and src_w >= target_w:
+                frame = np.maximum.reduceat(
+                    np.maximum.reduceat(frame, row_idx, axis=0), col_idx, axis=1
+                )
+            else:
+                # Upscaling has blocks of zero or one source pixel, where the two
+                # modes coincide; reduceat would mis-handle repeated indices.
+                frame = frame[np.ix_(row_idx, col_idx)]
 
         # Data augmentation (Req 13.4 — after grayscale/resize, before stacking)
         if self.augmentation:
@@ -256,13 +286,21 @@ class PreprocessedEnv:
         shape = None
         if p.frame_buffer is not None and len(p.frame_buffer) > 0:
             shape = tuple(p.frame_buffer[0].shape)
-        return (
+        sig = (
             bool(p.grayscale),
             tuple(p.resize) if p.resize else None,
             int(p.frame_stack),
             tuple(p.crop) if p.crop else None,
             shape,
         )
+        # A stack resized one way must not be restored into a pipeline that resizes
+        # the other way: same shape, different pixels. Appended ONLY for a
+        # non-default mode, so every existing pool's stored signature still matches
+        # a default pipeline and nothing already captured is silently re-seeded.
+        mode = getattr(p, "resize_mode", "nearest")
+        if mode != "nearest":
+            sig = sig + (("resize_mode", mode),)
+        return sig
 
     def export_frame_stack(self) -> Optional[Dict[str, Any]]:
         """Snapshot the current (processed) frame stack for save-stating.

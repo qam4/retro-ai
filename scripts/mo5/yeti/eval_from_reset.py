@@ -73,6 +73,15 @@ def main() -> None:
     )
     p.add_argument("--waypoint-tolerance", type=int, default=2)
     p.add_argument("--jump-waypoint-tolerance", type=int, default=6)
+    p.add_argument(
+        "--resize-mode",
+        default="nearest",
+        choices=["nearest", "max"],
+        help="MUST match the mode the model was trained with (env.resize_mode). A "
+        "mismatch does not error, it just scores the policy on a picture it never saw: "
+        "the L4 v29 champion reads mean rung 8.17 under its own mode and 0.02 under "
+        "the other.",
+    )
     args = p.parse_args()
 
     deterministic = not args.stochastic
@@ -89,6 +98,7 @@ def main() -> None:
         max_steps=args.max_steps,
         stall_threshold=args.stall_threshold,
         resize=(84, 84),
+        resize_mode=args.resize_mode,
     )
     stack = build_training_env(args.profile, env_cfg)
 

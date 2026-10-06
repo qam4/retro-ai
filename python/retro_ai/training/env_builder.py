@@ -92,6 +92,7 @@ def build_training_env(profile_name: str, env_cfg: EnvConfig) -> TrainingEnvStac
         frame_skip=(
             env_cfg.frame_skip if env_cfg.frame_skip is not None else profile.frame_skip
         ),
+        resize_mode=getattr(env_cfg, "resize_mode", "nearest"),
     )
     preprocessed = PreprocessedEnv(
         base,

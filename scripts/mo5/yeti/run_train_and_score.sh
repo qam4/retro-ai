@@ -37,8 +37,14 @@ for CFG in "$@"; do
 from retro_ai.training.run_config import RunConfig
 print(RunConfig.from_yaml('$CFG').training.output)
 ")
-  if [ -z "$OUT" ]; then
-    echo "========== COULD NOT READ output FROM $CFG -- skipped"
+  # The referee must see the SAME picture training did. Read from the config, not
+  # passed in, for the same reason as OUT: so the two cannot disagree.
+  RESIZE_MODE=$(python3 -c "
+from retro_ai.training.run_config import RunConfig
+print(RunConfig.from_yaml('$CFG').env.resize_mode)
+")
+  if [ -z "$OUT" ] || [ -z "$RESIZE_MODE" ]; then
+    echo "========== COULD NOT READ output/resize_mode FROM $CFG -- skipped"
     continue
   fi
 
@@ -46,9 +52,10 @@ print(RunConfig.from_yaml('$CFG').training.output)
   python3 -u scripts/mo5/yeti/train_checkpoint_curriculum.py --config "$CFG"
   echo "========== $CFG TRAIN EXIT $? $(date -Is)"
 
-  echo "========== $CFG REFEREE START $(date -Is)"
+  echo "========== $CFG REFEREE START $(date -Is)   resize_mode=$RESIZE_MODE"
   python3 -u scripts/mo5/yeti/keep_best_sweep.py \
     --snapshots-dir "${OUT}/snapshots" \
+    --resize-mode "$RESIZE_MODE" \
     --episodes 30 \
     --device cpu \
     --level 4 \

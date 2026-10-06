@@ -124,6 +124,14 @@ class EnvConfig:
     # `2b0a45d` blocker in TODO.md). Cropping changes the observation geometry,
     # so a policy trained with one crop cannot be evaluated with another.
     crop: Optional[Tuple[int, int, int, int]] = None
+    # How ``resize`` shrinks a frame: "nearest" (default, unchanged) or "max". See
+    # PreprocessingPipeline. "max" exists because "nearest" drops one-pixel-wide
+    # features -- L4's rope 2 keeps 0-4 pixels and sometimes none, so the agent cannot
+    # see the swing it must time its jump on. Like ``crop``, it changes the observation:
+    # the L4 v29 champion scores mean rung 8.17 under "nearest" and 0.02 under "max", so
+    # a policy must be trained AND evaluated under the same mode. The referee
+    # (keep_best_sweep -> eval_from_reset) takes it as `--resize-mode`.
+    resize_mode: str = "nearest"
 
 
 @dataclass(frozen=True)

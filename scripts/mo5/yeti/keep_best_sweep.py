@@ -96,6 +96,7 @@ def _eval_snapshot(
     stall_threshold,
     max_steps,
     level=None,
+    resize_mode="nearest",
 ):
     """Run eval_from_reset.py in a subprocess; return (princess, reach_top, mean_rung,
     n_rungs).
@@ -141,6 +142,9 @@ def _eval_snapshot(
         cmd += ["--level", str(level)]
     if start_state:
         cmd += ["--start-state", start_state]
+    # Only passed when non-default, so the command for every existing run is unchanged.
+    if resize_mode != "nearest":
+        cmd += ["--resize-mode", resize_mode]
     env = dict(os.environ)
     if device == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""
@@ -250,6 +254,14 @@ def main() -> None:
     p.add_argument("--stall-threshold", type=int, default=15)
     p.add_argument("--max-steps", type=int, default=1000)
     p.add_argument(
+        "--resize-mode",
+        default="nearest",
+        choices=["nearest", "max"],
+        help="forwarded to eval_from_reset. MUST match the run's env.resize_mode: a "
+        "mismatch scores every snapshot on a picture it was never trained on, and "
+        "nothing errors (the L4 v29 champion reads mean rung 8.17 vs 0.02).",
+    )
+    p.add_argument(
         "--level-route",
         type=int,
         default=None,
@@ -322,6 +334,7 @@ def main() -> None:
                     stall_threshold=args.stall_threshold,
                     max_steps=args.max_steps,
                     level=args.level,
+                    resize_mode=args.resize_mode,
                 )
             except Exception as e:
                 print(f"[keep-best] {name}: eval FAILED ({e})", flush=True)
@@ -482,6 +495,11 @@ def main() -> None:
         print(
             f"  python scripts/mo5/yeti/eval_from_reset.py --model "
             f"{os.path.join(best_dir, 'best_model.zip')} --episodes 300 --stochastic"
+            + (
+                f" --resize-mode {args.resize_mode}"
+                if args.resize_mode != "nearest"
+                else ""
+            )
         )
     else:
         print("No snapshots evaluated.")
