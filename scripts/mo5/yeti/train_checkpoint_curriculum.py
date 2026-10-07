@@ -2205,45 +2205,15 @@ def _progress_ladder(cfg):
     the reward cannot disagree about what one step is. Targets the reward does
     not group -- the fruits, which are paid by the fruit term -- each become a
     group of one.
+
+    The implementation now lives in `retro_ai.training.targets.progress_ladder`, so
+    the eval rollout counts rungs the same way. It used to be defined only here,
+    and the rollout counted ids: when an agent first crossed rope 2, every princess
+    episode in eval read 13 of 13 while this ladder has 12 rungs.
     """
-    from retro_ai.training.targets import build_targets
-    from retro_ai.training.yeti_map import get_level_map
+    from retro_ai.training.targets import progress_ladder
 
-    level = _level_of(cfg)
-    targets = [t for t in build_targets(level) if t.mandatory and t.kind != "princess"]
-
-    # Alias -> canonical, so a group can be found by either name a target has.
-    groups: list = []
-    claimed: set = set()
-    try:
-        reward_groups = get_level_map(level).reward_waypoints or []
-    except (ValueError, KeyError):
-        reward_groups = []
-    by_any_name = {}
-    for t in targets:
-        by_any_name[t.id] = t
-        if t.node_ident:
-            by_any_name[t.node_ident] = t
-    for members in reward_groups:
-        names: set = set()
-        for ident in members:
-            t = by_any_name.get(ident)
-            if t is None:
-                continue
-            names.add(t.id)
-            if t.node_ident:
-                names.add(t.node_ident)
-        if names:
-            groups.append(frozenset(names))
-            claimed |= names
-    # Anything mandatory the reward does not group (the fruits) is its own rung.
-    for t in targets:
-        if t.id in claimed:
-            continue
-        names = {t.id} | ({t.node_ident} if t.node_ident else set())
-        groups.append(frozenset(names))
-        claimed |= names
-    return groups, len(groups)
+    return progress_ladder(_level_of(cfg))
 
 
 def _route_order_for(cfg) -> list:

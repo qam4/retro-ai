@@ -335,12 +335,80 @@ def targets_by_id(level: int = 1) -> Dict[str, Target]:
     return {t.id: t for t in build_targets(level)}
 
 
+def progress_ladder(level: int = 1) -> Tuple[List[frozenset], int]:
+    """``(mandatory_groups, n_rungs)`` — the progress ladder for ``level``.
+
+    THE one definition of "how far along the route is this", shared by the curriculum
+    trainer (``_progress_ladder``) and the eval rollout so they cannot disagree. It used
+    to live only in the trainer, and the rollout counted mandatory IDS instead: when an
+    agent finally crossed L4's rope 2, every princess episode read 13 of 13, because the
+    crossing flies over BOTH members of the floor-13 OR-group, while the trainer had 12.
+
+    A rung is one STEP of the route, satisfied by ANY member of a group. Most groups
+    hold one target; a group holds several when the level offers alternative ways to
+    make the same step, plus the graph alias a jump landing carries (the curriculum
+    calls it "A1", the nav graph calls the same point "J10_11_b", and a seed may record
+    either). Counting ids instead double-counts both, and both were live on L4::
+
+        reached Low2 (low route to floor 13)          -> rung 11   correct
+        reached Lhi_down_bot (high route, same floor) -> rung 11   correct
+        reached BOTH                                  -> rung 12   WRONG
+        reached Low2 and its own alias J12_13_b       -> rung 12   WRONG
+
+    The grouping is the level map's own ``reward_waypoints``, so the curriculum, the
+    eval and the reward cannot disagree about what one step is. Mandatory targets the
+    reward does not group -- the fruits, paid by the fruit term -- each become a group
+    of one. The princess is the terminal, not a rung.
+    """
+    from retro_ai.training.yeti_map import get_level_map
+
+    targets = [t for t in build_targets(level) if t.mandatory and t.kind != "princess"]
+    groups: List[frozenset] = []
+    claimed: set = set()
+    try:
+        reward_groups = get_level_map(level).reward_waypoints or []
+    except (ValueError, KeyError):
+        reward_groups = []
+    by_any_name = {}
+    for t in targets:
+        by_any_name[t.id] = t
+        if t.node_ident:
+            by_any_name[t.node_ident] = t
+    for members in reward_groups:
+        names: set = set()
+        for ident in members:
+            t = by_any_name.get(ident)
+            if t is None:
+                continue
+            names.add(t.id)
+            if t.node_ident:
+                names.add(t.node_ident)
+        if names:
+            groups.append(frozenset(names))
+            claimed |= names
+    for t in targets:
+        if t.id in claimed:
+            continue
+        names = {t.id} | ({t.node_ident} if t.node_ident else set())
+        groups.append(frozenset(names))
+        claimed |= names
+    return groups, len(groups)
+
+
+def rung_of(groups, reached) -> int:
+    """How many of ``groups`` (from :func:`progress_ladder`) ``reached`` satisfies."""
+    got = set(reached or ())
+    return sum(1 for g in groups if got & g)
+
+
 __all__ = [
     "SPRITE_H",
     "SPRITE_W",
     "Target",
     "build_targets",
+    "progress_ladder",
     "reaches",
+    "rung_of",
     "sprite_overlaps",
     "targets_by_id",
     "within_tol",

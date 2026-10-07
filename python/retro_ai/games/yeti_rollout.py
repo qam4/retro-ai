@@ -180,10 +180,18 @@ def rollout_episode(
         raise ValueError(f"reach_mode must be 'box' or 'sprite', got {reach_mode!r}")
     wps: dict = {}
     tol_of: dict = {}
-    mandatory_ids: set = set()
+    # The trainer's progress ladder, from the SAME function (targets.progress_ladder):
+    # one rung per route STEP, satisfied by any member of its group. This counted
+    # mandatory IDS until 2026-10-07, so reaching both members of an OR-group, or a
+    # target under both its names, scored two rungs for one step. On L4 that was
+    # invisible until rope 2 was crossed: the crossing flies over both `Low2` (px 128)
+    # and `Lhi_down_bot` (px 104), and every princess episode read 13 of 13 against
+    # the trainer's 12-rung ladder. `n_rungs` is the ladder's length, so L4 reports
+    # /12 from that date on, where earlier evals said /13.
+    ladder_groups: list = []
     n_rungs = 0
     if track_waypoints:
-        from retro_ai.training.targets import build_targets
+        from retro_ai.training.targets import progress_ladder
         from retro_ai.training.yeti_map import get_level_map, jump_waypoints
 
         wps = dict(yeti.waypoints(level))
@@ -192,14 +200,7 @@ def rollout_episode(
         except (ValueError, KeyError):
             jump_ids = set()
         tol_of = {w: (wp_jump_tol if w in jump_ids else wp_tol) for w in wps}
-        _mand = [
-            t for t in build_targets(level) if t.mandatory and t.kind != "princess"
-        ]
-        for t in _mand:
-            mandatory_ids.add(t.id)
-            if t.node_ident:
-                mandatory_ids.add(t.node_ident)  # graph alias counts the same
-        n_rungs = len(_mand)
+        ladder_groups, n_rungs = progress_ladder(level)
     seed_poses = frozenset(yeti.SURFACE_POSES | {13})
     reached_points: set = set()
     fruit_addrs = yeti.fruit_presence_addrs(level) if track_waypoints else {}
@@ -311,7 +312,12 @@ def rollout_episode(
         for fid, addr in fruit_addrs.items():
             if iface.read_ram_byte(addr) == 0:
                 reached_points.add(f"F{fid}")
-    max_rung = len(reached_points & mandatory_ids) if track_waypoints else 0
+    if track_waypoints:
+        from retro_ai.training.targets import rung_of
+
+        max_rung = rung_of(ladder_groups, reached_points)
+    else:
+        max_rung = 0
     return EpisodeResult(
         length=steps,
         end_reason=end_reason,

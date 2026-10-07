@@ -2924,11 +2924,15 @@ date exactly (`test_box_mode_is_identical_to_the_old_rollout_rule`), and
 Re-measured, v30 champion, 30 episodes, sprite: princess 24/30, `Low2` **0.80** (was
 0.01), and `Low2` recorded in 24 of the 24 princess episodes.
 
-**What the fix exposes, not fixed here.** Those 24 princess episodes now read `max_rung`
-**13/13**, not 12. Sprite overlap counts the flight over BOTH members of the OR-group
-`[J12_13_b, Lhi_down_bot]` (anchors px 128 and px 104), and the rollout's `max_rung`
-counts mandatory IDS, not satisfied groups — the wart already recorded beside
-`reward_waypoints` in `yeti_map.py`. The trainer counts groups since `ded0032`; the
-rollout does not. So eval mean rung now reads one rung HIGH on a crossing episode,
-relative to group counting. Mean rung from before and after this fix is not comparable
-on any run that crosses rope 2.
+**What that fix exposed — also FIXED 2026-10-07.** With sprite overlap, those 24 princess
+episodes read `max_rung` **13/13**: the flight crosses BOTH members of the OR-group
+`[J12_13_b, Lhi_down_bot]` (anchors px 128 and px 104), and the rollout counted mandatory
+IDS while the trainer has counted satisfied groups since `ded0032`. The trainer's ladder
+now lives in `targets.progress_ladder` (verified identical for levels 1–4 before the
+move), the trainer delegates to it and the rollout uses it. Re-measured, 30 episodes:
+`n_rungs` **12**, and all 24 princess episodes read **12/12**.
+
+Comparability: L4 eval rung figures now read `/12` where older evals said `/13`, and a
+run that crosses rope 2 reads one rung lower than under the id count. Runs that never
+reach floor 13 score the same rung either way (`test_ids_and_groups_agree_...`); only the
+denominator, and so the referee's tiny `depth` tie-break term, moves.
