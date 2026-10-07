@@ -2399,6 +2399,13 @@ v18 inherits that irreproducibility.
 
 ## ROPE 2 IS AN EXPECTED-VALUE PROBLEM, AND THAT IS WHERE +1.0 COMES FROM (2026-09-22)
 
+> **SUPERSEDED 2026-10-07 — read "v30" at the end of this file first.** The diagnosis
+> below is that rope 2 is a reward problem. It was not the binding constraint: the agent
+> could not SEE the rope (a nearest-neighbour resize drops it), and changing only the
+> resize took a cold run from 0 princess touches to 0.69 of from-reset episodes, with
+> this section's +1.0 carry bonus unchanged. The pad-reward measurements here are still
+> correct; the conclusion drawn from them is not.
+
 DECIDED: pay **+1.0, once per episode, for the rope carry (pose 15)**. NOT YET
 IMPLEMENTED. This section is the derivation, so the number can be argued with instead of
 re-guessed.
@@ -2613,6 +2620,11 @@ mechanism, from per-step traces (`.kiro/tmp/rope_trace.py`):
 
 ### What actually blocks rope 2 is the DEPARTURE PIXEL, not the phase
 
+> **SUPERSEDED 2026-10-07 — see "v30" at the end of this file.** The px-184 measurements
+> below stand (it is lethal from rest and crosses 0 of 34 waits), but it was not what
+> blocked the crossing. Once the agent could see the rope, ~95% of episodes that reached
+> the pad crossed, with the departure geometry and the pool logic unchanged.
+
 Same sweep, per departure px, waits 0..33 (a full period), one seed each:
 
 ```
@@ -2780,3 +2792,124 @@ is under ~1.2 rungs. Where an arm's readout is a quantity pinned at exactly 0 --
 reach, princess -- a single run IS informative, because the null is "never happened in
 420 evals across seven runs"; use that asymmetry rather than paying for replicates to
 detect a mean shift nobody needs.
+
+## v30 (2026-10-07): ROPE 2 BROKEN — THE AGENT COULD NOT SEE THE ROPE
+
+**Result.** One lever, `env.resize_mode: max`, cold, 15M, seed 42, commit `f7d2d43`, clean
+tree. The champion (13.25M) reaches the princess in **208 of 300** stochastic from-reset
+episodes, **0.69** (95% Wilson interval 0.64–0.74), measured with
+`eval_from_reset.py --episodes 300 --stochastic --resize-mode max`. Before this, princess
+was 0.000 in every eval of every L4 run, v23 to v29.
+
+```
+from-reset reach, v30 champion, n=300
+Lfruit_top 0.99   Rope1 0.83   Lclimb3_top 0.74   Low1 0.73   Lprincess_top 0.69
+princess 0.69     (all 208 via rope 2; 0 touched Lhi_up_top or any Hi point)
+```
+
+About 95% of episodes that reach the rope-2 pad go on to touch the princess (0.69 of
+0.73). Rope 2 is no longer the wall; the remaining losses are upstream, mostly rope 1
+and the climb after it.
+
+The referee's own number for this champion was 0.80 on 30 episodes. The 300-episode
+figure is ~0.1 lower, the same selection inflation measured on v23 (0.967 -> 0.85).
+
+### How the run went
+
+Referee, 60 snapshots, every one scored with `--resize-mode max`:
+
+```
+frontier counts      Lprincess_top 37, Step 8, Lfruit_bot 4, Lhi_down_bot 4, Low1 3, other 4
+princess, mean over all 60 evals (unselected)   0.22    max 0.80
+frontier at Low1 or deeper                      0/4 evals per 1M block until 3M,
+                                                3-4 of 4 in every block after
+pools at the end                                Low1, Low2, Lhi_down_bot, Lprincess_top
+                                                all 100 seeds
+```
+
+Training episodes: 20,075 from reset, of which 4,333 reached `Low2` (21.6%) and 3,320
+touched the princess, the first at step 4.35M. Every one of the 3,320 passed through
+`Low2`. For comparison v29, warm on the old resize, reached `Low2` in 1 of 7,442
+from-reset episodes. Genuine `Low2` crossings (episodes not seeded at `Low2`): 14,166,
+against 3–7 per 6M run before.
+
+### Why: the observation dropped the rope
+
+Rope 2 is a one-pixel-wide pure-red line (RGB 255,0,0, measured in the raw frame).
+`preprocessing.py` does two things to it:
+
+* grayscale by luminance, `0.299R + 0.587G + 0.114B`, turns pure red into **76**, the
+  darkest colour on L4's screen (green platforms 149, yellow ladders 225, white 255;
+  those exact values are what the policy's input contains in the gap);
+* the 320x200 -> 84x84 resize was nearest-neighbour, keeping one source pixel per output
+  pixel (about 1 column in 4, 1 row in 2.4). A one-pixel line mostly falls between the
+  kept pixels. Measured over 20 frames across the route: the rope keeps **0–4** pixels,
+  and in some frames none at all.
+
+And position alone does not say "jump now": wait 0 misses and wait 16 crosses, with a
+near-vertical rope in both. The cue is the direction of swing, which the policy could only
+read from how a few dim, intermittent dots moved across its 4 stacked frames. Block-max
+keeps the brightest pixel of each block instead, and keeps **12–15** rope pixels in every
+frame. The rope stays dim (76); only the resize changed.
+
+Figures, in `experiments/003-yeti/evidence/l4_v30_rope_visibility/`:
+`rope2_agent_view.png` (raw frame vs the policy's input across one swing),
+`rope2_resize_closeup.png` (raw / nearest / block-max, same crop),
+`rope2_resize_fullscreen.png` (whole screen, and the 14% of input pixels that change).
+The whole-screen figure shows rope 1 is invisible in the old view too, consistent with
+rope 1 being crossed because the ladder delivers the agent in phase, not by sight.
+
+Side finding from the frames: the rope-2 gap holds ONE rope. The two catch positions
+(px 168 and px 132, both y 62) are that rope at two points of its swing, which settles the
+"two ropes or one rope at two phases" question left open above.
+
+### Why it had to be a cold run
+
+Block-max changes ~14% of every input pixel, not just the rope: every bright edge grows
+by up to a pixel, ladders lose their rungs, the HUD text merges. Measured, the v29
+champion from reset, 60 episodes each way: mean rung **8.17** under nearest, **0.02**
+under block-max (`Lfruit_top` 1.00 -> 0.00). No existing L4 policy survives the change.
+A policy must be trained AND evaluated under the same `resize_mode`; nothing errors on a
+mismatch, it just reads as a total collapse.
+
+### Attribution, and the one gap in it
+
+Three earlier cold 15M L4 runs, all under the nearest resize, never touched the princess:
+
+```
+                    resize    episodes reaching Low2   princess touched
+v16c cold 15M       nearest           39                      0
+v17  cold 15M       nearest           29                      0
+v19  cold 15M       nearest            0                      0
+v30  cold 15M       max           14,166 (genuine)        11,783
+```
+
+So a cold start alone did not do it. Those three ran on older commits, though, so the
+one combination not yet run is cold + nearest on today's code. That control (~9h) is the
+only thing between "the resize did it" and certainty.
+
+### What this overturns, and what it doesn't
+
+Overturned: rope 2 as a reward problem (the 2026-09-22 expected-value section) and as a
+departure-pixel problem (2026-09-29). Both measured real things — the pad's shaping does
+pay +0.12 per step toward the lethal px 184, made of three unreached targets each closing
+4 px times `scale` 0.01 — but neither was what stopped the crossing. v30 crossed with the
+reward, the pad geometry and the pool logic all unchanged.
+
+Measured on the way there, 2026-10-01 to 10-06, with the old view, and still true of it:
+77% of `Low1`-start episodes ended in the spring pit, in episodes a median 97 steps long
+whose fatal step is around step 13; the v29 champion's argmax policy touched the rope in
+0 of 105 phase-shifted attempts, its stochastic policy in 3 of 105 (4 of 88 in a second
+sample), and none of those grabs converted; the crossing needs jump-left
+held for at least 26 steps; and both catch positions are genuine decision points (from the
+second catch, 2 held steps land). All of that describes an agent acting on a rope it
+could not see.
+
+### Known evaluator defect this exposed
+
+`eval_from_reset` reads `Low2` at **0.01** for this champion while training saw it at
+21.6%. The evaluator still decides reach with the old box test (`within_tol` in
+`yeti_rollout.py`, about px 104–152 around `Low2`), and the crossing lands at px 88 and
+walks LEFT to the princess, so it never enters the box. Training uses sprite overlap. The
+princess count is a RAM flag and unaffected, but the evaluator's mean rung reads one rung
+low on every crossing episode. Not yet fixed.
