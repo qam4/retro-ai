@@ -2905,11 +2905,30 @@ held for at least 26 steps; and both catch positions are genuine decision points
 second catch, 2 held steps land). All of that describes an agent acting on a rope it
 could not see.
 
-### Known evaluator defect this exposed
+### Evaluator defect this exposed — FIXED 2026-10-07
 
-`eval_from_reset` reads `Low2` at **0.01** for this champion while training saw it at
-21.6%. The evaluator still decides reach with the old box test (`within_tol` in
-`yeti_rollout.py`, about px 104–152 around `Low2`), and the crossing lands at px 88 and
-walks LEFT to the princess, so it never enters the box. Training uses sprite overlap. The
-princess count is a RAM flag and unaffected, but the evaluator's mean rung reads one rung
-low on every crossing episode. Not yet fixed.
+`eval_from_reset` read `Low2` at **0.01** for this champion while training saw it at
+21.6%. The rollout (`yeti_rollout.py`) claimed to mirror the trainer's detection but used
+the box test with a grounded-only pose gate, while the trainer has used sprite overlap
+with a fail-open pose gate since `de21939`. The crossing FLIES over `Low2`'s anchor
+(px 128), lands at px 88 and walks left, so it was never grounded inside the box. The
+princess count is a RAM flag and was never affected.
+
+Fixed: the rollout now takes `reach_mode` (default `"sprite"`, the trainer's default),
+`eval_from_reset` and `keep_best_sweep` take `--reach-mode`, `run_train_and_score.sh`
+reads it from `curriculum.waypoint_reach_mode`, and the eval JSON records both
+`reach_mode` and `resize_mode`. `--reach-mode box` reproduces every eval made before this
+date exactly (`test_box_mode_is_identical_to_the_old_rollout_rule`), and
+`test_eval_default_matches_the_trainer_default` fails if the two defaults ever drift again.
+
+Re-measured, v30 champion, 30 episodes, sprite: princess 24/30, `Low2` **0.80** (was
+0.01), and `Low2` recorded in 24 of the 24 princess episodes.
+
+**What the fix exposes, not fixed here.** Those 24 princess episodes now read `max_rung`
+**13/13**, not 12. Sprite overlap counts the flight over BOTH members of the OR-group
+`[J12_13_b, Lhi_down_bot]` (anchors px 128 and px 104), and the rollout's `max_rung`
+counts mandatory IDS, not satisfied groups — the wart already recorded beside
+`reward_waypoints` in `yeti_map.py`. The trainer counts groups since `ded0032`; the
+rollout does not. So eval mean rung now reads one rung HIGH on a crossing episode,
+relative to group counting. Mean rung from before and after this fix is not comparable
+on any run that crosses rope 2.

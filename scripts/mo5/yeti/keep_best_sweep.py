@@ -97,6 +97,7 @@ def _eval_snapshot(
     max_steps,
     level=None,
     resize_mode="nearest",
+    reach_mode="sprite",
 ):
     """Run eval_from_reset.py in a subprocess; return (princess, reach_top, mean_rung,
     n_rungs).
@@ -145,6 +146,10 @@ def _eval_snapshot(
     # Only passed when non-default, so the command for every existing run is unchanged.
     if resize_mode != "nearest":
         cmd += ["--resize-mode", resize_mode]
+    # eval_from_reset's default is "sprite", the trainer's default; only "box" needs
+    # saying. Before 2026-10-07 eval ALWAYS used box, whatever the run trained with.
+    if reach_mode != "sprite":
+        cmd += ["--reach-mode", reach_mode]
     env = dict(os.environ)
     if device == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""
@@ -262,6 +267,15 @@ def main() -> None:
         "nothing errors (the L4 v29 champion reads mean rung 8.17 vs 0.02).",
     )
     p.add_argument(
+        "--reach-mode",
+        default="sprite",
+        choices=["box", "sprite"],
+        help="forwarded to eval_from_reset; MUST match the run's "
+        "curriculum.waypoint_reach_mode. The frontier and its rate are computed from "
+        "the reach test, so a mismatch moves both. 'box' reproduces referee scores "
+        "made before 2026-10-07.",
+    )
+    p.add_argument(
         "--level-route",
         type=int,
         default=None,
@@ -335,6 +349,7 @@ def main() -> None:
                     max_steps=args.max_steps,
                     level=args.level,
                     resize_mode=args.resize_mode,
+                    reach_mode=args.reach_mode,
                 )
             except Exception as e:
                 print(f"[keep-best] {name}: eval FAILED ({e})", flush=True)

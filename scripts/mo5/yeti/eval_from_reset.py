@@ -71,8 +71,27 @@ def main() -> None:
         "snapshots on a level where princess is uniformly 0 and the fruit count "
         "saturates.",
     )
-    p.add_argument("--waypoint-tolerance", type=int, default=2)
-    p.add_argument("--jump-waypoint-tolerance", type=int, default=6)
+    p.add_argument(
+        "--waypoint-tolerance",
+        type=int,
+        default=2,
+        help="ladder tolerance, used by --reach-mode box only",
+    )
+    p.add_argument(
+        "--jump-waypoint-tolerance",
+        type=int,
+        default=6,
+        help="jump-landing tolerance, used by --reach-mode box only",
+    )
+    p.add_argument(
+        "--reach-mode",
+        default="sprite",
+        choices=["box", "sprite"],
+        help="how a route point counts as reached. MUST match the run's "
+        "curriculum.waypoint_reach_mode (default sprite since de21939). 'box' is kept "
+        "to reproduce evals made before 2026-10-07, which used it whatever the run "
+        "trained with -- and so read L4's rope-2 landing as never reached.",
+    )
     p.add_argument(
         "--resize-mode",
         default="nearest",
@@ -129,6 +148,7 @@ def main() -> None:
             track_waypoints=track,
             wp_tol=args.waypoint_tolerance,
             wp_jump_tol=args.jump_waypoint_tolerance,
+            reach_mode=args.reach_mode,
         )
         max_cp_counts[result.max_cp] += 1
         rung_counts[result.max_rung] += 1
@@ -205,6 +225,10 @@ def main() -> None:
                     "rung_counts": dict(rung_counts),
                     "n_rungs": n_rungs,
                     "mean_rung": mean_rung,
+                    # How these numbers were measured. Both silently change every
+                    # route figure, and neither was recorded before 2026-10-07.
+                    "reach_mode": args.reach_mode,
+                    "resize_mode": args.resize_mode,
                     "rows": rows,
                 },
                 f,

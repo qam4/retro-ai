@@ -64,6 +64,43 @@ class EpisodeResult:
     cp_arrival: Dict[int, Tuple[int, int]] = field(default_factory=dict)
 
 
+def waypoint_frame_reaches(
+    pos: Tuple[int, int],
+    x_ram: int,
+    y_px: int,
+    pose: int,
+    tol: int,
+    mode: str,
+    seed_poses: Optional[frozenset] = None,
+) -> bool:
+    """Does this one frame count as reaching the waypoint at ``pos``?
+
+    The trainer's DETECTION rule, copied so eval and the route table agree
+    (train_checkpoint_curriculum.py, the `_pose_ok_detect` block in step()):
+
+    * ``"box"``    -- the agent must be on a surface (``seed_poses``: SURFACE_POSES
+      plus the L3 escalator ride) AND within ``tol`` of ``pos``.
+    * ``"sprite"`` -- any pose except fall / death (``yeti.NON_TRAVERSAL_POSES``) AND
+      the agent's sprite overlaps ``pos``; ``tol`` is ignored.
+
+    The two differ most on jump landings. A rope or jump crossing can fly over a
+    landing anchor and touch down beyond it -- L4's rope 2 does exactly that, landing
+    at px 88 past `Low2`'s px 128 -- which "sprite" counts and "box" never does.
+    """
+    from retro_ai.training.targets import reaches
+
+    if mode == "box":
+        gate = seed_poses if seed_poses is not None else (yeti.SURFACE_POSES | {13})
+        if pose not in gate:
+            return False
+    elif mode == "sprite":
+        if pose in yeti.NON_TRAVERSAL_POSES:
+            return False
+    else:
+        raise ValueError(f"reach mode must be 'box' or 'sprite', got {mode!r}")
+    return reaches(pos, x_ram, y_px, tol, mode=mode)
+
+
 def rollout_episode(
     stack,
     model,
@@ -80,6 +117,7 @@ def rollout_episode(
     track_waypoints: bool = False,
     wp_tol: int = 2,
     wp_jump_tol: int = 6,
+    reach_mode: str = "sprite",
 ) -> EpisodeResult:
     """Roll out a single Yeti episode under the training termination rules.
 
@@ -123,17 +161,29 @@ def rollout_episode(
     iface = base._interface
 
     # --- route-depth tracking (opt-in; off => behaviour unchanged) -----------
-    # Mirrors the trainer exactly: same waypoint positions, same per-axis tolerance
-    # (ladders `wp_tol`, jump landings `wp_jump_tol`), the same SHARED reach test
-    # (targets.within_tol) and the same pose gate (surface poses plus the L3
-    # escalator ride). Anything that diverges here would make eval numbers
+    # Mirrors the trainer's DETECTION: same waypoint positions, same per-axis
+    # tolerance (ladders `wp_tol`, jump landings `wp_jump_tol`, used by "box" only),
+    # and -- through `waypoint_frame_reaches` -- the same reach test and pose gate for
+    # the given `reach_mode`. Anything that diverges here makes eval numbers
     # incomparable with the route table, which is the whole point of it.
+    #
+    # It DID diverge, for four weeks. This comment used to say "mirrors the trainer
+    # exactly", naming `targets.within_tol` and the grounded pose gate, while the
+    # trainer switched to sprite overlap with a fail-open pose gate in de21939 and this
+    # function never followed. The cost surfaced only when an agent finally crossed
+    # rope 2: v30's champion touches the princess in 208/300 episodes, and every one
+    # read `Low2` as unreached and `max_rung` 11 instead of 12, because the crossing
+    # FLIES over `Low2`'s anchor, lands at px 88 and walks left -- it is never GROUNDED
+    # inside the box. `reach_mode` now defaults to the trainer's default and
+    # test_eval_reach_mode pins the two together.
+    if reach_mode not in ("box", "sprite"):
+        raise ValueError(f"reach_mode must be 'box' or 'sprite', got {reach_mode!r}")
     wps: dict = {}
     tol_of: dict = {}
     mandatory_ids: set = set()
     n_rungs = 0
     if track_waypoints:
-        from retro_ai.training.targets import build_targets, within_tol
+        from retro_ai.training.targets import build_targets
         from retro_ai.training.yeti_map import get_level_map, jump_waypoints
 
         wps = dict(yeti.waypoints(level))
@@ -207,9 +257,17 @@ def rollout_episode(
         # ladder pose) — a fall passing through a floor line doesn't count.
         if floor is not None and floor > deepest_floor and pose in yeti.SURFACE_POSES:
             deepest_floor = floor
-        if track_waypoints and pose in seed_poses:
+        if track_waypoints:
             for wid, (wx, wy, _f) in wps.items():
-                if within_tol((wx, wy), x, y, tol_of.get(wid, wp_tol)):
+                if waypoint_frame_reaches(
+                    (wx, wy),
+                    x,
+                    y,
+                    int(pose),
+                    tol_of.get(wid, wp_tol),
+                    reach_mode,
+                    seed_poses=seed_poses,
+                ):
                     reached_points.add(wid)
 
         if keep_frames and base._last_raw_obs is not None:
