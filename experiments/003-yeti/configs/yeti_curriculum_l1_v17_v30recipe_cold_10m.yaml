@@ -1,0 +1,90 @@
+# ============================================================================
+# L1 v17 — COLD, 10M, seed 42. The recipe that beat L4 (v30), applied to L1.
+#
+# WHY. No L1 policy has been trained on the current emulator. Every L1 princess
+# figure predates commit 2b0a45d, whose old state-restore left a hazard counter
+# (0x2B24) frozen, so the old champion trained in a quieter game: it scored 97.5%
+# then and 0/40 now (experiments/003-yeti/core_provenance_2b0a45d.md). TODO.md's
+# follow-up "re-measure or retrain L1 on the current core" is still open.
+#
+# WHAT IT IS. v30's config with ONLY the level-specific fields swapped:
+#   env.profile        yeti_fruit_level4 -> yeti_fruit
+#   env.max_steps      1500 -> 1000      L1's own values (L1 v15/v16); L2-L4 use
+#   env.stall_threshold  40 -> 15        1500/40 for their longer, frozen-clock starts
+#   reward.level         4 -> 1
+#   reward.carry_pose_*  removed         pose 15 is L4's rope 2; L1 has no rope
+#   curriculum.fruits_total / fruit_presence_addrs   L1's four fruits
+#   curriculum.start_state   removed     L1 starts from a game reset
+# Everything else -- resize_mode max, the grounded PBRS reward with
+# pay_on_target_change, the predecessor gate, split starts, earned-progress score,
+# survival admission, sprite reach -- is v30's, byte for byte.
+#
+# L1 GETS NO PROGRESS WAYPOINTS BEYOND THE FRUITS, deliberately: its level map
+# defines only ladders (no platforms, jump edges or reward_waypoints), so the progress
+# ladder is the four fruits and the predecessor gate is a no-op (no route_order).
+# Ladder waypoints are still detected and seeded from.
+#
+# READ IT ON princess from reset, re-measured at 300 episodes for the champion. The
+# bar: on this emulator no L1 policy reaches the princess at all (old champion 0/40),
+# so anything above 0 is new; the pre-fix 97.5% is the figure to aim for, not a
+# baseline, since it was measured in an easier game. Secondary: reach-4-fruits.
+# ============================================================================
+training:
+  timesteps: 10_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+  resize_mode: max
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 1
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 4
+  fruit_presence_addrs:
+    1: 12205
+    2: 12032
+    3: 11880
+    4: 11736
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
