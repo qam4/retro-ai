@@ -1,0 +1,8 @@
+{
+  "model": "model_100000_steps.zip",
+  "step": 100000,
+  "score": 0.0,
+  "princess": 0.0,
+  "reach4": 0.0,
+  "n_eval": 20
+}

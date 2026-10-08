@@ -1,0 +1,712 @@
+{
+  "evaluated": {
+    "model_100000_steps.zip": {
+      "step": 100000,
+      "princess": 0.03333333333333333,
+      "reach_top": 0.13333333333333333,
+      "score": 0.033466666666666665,
+      "n_eval": 30
+    },
+    "model_200000_steps.zip": {
+      "step": 200000,
+      "princess": 0.0,
+      "reach_top": 0.2,
+      "score": 0.0002,
+      "n_eval": 30
+    },
+    "model_300000_steps.zip": {
+      "step": 300000,
+      "princess": 0.0,
+      "reach_top": 0.3,
+      "score": 0.0003,
+      "n_eval": 30
+    },
+    "model_400000_steps.zip": {
+      "step": 400000,
+      "princess": 0.0,
+      "reach_top": 0.23333333333333334,
+      "score": 0.00023333333333333333,
+      "n_eval": 30
+    },
+    "model_500000_steps.zip": {
+      "step": 500000,
+      "princess": 0.0,
+      "reach_top": 0.2,
+      "score": 0.0002,
+      "n_eval": 30
+    },
+    "model_600000_steps.zip": {
+      "step": 600000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_700000_steps.zip": {
+      "step": 700000,
+      "princess": 0.0,
+      "reach_top": 0.9333333333333333,
+      "score": 0.0009333333333333333,
+      "n_eval": 30
+    },
+    "model_800000_steps.zip": {
+      "step": 800000,
+      "princess": 0.0,
+      "reach_top": 0.6666666666666666,
+      "score": 0.0006666666666666666,
+      "n_eval": 30
+    },
+    "model_900000_steps.zip": {
+      "step": 900000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_1000000_steps.zip": {
+      "step": 1000000,
+      "princess": 0.0,
+      "reach_top": 0.9333333333333333,
+      "score": 0.0009333333333333333,
+      "n_eval": 30
+    },
+    "model_1100000_steps.zip": {
+      "step": 1100000,
+      "princess": 0.0,
+      "reach_top": 0.4,
+      "score": 0.0004,
+      "n_eval": 30
+    },
+    "model_1200000_steps.zip": {
+      "step": 1200000,
+      "princess": 0.0,
+      "reach_top": 0.06666666666666667,
+      "score": 6.666666666666667e-05,
+      "n_eval": 30
+    },
+    "model_1300000_steps.zip": {
+      "step": 1300000,
+      "princess": 0.0,
+      "reach_top": 0.9666666666666667,
+      "score": 0.0009666666666666667,
+      "n_eval": 30
+    },
+    "model_1400000_steps.zip": {
+      "step": 1400000,
+      "princess": 0.0,
+      "reach_top": 0.06666666666666667,
+      "score": 6.666666666666667e-05,
+      "n_eval": 30
+    },
+    "model_1500000_steps.zip": {
+      "step": 1500000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_1600000_steps.zip": {
+      "step": 1600000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_1700000_steps.zip": {
+      "step": 1700000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_1800000_steps.zip": {
+      "step": 1800000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_1900000_steps.zip": {
+      "step": 1900000,
+      "princess": 0.0,
+      "reach_top": 0.5,
+      "score": 0.0005,
+      "n_eval": 30
+    },
+    "model_2000000_steps.zip": {
+      "step": 2000000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_2100000_steps.zip": {
+      "step": 2100000,
+      "princess": 0.0,
+      "reach_top": 0.9666666666666667,
+      "score": 0.0009666666666666667,
+      "n_eval": 30
+    },
+    "model_2200000_steps.zip": {
+      "step": 2200000,
+      "princess": 0.0,
+      "reach_top": 0.03333333333333333,
+      "score": 3.3333333333333335e-05,
+      "n_eval": 30
+    },
+    "model_2300000_steps.zip": {
+      "step": 2300000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_2400000_steps.zip": {
+      "step": 2400000,
+      "princess": 0.0,
+      "reach_top": 0.9666666666666667,
+      "score": 0.0009666666666666667,
+      "n_eval": 30
+    },
+    "model_2500000_steps.zip": {
+      "step": 2500000,
+      "princess": 0.0,
+      "reach_top": 0.8666666666666667,
+      "score": 0.0008666666666666667,
+      "n_eval": 30
+    },
+    "model_2600000_steps.zip": {
+      "step": 2600000,
+      "princess": 0.0,
+      "reach_top": 0.3,
+      "score": 0.0003,
+      "n_eval": 30
+    },
+    "model_2700000_steps.zip": {
+      "step": 2700000,
+      "princess": 0.0,
+      "reach_top": 0.43333333333333335,
+      "score": 0.00043333333333333337,
+      "n_eval": 30
+    },
+    "model_2800000_steps.zip": {
+      "step": 2800000,
+      "princess": 0.0,
+      "reach_top": 0.1,
+      "score": 0.0001,
+      "n_eval": 30
+    },
+    "model_2900000_steps.zip": {
+      "step": 2900000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_3000000_steps.zip": {
+      "step": 3000000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_3100000_steps.zip": {
+      "step": 3100000,
+      "princess": 0.0,
+      "reach_top": 0.4,
+      "score": 0.0004,
+      "n_eval": 30
+    },
+    "model_3200000_steps.zip": {
+      "step": 3200000,
+      "princess": 0.0,
+      "reach_top": 0.8,
+      "score": 0.0008,
+      "n_eval": 30
+    },
+    "model_3300000_steps.zip": {
+      "step": 3300000,
+      "princess": 0.0,
+      "reach_top": 0.6333333333333333,
+      "score": 0.0006333333333333333,
+      "n_eval": 30
+    },
+    "model_3400000_steps.zip": {
+      "step": 3400000,
+      "princess": 0.0,
+      "reach_top": 0.7666666666666667,
+      "score": 0.0007666666666666667,
+      "n_eval": 30
+    },
+    "model_3500000_steps.zip": {
+      "step": 3500000,
+      "princess": 0.0,
+      "reach_top": 0.03333333333333333,
+      "score": 3.3333333333333335e-05,
+      "n_eval": 30
+    },
+    "model_3600000_steps.zip": {
+      "step": 3600000,
+      "princess": 0.0,
+      "reach_top": 0.23333333333333334,
+      "score": 0.00023333333333333333,
+      "n_eval": 30
+    },
+    "model_3700000_steps.zip": {
+      "step": 3700000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_3800000_steps.zip": {
+      "step": 3800000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_3900000_steps.zip": {
+      "step": 3900000,
+      "princess": 0.0,
+      "reach_top": 0.9666666666666667,
+      "score": 0.0009666666666666667,
+      "n_eval": 30
+    },
+    "model_4000000_steps.zip": {
+      "step": 4000000,
+      "princess": 0.0,
+      "reach_top": 0.7666666666666667,
+      "score": 0.0007666666666666667,
+      "n_eval": 30
+    },
+    "model_4100000_steps.zip": {
+      "step": 4100000,
+      "princess": 0.0,
+      "reach_top": 0.9333333333333333,
+      "score": 0.0009333333333333333,
+      "n_eval": 30
+    },
+    "model_4200000_steps.zip": {
+      "step": 4200000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_4300000_steps.zip": {
+      "step": 4300000,
+      "princess": 0.0,
+      "reach_top": 0.03333333333333333,
+      "score": 3.3333333333333335e-05,
+      "n_eval": 30
+    },
+    "model_4400000_steps.zip": {
+      "step": 4400000,
+      "princess": 0.0,
+      "reach_top": 0.4666666666666667,
+      "score": 0.00046666666666666666,
+      "n_eval": 30
+    },
+    "model_4500000_steps.zip": {
+      "step": 4500000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_4600000_steps.zip": {
+      "step": 4600000,
+      "princess": 0.0,
+      "reach_top": 0.3,
+      "score": 0.0003,
+      "n_eval": 30
+    },
+    "model_4700000_steps.zip": {
+      "step": 4700000,
+      "princess": 0.0,
+      "reach_top": 0.03333333333333333,
+      "score": 3.3333333333333335e-05,
+      "n_eval": 30
+    },
+    "model_4800000_steps.zip": {
+      "step": 4800000,
+      "princess": 0.0,
+      "reach_top": 0.1,
+      "score": 0.0001,
+      "n_eval": 30
+    },
+    "model_4900000_steps.zip": {
+      "step": 4900000,
+      "princess": 0.0,
+      "reach_top": 0.26666666666666666,
+      "score": 0.0002666666666666667,
+      "n_eval": 30
+    },
+    "model_5000000_steps.zip": {
+      "step": 5000000,
+      "princess": 0.0,
+      "reach_top": 0.4,
+      "score": 0.0004,
+      "n_eval": 30
+    },
+    "model_5100000_steps.zip": {
+      "step": 5100000,
+      "princess": 0.03333333333333333,
+      "reach_top": 1.0,
+      "score": 0.034333333333333334,
+      "n_eval": 30
+    },
+    "model_5200000_steps.zip": {
+      "step": 5200000,
+      "princess": 0.0,
+      "reach_top": 0.9666666666666667,
+      "score": 0.0009666666666666667,
+      "n_eval": 30
+    },
+    "model_5300000_steps.zip": {
+      "step": 5300000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_5400000_steps.zip": {
+      "step": 5400000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "score": 0.001,
+      "n_eval": 30
+    },
+    "model_5500000_steps.zip": {
+      "step": 5500000,
+      "princess": 0.0,
+      "reach_top": 0.9,
+      "score": 0.0009000000000000001,
+      "n_eval": 30
+    },
+    "model_5600000_steps.zip": {
+      "step": 5600000,
+      "princess": 0.5,
+      "reach_top": 0.5333333333333333,
+      "score": 0.5005333333333334,
+      "n_eval": 30
+    },
+    "model_5700000_steps.zip": {
+      "step": 5700000,
+      "princess": 0.0,
+      "reach_top": 0.7666666666666667,
+      "score": 0.0007666666666666667,
+      "n_eval": 30
+    },
+    "model_5800000_steps.zip": {
+      "step": 5800000,
+      "princess": 0.26666666666666666,
+      "reach_top": 0.9666666666666667,
+      "score": 0.26763333333333333,
+      "n_eval": 30
+    },
+    "model_5900000_steps.zip": {
+      "step": 5900000,
+      "princess": 0.9666666666666667,
+      "reach_top": 0.9666666666666667,
+      "score": 0.9676333333333333,
+      "n_eval": 30
+    },
+    "model_6000000_steps.zip": {
+      "step": 6000000,
+      "princess": 0.8666666666666667,
+      "reach_top": 1.0,
+      "score": 0.8676666666666667,
+      "n_eval": 30
+    },
+    "model_6100000_steps.zip": {
+      "step": 6100000,
+      "princess": 0.8,
+      "reach_top": 0.8,
+      "score": 0.8008000000000001,
+      "n_eval": 30
+    },
+    "model_6200000_steps.zip": {
+      "step": 6200000,
+      "princess": 0.9666666666666667,
+      "reach_top": 0.9666666666666667,
+      "score": 0.9676333333333333,
+      "n_eval": 30
+    },
+    "model_6300000_steps.zip": {
+      "step": 6300000,
+      "princess": 0.8,
+      "reach_top": 0.8333333333333334,
+      "score": 0.8008333333333334,
+      "n_eval": 30
+    },
+    "model_6400000_steps.zip": {
+      "step": 6400000,
+      "princess": 0.13333333333333333,
+      "reach_top": 0.13333333333333333,
+      "score": 0.13346666666666668,
+      "n_eval": 30
+    },
+    "model_6500000_steps.zip": {
+      "step": 6500000,
+      "princess": 0.8333333333333334,
+      "reach_top": 0.8333333333333334,
+      "score": 0.8341666666666667,
+      "n_eval": 30
+    },
+    "model_6600000_steps.zip": {
+      "step": 6600000,
+      "princess": 0.8333333333333334,
+      "reach_top": 0.9333333333333333,
+      "score": 0.8342666666666667,
+      "n_eval": 30
+    },
+    "model_6700000_steps.zip": {
+      "step": 6700000,
+      "princess": 0.9333333333333333,
+      "reach_top": 0.9333333333333333,
+      "score": 0.9342666666666667,
+      "n_eval": 30
+    },
+    "model_6800000_steps.zip": {
+      "step": 6800000,
+      "princess": 0.7666666666666667,
+      "reach_top": 0.8,
+      "score": 0.7674666666666667,
+      "n_eval": 30
+    },
+    "model_6900000_steps.zip": {
+      "step": 6900000,
+      "princess": 0.9,
+      "reach_top": 0.9666666666666667,
+      "score": 0.9009666666666667,
+      "n_eval": 30
+    },
+    "model_7000000_steps.zip": {
+      "step": 7000000,
+      "princess": 0.13333333333333333,
+      "reach_top": 0.13333333333333333,
+      "score": 0.13346666666666668,
+      "n_eval": 30
+    },
+    "model_7100000_steps.zip": {
+      "step": 7100000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_7200000_steps.zip": {
+      "step": 7200000,
+      "princess": 0.26666666666666666,
+      "reach_top": 0.26666666666666666,
+      "score": 0.26693333333333336,
+      "n_eval": 30
+    },
+    "model_7300000_steps.zip": {
+      "step": 7300000,
+      "princess": 0.9666666666666667,
+      "reach_top": 1.0,
+      "score": 0.9676666666666667,
+      "n_eval": 30
+    },
+    "model_7400000_steps.zip": {
+      "step": 7400000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_7500000_steps.zip": {
+      "step": 7500000,
+      "princess": 0.4,
+      "reach_top": 0.43333333333333335,
+      "score": 0.40043333333333336,
+      "n_eval": 30
+    },
+    "model_7600000_steps.zip": {
+      "step": 7600000,
+      "princess": 0.03333333333333333,
+      "reach_top": 0.03333333333333333,
+      "score": 0.03336666666666667,
+      "n_eval": 30
+    },
+    "model_7700000_steps.zip": {
+      "step": 7700000,
+      "princess": 0.3,
+      "reach_top": 0.3,
+      "score": 0.3003,
+      "n_eval": 30
+    },
+    "model_7800000_steps.zip": {
+      "step": 7800000,
+      "princess": 0.4,
+      "reach_top": 0.4,
+      "score": 0.40040000000000003,
+      "n_eval": 30
+    },
+    "model_7900000_steps.zip": {
+      "step": 7900000,
+      "princess": 0.2,
+      "reach_top": 0.23333333333333334,
+      "score": 0.20023333333333335,
+      "n_eval": 30
+    },
+    "model_8000000_steps.zip": {
+      "step": 8000000,
+      "princess": 0.0,
+      "reach_top": 0.06666666666666667,
+      "score": 6.666666666666667e-05,
+      "n_eval": 30
+    },
+    "model_8100000_steps.zip": {
+      "step": 8100000,
+      "princess": 0.0,
+      "reach_top": 0.13333333333333333,
+      "score": 0.00013333333333333334,
+      "n_eval": 30
+    },
+    "model_8200000_steps.zip": {
+      "step": 8200000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_8300000_steps.zip": {
+      "step": 8300000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_8400000_steps.zip": {
+      "step": 8400000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_8500000_steps.zip": {
+      "step": 8500000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_8600000_steps.zip": {
+      "step": 8600000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_8700000_steps.zip": {
+      "step": 8700000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_8800000_steps.zip": {
+      "step": 8800000,
+      "princess": 0.0,
+      "reach_top": 0.03333333333333333,
+      "score": 3.3333333333333335e-05,
+      "n_eval": 30
+    },
+    "model_8900000_steps.zip": {
+      "step": 8900000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_9000000_steps.zip": {
+      "step": 9000000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_9100000_steps.zip": {
+      "step": 9100000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_9200000_steps.zip": {
+      "step": 9200000,
+      "princess": 0.0,
+      "reach_top": 0.03333333333333333,
+      "score": 3.3333333333333335e-05,
+      "n_eval": 30
+    },
+    "model_9300000_steps.zip": {
+      "step": 9300000,
+      "princess": 0.0,
+      "reach_top": 0.1,
+      "score": 0.0001,
+      "n_eval": 30
+    },
+    "model_9400000_steps.zip": {
+      "step": 9400000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_9500000_steps.zip": {
+      "step": 9500000,
+      "princess": 0.0,
+      "reach_top": 0.06666666666666667,
+      "score": 6.666666666666667e-05,
+      "n_eval": 30
+    },
+    "model_9600000_steps.zip": {
+      "step": 9600000,
+      "princess": 0.0,
+      "reach_top": 0.06666666666666667,
+      "score": 6.666666666666667e-05,
+      "n_eval": 30
+    },
+    "model_9700000_steps.zip": {
+      "step": 9700000,
+      "princess": 0.1,
+      "reach_top": 0.13333333333333333,
+      "score": 0.10013333333333334,
+      "n_eval": 30
+    },
+    "model_9800000_steps.zip": {
+      "step": 9800000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_9900000_steps.zip": {
+      "step": 9900000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    },
+    "model_10000000_steps.zip": {
+      "step": 10000000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "score": 0.0,
+      "n_eval": 30
+    }
+  },
+  "best": {
+    "model": "model_7300000_steps.zip",
+    "step": 7300000,
+    "score": 0.9676666666666667,
+    "princess": 0.9666666666666667,
+    "reach_top": 1.0,
+    "n_eval": 30
+  }
+}

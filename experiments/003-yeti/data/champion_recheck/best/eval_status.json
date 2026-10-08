@@ -1,0 +1,17 @@
+{
+ "step": 600000,
+ "frontier": "Low2_launch",
+ "frontier_rate": 0.8466666666666667,
+ "frontier_rate_ci95": 0.0407505749207514,
+ "princess": 0.0,
+ "princess_ci95": 0.0063217149988678304,
+ "mean_rung": 9.476666666666667,
+ "n_eval": 300,
+ "regressed": false,
+ "regress_margin": 0.062407264534400694,
+ "consecutive_regressions": 0,
+ "best_step": 600000,
+ "best_frontier": "Low2_launch",
+ "best_frontier_rate": 0.8466666666666667,
+ "best_model": "output/mo5/yeti/champion_recheck/best/best_model.zip"
+}

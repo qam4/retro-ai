@@ -1,0 +1,614 @@
+{
+  "evaluated": {
+    "model_100000_steps.zip": {
+      "step": 100000,
+      "princess": 0.0,
+      "reach_top": 0.75,
+      "mean_rung": 7.666666666666667,
+      "n_rungs": 13,
+      "depth": 0.5897435897435898,
+      "score": 0.005904935897435897,
+      "n_eval": 12
+    },
+    "model_200000_steps.zip": {
+      "step": 200000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 9.416666666666666,
+      "n_rungs": 13,
+      "depth": 0.7243589743589743,
+      "score": 0.007253589743589743,
+      "n_eval": 12
+    },
+    "model_300000_steps.zip": {
+      "step": 300000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 9.083333333333334,
+      "n_rungs": 13,
+      "depth": 0.6987179487179488,
+      "score": 0.006996346153846155,
+      "n_eval": 12
+    },
+    "model_400000_steps.zip": {
+      "step": 400000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 6.666666666666667,
+      "n_rungs": 13,
+      "depth": 0.5128205128205129,
+      "score": 0.005138205128205129,
+      "n_eval": 12
+    },
+    "model_500000_steps.zip": {
+      "step": 500000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 1.0833333333333333,
+      "n_rungs": 13,
+      "depth": 0.08333333333333333,
+      "score": 0.0008333333333333333,
+      "n_eval": 12
+    },
+    "model_600000_steps.zip": {
+      "step": 600000,
+      "princess": 0.0,
+      "reach_top": 0.3333333333333333,
+      "mean_rung": 3.6666666666666665,
+      "n_rungs": 13,
+      "depth": 0.28205128205128205,
+      "score": 0.002823846153846154,
+      "n_eval": 12
+    },
+    "model_700000_steps.zip": {
+      "step": 700000,
+      "princess": 0.0,
+      "reach_top": 0.25,
+      "mean_rung": 2.6666666666666665,
+      "n_rungs": 13,
+      "depth": 0.20512820512820512,
+      "score": 0.002053782051282051,
+      "n_eval": 12
+    },
+    "model_800000_steps.zip": {
+      "step": 800000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 7.416666666666667,
+      "n_rungs": 13,
+      "depth": 0.5705128205128205,
+      "score": 0.0057142948717948715,
+      "n_eval": 12
+    },
+    "model_900000_steps.zip": {
+      "step": 900000,
+      "princess": 0.0,
+      "reach_top": 0.08333333333333333,
+      "mean_rung": 1.1666666666666667,
+      "n_rungs": 13,
+      "depth": 0.08974358974358974,
+      "score": 0.0008982692307692308,
+      "n_eval": 12
+    },
+    "model_1000000_steps.zip": {
+      "step": 1000000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 8.416666666666666,
+      "n_rungs": 13,
+      "depth": 0.6474358974358974,
+      "score": 0.006483525641025641,
+      "n_eval": 12
+    },
+    "model_1100000_steps.zip": {
+      "step": 1100000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 9.083333333333334,
+      "n_rungs": 13,
+      "depth": 0.6987179487179488,
+      "score": 0.006996346153846155,
+      "n_eval": 12
+    },
+    "model_1200000_steps.zip": {
+      "step": 1200000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 9.75,
+      "n_rungs": 13,
+      "depth": 0.75,
+      "score": 0.007509999999999999,
+      "n_eval": 12
+    },
+    "model_1300000_steps.zip": {
+      "step": 1300000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 9.083333333333334,
+      "n_rungs": 13,
+      "depth": 0.6987179487179488,
+      "score": 0.006997179487179488,
+      "n_eval": 12
+    },
+    "model_1400000_steps.zip": {
+      "step": 1400000,
+      "princess": 0.0,
+      "reach_top": 0.75,
+      "mean_rung": 7.666666666666667,
+      "n_rungs": 13,
+      "depth": 0.5897435897435898,
+      "score": 0.005904935897435897,
+      "n_eval": 12
+    },
+    "model_1500000_steps.zip": {
+      "step": 1500000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 8.916666666666666,
+      "n_rungs": 13,
+      "depth": 0.6858974358974359,
+      "score": 0.006868141025641026,
+      "n_eval": 12
+    },
+    "model_1600000_steps.zip": {
+      "step": 1600000,
+      "princess": 0.0,
+      "reach_top": 0.3333333333333333,
+      "mean_rung": 3.0833333333333335,
+      "n_rungs": 13,
+      "depth": 0.2371794871794872,
+      "score": 0.0023751282051282054,
+      "n_eval": 12
+    },
+    "model_1700000_steps.zip": {
+      "step": 1700000,
+      "princess": 0.0,
+      "reach_top": 0.75,
+      "mean_rung": 5.916666666666667,
+      "n_rungs": 13,
+      "depth": 0.4551282051282052,
+      "score": 0.0045587820512820515,
+      "n_eval": 12
+    },
+    "model_1800000_steps.zip": {
+      "step": 1800000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 9.333333333333334,
+      "n_rungs": 13,
+      "depth": 0.717948717948718,
+      "score": 0.007189487179487179,
+      "n_eval": 12
+    },
+    "model_1900000_steps.zip": {
+      "step": 1900000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 7.0,
+      "n_rungs": 13,
+      "depth": 0.5384615384615384,
+      "score": 0.005393782051282051,
+      "n_eval": 12
+    },
+    "model_2000000_steps.zip": {
+      "step": 2000000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 8.083333333333334,
+      "n_rungs": 13,
+      "depth": 0.6217948717948718,
+      "score": 0.0062279487179487175,
+      "n_eval": 12
+    },
+    "model_2100000_steps.zip": {
+      "step": 2100000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 8.583333333333334,
+      "n_rungs": 13,
+      "depth": 0.6602564102564104,
+      "score": 0.006611730769230771,
+      "n_eval": 12
+    },
+    "model_2200000_steps.zip": {
+      "step": 2200000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 7.666666666666667,
+      "n_rungs": 13,
+      "depth": 0.5897435897435898,
+      "score": 0.005907435897435897,
+      "n_eval": 12
+    },
+    "model_2300000_steps.zip": {
+      "step": 2300000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 8.416666666666666,
+      "n_rungs": 13,
+      "depth": 0.6474358974358974,
+      "score": 0.006484358974358974,
+      "n_eval": 12
+    },
+    "model_2400000_steps.zip": {
+      "step": 2400000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 0.6666666666666666,
+      "n_rungs": 13,
+      "depth": 0.05128205128205128,
+      "score": 0.0005128205128205128,
+      "n_eval": 12
+    },
+    "model_2500000_steps.zip": {
+      "step": 2500000,
+      "princess": 0.0,
+      "reach_top": 0.3333333333333333,
+      "mean_rung": 2.9166666666666665,
+      "n_rungs": 13,
+      "depth": 0.22435897435897434,
+      "score": 0.002246923076923077,
+      "n_eval": 12
+    },
+    "model_2600000_steps.zip": {
+      "step": 2600000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 8.833333333333334,
+      "n_rungs": 13,
+      "depth": 0.6794871794871795,
+      "score": 0.006804038461538462,
+      "n_eval": 12
+    },
+    "model_2700000_steps.zip": {
+      "step": 2700000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 7.083333333333333,
+      "n_rungs": 13,
+      "depth": 0.5448717948717948,
+      "score": 0.005457884615384615,
+      "n_eval": 12
+    },
+    "model_2800000_steps.zip": {
+      "step": 2800000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 9.916666666666666,
+      "n_rungs": 13,
+      "depth": 0.7628205128205128,
+      "score": 0.007638205128205127,
+      "n_eval": 12
+    },
+    "model_2900000_steps.zip": {
+      "step": 2900000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 0.25,
+      "n_rungs": 13,
+      "depth": 0.019230769230769232,
+      "score": 0.00019230769230769233,
+      "n_eval": 12
+    },
+    "model_3000000_steps.zip": {
+      "step": 3000000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 1.0,
+      "n_rungs": 13,
+      "depth": 0.07692307692307693,
+      "score": 0.0007692307692307693,
+      "n_eval": 12
+    },
+    "model_3100000_steps.zip": {
+      "step": 3100000,
+      "princess": 0.0,
+      "reach_top": 0.3333333333333333,
+      "mean_rung": 2.3333333333333335,
+      "n_rungs": 13,
+      "depth": 0.1794871794871795,
+      "score": 0.0017982051282051281,
+      "n_eval": 12
+    },
+    "model_3200000_steps.zip": {
+      "step": 3200000,
+      "princess": 0.0,
+      "reach_top": 0.5,
+      "mean_rung": 2.6666666666666665,
+      "n_rungs": 13,
+      "depth": 0.20512820512820512,
+      "score": 0.002056282051282051,
+      "n_eval": 12
+    },
+    "model_3300000_steps.zip": {
+      "step": 3300000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 6.416666666666667,
+      "n_rungs": 13,
+      "depth": 0.4935897435897436,
+      "score": 0.004945897435897436,
+      "n_eval": 12
+    },
+    "model_3400000_steps.zip": {
+      "step": 3400000,
+      "princess": 0.0,
+      "reach_top": 0.5,
+      "mean_rung": 3.1666666666666665,
+      "n_rungs": 13,
+      "depth": 0.24358974358974358,
+      "score": 0.002440897435897436,
+      "n_eval": 12
+    },
+    "model_3500000_steps.zip": {
+      "step": 3500000,
+      "princess": 0.0,
+      "reach_top": 0.3333333333333333,
+      "mean_rung": 2.8333333333333335,
+      "n_rungs": 13,
+      "depth": 0.21794871794871795,
+      "score": 0.002182820512820513,
+      "n_eval": 12
+    },
+    "model_3600000_steps.zip": {
+      "step": 3600000,
+      "princess": 0.0,
+      "reach_top": 0.75,
+      "mean_rung": 5.333333333333333,
+      "n_rungs": 13,
+      "depth": 0.41025641025641024,
+      "score": 0.004110064102564102,
+      "n_eval": 12
+    },
+    "model_3700000_steps.zip": {
+      "step": 3700000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 6.416666666666667,
+      "n_rungs": 13,
+      "depth": 0.4935897435897436,
+      "score": 0.004945064102564103,
+      "n_eval": 12
+    },
+    "model_3800000_steps.zip": {
+      "step": 3800000,
+      "princess": 0.0,
+      "reach_top": 0.75,
+      "mean_rung": 6.583333333333333,
+      "n_rungs": 13,
+      "depth": 0.5064102564102564,
+      "score": 0.005071602564102564,
+      "n_eval": 12
+    },
+    "model_3900000_steps.zip": {
+      "step": 3900000,
+      "princess": 0.0,
+      "reach_top": 0.08333333333333333,
+      "mean_rung": 1.8333333333333333,
+      "n_rungs": 13,
+      "depth": 0.14102564102564102,
+      "score": 0.0014110897435897437,
+      "n_eval": 12
+    },
+    "model_4000000_steps.zip": {
+      "step": 4000000,
+      "princess": 0.0,
+      "reach_top": 0.75,
+      "mean_rung": 7.083333333333333,
+      "n_rungs": 13,
+      "depth": 0.5448717948717948,
+      "score": 0.005456217948717948,
+      "n_eval": 12
+    },
+    "model_4100000_steps.zip": {
+      "step": 4100000,
+      "princess": 0.0,
+      "reach_top": 0.25,
+      "mean_rung": 2.9166666666666665,
+      "n_rungs": 13,
+      "depth": 0.22435897435897434,
+      "score": 0.0022460897435897433,
+      "n_eval": 12
+    },
+    "model_4200000_steps.zip": {
+      "step": 4200000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 1.0,
+      "n_rungs": 13,
+      "depth": 0.07692307692307693,
+      "score": 0.0007692307692307693,
+      "n_eval": 12
+    },
+    "model_4300000_steps.zip": {
+      "step": 4300000,
+      "princess": 0.0,
+      "reach_top": 0.6666666666666666,
+      "mean_rung": 6.083333333333333,
+      "n_rungs": 13,
+      "depth": 0.46794871794871795,
+      "score": 0.004686153846153847,
+      "n_eval": 12
+    },
+    "model_4400000_steps.zip": {
+      "step": 4400000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 1.0833333333333333,
+      "n_rungs": 13,
+      "depth": 0.08333333333333333,
+      "score": 0.0008333333333333333,
+      "n_eval": 12
+    },
+    "model_4500000_steps.zip": {
+      "step": 4500000,
+      "princess": 0.0,
+      "reach_top": 0.3333333333333333,
+      "mean_rung": 2.6666666666666665,
+      "n_rungs": 13,
+      "depth": 0.20512820512820512,
+      "score": 0.0020546153846153848,
+      "n_eval": 12
+    },
+    "model_4600000_steps.zip": {
+      "step": 4600000,
+      "princess": 0.0,
+      "reach_top": 0.75,
+      "mean_rung": 6.083333333333333,
+      "n_rungs": 13,
+      "depth": 0.46794871794871795,
+      "score": 0.0046869871794871796,
+      "n_eval": 12
+    },
+    "model_4700000_steps.zip": {
+      "step": 4700000,
+      "princess": 0.0,
+      "reach_top": 0.9166666666666666,
+      "mean_rung": 8.333333333333334,
+      "n_rungs": 13,
+      "depth": 0.6410256410256411,
+      "score": 0.006419423076923078,
+      "n_eval": 12
+    },
+    "model_4800000_steps.zip": {
+      "step": 4800000,
+      "princess": 0.0,
+      "reach_top": 0.8333333333333334,
+      "mean_rung": 6.583333333333333,
+      "n_rungs": 13,
+      "depth": 0.5064102564102564,
+      "score": 0.0050724358974358974,
+      "n_eval": 12
+    },
+    "model_4900000_steps.zip": {
+      "step": 4900000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 1.6666666666666667,
+      "n_rungs": 13,
+      "depth": 0.12820512820512822,
+      "score": 0.0012820512820512823,
+      "n_eval": 12
+    },
+    "model_5000000_steps.zip": {
+      "step": 5000000,
+      "princess": 0.0,
+      "reach_top": 0.8333333333333334,
+      "mean_rung": 3.1666666666666665,
+      "n_rungs": 13,
+      "depth": 0.24358974358974358,
+      "score": 0.0024442307692307693,
+      "n_eval": 12
+    },
+    "model_5100000_steps.zip": {
+      "step": 5100000,
+      "princess": 0.0,
+      "reach_top": 0.25,
+      "mean_rung": 2.75,
+      "n_rungs": 13,
+      "depth": 0.21153846153846154,
+      "score": 0.0021178846153846152,
+      "n_eval": 12
+    },
+    "model_5200000_steps.zip": {
+      "step": 5200000,
+      "princess": 0.0,
+      "reach_top": 0.0,
+      "mean_rung": 0.75,
+      "n_rungs": 13,
+      "depth": 0.057692307692307696,
+      "score": 0.000576923076923077,
+      "n_eval": 12
+    },
+    "model_5300000_steps.zip": {
+      "step": 5300000,
+      "princess": 0.0,
+      "reach_top": 0.8333333333333334,
+      "mean_rung": 3.3333333333333335,
+      "n_rungs": 13,
+      "depth": 0.25641025641025644,
+      "score": 0.002572435897435898,
+      "n_eval": 12
+    },
+    "model_5400000_steps.zip": {
+      "step": 5400000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 6.083333333333333,
+      "n_rungs": 13,
+      "depth": 0.46794871794871795,
+      "score": 0.0046894871794871795,
+      "n_eval": 12
+    },
+    "model_5500000_steps.zip": {
+      "step": 5500000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 6.25,
+      "n_rungs": 13,
+      "depth": 0.4807692307692308,
+      "score": 0.0048176923076923076,
+      "n_eval": 12
+    },
+    "model_5600000_steps.zip": {
+      "step": 5600000,
+      "princess": 0.0,
+      "reach_top": 1.0,
+      "mean_rung": 8.916666666666666,
+      "n_rungs": 13,
+      "depth": 0.6858974358974359,
+      "score": 0.006868974358974359,
+      "n_eval": 12
+    },
+    "model_5700000_steps.zip": {
+      "step": 5700000,
+      "princess": 0.0,
+      "reach_top": 0.8333333333333334,
+      "mean_rung": 6.166666666666667,
+      "n_rungs": 13,
+      "depth": 0.4743589743589744,
+      "score": 0.004751923076923077,
+      "n_eval": 12
+    },
+    "model_5800000_steps.zip": {
+      "step": 5800000,
+      "princess": 0.0,
+      "reach_top": 0.6666666666666666,
+      "mean_rung": 6.666666666666667,
+      "n_rungs": 13,
+      "depth": 0.5128205128205129,
+      "score": 0.005134871794871796,
+      "n_eval": 12
+    },
+    "model_5900000_steps.zip": {
+      "step": 5900000,
+      "princess": 0.0,
+      "reach_top": 0.5833333333333334,
+      "mean_rung": 5.583333333333333,
+      "n_rungs": 13,
+      "depth": 0.42948717948717946,
+      "score": 0.004300705128205128,
+      "n_eval": 12
+    },
+    "model_6000000_steps.zip": {
+      "step": 6000000,
+      "princess": 0.0,
+      "reach_top": 0.8333333333333334,
+      "mean_rung": 7.166666666666667,
+      "n_rungs": 13,
+      "depth": 0.5512820512820513,
+      "score": 0.005521153846153847,
+      "n_eval": 12
+    }
+  },
+  "best": {
+    "model": "model_2800000_steps.zip",
+    "step": 2800000,
+    "score": 0.007638205128205127,
+    "princess": 0.0,
+    "reach_top": 1.0,
+    "mean_rung": 9.916666666666666,
+    "n_rungs": 13,
+    "n_eval": 12
+  }
+}

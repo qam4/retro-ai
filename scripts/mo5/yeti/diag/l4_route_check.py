@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import json
 
-D = json.load(open("output/mo5/yeti/level4/level4_map_raw.json"))
+# Tracked copy (output/ is gitignored); regenerate with extract_level_map.py.
+D = json.load(open("experiments/003-yeti/data/level_maps/level4_map_raw.json"))
 SURF = {s["n"]: s for s in D["surface"]}
 LADDERS = D["ladders"]
 PLAT = {p["id"]: p for p in D["platforms"]}

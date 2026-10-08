@@ -1,0 +1,1 @@
+{"step": 123456, "consecutive_regressions": 3, "frontier": "Low2_launch", "frontier_rate": 0.4, "best_step": 3800000, "best_frontier": "Low2_launch", "best_frontier_rate": 0.73, "best_model": "best/best_model.zip"}

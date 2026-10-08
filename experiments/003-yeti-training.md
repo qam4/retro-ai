@@ -885,7 +885,7 @@ alone doesn't resolve the over-concentration.
     agent (x=72,y=182). Tile-ids: ladder 1-4, floor 5-8, fruits = 2x2 sprite
     blocks. Princess is a separate entity (Y=RAM 0x2B00, X=0x2B01, 4px
     units). Tools: `find_map_in_ram.py`, `render_tilemap.py`,
-    `extract_level_map.py`; data: `output/mo5/yeti/level2/level2_map.json`.
+    `extract_level_map.py`; data: `experiments/003-yeti/data/level_maps/level2_map.json`.
     This generalizes to ALL future levels (read the map, build the nav graph
     automatically).
   - Train with the proven recipe (curriculum -> phase-2 anneal ->

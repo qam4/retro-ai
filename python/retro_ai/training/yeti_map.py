@@ -270,8 +270,8 @@ LEVEL2 = LevelMap(
 )
 
 # Level 3 — fragmented multi-platform layout, REBUILT from the raw tilemap
-# (output/mo5/yeti/level3/level3_map.json + per-cell RAM read) and verified
-# tile-by-tile with the user against a rendered frame (see
+# (experiments/003-yeti/data/level_maps/level3_map.json + per-cell RAM read) and
+# verified tile-by-tile with the user against a rendered frame (see
 # scripts/mo5/yeti/annotate_level3_map.py). 1 fruit, princess top-left, player
 # starts bottom-left.
 #

@@ -1,0 +1,10 @@
+{
+  "model": "model_900000_steps.zip",
+  "step": 900000,
+  "score": 0.007574102564102565,
+  "princess": 0.0,
+  "reach_top": 1.0,
+  "mean_rung": 9.833333333333334,
+  "n_rungs": 13,
+  "n_eval": 12
+}

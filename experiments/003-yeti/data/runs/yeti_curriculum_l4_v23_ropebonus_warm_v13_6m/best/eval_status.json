@@ -1,0 +1,15 @@
+{
+ "step": 6000000,
+ "frontier": "Low2_launch",
+ "frontier_rate": 0.2,
+ "princess": 0.0,
+ "mean_rung": 5.366666666666666,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.21908902300206648,
+ "consecutive_regressions": 37,
+ "best_step": 600000,
+ "best_frontier": "Low2_launch",
+ "best_frontier_rate": 0.9666666666666667,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v23_ropebonus_warm_v13_6m/best/best_model.zip"
+}

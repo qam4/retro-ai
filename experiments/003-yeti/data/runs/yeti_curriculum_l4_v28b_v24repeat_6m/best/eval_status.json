@@ -1,0 +1,17 @@
+{
+ "step": 6000000,
+ "frontier": "Low2_launch",
+ "frontier_rate": 0.3333333333333333,
+ "frontier_rate_ci95": 0.15994989329661768,
+ "princess": 0.0,
+ "princess_ci95": 0.056758545695239,
+ "mean_rung": 7.533333333333333,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.2581988897471611,
+ "consecutive_regressions": 1,
+ "best_step": 3500000,
+ "best_frontier": "Low2_launch",
+ "best_frontier_rate": 0.6666666666666666,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v28b_v24repeat_6m/best/best_model.zip"
+}

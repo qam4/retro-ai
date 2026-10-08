@@ -1,0 +1,73 @@
+args:
+  config_path: experiments/003-yeti/configs/yeti_curriculum_l4_v9_leftwalk_100k.yaml
+extras:
+  training:
+    timesteps: 100000
+    output: output/mo5/yeti/training/yeti_curriculum_l4_v9_leftwalk_100k
+    num_envs: 8
+    seed: 42
+    resume: output/mo5/yeti/training/yeti_curriculum_l4_v6_anchorfix_15m/best/best_model.zip
+    snapshot_freq_steps: 50000
+    route_table_freq_steps: 25000
+    warmstart_weights_only: true
+    resume_pools: output/mo5/yeti/training/yeti_curriculum_l4_v6_anchorfix_15m/checkpoints.pkl
+  env:
+    profile: yeti_fruit_level4
+    action_mode: joystick
+    max_steps: 1500
+    stall_threshold: 40
+    resize:
+    - 84
+    - 84
+    frame_skip: null
+    frame_stack: null
+    frame_maxpool: null
+    grayscale: null
+    crop: null
+  reward:
+    name: fruit_bonus_path_progress_pbrs_grounded
+    params:
+      scale: 0.01
+      fruit_scale: 0.01
+      princess_scale: 0.05
+      level: 4
+      gamma: 1.0
+      defer_fruit_credit: true
+      waypoint_reward_tol: 2
+      ladder_segment_shaping: true
+  ppo:
+    learning_rate: 0.0003
+    batch_size: 64
+    n_steps: 512
+    n_epochs: 4
+    ent_coef: 0.02
+    clip_range: 0.2
+    gamma: 0.99
+    gae_lambda: 0.95
+    target_kl: 0.07
+  curriculum:
+    reset_fraction: 0.0
+    frontier_fraction: 0.0
+    earlier_fraction: 0.0
+    max_states_per_checkpoint: 100
+    min_states_to_advance: 20
+    seed_archive: null
+    preseed_pool: null
+    reach_threshold: 0.15
+    segment_floor: 0.0
+    multi_input_obs: false
+    min_survival_steps: 30
+    fruits_total: 1
+    fruit_presence_addrs:
+      1: 11055
+    start_state: output/mo5/yeti/level4/level4_start.sav
+    waypoints: true
+    waypoint_tolerance: 2
+    gate_waypoints: true
+    split_mandatory_starts: true
+    earned_progress_score: true
+    admit_requires_survival: true
+    noop_start_max: 0
+    noop_start_scope: reset
+  resolved_seed: 42
+  script: scripts/mo5/yeti/train_checkpoint_curriculum.py

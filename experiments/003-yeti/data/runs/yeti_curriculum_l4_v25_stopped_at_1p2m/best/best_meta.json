@@ -1,0 +1,12 @@
+{
+  "model": "model_700000_steps.zip",
+  "step": 700000,
+  "score": 0.005387287179487179,
+  "princess": 0.0,
+  "reach_top": 0.8666666666666667,
+  "mean_rung": 8.066666666666666,
+  "n_rungs": 13,
+  "frontier": "Low2_launch",
+  "frontier_rate": 0.5333333333333333,
+  "n_eval": 30
+}

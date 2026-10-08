@@ -1,0 +1,15 @@
+{
+ "step": 6000000,
+ "frontier": "Low2_launch",
+ "frontier_rate": 0.23333333333333334,
+ "princess": 0.0,
+ "mean_rung": 5.833333333333333,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.23166067138525404,
+ "consecutive_regressions": 11,
+ "best_step": 4500000,
+ "best_frontier": "Low2_launch",
+ "best_frontier_rate": 0.6333333333333333,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v27_pool_eligibility_6m/best/best_model.zip"
+}

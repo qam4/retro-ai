@@ -1,0 +1,17 @@
+{
+ "step": 15000000,
+ "frontier": "Lprincess_top",
+ "frontier_rate": 0.5333333333333333,
+ "frontier_rate_ci95": 0.16812929747173364,
+ "princess": 0.5333333333333333,
+ "princess_ci95": 0.16812929747173364,
+ "mean_rung": 8.7,
+ "n_eval": 30,
+ "regressed": false,
+ "regress_margin": 0.27325202042558927,
+ "consecutive_regressions": 0,
+ "best_step": 13250000,
+ "best_frontier": "Lprincess_top",
+ "best_frontier_rate": 0.8,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v30_blockmax_cold_15m/best/best_model.zip"
+}

@@ -1,0 +1,15 @@
+{
+ "step": 5600000,
+ "frontier": "Low2_launch",
+ "frontier_rate": 0.4,
+ "princess": 0.0,
+ "mean_rung": 5.766666666666667,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.2683281572999748,
+ "consecutive_regressions": 15,
+ "best_step": 3800000,
+ "best_frontier": "Low2_launch",
+ "best_frontier_rate": 0.7333333333333333,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v24_unified_capture_noseeds_6m/best/best_model.zip"
+}

@@ -87,7 +87,7 @@ Recovered level 1 **exactly**:
 - 4 fruits at (264,80),(136,112),(72,144),(176,176)  (matches known UL pixels)
 - princess sprite (id 30) at top-right ~ (288,16)
 
-## LEVEL 2 MAP (read from RAM, `output/mo5/yeti/level2/level2_map.json`)
+## LEVEL 2 MAP (read from RAM, `experiments/003-yeti/data/level_maps/level2_map.json`)
 
 6 full floors (top to bottom), 10 ladders, 2 fruits. Annotated grid
 (`=` floor, `H` ladder, `1`/`2` fruit; from `scripts/mo5/yeti/render_tilemap.py`):

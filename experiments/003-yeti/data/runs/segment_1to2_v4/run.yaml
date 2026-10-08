@@ -1,0 +1,40 @@
+args:
+  config_path: experiments/003-yeti/configs/segment_1to2_v4.yaml
+extras:
+  training:
+    timesteps: 5000000
+    output: output/mo5/yeti/training/segment_1to2_v4
+    num_envs: 8
+    seed: 42
+    resume: null
+  env:
+    profile: yeti_fruit
+    action_mode: joystick
+    max_steps: 1000
+    stall_threshold: 15
+    resize:
+    - 84
+    - 84
+    frame_skip: null
+    frame_stack: null
+    frame_maxpool: null
+    grayscale: null
+  reward:
+    name: fruit_bonus
+    params:
+      scale: 0.01
+  ppo:
+    learning_rate: 0.0003
+    batch_size: 64
+    n_steps: null
+    n_epochs: 4
+    ent_coef: 0.01
+    clip_range: 0.2
+    gamma: 0.99
+    gae_lambda: 0.95
+  segment:
+    checkpoints: output/mo5/yeti/seeds/v9_checkpoints.pkl
+    segment: 1
+  resolved_seed: 42
+  script: scripts/train_segment.py
+  num_checkpoint_states: 88

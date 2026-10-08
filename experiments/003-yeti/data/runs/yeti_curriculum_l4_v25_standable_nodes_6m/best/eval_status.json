@@ -1,0 +1,15 @@
+{
+ "step": 6000000,
+ "frontier": "Low2_launch",
+ "frontier_rate": 0.26666666666666666,
+ "princess": 0.0,
+ "mean_rung": 5.366666666666666,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.24221202832779934,
+ "consecutive_regressions": 1,
+ "best_step": 5700000,
+ "best_frontier": "Low2_launch",
+ "best_frontier_rate": 0.7,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v25_standable_nodes_6m/best/best_model.zip"
+}

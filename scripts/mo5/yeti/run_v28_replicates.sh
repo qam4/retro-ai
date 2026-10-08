@@ -14,7 +14,8 @@
 # exit codes are in the log.
 set -u
 
-cd /home/ec2-user/src/fred/retro-ai || exit 1
+# The repo root, from this script's own location, not a hardcoded home directory.
+cd "$(dirname "$0")/../../.." || exit 1
 export PYTHONPATH=python:build/ci-linux
 export RETRO_AI_ROM_DIR=roms
 

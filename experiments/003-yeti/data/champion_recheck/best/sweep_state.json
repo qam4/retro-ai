@@ -1,0 +1,49 @@
+{
+  "evaluated": {
+    "model_600000_steps.zip": {
+      "step": 600000,
+      "princess": 0.0,
+      "reach_top": 0.9933333333333333,
+      "mean_rung": 9.476666666666667,
+      "n_rungs": 13,
+      "depth": 0.7289743589743589,
+      "frontier": "Low2_launch",
+      "frontier_rate": 0.8466666666666667,
+      "score": 0.005418728974358975,
+      "n_eval": 300,
+      "rates": {
+        "F1": 0.9933333333333333,
+        "Fr1": 0.9966666666666667,
+        "Fr1_launch": 1.0,
+        "Fr2": 0.9933333333333333,
+        "Fr2_launch": 0.9966666666666667,
+        "Lascent_top": 0.96,
+        "Lclimb1_top": 0.9566666666666667,
+        "Lclimb2_top": 0.9133333333333333,
+        "Lclimb3_top": 0.8733333333333333,
+        "Lfruit_bot": 1.0,
+        "Lfruit_top": 1.0,
+        "Low1": 0.8566666666666667,
+        "Low2_launch": 0.8466666666666667,
+        "Rope1": 0.9566666666666667,
+        "Rope1_launch": 0.9566666666666667,
+        "Spring": 0.9133333333333333,
+        "Step": 0.9133333333333333
+      },
+      "regressed": false,
+      "regress_margin": 0.062407264534400694
+    }
+  },
+  "best": {
+    "model": "model_600000_steps.zip",
+    "step": 600000,
+    "score": 0.005418728974358975,
+    "princess": 0.0,
+    "reach_top": 0.9933333333333333,
+    "mean_rung": 9.476666666666667,
+    "n_rungs": 13,
+    "frontier": "Low2_launch",
+    "frontier_rate": 0.8466666666666667,
+    "n_eval": 300
+  }
+}

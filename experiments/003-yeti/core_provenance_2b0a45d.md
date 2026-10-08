@@ -160,7 +160,7 @@ git -C out/oldcore-2b0a45d submodule update --init --recursive
 cmake -S out/oldcore-2b0a45d -B out/oldcore-2b0a45d/build/ci-linux --preset ci-linux \
   -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
   -DPython3_EXECUTABLE=/usr/bin/python3.9 \
-  -Dpybind11_DIR=/home/ec2-user/.local/lib/python3.9/site-packages/pybind11/share/cmake/pybind11
+  -Dpybind11_DIR="$(python3.9 -m pybind11 --cmakedir)"
 cmake --build out/oldcore-2b0a45d/build/ci-linux -j8
 
 # 3. The .so lands in build/ci-linux/ (NOT build/), so PYTHONPATH must include

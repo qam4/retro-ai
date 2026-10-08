@@ -1,0 +1,15 @@
+{
+ "step": 6000000,
+ "frontier": "Lfruit_bot",
+ "frontier_rate": 0.9333333333333333,
+ "princess": 0.0,
+ "mean_rung": 1.1666666666666667,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.13662601021279464,
+ "consecutive_regressions": 2,
+ "best_step": 600000,
+ "best_frontier": "Low2_launch",
+ "best_frontier_rate": 0.6,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v26_surfaceposes_6m/best/best_model.zip"
+}

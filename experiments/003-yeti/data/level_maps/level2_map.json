@@ -1,0 +1,169 @@
+{
+  "base": 11303,
+  "grid": [
+    40,
+    25
+  ],
+  "floors": [
+    {
+      "row": 6,
+      "col_min": 0,
+      "col_max": 39,
+      "n": 30
+    },
+    {
+      "row": 9,
+      "col_min": 0,
+      "col_max": 39,
+      "n": 32
+    },
+    {
+      "row": 12,
+      "col_min": 0,
+      "col_max": 39,
+      "n": 30
+    },
+    {
+      "row": 15,
+      "col_min": 0,
+      "col_max": 39,
+      "n": 32
+    },
+    {
+      "row": 18,
+      "col_min": 0,
+      "col_max": 39,
+      "n": 32
+    },
+    {
+      "row": 21,
+      "col_min": 0,
+      "col_max": 39,
+      "n": 34
+    }
+  ],
+  "ladders": [
+    {
+      "col_left": 1,
+      "col_right": 2,
+      "row_top": 9,
+      "row_bot": 11,
+      "n_tiles": 6
+    },
+    {
+      "col_left": 4,
+      "col_right": 5,
+      "row_top": 15,
+      "row_bot": 17,
+      "n_tiles": 6
+    },
+    {
+      "col_left": 6,
+      "col_right": 7,
+      "row_top": 21,
+      "row_bot": 24,
+      "n_tiles": 8
+    },
+    {
+      "col_left": 9,
+      "col_right": 10,
+      "row_top": 6,
+      "row_bot": 8,
+      "n_tiles": 6
+    },
+    {
+      "col_left": 14,
+      "col_right": 15,
+      "row_top": 18,
+      "row_bot": 20,
+      "n_tiles": 6
+    },
+    {
+      "col_left": 16,
+      "col_right": 17,
+      "row_top": 12,
+      "row_bot": 14,
+      "n_tiles": 6
+    },
+    {
+      "col_left": 23,
+      "col_right": 24,
+      "row_top": 9,
+      "row_bot": 11,
+      "n_tiles": 6
+    },
+    {
+      "col_left": 28,
+      "col_right": 29,
+      "row_top": 21,
+      "row_bot": 24,
+      "n_tiles": 8
+    },
+    {
+      "col_left": 36,
+      "col_right": 37,
+      "row_top": 15,
+      "row_bot": 17,
+      "n_tiles": 6
+    },
+    {
+      "col_left": 37,
+      "col_right": 38,
+      "row_top": 6,
+      "row_bot": 8,
+      "n_tiles": 6
+    }
+  ],
+  "fruits": [
+    {
+      "col": 7,
+      "row": 16,
+      "col_max": 8,
+      "row_max": 17,
+      "tile_ids": [
+        31,
+        32,
+        33,
+        34
+      ],
+      "n_tiles": 4,
+      "pixel": [
+        56,
+        128
+      ],
+      "agent_x": 14,
+      "agent_y": 128,
+      "presence_addr": 11950
+    },
+    {
+      "col": 32,
+      "row": 16,
+      "col_max": 33,
+      "row_max": 17,
+      "tile_ids": [
+        35,
+        36,
+        37,
+        38
+      ],
+      "n_tiles": 4,
+      "pixel": [
+        256,
+        128
+      ],
+      "agent_x": 64,
+      "agent_y": 128,
+      "presence_addr": 11975
+    }
+  ],
+  "princess": {
+    "agent_x": 72,
+    "agent_y": 182,
+    "pixel": [
+      288,
+      182
+    ],
+    "y_byte": 182,
+    "x_byte": 72
+  }
+}

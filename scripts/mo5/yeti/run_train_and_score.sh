@@ -15,7 +15,9 @@
 # are in the log.
 set -u
 
-cd /home/ec2-user/src/fred/retro-ai || exit 1
+# The repo root, from this script's own location (scripts/mo5/yeti/), not a hardcoded
+# home directory: the repo is public and that path carried the user's name.
+cd "$(dirname "$0")/../../.." || exit 1
 export PYTHONPATH=python:build/ci-linux
 export RETRO_AI_ROM_DIR=roms
 
