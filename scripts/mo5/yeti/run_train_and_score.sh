@@ -33,43 +33,59 @@ for CFG in "$@"; do
     echo "========== MISSING CONFIG $CFG -- skipped"
     continue
   fi
-  OUT=$(python3 -c "
+  # EVERYTHING the referee needs comes from the config, never from this script, so the
+  # referee scores the run on the level, view and reach test it trained with. This used
+  # to hardcode L4 (`--level 4 --profile yeti_fruit_level4 --fruits-total 1` and L4's
+  # start state), which would have scored any other level's run as L4 without an error.
+  # Values are shlex-quoted before eval, so a path with spaces cannot split.
+  VARS=$(python3 - "$CFG" <<'PYEOF'
+import shlex
+import sys
+
 from retro_ai.training.run_config import RunConfig
-print(RunConfig.from_yaml('$CFG').training.output)
-")
-  # The referee must see the SAME picture training did. Read from the config, not
-  # passed in, for the same reason as OUT: so the two cannot disagree.
-  RESIZE_MODE=$(python3 -c "
-from retro_ai.training.run_config import RunConfig
-print(RunConfig.from_yaml('$CFG').env.resize_mode)
-")
-  # Same for the reach test: the referee must decide "reached" the way training did.
-  REACH_MODE=$(python3 -c "
-from retro_ai.training.run_config import RunConfig
-print(RunConfig.from_yaml('$CFG').curriculum.waypoint_reach_mode)
-")
-  if [ -z "$OUT" ] || [ -z "$RESIZE_MODE" ] || [ -z "$REACH_MODE" ]; then
-    echo "========== COULD NOT READ output/resize_mode/reach_mode FROM $CFG -- skipped"
+
+c = RunConfig.from_yaml(sys.argv[1])
+if c.curriculum is None:
+    raise SystemExit("config has no curriculum section")
+vals = {
+    "OUT": c.training.output,
+    "RESIZE_MODE": c.env.resize_mode,
+    "REACH_MODE": c.curriculum.waypoint_reach_mode,
+    "PROFILE": c.env.profile,
+    "LEVEL": int((c.reward.params or {}).get("level", 1)),
+    "FRUITS_TOTAL": c.curriculum.fruits_total,
+    "START_STATE": c.curriculum.start_state or "",
+    "STALL": c.env.stall_threshold,
+    "MAXSTEPS": c.env.max_steps,
+}
+for k, v in vals.items():
+    print(f"{k}={shlex.quote(str(v))}")
+PYEOF
+)
+  if [ -z "$VARS" ]; then
+    echo "========== COULD NOT READ the referee settings FROM $CFG -- skipped"
     continue
+  fi
+  eval "$VARS"
+  REF_ARGS=(--level "$LEVEL" --profile "$PROFILE" --fruits-total "$FRUITS_TOTAL"
+            --stall-threshold "$STALL" --max-steps "$MAXSTEPS")
+  # L1 starts from a game reset, not a save-state.
+  if [ -n "$START_STATE" ]; then
+    REF_ARGS+=(--start-state "$START_STATE")
   fi
 
   echo "========== $CFG TRAIN START $(date -Is)   -> $OUT"
   python3 -u scripts/mo5/yeti/train_checkpoint_curriculum.py --config "$CFG"
   echo "========== $CFG TRAIN EXIT $? $(date -Is)"
 
-  echo "========== $CFG REFEREE START $(date -Is)   resize_mode=$RESIZE_MODE reach_mode=$REACH_MODE"
+  echo "========== $CFG REFEREE START $(date -Is)   resize_mode=$RESIZE_MODE reach_mode=$REACH_MODE ${REF_ARGS[*]}"
   python3 -u scripts/mo5/yeti/keep_best_sweep.py \
     --snapshots-dir "${OUT}/snapshots" \
     --resize-mode "$RESIZE_MODE" \
     --reach-mode "$REACH_MODE" \
     --episodes 30 \
     --device cpu \
-    --level 4 \
-    --profile yeti_fruit_level4 \
-    --fruits-total 1 \
-    --start-state output/mo5/yeti/level4/level4_start.sav \
-    --stall-threshold 40 \
-    --max-steps 1500
+    "${REF_ARGS[@]}"
   echo "========== $CFG REFEREE EXIT $? $(date -Is)"
 done
 

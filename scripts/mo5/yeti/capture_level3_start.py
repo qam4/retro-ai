@@ -167,6 +167,14 @@ def main() -> None:
     p.add_argument("--settle-stride", type=int, default=4)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument(
+        "--resize-mode",
+        default="nearest",
+        choices=["nearest", "max"],
+        help="MUST match the mode --model was trained with (env.resize_mode). A policy "
+        "run on the other mode does not finish the level: the L4 v29 champion reads "
+        "mean rung 8.17 under its own mode and 0.02 under the other.",
+    )
+    p.add_argument(
         "--label",
         default="level3",
         help="output basename + log label for the NEXT level captured "
@@ -184,6 +192,7 @@ def main() -> None:
         max_steps=10_000,
         stall_threshold=10**9,
         resize=(84, 84),
+        resize_mode=args.resize_mode,
     )
     stack = build_training_env(args.profile, env_cfg)
     base, gym_env, iface = stack.base, stack.gym, stack.base._interface
