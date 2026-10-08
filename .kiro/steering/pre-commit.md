@@ -36,7 +36,7 @@ SDL code must be guarded by `ENABLE_SDL` — Android and libretro builds have no
 
 - Build preset: `dev-win64` (MSVC, Visual Studio 18 2026)
 - MinGW preset `dev-mingw` still works but is not the primary build
-- Python: pyenv Python 3.13.5 (`C:\Users\fredmarc\.pyenv\pyenv-win\versions\3.13.5\python.exe`)
+- Python: pyenv Python 3.13.5 (`%USERPROFILE%\.pyenv\pyenv-win\versions\3.13.5\python.exe`)
 - Install packages via `pip install <name>` (standard MSVC Python, PyTorch wheels work)
 - Set `PYTHONPATH=C:\src\retro-ai\python;C:\src\retro-ai\build\dev-win64\Debug` for imports
 - Native module: `retro_ai_native.cp313-win_amd64.pyd` in `build/dev-win64/Debug/`
