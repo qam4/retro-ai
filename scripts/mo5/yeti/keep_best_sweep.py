@@ -166,6 +166,13 @@ def _eval_snapshot(
         for pt in row.get("reached_points") or ():
             hits[pt] += 1
     rates = {k: v / n for k, v in hits.items()} if n else {}
+    # Progress-ladder rates: "rungK" = fraction of episodes that got AT LEAST K rungs.
+    # The frontier for a level with no route order (see _frontier_route). Added for
+    # every level; a level WITH a route order never looks these keys up.
+    if n:
+        rungs = {int(k): v for k, v in (data.get("rung_counts") or {}).items()}
+        for k in range(1, int(data.get("n_rungs") or 0) + 1):
+            rates[f"rung{k}"] = sum(v for r, v in rungs.items() if r >= k) / n
     return (
         princess,
         reach_top,
@@ -173,6 +180,26 @@ def _eval_snapshot(
         data.get("n_rungs", 0),
         rates,
     )
+
+
+def _frontier_route(level_route, n_rungs):
+    """The ordered list the frontier walks: the level's route order, or its ladder.
+
+    A level map's ``route_order`` names waypoints in travel order, and L3/L4 define one.
+    L1 and L2 do not -- their progress ladder is just the fruits -- so the frontier used
+    to come back empty there, and their snapshots were ranked on princess and mean rung
+    alone. With no route order, the route is the ladder itself: ``rung1 .. rungN``,
+    where ``rungK``'s rate (from _eval_snapshot) is the fraction of episodes that got at
+    least K rungs. That is order-free, so it does not assume the fruits are collected in
+    any particular sequence.
+
+    NOT fixed by giving L1 a route order: the trainer's start gate refuses any pool
+    absent from ``route_order``, so a fruits-only route would lock out every ladder
+    waypoint pool on the level.
+    """
+    if level_route:
+        return list(level_route)
+    return [f"rung{k}" for k in range(1, int(n_rungs or 0) + 1)]
 
 
 def _frontier(rates, route_order, floor=0.05):
@@ -374,12 +401,12 @@ def main() -> None:
             # 0.75) where `mean_rung`'s sd at n=12 is 0.75 rungs against a 0.47-rung
             # signal. `mean_rung` stays in the record and as the last tie-break, since
             # it is comparable with the training route table.
-            fwid, frate = _frontier(rates, route_order)
-            fdepth = (
-                (route_order.index(fwid) + 1) / len(route_order)
-                if (fwid and route_order)
-                else 0.0
-            )
+            # The level's route order, or -- on a level without one (L1, L2) -- its
+            # progress ladder. Identical to before wherever a route order exists, so
+            # L3/L4 scores stay comparable.
+            route = _frontier_route(route_order, n_rungs)
+            fwid, frate = _frontier(rates, route)
+            fdepth = (route.index(fwid) + 1) / len(route) if (fwid and route) else 0.0
             score = (
                 princess
                 + 1e-2 * fdepth  # how far along the route the frontier sits
@@ -411,10 +438,13 @@ def main() -> None:
             bfr = (state.get("best") or {}).get("frontier_rate") or 0.0
             regressed = bool(
                 bf
-                and route_order
+                and route
                 and fwid
+                # A best recorded under the other naming (a state file from before this
+                # fallback existed) cannot be compared; do not crash on it.
+                and bf in route
                 and (
-                    route_order.index(fwid) < route_order.index(bf)
+                    route.index(fwid) < route.index(bf)
                     or (fwid == bf and frate < bfr - margin)
                 )
             )
