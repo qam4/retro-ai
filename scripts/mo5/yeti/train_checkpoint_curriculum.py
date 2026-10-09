@@ -1155,7 +1155,24 @@ class CheckpointManager:
         are appended in a stable order so nothing is ever hidden.
         """
         ids = list(route_order or [])
-        rest = sorted(set(self.waypoints) | set(self.wp_reach_ema) - set(ids))
+        # Every FRUIT on the progress ladder gets a row from the first table on. A
+        # fruit only enters the reach table once its pool exists, so a fruit nobody
+        # had reached yet was simply absent -- which read as "this level has fewer
+        # fruits", not as "not reached". It now shows with dashes until it has data.
+        # Display only: the reach EMA and the start gate are untouched.
+        fruits = sorted(
+            {
+                n
+                for g in getattr(self, "mandatory_groups", ()) or ()
+                for n in g
+                if n[:1] == "F" and n[1:].isdigit()
+            },
+            key=lambda s: int(s[1:]),
+        )
+        rest = sorted(
+            (set(self.waypoints) | set(self.wp_reach_ema) | set(fruits)) - set(ids),
+            key=lambda s: (0, int(s[1:])) if s in fruits else (1, s),
+        )
         ids += [w for w in rest if w not in ids]
         if not ids:
             return ""

@@ -141,3 +141,19 @@ def test_the_L4_ladder_shrinks_because_the_or_pair_is_one_step():
 
     groups, n = mod._progress_ladder(_Cfg)
     assert n == 12, f"expected 12 rungs, got {n}: {[sorted(g) for g in groups]}"
+
+
+def test_route_table_lists_every_fruit_before_any_is_reached():
+    """A fruit only enters the reach table once its pool exists, so the route table
+    used to omit fruits nobody had reached -- which read as the level having fewer
+    fruits. Every fruit on the ladder must have a row from the start."""
+    mod = _mod()
+    groups = [frozenset({f"F{i}"}) for i in (1, 2, 3, 4)] + [frozenset({"L12a_top"})]
+    m = _mgr(mod, groups, len(groups))
+    m.wp_reach_ema["L12a_top"] = 0.5  # one waypoint already has data
+    table = m.route_table()
+    rows = [line.split()[0] for line in table.splitlines()[1:]]
+    assert rows[:4] == ["F1", "F2", "F3", "F4"], rows
+    assert "L12a_top" in rows
+    f2 = next(line for line in table.splitlines() if line.split()[0] == "F2")
+    assert f2.split()[1] == "—", f"an unreached fruit must read as no data: {f2!r}"
