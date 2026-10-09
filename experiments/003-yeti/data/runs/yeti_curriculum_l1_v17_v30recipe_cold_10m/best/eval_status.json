@@ -1,0 +1,17 @@
+{
+ "step": 10000000,
+ "frontier": "rung4",
+ "frontier_rate": 0.7666666666666667,
+ "frontier_rate_ci95": 0.14568216559911518,
+ "princess": 0.7,
+ "princess_ci95": 0.1560577918385062,
+ "mean_rung": 3.3666666666666667,
+ "n_eval": 30,
+ "regressed": false,
+ "regress_margin": 0.23166067138525404,
+ "consecutive_regressions": 0,
+ "best_step": 8500000,
+ "best_frontier": "rung4",
+ "best_frontier_rate": 0.8,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/best/best_model.zip"
+}

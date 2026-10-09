@@ -195,9 +195,11 @@ logs; `debug/probe_{old,head}.npz` RAM/frame captures (~2.8M each).
   manifest already captures git info; add the built artifact's SHA/mtime. Without
   it, a policy cannot be tied to the emulator it was trained on — which is what
   made this take a full investigation instead of one command.
-- **Re-measure or retrain L1 on the current core.** Navigation transfers
-  (reach-4 is 39/40 everywhere); the final leg needs to relearn live hazards.
-  Warm-starting from the champion's weights is the obvious first attempt.
+- **Re-measure or retrain L1 on the current core.** DONE 2026-10-09, by a cold
+  retrain rather than a warm start: `yeti_curriculum_l1_v17_v30recipe_cold_10m`
+  scores princess **208/300 = 0.69 (0.64-0.74)** from reset on the current core
+  (`experiments/003-yeti/data/champion_recheck/l1_v17/eval_300.json`). The 97.5% above was earned
+  against frozen hazards, so the two numbers are not the same game.
 - **Keep `selfcheck` in the loop** after any change to save/load, the crayon
   submodule, or the startup sequence. It is ~30s and needs no champion.
 - **Consider cropping the HUD** for the next training generation (TODO.md has

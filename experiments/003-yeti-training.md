@@ -61,6 +61,10 @@ about those runs come from old logs / prior conversations and are marked
 > before being quoted.** Relative results within a single emulator build (e.g.
 > L3 v13 vs v14) remain valid. There is no pixel-level workaround — the main
 > component is game state, not the frame.
+>
+> **Current-core L1 figure (2026-10-09):** a cold retrain,
+> `yeti_curriculum_l1_v17_v30recipe_cold_10m`, scores princess **208/300 =
+> 0.69 (0.64-0.74)** from reset. See the H-AM follow-up below.
 
 ## TL;DR / Current status (after approach 35)
 
@@ -1065,6 +1069,28 @@ alone doesn't resolve the over-concentration.
   implemented as a state restore. (c) H-AE's rule generalises: validate the
   start state against a real boot, not just against itself — bit-exact
   restore-vs-boot is now the guard.
+  **Follow-up: L1 retrained on the current core (2026-10-09).**
+  `yeti_curriculum_l1_v17_v30recipe_cold_10m`: cold 10M, 8 envs, seed 42, the
+  recipe that broke L4 in v30 — block-max resize (`env.resize_mode: max`),
+  sprite reach, the four fruits as the progress ladder (ladder waypoints are
+  still seeded from), n_steps 512, ent_coef 0.01. 11h 49m wall, training plus referee.
+  Referee (30 episodes per snapshot, 40 snapshots): princess 0 until 5.25M, then
+  1M-block means 0.17, 0.32, 0.68, 0.65, 0.49; champion `model_8500000_steps` at
+  0.77. Re-measured on 300 stochastic episodes from reset
+  (`experiments/003-yeti/data/champion_recheck/l1_v17/eval_300.json`):
+  **princess 208/300 = 0.69 (Wilson 0.64-0.74)**; >= 4 fruits 0.75, >= 3 0.86,
+  >= 2 0.96. Deaths by fruits held: {0: 2, 1: 11, 2: 30, 3: 31, 4: 18}, so the
+  losses are spread over the climb, not only the final leg.
+  Not comparable to the 97.5% above, which was earned against frozen hazards.
+  Not warm-started from `v15_phase2_4500k`: that policy was trained on nearest
+  resize, and switching resize collapsed the L4 warm start (v29 champion 8.17 ->
+  0.02 mean rung). One run and no cold-nearest control, so this does not show
+  that block-max is why L1 learned; it shows the current recipe works on L1.
+  The run record and referee state are under
+  `experiments/003-yeti/data/runs/yeti_curriculum_l1_v17_v30recipe_cold_10m/`.
+  Its `env.json` git block was corrected by hand from the launch log (clean
+  `571c359`): the manifest used to re-capture git at end of run, fixed in
+  `run_manifest.py`.
 - **H-AF — first VALID level-2 run (`yeti_curriculum_l2_v3_10m`), raw data.**
   First L2 training on the fixed, control-verified start save (config = the
   latest L2 config, `fruit_bonus_path_progress_pbrs` level 2, phase-1

@@ -220,11 +220,14 @@ cropping the HUD still diverges, at step 76, via a snowball).
 Numbers, mechanism, reproduction recipe and tracked data: see the write-up.
 
 FOLLOW-UPS
-- [ ] **Re-measure or retrain L1 on the current core.** Every L1 princess figure
-  in experiments/003-yeti-training.md predates `2b0a45d` and is void. Navigation
-  transfers (reach-4 = 39/40 on every build); only the hazard-sensitive final leg
-  must relearn. Warm-starting from the champion's weights is the obvious first
-  attempt.
+- [x] **Re-measure or retrain L1 on the current core.** DONE 2026-10-09:
+  `yeti_curriculum_l1_v17_v30recipe_cold_10m` (cold 10M, the L4 v30 recipe:
+  block-max resize, sprite reach, the fruits as the progress ladder) scores **princess
+  208/300 = 0.69 (0.64-0.74)** from reset on the current core. Not warm-started:
+  the old champion was trained on nearest resize, and switching resize collapsed
+  the L4 warm start (v29 8.17 -> 0.02 mean rung). One run, no cold-nearest
+  control, so block-max is not proven to be the reason. Write-up: H-AM follow-up
+  in experiments/003-yeti-training.md.
 - [ ] **Run `core_determinism_probe.py selfcheck` after any change to save/load,
   the crayon submodule, or the startup sequence.** ~30s, one build, no champion
   needed; exits non-zero when `reset()` stops reproducing a real boot. Worth
