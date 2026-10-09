@@ -394,3 +394,53 @@ def test_git_info_on_a_clean_tree_writes_no_patch(tmp_path, monkeypatch):
     assert info["dirty"] is False
     assert "diff_file" not in info
     assert not list(out.iterdir())
+
+
+def test_finalize_keeps_the_launch_commit_and_patch(tmp_path, monkeypatch):
+    """env.json must describe the code a run LAUNCHED with, not the tree at the end.
+
+    finalize() used to re-capture git state, so a run that launched clean and finished
+    after an unrelated edit recorded the later commit, `dirty: true`, and a
+    run_dirty.patch of code it never executed. Measured on L1 v17: launched from a
+    clean 571c359, recorded 811e35a dirty.
+    """
+    import json
+    import subprocess as sp
+
+    from retro_ai.training.run_manifest import RunManifest
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args):
+        sp.check_call(
+            ["git", "-C", str(repo), "-c", "commit.gpgsign=false", *args],
+            stdout=sp.DEVNULL,
+            stderr=sp.DEVNULL,
+        )
+
+    ident = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+    git("init", "-q")
+    (repo / "a.py").write_text("x = 1\n")
+    git("add", "a.py")
+    git(*ident, "commit", "-qm", "init")
+    launch_sha = sp.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
+
+    monkeypatch.chdir(repo)
+    out = tmp_path / "run"
+    m = RunManifest.capture({"x": 1}, str(out))
+
+    # Mid-run: someone commits, then leaves an uncommitted edit.
+    (repo / "a.py").write_text("x = 2\n")
+    git(*ident, "commit", "-qam", "later")
+    (repo / "a.py").write_text("x = 3\n")
+
+    m.finalize(status="COMPLETED", exit_code=0)
+    env = json.loads((out / "env.json").read_text())
+    assert env["status"] == "COMPLETED"
+    assert env["git"]["commit"] == launch_sha
+    assert env["git"]["dirty"] is False
+    assert not (out / "run_dirty.patch").exists()
+    assert env["wall_clock_sec"] is not None

@@ -271,6 +271,8 @@ class RunManifest:
     _env_path: str = field(init=False)
     _run_path: str = field(init=False)
     _started_at: float = field(default_factory=time.time)
+    # git / emulator / versions as they were AT LAUNCH. See _write_env_json.
+    _launch: Optional[Dict[str, Any]] = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         os.makedirs(self.output_dir, exist_ok=True)
@@ -326,6 +328,29 @@ class RunManifest:
                 json.dump(payload, f, indent=2, default=str)
 
     def _write_env_json(self, status: str, exit_code: Optional[int]) -> None:
+        # LAUNCH CONTEXT IS CAPTURED ONCE, at the first write, and reused at finalize.
+        #
+        # It used to be re-captured on every write, so `finalize()` -- hours later --
+        # overwrote the launch record with whatever the tree held when the run ENDED:
+        # the commit, the dirty flag, run_dirty.patch, even the emulator build hash.
+        # Found on L1 v17, which launched from a clean 571c359 and recorded 811e35a,
+        # dirty, with a patch of an edit made mid-run that the run never executed.
+        # Every run where a commit landed during training named the wrong code.
+        if self._launch is None:
+            self._launch = {
+                # Dumps `run_dirty.patch` beside this file when the tree is dirty, so
+                # a run launched from uncommitted work stays reconstructible.
+                "git": _git_info(dump_dir=self.output_dir),
+                # Which EMULATOR produced these numbers. The git SHA cannot answer
+                # that: the native module is unversioned and may be stale or ahead of
+                # HEAD. See _native_info.
+                "native": _native_info(),
+                "versions": _library_versions(),
+                "hostname": socket.gethostname(),
+                "platform": platform.platform(),
+                "argv": list(sys.argv),
+                "cwd": os.getcwd(),
+            }
         payload = {
             "status": status,
             "exit_code": exit_code,
@@ -335,18 +360,7 @@ class RunManifest:
             ),
             "finished_at": None,
             "wall_clock_sec": None,
-            # Dumps `run_dirty.patch` beside this file when the tree is dirty, so a
-            # run launched from uncommitted work stays reconstructible. See _git_info.
-            "git": _git_info(dump_dir=self.output_dir),
-            # Which EMULATOR produced these numbers. The git SHA cannot answer
-            # that: the native module is unversioned and may be stale or ahead of
-            # HEAD. See _native_info.
-            "native": _native_info(),
-            "versions": _library_versions(),
-            "hostname": socket.gethostname(),
-            "platform": platform.platform(),
-            "argv": list(sys.argv),
-            "cwd": os.getcwd(),
+            **self._launch,
         }
         if status != "RUNNING":
             now = time.time()
