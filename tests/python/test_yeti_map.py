@@ -317,10 +317,9 @@ def test_jump_node_inset_stays_off():
     Measured on every L4 jump edge at inset 4: the last step onto the departure edge
     went from +0.04 to -0.04, all 12 flipped, so the shaping punished the departure of
     every jump on the level -- including rope 1, which the agent crosses ~53% of the
-    time. Run v25 against v24 as control (6M, n=30, 60 snapshots): mean `Low2_launch`
-    rate 0.195 vs 0.349, frontier collapsed in 23/60 evals vs 8/56, and per-waypoint
-    reach down a FLAT 0.12-0.13 from `Lclimb1_top` through `Low2_launch` -- a constant
-    offset, so the loss is incurred early and inherited, not a rope-2 effect.
+    time. Run v25 against v24 (mean `Low2_launch` rate 0.195 vs 0.349) was first read as
+    confirming it, but the v28a/b/c replicates of one config span 0.149-0.239, so that
+    comparison shows nothing. The sign flip is the reason.
 
     `test_departing_a_jump_edge_pays` pins the mechanism. This pins the setting.
     """

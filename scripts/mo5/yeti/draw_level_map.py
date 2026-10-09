@@ -22,12 +22,14 @@ declared platform EDGE nearest the other platform (``_jump_graph``), while a
 waypoint can carry a MEASURED anchor from ``jump_waypoint_pos``. Where a level
 supplies such an anchor the two separate, and nothing on this map showed it.
 
-L4's rope 2 is the case that matters: ``Low2_launch`` was moved to the measured
-px 188 in September, but ``J12_13_a`` -- the point the potential actually aims at
--- still sits on the declared edge at px 184, the pixel that kills 12/12 at rest.
-Four pixels, invisible unless both are drawn. Same on the landing side:
-``J12_13_b`` and the mandatory ``Low2`` both sit at px 128 while floor 13 is
-only standable to 124.
+L4's rope 2 is the case that prompted this: ``Low2_launch`` carried a measured
+px 188 while ``J12_13_a`` -- the point the potential aims at -- sits on the
+declared edge at px 184, the pixel that kills 12/12 at rest. Four pixels,
+invisible unless both are drawn. The node is on the edge deliberately, because the
+jump departs from it (see ``_jump_graph``), and ``Low2_launch`` is no longer
+emitted (v29). On the landing side ``J12_13_b`` and the mandatory ``Low2`` both sit
+at px 128 while floor 13 is standable only to 124; under sprite reach an agent at
+124 still covers ``Low2``.
 
 So: violet diamonds are what the REWARD sees, coloured circles are what the
 CURRICULUM sees, and any place they do not coincide is worth explaining.

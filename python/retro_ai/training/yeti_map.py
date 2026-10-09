@@ -159,19 +159,13 @@ class LevelMap:
     # platform, and the ladder anchor is exact while the launch pad's wide box also
     # caught a stalled climb 24 px away and reported it as an arrival.
     jump_waypoint_skip: Optional[List[str]] = None
-    # Px to pull each JUMP-GRAPH NODE inside its platform's tile edge, so the PBRS
-    # potential aims at a position the agent can stand on. See EDGE_INSET_PX for the
-    # measurement and `_jump_graph` for why only the nodes move, never the curriculum
-    # anchors.
-    #
-    # PER-LEVEL AND DEFAULT 0 ON PURPOSE. The mechanic is universal -- 8x8 tiles, 4-px
-    # steps -- so the right value is EDGE_INSET_PX everywhere. The opt-in is about blast
-    # radius, not about geometry: this moves a reward target, and L3 is the only level
-    # this project finishes reliably (14 of 16 runs reach the princess). Perturbing L3's
-    # shaping to fix L4's rope-2 pad would put the one working level at risk for no
-    # measured benefit, and it would break the seeder/shaping agreement that
-    # test_l3_jump_waypoints_on_ascent pins there. Turn it on for L3 only with its own
-    # control arm, after L4 has read out.
+    # Px to pull each JUMP-GRAPH NODE inside its platform's tile edge. 0 on every level,
+    # and it should stay 0. The tile edge is a pixel the agent cannot stand on
+    # (EDGE_INSET_PX), but a jump node marks where a jump DEPARTS, and the agent leaves
+    # from the edge pixel in motion. At 4, the last step onto the departure edge pays
+    # -0.04 instead of +0.04 at all 12 L4 jumps, so the shaping punishes walking to the
+    # jump (test_departing_a_jump_edge_pays). Tried on L4 in v25 and reverted; see
+    # LEVEL4's edge_inset comment. Kept as a field so that arm stays reproducible.
     edge_inset: int = 0
     # Optional DISPLAY-ONLY route order: route-point ids bottom-of-route first.
     # Carries NO semantics — the reward still sums over ALL not-yet-reached
@@ -907,7 +901,7 @@ LEVEL4 = LevelMap(
         "Low1_launch",
         "Low2_launch",
     ],
-    # 0 = nodes stay ON the tile edge. MEASURED HARMFUL AT 4, DO NOT RAISE IT.
+    # 0 = nodes stay ON the tile edge. HARMFUL AT 4 BY CONSTRUCTION, DO NOT RAISE IT.
     #
     # The idea was that a node on the tile edge aims the potential at a pixel the agent
     # falls off, so pulling it one step in would stop the shaping paying to step onto
@@ -922,20 +916,16 @@ LEVEL4 = LevelMap(
     # agent crosses ~53% of the time) and including rope 2 itself -- the notes record a
     # real crossing that departs px 184 with leftward momentum.
     #
-    # Run v25 (6M, warm from v23, empty pools, evaluator at n=30 over 60 snapshots)
-    # against v24 as control:
-    #
-    #     mean Low2_launch rate   0.195 vs 0.349      median 0.17 vs 0.37
-    #     frontier collapsed in   23/60 vs 8/56 evals
-    #     per-waypoint from-reset reach: flat -0.12 to -0.13 from Lclimb1_top all the
-    #     way to Low2_launch -- a constant offset, i.e. loss incurred EARLY and
-    #     inherited downstream, not a rope-2 effect
-    #
-    # v25 bundled this with the rewards.SURFACE_POSES fix, so the split is not proven;
-    # but only this change has a mechanism that predicts a uniform whole-route offset.
+    # Run v25 (6M, warm from v23, bundled with the rewards.SURFACE_POSES fix) against
+    # v24 read mean Low2_launch rate 0.195 vs 0.349 and was first taken as confirming
+    # this. IT DOES NOT: the v28a/b/c replicates of one config span 0.149-0.239 (sd
+    # 0.047), so 0.195 is an ordinary draw. v24's 0.349 is the high one (+3.09 sd), and
+    # whether that was luck or its older pose gate is unsettled (level4_notes.md, "THE
+    # RUN-TO-RUN SPREAD"). No run shows 4 hurt; the sign flip above is the reason, and
+    # it is arithmetic.
     # Kept as a field rather than deleted so the arm is reproducible from data, not from
     # a git checkout, per the control-arm rule in experiments/003-yeti-training.md.
-    # test_jump_node_inset_stays_off pins it.
+    # test_jump_node_inset_stays_off and test_departing_a_jump_edge_pays pin it.
     edge_inset=0,
 )
 
@@ -987,7 +977,8 @@ def _edge_px(p: "Platform", toward_x: float, inset: int = 0) -> int:
 
     ``inset`` pulls the result that many px INSIDE the platform, for callers that need a
     position the agent can stand on rather than the tile boundary. Default 0 keeps every
-    existing caller byte-identical; only `_jump_graph` passes it (see EDGE_INSET_PX).
+    existing caller byte-identical; only `_jump_graph` passes it, as ``lvl.edge_inset``,
+    which is 0 on every level (see that field for why).
 
     WHICH SIDE the other platform is on is decided against the REAL extent, so the
     inset moves the returned point without changing the geometry of the choice. The
@@ -1010,25 +1001,26 @@ def _jump_graph(lvl: LevelMap):
     """Nodes + edges contributed by ``lvl.jump_edges``.
 
     Returns (nodes, edge_specs) where edge_specs are (identA, identB, cost).
-    Each jump-edge (fa, fb) gets an endpoint node on each platform placed
-    ``EDGE_INSET_PX`` inside that platform's edge nearest the other (so shaping pulls
-    toward the jump-off point on wide platforms), joined by a jump edge of cost
-    |Δx| + |Δy|. Empty unless the level defines both jump_edges and platforms.
+    Each jump-edge (fa, fb) gets an endpoint node on each platform, ON that platform's
+    tile edge nearest the other (``lvl.edge_inset`` px inside it, 0 on every level), so
+    shaping pulls toward the jump-off point on wide platforms. The two are joined by a
+    jump edge of cost |Δx| + |Δy|. Empty unless the level defines both jump_edges and
+    platforms.
 
-    WHY INSET, AND WHY ONLY HERE (2026-09-24). These nodes are what the PBRS potential
-    measures distance to, so their position decides which pixel the shaping walks the
-    agent to. Placed on the tile boundary they name a pixel the agent falls off, which
-    contradicts this docstring's own word "jump-off point". On L4 floor 12 that was not
-    academic: `J12_13_a` sat on px 184, the step 188 -> 184 was the ONLY positive shaped
-    reward anywhere on the rope-2 pad (+0.12 over three live targets), and px 184 kills
-    12/12 agents that walk there and stop. Inset, the same step pays about -0.12.
+    WHY ON THE EDGE, NOT INSET. These nodes are what the PBRS potential measures
+    distance to. The tile edge is a pixel the agent cannot stand on (EDGE_INSET_PX),
+    which made an inset look obviously right, and it was tried on L4 (2026-09-24, run
+    v25). It is wrong: a node marks where a jump DEPARTS, and the agent leaves from the
+    edge pixel in motion. Inset by 4, the last step onto the departure edge pays -0.04
+    instead of +0.04 at all 12 L4 jumps, so the shaping punishes walking to the jump.
+    `test_departing_a_jump_edge_pays` and `test_jump_node_inset_stays_off` pin it.
 
-    `jump_waypoints` deliberately does NOT inset, even though it derives its defaults
-    from the same function. Those feed DETECTION and CAPTURE, a different subsystem with
-    its own history -- e667206 moved anchors, regressed `Rope1`, and was reverted
-    wholesale, taking a correct `Low2_launch` fix with it. Moving them is a separate
-    lever with a separate control arm; `test_jump_nodes_inset_curriculum_anchors_not`
-    pins the split.
+    `jump_waypoints` does not inset either. Its anchors feed DETECTION and CAPTURE, and
+    under sprite reach an agent standing one step inside still covers an edge anchor
+    (its sprite spans centre-7 .. centre+6): measured on all 15 L4 edge anchors, 15
+    reached. Under box reach (+-2) the edge did matter, which is why the measured
+    overrides in ``jump_waypoint_pos`` exist (e667206 moved anchors, regressed `Rope1`,
+    and was reverted).
     """
     if not lvl.jump_edges or not lvl.platforms:
         return [], []
