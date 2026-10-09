@@ -32,8 +32,16 @@ only standable to 124.
 So: violet diamonds are what the REWARD sees, coloured circles are what the
 CURRICULUM sees, and any place they do not coincide is worth explaining.
 
-Coordinate conventions (see yeti_map docstring): sprite centre is
-(x_ram*4 + 8, y + 8); a floor's visible surface is standing_y + 18.
+Coordinate conventions. The Y byte is the TOP row of the agent's sprite, and an
+anchor's y is the Y byte of an agent standing on it. Measured on live frames (L1 and
+L4 reset, Y 182): the sprite fills rows y .. y+17 and columns centre-7 .. centre+6,
+centre = x_ram*4 + 8. The floor tiles start at y + 18.
+
+So a waypoint is drawn as what the sprite reach test checks: a dot on the anchor
+PIXEL (px, y), plus the outline of an agent standing on it. The outline's bottom
+edge is the floor surface, where ladders end and graph nodes sit. Drawing the
+anchor at any other row (this script used y + 8 until 2026-10-09) puts it beside
+the ladder end it belongs to, or outside the sprite that reaches it.
 
 Usage::
 
@@ -48,12 +56,14 @@ import argparse
 
 from PIL import Image, ImageDraw, ImageFont
 from retro_ai.games import yeti
-from retro_ai.training.targets import build_targets
+from retro_ai.training.targets import SPRITE_H, SPRITE_W, build_targets
 from retro_ai.training.yeti_map import build_navigation_map, get_level_map
 
 FONT = "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono-Bold.ttf"
-SURFACE_DY = 18  # standing_y -> visible floor surface
-CENTRE_DY = 8  # standing_y -> sprite centre
+SURFACE_DY = SPRITE_H  # standing_y -> visible floor surface (first tile row)
+# The reach test's sprite span around the centre pixel: centre-7 .. centre+6.
+SPRITE_LEFT = SPRITE_W // 2
+SPRITE_RIGHT = SPRITE_W // 2 - 1
 
 PLATFORM = (70, 230, 120)
 LADDER = (90, 170, 255)
@@ -114,8 +124,8 @@ def draw(level, frame_path, out_path, scale=5, nodes=True):
         [pad_l, pad_t, pad_l + img.width, pad_t + img.height], fill=(0, 0, 0, 90)
     )
 
-    # platforms
-    for p in lvl.platforms:
+    # platforms (L1 and L2 define none: their maps are ladders only)
+    for p in lvl.platforms or ():
         y = p.y + SURFACE_DY
         d.line([P(p.x_min, y), P(p.x_max, y)], fill=PLATFORM, width=max(2, scale // 2))
         d.text(P(p.x_min + 1, y - 9), f"f{p.floor}", fill=PLATFORM, font=f_small)
@@ -129,31 +139,38 @@ def draw(level, frame_path, out_path, scale=5, nodes=True):
 
     # jump edges, launch -> landing, using the authored waypoint positions
     names = lvl.jump_waypoint_names or {}
-    for a, b in lvl.jump_edges:
+    for a, b in lvl.jump_edges or ():
         land = max(a, b)
         nm = names.get(land)
         if nm and nm in wps and f"{nm}_launch" in wps:
             (lx, ly, _), (ax, ay, _) = wps[f"{nm}_launch"], wps[nm]
-            p0 = P(lx * 4 + 8, ly + CENTRE_DY)
-            p1 = P(ax * 4 + 8, ay + CENTRE_DY)
+            p0 = P(lx * 4 + 8 + 0.5, ly + 0.5)
+            p1 = P(ax * 4 + 8 + 0.5, ay + 0.5)
         else:
             pf = {p.floor: p for p in lvl.platforms}
             pa, pb = pf[a], pf[b]
-            p0 = P((pa.x_min + pa.x_max) / 2, pa.y + CENTRE_DY)
-            p1 = P((pb.x_min + pb.x_max) / 2, pb.y + CENTRE_DY)
+            p0 = P((pa.x_min + pa.x_max) / 2, pa.y + 0.5)
+            p1 = P((pb.x_min + pb.x_max) / 2, pb.y + 0.5)
         _dashed(d, p0, p1, JUMP, width=max(2, scale // 2))
 
-    # waypoints
+    # waypoints: a dot on the anchor pixel, and the sprite of an agent standing on it
     r = max(4, int(scale * 1.5))
+    rd = max(3, int(scale * 0.9))
     for wid, (x_ram, y, _floor) in sorted(wps.items()):
-        cx, cy = P(x_ram * 4 + 8, y + CENTRE_DY)
+        px = x_ram * 4 + 8
         is_m = wid in mand_wp
         colour = MAND if is_m else OPT
-        box = [cx - r, cy - r, cx + r, cy + r]
+        d.rectangle(
+            [P(px - SPRITE_LEFT, y), P(px + SPRITE_RIGHT + 1, y + SPRITE_H)],
+            outline=colour + (150,),
+            width=1,
+        )
+        cx, cy = P(px + 0.5, y + 0.5)  # the centre of the anchor pixel
+        box = [cx - rd, cy - rd, cx + rd, cy + rd]
         if is_m:
-            d.ellipse(box, fill=colour + (200,), outline=(0, 0, 0), width=2)
+            d.ellipse(box, fill=colour + (230,), outline=(0, 0, 0), width=1)
         else:
-            d.ellipse(box, outline=colour, width=max(2, scale // 3))
+            d.ellipse(box, fill=(0, 0, 0), outline=colour, width=max(2, scale // 3))
         label = wid.replace("_launch", "^")
         d.text(
             (cx + r + 2, cy - r - 1),
@@ -173,7 +190,7 @@ def draw(level, frame_path, out_path, scale=5, nodes=True):
         by_ident = {n.ident: n for n in nav.nodes}
         # The graph's OWN edges, between node positions. Compare against the orange
         # dashed edge above, which is drawn between the waypoint positions.
-        for a, b in lvl.jump_edges:
+        for a, b in lvl.jump_edges or ():
             na, nb = by_ident.get(f"J{a}_{b}_a"), by_ident.get(f"J{a}_{b}_b")
             if na and nb:
                 _dashed(
@@ -208,29 +225,31 @@ def draw(level, frame_path, out_path, scale=5, nodes=True):
                     stroke_fill=(0, 0, 0),
                 )
 
-    # fruit + princess
-    for fid, (fx, fy) in lvl.fruit_centre_px.items():
-        cx, cy = P(fx, fy + CENTRE_DY)
-        d.rectangle([cx - r, cy - r, cx + r, cy + r], outline=FRUIT, width=3)
+    # fruit + princess: same convention as a waypoint. Their y is the standing Y of
+    # their floor (test_fruit_and_princess_stand_on_their_floor), so they get the
+    # standing-agent outline and a SQUARE on the point. The game detects these touches
+    # itself (presence byte, princess flag); nothing reads this y except this drawing.
+    def _stand_marker(x_px, y, colour, label):
+        d.rectangle(
+            [P(x_px - SPRITE_LEFT, y), P(x_px + SPRITE_RIGHT + 1, y + SPRITE_H)],
+            outline=colour + (170,),
+            width=1,
+        )
+        cx, cy = P(x_px + 0.5, y + 0.5)
+        d.rectangle([cx - rd, cy - rd, cx + rd, cy + rd], fill=colour)
         d.text(
-            (cx + r + 2, cy - r),
-            f"F{fid}",
-            fill=FRUIT,
+            (cx + rd + 2, cy - r),
+            label,
+            fill=colour,
             font=f_mid,
             stroke_width=2,
             stroke_fill=(0, 0, 0),
         )
+
+    for fid, (fx, fy) in lvl.fruit_centre_px.items():
+        _stand_marker(fx, fy, FRUIT, f"F{fid}")
     px, py = lvl.princess_centre_px
-    cx, cy = P(px, py + CENTRE_DY)
-    d.rectangle([cx - r, cy - r, cx + r, cy + r], outline=PRINCESS, width=3)
-    d.text(
-        (cx + r + 2, cy - r),
-        "PRINCESS",
-        fill=PRINCESS,
-        font=f_mid,
-        stroke_width=2,
-        stroke_fill=(0, 0, 0),
-    )
+    _stand_marker(px, py, PRINCESS, "PRINCESS")
 
     legend = [
         ("platform (floor)", PLATFORM),

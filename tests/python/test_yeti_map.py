@@ -4,14 +4,29 @@ from __future__ import annotations
 
 import pytest
 from retro_ai.training.yeti_map import (
+    LEVELS,
     agent_floor_from_pixel_y,
     build_navigation_map,
+    get_level_map,
 )
 
 
 @pytest.fixture(scope="module")
 def nav():
     return build_navigation_map()
+
+
+@pytest.mark.parametrize("level", sorted(LEVELS))
+def test_fruit_and_princess_stand_on_their_floor(level):
+    """A fruit's or the princess's y is the standing Y of its floor, like an anchor.
+
+    L1 and L2 had no single convention (y = standing +0, +2, +6, +10 or +18), which
+    drew their markers off the floor on the level maps. Only the drawing reads this y.
+    """
+    lvl = get_level_map(level)
+    for fid, (_x, y) in lvl.fruit_centre_px.items():
+        assert y == lvl.floor_top_y[lvl.fruit_floor[fid]], f"L{level} F{fid}"
+    assert lvl.princess_centre_px[1] == lvl.floor_top_y[lvl.princess_floor]
 
 
 def test_fixed_nodes_present(nav):
@@ -80,24 +95,26 @@ def test_path_distance_agent_at_target(nav):
 
 
 def test_agent_floor_from_pixel_y_standing():
-    """Standing y (within tolerance) resolves to correct floor."""
-    assert agent_floor_from_pixel_y(184) == 1
-    assert agent_floor_from_pixel_y(152) == 2
-    assert agent_floor_from_pixel_y(120) == 3
-    assert agent_floor_from_pixel_y(88) == 4
-    assert agent_floor_from_pixel_y(56) == 5
+    """Measured standing y (Y RAM byte, grounded) resolves to the correct floor."""
+    assert agent_floor_from_pixel_y(182) == 1
+    assert agent_floor_from_pixel_y(150) == 2
+    assert agent_floor_from_pixel_y(118) == 3
+    assert agent_floor_from_pixel_y(86) == 4
+    assert agent_floor_from_pixel_y(54) == 5
 
 
 def test_agent_floor_from_pixel_y_tolerance():
-    """8px tolerance around each floor top."""
-    assert agent_floor_from_pixel_y(180) == 1
-    assert agent_floor_from_pixel_y(192) == 1
+    """8px tolerance around each floor's standing y (floor 1 stands at 182)."""
+    assert agent_floor_from_pixel_y(174) == 1
+    assert agent_floor_from_pixel_y(190) == 1
+    assert agent_floor_from_pixel_y(173) is None
+    assert agent_floor_from_pixel_y(191) is None
 
 
 def test_agent_floor_from_pixel_y_mid_air_returns_none():
     """A y clearly between floors resolves to None."""
-    # Between floor 1 (y=184) and floor 2 (y=152): midpoint 168 is
-    # outside the 8px tolerance of either, so None.
+    # Between floor 1 (y=182) and floor 2 (y=150): 168 is outside the 8px
+    # tolerance of either, so None.
     assert agent_floor_from_pixel_y(168) is None
     # Death animation region.
     assert agent_floor_from_pixel_y(16) is None

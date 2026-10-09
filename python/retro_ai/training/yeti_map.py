@@ -225,10 +225,28 @@ EDGE_INSET_PX = 4
 
 
 # Level 1 — original climb-up layout (floor 1 = bottom/spawn, 5 = princess).
+#
+# floor_top_y is where the agent STANDS (the Y RAM byte), MEASURED. It read
+# {184, 152, 120, 88, 56} until 2026-10-09: 2 px below the real standing height on
+# every floor, the only level that was off (L2, L3, L4 match their grounded seeds
+# exactly). Measured on L1 v17's seed pools and from a reset: 182 on the ground,
+# 150 / 118 / 86 / 54 on floors 2-5. A floor's visible surface is standing y + 18,
+# which now lands exactly on the floor tile rows of the extracted tilemap
+# (test_level1_heights_sit_on_the_tilemap). Visible as markers drawn inside the floor
+# tiles on the L1 map render. Effect on the floor lookup (+-8), measured on 563 frames
+# of the v17 champion: 105 frames change, all at y = floor - 8 (174/142/110/78), which
+# now resolve to the floor instead of the ladder segment. So on each climb one 4 px
+# shaping step lands one frame later; PBRS totals over a climb are unchanged. Ladder
+# waypoint anchors move 2 px too, so seed pools captured before this change fail the
+# anchor-provenance check and drop their ladder pools.
 LEVEL1 = LevelMap(
-    floor_top_y={1: 184, 2: 152, 3: 120, 4: 88, 5: 56},
+    floor_top_y={1: 182, 2: 150, 3: 118, 4: 86, 5: 54},
     floor_height=32,
-    fruit_centre_px={1: (184, 184), 2: (80, 150), 3: (144, 120), 4: (272, 88)},
+    # Fruit and princess y = the standing Y of their floor, as on L3/L4. They read
+    # 184/150/120/88 and princess 60 until 2026-10-09 (no single convention). Only the
+    # map drawing reads this y: fruits are detected by their presence byte, the
+    # princess by her flag, and the nav graph uses x only.
+    fruit_centre_px={1: (184, 182), 2: (80, 150), 3: (144, 118), 4: (272, 86)},
     fruit_floor={1: 1, 2: 2, 3: 3, 4: 4},
     # Ordered (name, TOP_floor, BOT_floor, x): top = higher on screen (smaller
     # y). L1 climbs up, so the top floor has the larger number here.
@@ -239,7 +257,7 @@ LEVEL1 = LevelMap(
         ("L34", 4, 3, 176),
         ("L45", 5, 4, 208),
     ],
-    princess_centre_px=(312, 60),
+    princess_centre_px=(312, 54),
     princess_floor=5,
 )
 
@@ -253,7 +271,9 @@ LEVEL1 = LevelMap(
 LEVEL2 = LevelMap(
     floor_top_y={1: 30, 2: 54, 3: 78, 4: 102, 5: 126, 6: 150},
     floor_height=24,
-    fruit_centre_px={1: (64, 136), 2: (264, 136)},
+    # Fruit and princess y = standing Y of their floor (were 136 and 168 until
+    # 2026-10-09; only the map drawing reads them, see LEVEL1).
+    fruit_centre_px={1: (64, 126), 2: (264, 126)},
     fruit_floor={1: 5, 2: 5},
     ladders=[
         ("L12a", 1, 2, 80),
@@ -265,7 +285,7 @@ LEVEL2 = LevelMap(
         ("L45b", 4, 5, 296),
         ("L56", 5, 6, 120),
     ],
-    princess_centre_px=(288, 168),
+    princess_centre_px=(288, 150),
     princess_floor=6,
 )
 
