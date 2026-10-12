@@ -1,0 +1,93 @@
+# ============================================================================
+# L1+L5 v1 -- WARM from l1_v17, 6M, seed 42. Start groups L1 (game reset) + L5 (its save).
+#
+# WHY. L5 has L1's tiles exactly (0 of 1000 cells differ) and 1.7-1.9x the snowballs.
+# l1_v17 scores 215/300 on L1 and 0/300 on L5 (never past 3 fruits), so the L1 policy
+# does not cover L5 as trained. Question: can ONE policy hold L1 and learn L5, i.e. is
+# "one policy per layout" viable? First run of TODO.md "Yeti -- the full game".
+#
+# THE ONE LEVER vs the control (yeti_curriculum_l1_v18_ctrl_warm_v17_6m): adding the L5
+# start group (`curriculum.start_groups: [1, 5]`). Everything else is identical,
+# including the warm start, the inherited pools and the seed.
+#
+# WHAT IT IS. l1_v17's config byte for byte, plus:
+#   training.resume / warmstart_weights_only   l1_v17's weights, this run's PPO settings
+#   training.resume_pools                      l1_v17's pools. Measured: F1-F4 (100
+#       states each) are inherited; all 10 ladder pools are DROPPED by the anchor check,
+#       because the L1 height fix (7f62f32) moved every ladder anchor 2 px. The L5 group
+#       starts with empty pools (no checkpoints_L5.pkl exists).
+#   training.timesteps 10M -> 6M               the 6M default (003-yeti-training.md
+#       "Step 2"); this is a warm start, l1_v17 already reaches the princess.
+#   curriculum.start_groups [1, 5]             THE LEVER. Groups drawn by 1 - goal score of
+#       each level start, no fixed share; at the 300-episode rates L1 would get ~18%.
+#
+# READ IT ON, from the best snapshot, 300 episodes per level, through the registry:
+#   L5 princess from L5's start      did it learn L5? (l1_v17: 0/300)
+#   L1 princess from reset           did it keep L1? (l1_v17: 215/300; and vs the control)
+# The referee will not crown a snapshot below l1_v17 on L1 at 3 sigma, but at 30
+# episodes that only catches a drop to <= 0.43; a slip is for the 300-episode re-measure
+# and the control to show.
+# ============================================================================
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l1l5_v1_warm_v17_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/best/best_model.zip
+  warmstart_weights_only: true
+  resume_pools: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/checkpoints.pkl
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+  resize_mode: max
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 1
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 4
+  fruit_presence_addrs:
+    1: 12205
+    2: 12032
+    3: 11880
+    4: 11736
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
+  start_groups: [1, 5]
