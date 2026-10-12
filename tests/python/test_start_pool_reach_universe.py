@@ -111,7 +111,8 @@ def test_reach_universe_passed_to_record_episode_covers_the_pools():
     reaches it.
     """
     src = _SRC.read_text()
-    i = src.index("_manager.record_episode(")
+    # The env calls its episode's start-group manager (`self._mgr`), not the global.
+    i = src.index("self._mgr.record_episode(")
     call = src[i : src.index(")", src.index("start_rung=", i))]
     assert "_reach_universe" in call, "all_wps must be the widened universe"
     assert "_reached_targets(" in call, (

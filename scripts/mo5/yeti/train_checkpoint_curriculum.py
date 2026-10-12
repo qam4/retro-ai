@@ -27,7 +27,7 @@ import random
 import threading
 import time
 from collections import Counter
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -1300,8 +1300,65 @@ class CheckpointManager:
         print(f"  Loaded checkpoints from {path}: {self.summary()}", flush=True)
 
 
-# Module-level singleton. Populated in train(); shared across envs.
+# Module-level singleton. Populated in train(); shared across envs. In a run with
+# several start groups this is the FIRST group's manager, so every single-group
+# reader (callbacks, tests, the status line) is unchanged.
 _manager: Optional[CheckpointManager] = None
+
+
+class StartGroup:
+    """One level start a run trains from, with the curriculum state that belongs to it.
+
+    A group IS a CheckpointManager plus its level start. That is the whole design: the
+    manager already keeps everything a start needs -- pools, per-pool goal scores, the
+    from-reset reach EMAs the start gate reads, admission counters, anchors -- so one
+    manager per group gives each group its own copy of all of it, no new bookkeeping.
+    An L5 capture lands in L5's pools, L5 episodes move only L5's reach, and L1 and L5
+    can share waypoint names without sharing pools.
+
+    A plain class, not a dataclass: the tests load this script by path without putting
+    it in ``sys.modules``, and a dataclass with postponed annotations looks its module
+    up there at class creation, so the whole module failed to import.
+    """
+
+    __slots__ = ("name", "manager", "start_bytes", "pool_file")
+
+    def __init__(
+        self,
+        name: str,
+        manager: CheckpointManager,
+        start_bytes: Optional[bytes],
+        pool_file: str,
+    ):
+        self.name = name  # "" for a single-group run (no change); else "L<level>"
+        self.manager = manager
+        self.start_bytes = start_bytes  # the level start; None = game reset
+        self.pool_file = pool_file  # basename of this group's pool file
+
+
+_groups: List[StartGroup] = []
+# Episodes started per group, for the status line. Display only.
+_group_starts: Counter = Counter()
+
+
+def _pick_group() -> int:
+    """Index of the group the next episode starts in.
+
+    Groups are drawn by ``1 - goal score`` of each group's level start (its rung-0
+    pool), the rule pick_start already uses between reset and the pools, with no fixed
+    share. A level never reaches goal 1 while it misses the princess, so the group being
+    trained away from keeps getting episodes, and gets more as soon as it slips.
+
+    A run with one group draws NOTHING here, so its random stream, and therefore every
+    pick_start draw after it, is exactly what it was before groups existed.
+    """
+    if len(_groups) <= 1:
+        _group_starts[0] += 1
+        return 0
+    weights = [g.manager.checkpoints[0].weight() for g in _groups]
+    i = random.choices(range(len(_groups)), weights=weights, k=1)[0]
+    _group_starts[i] += 1
+    return i
 
 
 class CheckpointCurriculumEnv(gym.Env):
@@ -1497,6 +1554,11 @@ class CheckpointCurriculumEnv(gym.Env):
             wid: (self._wp_jump_tol if wid in self._wp_jump_ids else self._wp_tol)
             for wid in self._waypoints
         }
+        # The start group of the CURRENT episode, chosen at reset. Every manager call
+        # the episode makes goes through ``self._mgr``, so its captures, goal scores and
+        # reach evidence land in its own group. Never the global ``_manager`` directly.
+        self._mgr: Optional[CheckpointManager] = None
+        self._group_name = ""
         self._start_wp = None  # the WP this episode was seeded from (skip re-save)
         self._captured_wps: set = set()  # WPs already captured this episode
         # WPs detected but still awaiting a grounded frame to save from. Mirrors
@@ -1581,7 +1643,13 @@ class CheckpointCurriculumEnv(gym.Env):
             self.gym_env.reset(seed=seed)
             self._initialized = True
 
-        level, state_bytes, start_stack, inherited_wps = _manager.pick_start()
+        # Group first, then a start inside it. With one group (every run before start
+        # groups existed) this is `_manager` with no extra random draw.
+        group = _groups[_pick_group()] if _groups else None
+        self._mgr = group.manager if group is not None else _manager
+        self._group_name = group.name if group is not None else ""
+        root_bytes = group.start_bytes if group is not None else self._start_state_bytes
+        level, state_bytes, start_stack, inherited_wps = self._mgr.pick_start()
         # A waypoint start returns a str id; remember it so (a) episode-end
         # record_episode credits the WP pool, and (b) we don't re-capture the
         # waypoint we were seeded at.
@@ -1599,11 +1667,12 @@ class CheckpointCurriculumEnv(gym.Env):
         # excludes the seed WP + already-captured); here we want every reach.
         self._reached_wps_this_ep: set = set()
 
-        if state_bytes is None and self._start_state_bytes is not None:
+        if state_bytes is None and root_bytes is not None:
             # CP0 for a level that boots from a save-state rather than a
-            # fresh game reset (level 2 starts from level2_start.sav). The
-            # file-based start carries no frame stack -> reseed fallback.
-            state_bytes = self._start_state_bytes
+            # fresh game reset (level 2 starts from level2_start.sav, and an L5
+            # group from level5_start.sav). The file-based start carries no frame
+            # stack -> reseed fallback.
+            state_bytes = root_bytes
 
         if state_bytes is not None:
             self.base._interface.load_state(state_bytes)
@@ -1712,7 +1781,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # Progress rung this episode STARTS on (a seed carries its reached set,
         # so a mid-route seed starts partway up the ladder). Cached because the
         # start state cannot change mid-episode.
-        self._n_rungs = _manager.N_RUNGS
+        self._n_rungs = self._mgr.N_RUNGS
         self._start_rung = self._current_rung()
         self._max_cp_this_ep = self._start_rung
         # Clean per-episode princess-touch flag, credited to
@@ -1723,7 +1792,7 @@ class CheckpointCurriculumEnv(gym.Env):
         return self._wrap_obs(obs), {}
 
     def step(self, action):
-        assert _manager is not None
+        assert self._mgr is not None, "step() before reset()"
         obs, _, done, truncated, info = self.gym_env.step(action)
         self._step_count += 1
 
@@ -1767,7 +1836,7 @@ class CheckpointCurriculumEnv(gym.Env):
         # Census every pose the run observes, so an uncatalogued one shows up in the
         # status line instead of silently failing every pose gate. See
         # CheckpointManager.pose_seen and yeti.unknown_poses.
-        _manager.pose_seen[int(ctx.pose)] += 1
+        self._mgr.pose_seen[int(ctx.pose)] += 1
         # Indexed by gym step, so the admission gate can look up the pose at
         # save_step + min_survival_steps. See _admit_by_play.
         self._pose_log.append(int(ctx.pose))
@@ -1845,7 +1914,7 @@ class CheckpointCurriculumEnv(gym.Env):
                 # grounded-only whatever the reach mode, so the number keeps
                 # meaning the same thing across runs.
                 if _grounded:
-                    _manager.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
+                    self._mgr.note_wp_distance(wp_id, max(abs(x - wx), abs(y - wy)))
                 _tol = self._wp_tol_of.get(wp_id, self._wp_tol)
                 # Shared reach test (retro_ai.training.targets.reaches) -- the SAME
                 # comparison AND mode the REWARD uses for milestone marking, so the two
@@ -2031,9 +2100,9 @@ class CheckpointCurriculumEnv(gym.Env):
                 self.iface.read_ram_byte(self._fruit_addrs[i]) != 0
                 for i in self._fruit_ids
             )
-            _pool_ids = set(getattr(_manager, "waypoints", {}) or {})
+            _pool_ids = set(getattr(self._mgr, "waypoints", {}) or {})
             _reach_universe = set(self._waypoints.keys()) | _pool_ids
-            _manager.record_episode(
+            self._mgr.record_episode(
                 start_key,
                 reached_level,
                 reached_wps=self._reached_targets(_fp),
@@ -2058,7 +2127,7 @@ class CheckpointCurriculumEnv(gym.Env):
             ) in self._pending_saves:
                 survived_steps = self._step_count - save_step
                 reached_next = self._max_cp_this_ep > level
-                _manager.save_scored(
+                self._mgr.save_scored(
                     level,
                     state_bytes,
                     survived_steps,
@@ -2086,7 +2155,7 @@ class CheckpointCurriculumEnv(gym.Env):
                 wp_survived = self._step_count - wp_step
                 wp_reached_next = self._max_cp_this_ep > start_level
                 _wp_end_pose = self._pose_at_window_end(wp_step)
-                _manager.save_waypoint(
+                self._mgr.save_waypoint(
                     wp_id,
                     wp_state,
                     wp_survived,
@@ -2112,7 +2181,7 @@ class CheckpointCurriculumEnv(gym.Env):
         so
         None is returned and the gate falls through to its step-count check.
         """
-        want = int(save_step) + int(_manager.min_survival_steps)
+        want = int(save_step) + int(self._mgr.min_survival_steps)
         if 0 <= want < len(self._pose_log):
             return self._pose_log[want]
         return None
@@ -2139,7 +2208,7 @@ class CheckpointCurriculumEnv(gym.Env):
                 self.iface.read_ram_byte(self._fruit_addrs[i]) != 0
                 for i in self._fruit_ids
             )
-        return _manager.rung_of(self._reached_targets(fruits_present))
+        return self._mgr.rung_of(self._reached_targets(fruits_present))
 
     def _log_episode(
         self, end_reason: str, fruits: int, bonus: int, final_score: int
@@ -2182,6 +2251,9 @@ class CheckpointCurriculumEnv(gym.Env):
             # Column index of the start x reached matrix (see EPISODE_COLUMNS):
             # every route point this episode reached.
             reached_points=";".join(sorted(self._reached_wps_this_ep)),
+            # Which level start the episode belongs to ("" in a single-group run).
+            # start_key alone cannot tell: L1's reset and L5's save are both "0".
+            start_group=self._group_name,
         )
 
 
@@ -2193,6 +2265,134 @@ def _level_of(cfg) -> int:
         except (TypeError, ValueError):
             return 1
     return 1
+
+
+def _start_group_specs(cfg) -> List[Tuple[str, Optional[str]]]:
+    """``[(name, start_state)]`` for every start group of this run, first = the run's.
+
+    Without ``curriculum.start_groups`` this is one unnamed group, the run's own start,
+    so a run that does not ask for groups is unchanged. Otherwise each entry is a game
+    level looked up in ``experiments/003-yeti/registry.yaml``, and it must agree with
+    everything this run fixes ONCE for all its episodes -- the reward's layout, the game
+    profile, the fruit count, the stop rules -- because one reward and one environment
+    serve every group. A group that would need different ones is refused rather than
+    trained under settings that are not its own. Start paths are repo-relative.
+    """
+    cur = cfg.curriculum
+    levels = [int(n) for n in (getattr(cur, "start_groups", None) or [])]
+    if not levels:
+        return [("", cur.start_state)]
+    if len(set(levels)) != len(levels):
+        raise SystemExit(f"curriculum.start_groups lists a level twice: {levels}")
+    from retro_ai.training.yeti_registry import Registry
+
+    reg = Registry.load()
+    layout = _level_of(cfg)
+    out: List[Tuple[str, Optional[str]]] = []
+    for i, n in enumerate(levels):
+        try:
+            spec = reg.level(n)
+        except KeyError as exc:
+            raise SystemExit(f"curriculum.start_groups: {exc.args[0]}") from None
+        checks = (
+            ("layout", spec.layout, layout, "reward.params.level"),
+            ("profile", spec.profile, cfg.env.profile, "env.profile"),
+            ("fruits", spec.fruits_total, cur.fruits_total, "curriculum.fruits_total"),
+            ("max_steps", spec.max_steps, cfg.env.max_steps, "env.max_steps"),
+            (
+                "stall_threshold",
+                spec.stall_threshold,
+                cfg.env.stall_threshold,
+                "env.stall_threshold",
+            ),
+        )
+        clash = [
+            f"{what} {want} (this run has {key} = {have})"
+            for what, want, have, key in checks
+            if want != have
+        ]
+        if clash:
+            raise SystemExit(
+                f"start group L{n} cannot share this run: needs "
+                + "; ".join(clash)
+                + ". One reward and one environment serve every group."
+            )
+        if i == 0 and spec.start_state != cur.start_state:
+            raise SystemExit(
+                f"the first start group must be the run's own start: L{n} starts from "
+                f"{spec.start_state or 'a game reset'}, this run from "
+                f"{cur.start_state or 'a game reset'} (curriculum.start_state)"
+            )
+        out.append((f"L{n}", spec.start_state))
+    return out
+
+
+def _make_manager(cfg, ladder_groups, ladder_rungs) -> CheckpointManager:
+    """A CheckpointManager for one start group, configured from the run config."""
+    mgr = CheckpointManager(
+        max_states_per_checkpoint=cfg.curriculum.max_states_per_checkpoint,
+        min_states_to_advance=cfg.curriculum.min_states_to_advance,
+        reset_fraction=cfg.curriculum.reset_fraction,
+        frontier_fraction=cfg.curriculum.frontier_fraction,
+        earlier_fraction=cfg.curriculum.earlier_fraction,
+        min_survival_steps=cfg.curriculum.min_survival_steps,
+        reach_threshold=cfg.curriculum.reach_threshold,
+        segment_floor=cfg.curriculum.segment_floor,
+        # Progress ladder: pools keyed by how many MANDATORY targets are done.
+        mandatory_groups=ladder_groups,
+        n_rungs=ladder_rungs,
+        gate_waypoints=cfg.curriculum.gate_waypoints,
+        gate_waypoints_by_predecessor=cfg.curriculum.gate_waypoints_by_predecessor,
+        split_mandatory=cfg.curriculum.split_mandatory_starts,
+        earned_progress_score=cfg.curriculum.earned_progress_score,
+        admit_requires_survival=cfg.curriculum.admit_requires_survival,
+        admit_requires_grounded=cfg.curriculum.admit_requires_grounded,
+    )
+    # Travel order. Feeds the route table AND, under
+    # `gate_waypoints_by_predecessor`, the start-eligibility rule -- so this is
+    # semantic now, not display-only. Must be set before the first pick_start.
+    mgr.route_order = _route_order_for(cfg)
+    # Anchor provenance for waypoint pools. Must be set BEFORE any load_from_disk so
+    # the resume path can compare a file's anchors against the ones in force now and
+    # discard pools captured around a position that has since moved.
+    mgr.waypoint_anchors = {
+        w: (int(x), int(y)) for w, (x, y, _f) in yeti.waypoints(_level_of(cfg)).items()
+    }
+    return mgr
+
+
+def _drop_stale_pools(mgr: CheckpointManager, cfg, label: str = "") -> None:
+    """DROP pools for waypoints this level no longer defines.
+
+    A resumed pkl can carry pools for waypoints that have since been removed from the
+    map (L4 v6 dropped Spring_launch / Step_launch / Low1_launch as redundant). Their
+    states are real, but the waypoint is no longer detected, so its reach EMA stays 0:
+    under `gate_waypoints` it is silently gated out and merely clutters the route table
+    with an all-dashes row, and with the gate off it would be sampled as an untracked
+    start source. Neither is wanted -- if a waypoint was deleted, its pool should go
+    with it.
+
+    FRUIT POOLS ARE NOT STALE. A fruit seeds into a pool named after it ("F1", ...),
+    like a waypoint, but fruits are not in ``yeti.waypoints``, so checking names
+    against that list alone dropped every fruit pool on every resume. Measured on L1
+    v17's pool file: F1-F4 hold 100 states each, all four would have been dropped.
+    """
+    from retro_ai.training.yeti_map import get_level_map
+
+    level = _level_of(cfg)
+    known = set(yeti.waypoints(level)) | {
+        f"F{fid}" for fid in get_level_map(level).fruit_centre_px
+    }
+    stale = [w for w in mgr.waypoints if w not in known]
+    for w in stale:
+        mgr.waypoints.pop(w, None)
+    if stale:
+        tag = f"[{label}] " if label else ""
+        print(
+            f"  {tag}Dropped {len(stale)} inherited pool(s) for waypoints this level "
+            f"no longer defines: {sorted(stale)}",
+            flush=True,
+        )
 
 
 def _progress_ladder(cfg):
@@ -2264,18 +2464,21 @@ class PoolSaveCallback(BaseCallback):
     phase can reuse the latest pools. Pure I/O; does not affect training.
     """
 
-    def __init__(self, path: str, save_freq: int):
+    def __init__(self, path: str, save_freq: int, manager=None):
         super().__init__()
         self._path = path
         self._save_freq = max(1, int(save_freq))
         self._last_save = 0
+        # The start group whose pools this saves; None = the global `_manager`.
+        self._manager = manager
 
     def _on_step(self) -> bool:
-        if _manager is None:
+        mgr = self._manager if self._manager is not None else _manager
+        if mgr is None:
             return True
         if self.num_timesteps - self._last_save >= self._save_freq:
             self._last_save = self.num_timesteps
-            _manager.save_to_disk(self._path)
+            mgr.save_to_disk(self._path)
         return True
 
 
@@ -2366,8 +2569,19 @@ class CurriculumCallback(BaseCallback):
         # print the table often instead.
         table_interval: int = 50_000,
         route_order=None,
+        # START GROUPS. ``manager`` is the group this callback logs (None = the global
+        # `_manager`); ``label`` tags its lines in a run with several groups ("" in a
+        # single-group run, whose output is unchanged); ``primary`` is the one group
+        # that prints the full step line (reward, fps) and the share of starts per
+        # group. The others print their own summary and route table under their tag.
+        manager=None,
+        label: str = "",
+        primary: bool = True,
     ):
         super().__init__()
+        self._manager = manager
+        self._label = label
+        self._primary = primary
         self._diag_path = diag_path
         self._diag_file = None
         self._adm_file = None
@@ -2394,42 +2608,60 @@ class CurriculumCallback(BaseCallback):
         self._last_table = 0
         self._route_order = route_order or []
 
+    def _mgr(self):
+        return self._manager if self._manager is not None else _manager
+
     def _on_step(self) -> bool:
         _set_global_step(self.num_timesteps)
+        mgr = self._mgr()
+        tag = f"[{self._label}] " if self._label else ""
 
         if self.num_timesteps - self._last_log >= self._log_interval:
-            elapsed = time.monotonic() - self._start
-            fps = self.num_timesteps / elapsed if elapsed > 0 else 0
-            pct = 100 * self.num_timesteps / self._total
+            assert mgr is not None
+            if self._primary:
+                elapsed = time.monotonic() - self._start
+                fps = self.num_timesteps / elapsed if elapsed > 0 else 0
+                pct = 100 * self.num_timesteps / self._total
 
-            infos = self.locals.get("infos", [])
-            rewards = []
-            for info in infos:
-                ep = info.get("episode")
-                if ep:
-                    rewards.append(ep["r"])
-            reward_str = f"{np.mean(rewards):.1f}" if rewards else "N/A"
+                infos = self.locals.get("infos", [])
+                rewards = []
+                for info in infos:
+                    ep = info.get("episode")
+                    if ep:
+                        rewards.append(ep["r"])
+                reward_str = f"{np.mean(rewards):.1f}" if rewards else "N/A"
 
-            assert _manager is not None
-            print(
-                f"step {self.num_timesteps}/{self._total} ({pct:.0f}%) "
-                f"| reward={reward_str} "
-                f"| emu_fps={fps * 4:.0f} "
-                f"| {_manager.summary()}",
-                flush=True,
-            )
+                print(
+                    f"step {self.num_timesteps}/{self._total} ({pct:.0f}%) "
+                    f"| reward={reward_str} "
+                    f"| emu_fps={fps * 4:.0f} "
+                    f"| {tag}{mgr.summary()}",
+                    flush=True,
+                )
+                if len(_groups) > 1:
+                    total = sum(_group_starts.values()) or 1
+                    print(
+                        "  groups: "
+                        + "  ".join(
+                            f"{g.name} weight={g.manager.checkpoints[0].weight():.3f} "
+                            f"starts={_group_starts[i] / total:.1%}"
+                            for i, g in enumerate(_groups)
+                        ),
+                        flush=True,
+                    )
+            else:
+                print(f"step {self.num_timesteps} | {tag}{mgr.summary()}", flush=True)
             self._write_diag()
             self._last_log = self.num_timesteps
 
         # Route table: low frequency, route-ordered, one row per point.
-        if (
-            _manager is not None
-            and self.num_timesteps - self._last_table >= self._table_interval
+        if mgr is not None and self.num_timesteps - self._last_table >= (
+            self._table_interval
         ):
-            table = _manager.route_table(self._route_order)
+            table = mgr.route_table(self._route_order)
             if table:
                 print(
-                    f"\nROUTE @ step {self.num_timesteps} "
+                    f"\nROUTE {tag}@ step {self.num_timesteps} "
                     f"(reach=from-reset, prog=order-free progress)\n{table}\n",
                     flush=True,
                 )
@@ -2441,16 +2673,17 @@ class CurriculumCallback(BaseCallback):
         curriculum's start distribution and per-segment success (to chase
         the decay/oscillation mechanism). PPO-side metrics (kl, entropy,
         explained_variance) are in tensorboard."""
-        if self._diag_path is None or _manager is None:
+        mgr = self._mgr()
+        if self._diag_path is None or mgr is None:
             return
         if not self._baseline_captured:
             # Resumed runs load lifetime counters from checkpoints.pkl;
             # seed the per-interval baselines from current values so the
             # first emitted deltas reflect only new activity.
-            self._last_starts = list(_manager.stats["starts"])
-            self._last_adm_reached = list(_manager.stats["admit_reached"])
-            self._last_adm_survived = list(_manager.stats["admit_survived"])
-            self._last_rejected = list(_manager.stats["rejected_precarious"])
+            self._last_starts = list(mgr.stats["starts"])
+            self._last_adm_reached = list(mgr.stats["admit_reached"])
+            self._last_adm_survived = list(mgr.stats["admit_survived"])
+            self._last_rejected = list(mgr.stats["rejected_precarious"])
             self._baseline_captured = True
         if self._diag_file is None:
             self._diag_file = open(self._diag_path, "w")
@@ -2462,14 +2695,14 @@ class CurriculumCallback(BaseCallback):
             header = ["step"] + reach_cols + succ_cols + sfrac_cols + gscore_cols
             self._diag_file.write(",".join(header) + "\n")
         n = self._n_rungs
-        starts = _manager.stats["starts"]
+        starts = mgr.stats["starts"]
         delta = [starts[i] - self._last_starts[i] for i in range(n + 1)]
         self._last_starts = list(starts)
         tot = sum(delta) or 1
         fr = [d / tot for d in delta]
-        rr = _manager.reset_reach_ema
-        se = _manager.seg_success_ema
-        gs = [p.goal_score for p in _manager.checkpoints]
+        rr = mgr.reset_reach_ema
+        se = mgr.seg_success_ema
+        gs = [p.goal_score for p in mgr.checkpoints]
         # reach1..reach_N then princess (index N+1); succ_ema1..N;
         # start_frac0..N; gscore0..N.
         vals = [str(self.num_timesteps)]
@@ -2488,15 +2721,25 @@ class CurriculumCallback(BaseCallback):
         plus pool diversity (distinct = unique save-states; psize = pool
         size). Shows whether a stricter filter admits fewer CPs and/or
         collapses pool diversity over time."""
-        if self._diag_path is None or _manager is None:
+        mgr = self._mgr()
+        if self._diag_path is None or mgr is None:
             return
         if self._adm_file is None:
+            # Beside the curriculum diag, same group suffix: curriculum_diag.csv ->
+            # admission_diag.csv, curriculum_diag_L5.csv -> admission_diag_L5.csv.
             adm_path = os.path.join(
-                os.path.dirname(self._diag_path), "admission_diag.csv"
+                os.path.dirname(self._diag_path),
+                os.path.basename(self._diag_path).replace(
+                    "curriculum_diag", "admission_diag", 1
+                ),
             )
+            if adm_path == self._diag_path:
+                adm_path = os.path.join(
+                    os.path.dirname(self._diag_path), "admission_diag.csv"
+                )
             self._adm_file = open(adm_path, "w")
             cols = ["step"]
-            for cp in range(1, _manager.N_RUNGS + 1):
+            for cp in range(1, mgr.N_RUNGS + 1):
                 cols += [
                     f"a_reach{cp}",
                     f"a_surv{cp}",
@@ -2505,15 +2748,15 @@ class CurriculumCallback(BaseCallback):
                     f"psize{cp}",
                 ]
             self._adm_file.write(",".join(cols) + "\n")
-        ar = _manager.stats["admit_reached"]
-        asv = _manager.stats["admit_survived"]
-        rj = _manager.stats["rejected_precarious"]
+        ar = mgr.stats["admit_reached"]
+        asv = mgr.stats["admit_survived"]
+        rj = mgr.stats["rejected_precarious"]
         row = [str(self.num_timesteps)]
-        for cp in range(1, _manager.N_RUNGS + 1):
+        for cp in range(1, mgr.N_RUNGS + 1):
             d_reach = ar[cp] - self._last_adm_reached[cp]
             d_surv = asv[cp] - self._last_adm_survived[cp]
             d_rej = rj[cp] - self._last_rejected[cp]
-            pool = _manager.checkpoints[cp]
+            pool = mgr.checkpoints[cp]
             distinct = len({e[2] for e in pool.states})
             row += [
                 str(d_reach),
@@ -2541,37 +2784,45 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
     seed = seed_everything(cfg.training.seed)
 
     _ladder_groups, _ladder_rungs = _progress_ladder(cfg)
-    _manager = CheckpointManager(
-        max_states_per_checkpoint=cfg.curriculum.max_states_per_checkpoint,
-        min_states_to_advance=cfg.curriculum.min_states_to_advance,
-        reset_fraction=cfg.curriculum.reset_fraction,
-        frontier_fraction=cfg.curriculum.frontier_fraction,
-        earlier_fraction=cfg.curriculum.earlier_fraction,
-        min_survival_steps=cfg.curriculum.min_survival_steps,
-        reach_threshold=cfg.curriculum.reach_threshold,
-        segment_floor=cfg.curriculum.segment_floor,
-        # Progress ladder: pools keyed by how many MANDATORY targets are done.
-        mandatory_groups=_ladder_groups,
-        n_rungs=_ladder_rungs,
-        gate_waypoints=cfg.curriculum.gate_waypoints,
-        gate_waypoints_by_predecessor=cfg.curriculum.gate_waypoints_by_predecessor,
-        split_mandatory=cfg.curriculum.split_mandatory_starts,
-        earned_progress_score=cfg.curriculum.earned_progress_score,
-        admit_requires_survival=cfg.curriculum.admit_requires_survival,
-        admit_requires_grounded=cfg.curriculum.admit_requires_grounded,
-    )
-    # Travel order. Feeds the route table AND, under
-    # `gate_waypoints_by_predecessor`, the start-eligibility rule -- so this is
-    # semantic now, not display-only. Must be set before the first pick_start.
-    _manager.route_order = _route_order_for(cfg)
-    # Anchor provenance for waypoint pools. Must be set BEFORE any load_from_disk so
-    # the resume path can compare a file's anchors against the ones in force now and
-    # discard pools captured around a position that has since moved.
-    _manager.waypoint_anchors = {
-        w: (int(x), int(y)) for w, (x, y, _f) in yeti.waypoints(_level_of(cfg)).items()
-    }
+    # START GROUPS. Validated before anything is built, so a group that cannot share
+    # this run fails in seconds rather than after the environments boot.
+    _specs = _start_group_specs(cfg)
+    _manager = _make_manager(cfg, _ladder_groups, _ladder_rungs)
+    _groups.clear()
+    _group_starts.clear()
+    for _gi, (_name, _start) in enumerate(_specs):
+        _bytes = None
+        if _start:
+            # Registry paths are repo-relative; an unnamed group's is the config's,
+            # read exactly as the env reads it.
+            from retro_ai.training.yeti_registry import REPO
+
+            _p = str(REPO / _start) if _name and not os.path.isabs(_start) else _start
+            with open(_p, "rb") as _f:
+                _bytes = _f.read()
+        _groups.append(
+            StartGroup(
+                name=_name,
+                manager=(
+                    _manager
+                    if _gi == 0
+                    else _make_manager(cfg, _ladder_groups, _ladder_rungs)
+                ),
+                start_bytes=_bytes,
+                pool_file="checkpoints.pkl" if _gi == 0 else f"checkpoints_{_name}.pkl",
+            )
+        )
 
     print("Checkpoint Curriculum Training", flush=True)
+    if len(_groups) > 1:
+        print(
+            "  Start groups: "
+            + ", ".join(
+                f"{g.name} ({_start or 'game reset'})"
+                for g, (_n, _start) in zip(_groups, _specs)
+            ),
+            flush=True,
+        )
     print(f"  Profile: {cfg.env.profile}", flush=True)
     print(f"  Timesteps: {cfg.training.timesteps}", flush=True)
     print(f"  Output: {cfg.training.output}", flush=True)
@@ -2718,24 +2969,19 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
             )
         _manager.load_from_disk(ckpt_path)
         _manager.load_from_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
-        # DROP pools for waypoints this level no longer defines. A resumed pkl can
-        # carry pools for waypoints that have since been removed from the map (L4 v6
-        # dropped Spring_launch / Step_launch / Low1_launch as redundant). Their states
-        # are real, but the waypoint is no longer detected, so its reach EMA stays 0:
-        # under `gate_waypoints` it is silently gated out and merely clutters the route
-        # table with an all-dashes row, and with the gate off it would be sampled as an
-        # untracked start source. Neither is wanted -- if a waypoint was deleted, its
-        # pool should go with it.
-        _known_wps = set(yeti.waypoints(_level_of(cfg)))
-        _stale = [w for w in _manager.waypoints if w not in _known_wps]
-        for w in _stale:
-            _manager.waypoints.pop(w, None)
-        if _stale:
-            print(
-                f"  Dropped {len(_stale)} inherited pool(s) for waypoints this level "
-                f"no longer defines: {sorted(_stale)}",
-                flush=True,
-            )
+        _drop_stale_pools(_manager, cfg)
+        # Every other group's pools sit beside the first group's, one file per group,
+        # so a group never inherits another group's states.
+        for g in _groups[1:]:
+            src = os.path.join(os.path.dirname(ckpt_path), g.pool_file)
+            if not os.path.exists(src):
+                print(
+                    f"  [{g.name}] no pool file at {src} — starting with EMPTY pools.",
+                    flush=True,
+                )
+            g.manager.load_from_disk(src)
+            g.manager.load_from_disk(os.path.join(cfg.training.output, g.pool_file))
+            _drop_stale_pools(g.manager, cfg, g.name)
 
     print("\nTraining...", flush=True)
     status = "COMPLETED"
@@ -2755,15 +3001,30 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
         model.learn(
             total_timesteps=cfg.training.timesteps,
             callback=[
-                CurriculumCallback(
-                    cfg.training.timesteps,
-                    diag_path=os.path.join(cfg.training.output, "curriculum_diag.csv"),
-                    n_rungs=_ladder_rungs,
-                    # Display-only ordering for the route table (no semantics).
-                    route_order=_route_order_for(cfg),
-                    table_interval=int(
-                        getattr(cfg.training, "route_table_freq_steps", 0) or 50_000
-                    ),
+                # One curriculum log per start group. The first group's keeps the
+                # file names and the line format every reader expects.
+                *(
+                    CurriculumCallback(
+                        cfg.training.timesteps,
+                        diag_path=os.path.join(
+                            cfg.training.output,
+                            (
+                                "curriculum_diag.csv"
+                                if gi == 0
+                                else f"curriculum_diag_{g.name}.csv"
+                            ),
+                        ),
+                        n_rungs=_ladder_rungs,
+                        # Display-only ordering for the route table (no semantics).
+                        route_order=_route_order_for(cfg),
+                        table_interval=int(
+                            getattr(cfg.training, "route_table_freq_steps", 0) or 50_000
+                        ),
+                        manager=g.manager,
+                        label=g.name if len(_groups) > 1 else "",
+                        primary=gi == 0,
+                    )
+                    for gi, g in enumerate(_groups)
                 ),
                 EpisodeMetricsCallback(episode_logger, log_interval=10_000),
                 snapshot_cb,
@@ -2780,16 +3041,23 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
                 ),
                 # Persist pools periodically so an early stop keeps captured
                 # seeds (pools were previously saved only on normal completion).
-                PoolSaveCallback(
-                    os.path.join(cfg.training.output, "checkpoints.pkl"),
-                    save_freq=1_000_000,
+                *(
+                    PoolSaveCallback(
+                        os.path.join(cfg.training.output, g.pool_file),
+                        save_freq=1_000_000,
+                        manager=g.manager,
+                    )
+                    for g in _groups
                 ),
             ],
         )
         model.save(os.path.join(cfg.training.output, "final_model"))
-        _manager.save_to_disk(os.path.join(cfg.training.output, "checkpoints.pkl"))
+        for g in _groups:
+            g.manager.save_to_disk(os.path.join(cfg.training.output, g.pool_file))
         print(f"\nSaved model to {cfg.training.output}/final_model.zip", flush=True)
-        print(f"Final: {_manager.summary()}", flush=True)
+        for g in _groups:
+            tag = f"[{g.name}] " if len(_groups) > 1 else ""
+            print(f"Final: {tag}{g.manager.summary()}", flush=True)
     except Exception:
         status = "FAILED"
         exit_code = 1

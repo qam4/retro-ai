@@ -335,7 +335,27 @@ WORK, in order:
 - [x] Re-measure every champion through the registry (table above).
 - [ ] Find and measure L3 v15's peak snapshot (0.953 at the referee around 2.2-2.3M;
       its referee state is not archived). Final weights read 0.820.
-- [ ] Trainer: start groups, per-group pools and goal score.
+- [x] Trainer: start groups, per-group pools and goal score. `curriculum.start_groups:
+      [1, 5]`, levels from the registry; a group is one CheckpointManager plus its
+      start, so pools, goal scores, reach EMAs and counters are per group by
+      construction. Groups drawn by 1 - goal of each group's level start; a one-group
+      run makes no extra random draw. Per-group files: checkpoints_L5.pkl,
+      curriculum_diag_L5.csv, admission_diag_L5.csv; episodes.csv gains `start_group`.
+      A group whose layout, profile, fruit count or stop rules differ from the run's is
+      refused. Checked: a 1-env single-group run gives the same 12 episodes as HEAD's
+      trainer (all fields except start_state_hash, which also differs between two HEAD
+      runs: save_state bytes of the same game state are not identical run to run);
+      8k-step L1+L5 smoke shares no state between the two pool files; resume loads
+      each group's own file.
+      FIXED ON THE WAY: the resume stale-pool check compared pool names with
+      `yeti.waypoints`, which has no fruits, so it would drop every fruit pool (F1-F4,
+      100 states each in v17's file) on any warm start. No log under output/monitor
+      shows it happening yet.
+- [ ] `capture_level3_start.py --policy`: it still takes settings by hand (profile
+      defaults to L2's, resize mode typed, settle defaults to 5 where training uses 1;
+      settle 5 read 4/40 vs 32/40 on L4). Needed before capturing L6's start, which can
+      come from deep L5 pools (`--seed-checkpoints`/`--seed-pool`) once one L5 princess
+      touch exists. Also check its `--seed` against the PPO.load re-seed.
 - [ ] Referee: score every group's level; flag regressions against the champion (binomial).
 - [ ] Automate step 5 at the end of `run_train_and_score.sh`.
 - [ ] First run: warm from l1_v17, groups L1 reset + L5 save. Control: same warm start,

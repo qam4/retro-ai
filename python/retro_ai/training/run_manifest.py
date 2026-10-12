@@ -81,6 +81,11 @@ EPISODE_COLUMNS = [
     # emulator-booting probe. The log itself only carries fixed-size 1-D
     # projections of this matrix (see CheckpointManager.route_table).
     "reached_points",
+    # The level start an episode belongs to in a run with several start groups
+    # (e.g. "L1", "L5"); empty in a single-group run. ``start_key`` cannot tell them
+    # apart: an L1 game reset and an L5 level save both read "0". Appended last, as
+    # above.
+    "start_group",
 ]
 
 

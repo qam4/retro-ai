@@ -467,6 +467,22 @@ class CurriculumConfig:
     # situation it was captured for); "all" = jitter seeded episodes too
     # (diversifies pools, but changes what a seed means). Untested either way.
     noop_start_scope: str = "reset"
+    # START GROUPS: train from several game levels at once, named by game level in
+    # experiments/003-yeti/registry.yaml, e.g. [1, 5] = L1 from a game reset plus L5
+    # from its save. Empty = one group, the run's own start (unchanged behaviour).
+    #
+    # Each group keeps its OWN pools, goal scores and from-reset reach, so an L5
+    # capture cannot land in an L1 pool and L5 evidence cannot open an L1 waypoint.
+    # Groups are drawn by 1 - goal score of the group's level start, the same rule
+    # that shares episodes between reset and the pools today, with no fixed share:
+    # a level never reaches goal 1, so a level being trained away from keeps
+    # getting episodes, and more of them if it slips.
+    #
+    # The FIRST entry must be the run's own start (`start_state`, layout from
+    # `reward.params.level`). Every group must share the run's layout, profile, fruit
+    # count and stop rules, which the trainer checks against the registry: one
+    # reward and one environment serve all groups. L1 and L5 qualify.
+    start_groups: List[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
