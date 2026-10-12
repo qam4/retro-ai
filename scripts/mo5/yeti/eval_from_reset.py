@@ -16,23 +16,40 @@ Example::
       python scripts/mo5/yeti/eval_from_reset.py \\
         --model output/mo5/yeti/warmstart/v2_clean/final_model.zip \\
         --episodes 200
+
+PREFER THE REGISTRY for any number that will be quoted or compared::
+
+    python scripts/mo5/yeti/eval_from_reset.py --policy l1_v17 --game-level 5 \\
+        --episodes 300
+
+``--policy`` takes the model, level, start state, profile, stop rules, resize mode and
+reach test from ``experiments/003-yeti/registry.yaml`` and the policy's training config,
+refuses those flags if they are also passed, checks the model's sha256, samples
+stochastically, and writes a result file under
+``experiments/003-yeti/data/champion_recheck/<policy>/`` that the registry reads back.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import random
+import secrets
+import sys
 from collections import Counter
+from pathlib import Path
 
+import numpy as np
+import torch
 from retro_ai.games.yeti_rollout import rollout_episode
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.run_config import EnvConfig
 from stable_baselines3 import PPO
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--model", required=True)
+    p.add_argument("--model", default=None, help="required unless --policy is given")
     p.add_argument("--episodes", type=int, default=200)
     p.add_argument("--profile", default="yeti_fruit")
     p.add_argument("--max-steps", type=int, default=1000)
@@ -101,27 +118,146 @@ def main() -> None:
         "the L4 v29 champion reads mean rung 8.17 under its own mode and 0.02 under "
         "the other.",
     )
-    args = p.parse_args()
+    p.add_argument(
+        "--policy",
+        default=None,
+        help="registry policy id (experiments/003-yeti/registry.yaml). Sets the model "
+        "and every setting the registry owns; passing any of those as well is refused. "
+        "Implies --stochastic and writes a result file the registry reads back.",
+    )
+    p.add_argument(
+        "--game-level",
+        type=int,
+        default=None,
+        help="the game level to evaluate --policy on, counted as the game counts them "
+        "(L5 is a level of its own, on L1's layout)",
+    )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="seeds the policy's action sampling. Default: a random seed, recorded in "
+        "the output so the run can be repeated.",
+    )
+    return p
+
+
+def _from_registry(args: argparse.Namespace, argv: list):
+    """Fill ``args`` from the registry for --policy / --game-level."""
+    from retro_ai.training import yeti_registry as reg
+
+    if args.policy is None or args.game_level is None:
+        raise SystemExit("--policy and --game-level must be given together")
+    clash = reg.hand_settings_given(build_parser(), argv)
+    if clash:
+        raise SystemExit(
+            f"--policy takes {', '.join(clash)} from the registry; do not pass "
+            f"{'it' if len(clash) == 1 else 'them'} as well"
+        )
+    registry = reg.Registry.load()
+    s = registry.eval_settings(args.policy, args.game_level)
+    actual = reg.sha256_of(reg.REPO / s.model)
+    if actual != s.model_sha256:
+        raise SystemExit(
+            f"{s.model} has sha256 {actual}, but the registry records "
+            f"{s.model_sha256} for {args.policy}: not the registered model"
+        )
+    # A deterministic policy from a fixed start replays ONE trajectory N times (L3
+    # notes, "v15 FINAL"), so only stochastic results are results.
+    args.stochastic = True
+    args.model = s.model
+    args.profile = s.env.profile
+    args.max_steps = s.env.max_steps
+    args.stall_threshold = s.env.stall_threshold
+    args.fruits_total = s.fruits_total
+    args.start_state = s.start_state
+    args.level = s.layout
+    args.resize_mode = s.env.resize_mode
+    args.reach_mode = s.reach_mode
+    return s, registry
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    p = build_parser()
+    args = p.parse_args(argv)
+    settings = registry = None
+    if args.policy is not None or args.game_level is not None:
+        settings, registry = _from_registry(args, argv)
+    elif args.model is None:
+        p.error("--model is required (or use --policy with --game-level)")
+
+    def _path(rel):
+        # Registry paths are repo-relative; hand-typed ones stay as given.
+        if rel is None or settings is None:
+            return rel
+        from retro_ai.training.yeti_registry import REPO
+
+        return str(REPO / rel)
+
+    # THE SEED THAT IS ACTUALLY USED. SB3's PPO.load calls set_random_seed with the seed
+    # saved in the model (42 for every Yeti run), re-seeding random, numpy and torch. So
+    # every evaluation of one model has always replayed the same action samples: two
+    # 300-episode runs of the same model are the same 300 episodes, not 600 (measured:
+    # with seeding before the load, seeds 123 and 124 gave identical rows). A seed given
+    # here is applied AFTER the load. Without one, hand-typed runs keep the model's
+    # seed, as they always had, and record it; registry runs draw a fresh seed, so
+    # repeated measurements of one model are independent and can be pooled.
+    seed = args.seed
+    if seed is None and settings is not None:
+        seed = secrets.randbits(31)
+
+    out_path = args.out
+    if settings is not None:
+        out = (
+            Path(args.out)
+            if args.out
+            else registry.default_result_path(
+                args.policy, args.game_level, args.episodes, seed
+            )
+        )
+        if out.exists():
+            raise SystemExit(f"{out} exists; a result file is data, never overwritten")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out_path = str(out)
+        print(
+            f"policy {args.policy} on game level {args.game_level}: model "
+            f"{args.model}, layout {args.level}, start {args.start_state or 'reset'}, "
+            f"profile "
+            f"{args.profile}, stop {args.max_steps}/{args.stall_threshold}, resize "
+            f"{settings.env.resize_mode}, reach {args.reach_mode}, seed {seed}",
+            flush=True,
+        )
 
     deterministic = not args.stochastic
     fruits_total = args.fruits_total
     princess_cp = fruits_total + 1
     start_state_bytes = None
     if args.start_state:
-        with open(args.start_state, "rb") as f:
+        with open(_path(args.start_state), "rb") as f:
             start_state_bytes = f.read()
 
-    env_cfg = EnvConfig(
-        profile=args.profile,
-        action_mode="joystick",
-        max_steps=args.max_steps,
-        stall_threshold=args.stall_threshold,
-        resize=(84, 84),
-        resize_mode=args.resize_mode,
-    )
-    stack = build_training_env(args.profile, env_cfg)
+    if settings is not None:
+        # The policy's own view: resize, resize mode, crop, frame settings, action mode.
+        env_cfg = settings.env
+    else:
+        env_cfg = EnvConfig(
+            profile=args.profile,
+            action_mode="joystick",
+            max_steps=args.max_steps,
+            stall_threshold=args.stall_threshold,
+            resize=(84, 84),
+            resize_mode=args.resize_mode,
+        )
+    stack = build_training_env(env_cfg.profile, env_cfg)
 
-    model = PPO.load(args.model, device="auto")
+    model = PPO.load(_path(args.model), device="auto")
+    if seed is None:
+        seed = model.seed  # PPO.load already seeded random, numpy and torch with it
+    else:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
     level = args.level if args.level is not None else (2 if start_state_bytes else 1)
     track = not args.no_depth
@@ -210,10 +346,27 @@ def main() -> None:
                 )
         print(f"  mean rung: {mean_rung:.2f} / {n_rungs}")
 
-    if args.out:
-        with open(args.out, "w") as f:
+    if out_path:
+        from retro_ai.training.yeti_registry import current_native_sha256
+
+        provenance = {
+            "seed": seed,
+            "profile": env_cfg.profile,
+            "max_steps": args.max_steps,
+            "stall_threshold": args.stall_threshold,
+            # Which emulator build produced these numbers (see 2b0a45d in TODO.md).
+            "native_sha256": current_native_sha256(),
+        }
+        if settings is not None:
+            provenance.update(
+                policy=args.policy,
+                game_level=args.game_level,
+                model_sha256=settings.model_sha256,
+            )
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(
                 {
+                    **provenance,
                     "model": args.model,
                     "episodes": n,
                     "deterministic": deterministic,
@@ -234,7 +387,7 @@ def main() -> None:
                 f,
                 indent=2,
             )
-        print(f"\nWrote {args.out}")
+        print(f"\nWrote {out_path}")
 
 
 if __name__ == "__main__":

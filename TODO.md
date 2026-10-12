@@ -259,6 +259,91 @@ FOLLOW-UPS
   on, and that link is still unrecorded. Cheap: the manifest already captures git
   info; add the built artifact's SHA/mtime alongside it.
 
+## Yeti — the full game: one policy per layout, without regressions (2026-10-12)
+
+GOAL. Play the game as far as it goes. Levels cycle: L5 has L1's tiles exactly (0 of
+1000 cells differ) with 1.7-1.9x the snowballs; L6-L8 repeating L2-L4 is NOT yet
+checked. First target: one policy per layout. Stretch: one policy for every level.
+
+STARTING POINT (300 stochastic episodes each, from the level's own start, through the
+registry on emulator fdd7e006..., 2026-10-12; files in
+experiments/003-yeti/data/champion_recheck/<policy>/). The earlier figure is a separate
+300-episode sample (seed 42); no pair differs by more than |z| 1.08.
+
+| level | policy | princess (95% Wilson) | earlier | resize |
+|---|---|---|---|---|
+| L1 | l1_v17 | 215/300 = 0.717 (0.663-0.765) | 208/300 | max |
+| L2 | l2_v10 (7.3M) | 298/300 = 0.993 (0.976-0.998) | 296/300 | nearest |
+| L3 | l3_v15 final weights | 246/300 = 0.820 (0.773-0.859) | 242/300 | nearest |
+| L4 | l4_v30 | 220/300 = 0.733 (0.681-0.780) | 208/300 | max |
+| L5 | l1_v17 | **0/300** (0 - 0.013) | 0/300 | max |
+
+On L5 the L1 policy never got past 3 fruits; median death step 194 vs 311 on L1.
+
+So the L1 policy does NOT cover L5 as trained. Cause not separated: more snowballs, or
+the different score display. All four champions were trained after `2b0a45d`.
+
+THE LOOP, once per level:
+1. Capture the level's start by letting the previous level's policy finish
+   (`capture_level3_start.py --label levelN`), so it carries real score/bonus/lives.
+2. Identify the layout by its tile map (0x2C27) against the known ones. New layout:
+   build and check its map, then step 4.
+3. Try that layout's policy from the new start, 300 episodes.
+4. Train if it falls short: one lever per run, with a control run.
+5. Finish: 300-episode re-measure of EVERY level the policy covers, archive, register.
+6. Chain: play the whole game from reset with the registered champions; record where
+   each game ends (level, fruits, cause). Failures feed the next loop.
+
+DESIGN DECISIONS (agreed 2026-10-12):
+- **No hand-typed evaluation settings.** One registry
+  (`experiments/003-yeti/registry.yaml`) says which policy plays which level and how
+  every evaluation of it is set up. Level settings come from the registry, the policy's
+  view from its training config, results from the files the evaluator writes. History:
+  referee hardcoded to L4; resize mismatch 8.17 -> 0.02 mean rung; settle 5 vs 1 =
+  4/40 vs 32/40; box vs sprite reach; git info captured at the end of a run.
+- **Training on a new level must not regress the old ones.** One start group per level
+  start (e.g. L1 reset + L5 save), each with its own pools (L1 and L5 share waypoint
+  names, and an L5 seed carries L5's snowball rate) and its own goal score, today's
+  `pick_start` inside each group.
+- **No hardcoded shares or bars.** Groups are drawn by 1 - goal score, as reset is today.
+  A level never reaches goal 1 (princess < 100%), so it keeps getting episodes: at
+  today's rates L1 0.851 -> weight 0.149, L5 0.312 -> 0.688, so L1 gets ~18% with no
+  constant. A regression is a snapshot scoring below the champion's measured rate on a
+  level by more than the two sample sizes explain (binomial test), not a fixed bar.
+- **Near-perfect levels.** L2's goal is ~0.99 (weight ~0.01), so it recovers slowly from
+  a slip. Fix if it matters: put leftover bonus into the goal score (never reaches 1, and
+  it is the best-time signal). Changes allocation in every run, so its own lever.
+- **Stretch goal uses the same machinery** with groups L1..L4, plus: the reward must
+  follow the group (`reward.params.level` is per run today), pools keyed by (level,
+  name) since names repeat across layouts, and one resize mode for all (L2/L3 are
+  nearest). Key groups by level from the start; build only what L1 + L5 needs.
+
+WORK, in order:
+- [x] Registry + `eval_from_reset.py --policy --game-level`, refusing hand-typed
+      settings; results carry policy, level, model sha256, emulator sha256, seed.
+      (`python/retro_ai/training/yeti_registry.py`, tests/python/test_yeti_registry.py.)
+      FOUND ON THE WAY: `PPO.load` re-seeds random/numpy/torch with the seed saved in the
+      model (42 for every Yeti run), so every evaluation of one model has replayed the
+      SAME action samples. Measured: the 300-episode L5 run and a separate 1-episode run
+      both open with (422 steps, death, 2 fruits); with seeding moved after the load,
+      seeds 123 and 124 differ and 123 repeats exactly. Each past evaluation is still a
+      valid sample, but two evaluations of one model under the same settings are the
+      same episodes. Inferred, not checked: a 300-episode re-measure of a referee's
+      winner repeated the referee's 30 episodes as its first 30.
+      Registry runs now draw a fresh seed (recorded); hand-typed runs keep the old
+      behaviour and record seed 42.
+- [x] Re-measure every champion through the registry (table above).
+- [ ] Find and measure L3 v15's peak snapshot (0.953 at the referee around 2.2-2.3M;
+      its referee state is not archived). Final weights read 0.820.
+- [ ] Trainer: start groups, per-group pools and goal score.
+- [ ] Referee: score every group's level; flag regressions against the champion (binomial).
+- [ ] Automate step 5 at the end of `run_train_and_score.sh`.
+- [ ] First run: warm from l1_v17, groups L1 reset + L5 save. Control: same warm start,
+      L1 only (separates "L5 hurt L1" from drift under continued training).
+- [ ] Full-game runner. Probe first: what happens after a death (level restart? fruits
+      kept? lives)? Every training episode ends at the first death.
+- [ ] Later: best time (leftover bonus), starting on L2.
+
 ## Yeti Level 3 — reward graph
 
 - [DONE — commit pending] **Model the A1-A5 ascending climb as jump-edges.**

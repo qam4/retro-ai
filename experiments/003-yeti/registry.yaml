@@ -1,0 +1,91 @@
+# Yeti champion registry: which policy plays which game level, and how every
+# evaluation of it is set up. Read by python/retro_ai/training/yeti_registry.py and by
+# `scripts/mo5/yeti/eval_from_reset.py --policy ID --game-level N`.
+#
+# Each kind of setting has ONE home, and nothing here is copied from another:
+#   levels    where a game level starts, which map layout it uses, its game profile,
+#             fruit count and stop rules. Owned HERE.
+#   policies  a model, its sha256, and the run that trained it. The policy's VIEW of the
+#             game (resize, resize mode, crop, frame settings, action mode, reach test)
+#             is read from that run's config and archived run record, never repeated.
+#   results   NOT in this file. They are the JSON files the evaluator writes under
+#             experiments/003-yeti/data/champion_recheck/<policy>/, read back with
+#             their model and emulator hashes checked.
+#
+# Paths are relative to the repo root. Models and start saves are local files, not
+# tracked (models are large; a .sav holds the game program).
+
+levels:
+  1:
+    layout: 1           # yeti_map.LEVELS key
+    start_state: null   # game reset
+    profile: yeti_fruit
+    fruits_total: 4
+    max_steps: 1000
+    stall_threshold: 15
+  2:
+    layout: 2
+    start_state: output/mo5/yeti/level2/level2_start.sav
+    profile: yeti_fruit_level2
+    fruits_total: 2
+    max_steps: 1000
+    stall_threshold: 40
+  3:
+    layout: 3
+    start_state: output/mo5/yeti/level3/level3_start.sav
+    profile: yeti_fruit_level3
+    fruits_total: 1
+    max_steps: 1500
+    stall_threshold: 40
+  4:
+    layout: 4
+    start_state: output/mo5/yeti/level4/level4_start.sav
+    profile: yeti_fruit_level4
+    fruits_total: 1
+    max_steps: 1500
+    stall_threshold: 40
+  5:
+    # L1's tiles exactly (0 of 1000 cells differ), 1.7-1.9x the snowballs. Captured by
+    # playing L4 through its princess, so it carries a real playthrough's score, bonus
+    # and lives. L1's profile and stop rules: same layout, and its bonus clock runs from
+    # the first step like L1's (995 -> 958 on L1 vs 999 -> 962 on L5 over 40 no-op
+    # steps, measured 2026-10-12).
+    layout: 1
+    start_state: output/mo5/yeti/level5/level5_start.sav
+    profile: yeti_fruit
+    fruits_total: 4
+    max_steps: 1000
+    stall_threshold: 15
+
+policies:
+  l1_v17:
+    model: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/best/best_model.zip
+    model_sha256: 9c066df81e686de6ccc9ad5dc41b78d83959a2069bf7b02a5b310d4ee92015a6
+    config: experiments/003-yeti/configs/yeti_curriculum_l1_v17_v30recipe_cold_10m.yaml
+    run_record: experiments/003-yeti/data/runs/yeti_curriculum_l1_v17_v30recipe_cold_10m/run.yaml
+  l2_v10:
+    # The 7.3M snapshot; byte-identical to champions/l2_v10_7300k/final_model.zip.
+    model: output/mo5/yeti/training/yeti_curriculum_l2_v10_deferfruit_10m/best/best_model.zip
+    model_sha256: 351a4b2579ee685cd0101e7b1431ced51125cee7cf4c1b0f117319f40e1cc32e
+    config: experiments/003-yeti/configs/yeti_curriculum_l2_v10_deferfruit_10m.yaml
+    run_record: experiments/003-yeti/data/runs/yeti_curriculum_l2_v10_deferfruit_10m/run.yaml
+  l3_v15:
+    # FINAL weights: the only L3 v15 model measured at 300 episodes (242/300, older
+    # evaluator, level3_notes.md "v15 FINAL"). The run's peak snapshot is not
+    # identified yet; see TODO.md.
+    model: output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m/final_model.zip
+    model_sha256: 8eac09c82c2a72dc09b443bd60b1f41e63389758858ddb6db7e4e0de9f576e6a
+    config: experiments/003-yeti/configs/yeti_curriculum_l3_v15_gatewp_15m.yaml
+    run_record: experiments/003-yeti/data/runs/yeti_curriculum_l3_v15_gatewp_15m/run.yaml
+  l4_v30:
+    model: output/mo5/yeti/training/yeti_curriculum_l4_v30_blockmax_cold_15m/best/best_model.zip
+    model_sha256: d62f6d8683685328f38f8485cdf8a67aabfe9c8867ee9ec0ca05c400b8627a27
+    config: experiments/003-yeti/configs/yeti_curriculum_l4_v30_blockmax_cold_15m.yaml
+    run_record: experiments/003-yeti/data/runs/yeti_curriculum_l4_v30_blockmax_cold_15m/run.yaml
+
+# The policy that plays each game level. L5 has none: l1_v17 scores 0/300 there.
+champions:
+  1: l1_v17
+  2: l2_v10
+  3: l3_v15
+  4: l4_v30
