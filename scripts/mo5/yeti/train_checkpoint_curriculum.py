@@ -2287,30 +2287,13 @@ def _start_group_specs(cfg) -> List[Tuple[str, Optional[str]]]:
     from retro_ai.training.yeti_registry import Registry
 
     reg = Registry.load()
-    layout = _level_of(cfg)
     out: List[Tuple[str, Optional[str]]] = []
     for i, n in enumerate(levels):
         try:
             spec = reg.level(n)
         except KeyError as exc:
             raise SystemExit(f"curriculum.start_groups: {exc.args[0]}") from None
-        checks = (
-            ("layout", spec.layout, layout, "reward.params.level"),
-            ("profile", spec.profile, cfg.env.profile, "env.profile"),
-            ("fruits", spec.fruits_total, cur.fruits_total, "curriculum.fruits_total"),
-            ("max_steps", spec.max_steps, cfg.env.max_steps, "env.max_steps"),
-            (
-                "stall_threshold",
-                spec.stall_threshold,
-                cfg.env.stall_threshold,
-                "env.stall_threshold",
-            ),
-        )
-        clash = [
-            f"{what} {want} (this run has {key} = {have})"
-            for what, want, have, key in checks
-            if want != have
-        ]
+        clash = reg.mismatches(cfg, n)
         if clash:
             raise SystemExit(
                 f"start group L{n} cannot share this run: needs "

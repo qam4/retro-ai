@@ -198,7 +198,13 @@ class Registry:
 
     def training_level(self, policy_id: str) -> int:
         """The game level whose start and layout the policy's config trains on."""
-        cfg = self.config(policy_id)
+        try:
+            return self.training_level_of(self.config(policy_id))
+        except ValueError as exc:
+            raise ValueError(f"{policy_id}: {exc}") from None
+
+    def training_level_of(self, cfg: RunConfig) -> int:
+        """The game level whose start and layout ``cfg`` trains on (its first group)."""
         layout = int((cfg.reward.params or {}).get("level", 1))
         start = cfg.curriculum.start_state if cfg.curriculum else None
         hits = [
@@ -208,12 +214,83 @@ class Registry:
         ]
         if len(hits) != 1:
             raise ValueError(
-                f"{policy_id}: config trains on layout {layout} from {start!r}, which "
-                f"matches game levels {hits}; expected exactly one"
+                f"config trains on layout {layout} from {start!r}, which matches game "
+                f"levels {hits}; expected exactly one"
             )
         return hits[0]
 
+    def levels_of(self, cfg: RunConfig) -> List[int]:
+        """Every game level a run trains on: its start groups, else its own level."""
+        groups = list(getattr(cfg.curriculum, "start_groups", None) or [])
+        return [int(n) for n in groups] if groups else [self.training_level_of(cfg)]
+
+    def mismatches(self, cfg: RunConfig, game_level: int) -> List[str]:
+        """How ``cfg``'s settings differ from ``game_level``'s, one line per setting.
+
+        Empty when the run's layout, game profile, fruit count and stop rules are the
+        level's. A run trains every level under ONE reward and ONE environment, so a
+        level it disagrees with is one it would train, or be scored on, under conditions
+        that are not that level's.
+        """
+        lvl = self.level(game_level)
+        cur = cfg.curriculum
+        checks = (
+            (
+                "layout",
+                lvl.layout,
+                int((cfg.reward.params or {}).get("level", 1)),
+                "reward.params.level",
+            ),
+            ("profile", lvl.profile, cfg.env.profile, "env.profile"),
+            (
+                "fruits",
+                lvl.fruits_total,
+                cur.fruits_total if cur else None,
+                "curriculum.fruits_total",
+            ),
+            ("max_steps", lvl.max_steps, cfg.env.max_steps, "env.max_steps"),
+            (
+                "stall_threshold",
+                lvl.stall_threshold,
+                cfg.env.stall_threshold,
+                "env.stall_threshold",
+            ),
+        )
+        return [
+            f"{what} {want} (the run has {key} = {have})"
+            for what, want, have, key in checks
+            if want != have
+        ]
+
     # --- evaluation --------------------------------------------------------------
+
+    def _settings(
+        self,
+        cfg: RunConfig,
+        game_level: int,
+        reach_mode: str,
+        policy: str = "",
+        model: str = "",
+        model_sha256: str = "",
+    ) -> EvalSettings:
+        lvl = self.level(game_level)
+        env = dataclasses.replace(
+            cfg.env,
+            profile=lvl.profile,
+            max_steps=lvl.max_steps,
+            stall_threshold=lvl.stall_threshold,
+        )
+        return EvalSettings(
+            policy=policy,
+            game_level=lvl.game_level,
+            model=model,
+            model_sha256=model_sha256,
+            layout=lvl.layout,
+            start_state=lvl.start_state,
+            fruits_total=lvl.fruits_total,
+            reach_mode=reach_mode,
+            env=env,
+        )
 
     def eval_settings(self, policy_id: str, game_level: int) -> EvalSettings:
         """Resolve every setting an evaluation of ``policy_id`` on ``game_level`` needs.
@@ -222,25 +299,25 @@ class Registry:
         rest of the environment (resize, resize mode, crop, frame settings, action
         mode), so a policy is always shown the picture it trained on.
         """
-        lvl = self.level(game_level)
         pol = self.policy(policy_id)
-        env = dataclasses.replace(
-            self.config(policy_id).env,
-            profile=lvl.profile,
-            max_steps=lvl.max_steps,
-            stall_threshold=lvl.stall_threshold,
-        )
-        return EvalSettings(
+        return self._settings(
+            self.config(policy_id),
+            game_level,
+            self.reach_mode(policy_id),
             policy=policy_id,
-            game_level=lvl.game_level,
             model=pol.model,
             model_sha256=pol.model_sha256,
-            layout=lvl.layout,
-            start_state=lvl.start_state,
-            fruits_total=lvl.fruits_total,
-            reach_mode=self.reach_mode(policy_id),
-            env=env,
         )
+
+    def config_eval_settings(self, cfg: RunConfig, game_level: int) -> EvalSettings:
+        """Settings for evaluating a model trained by ``cfg`` that is not registered,
+        e.g. a referee scoring a run's snapshots. Same rule as ``eval_settings``; the
+        reach test is the config's own, since a run being trained now has its record
+        written from this very config. ``model`` is left for the caller to fill."""
+        reach = (
+            cfg.curriculum.waypoint_reach_mode if cfg.curriculum else "sprite"
+        ) or "sprite"
+        return self._settings(cfg, game_level, str(reach))
 
     def default_result_path(
         self, policy_id: str, game_level: int, episodes: int, seed: int
@@ -312,6 +389,32 @@ class Registry:
         return k, n
 
 
+def regressed_against(
+    k: int, n: int, ref_k: int, ref_n: int, sigmas: float = 3.0
+) -> Tuple[bool, float]:
+    """Is ``k/n`` below the reference rate ``ref_k/ref_n`` by more than chance explains?
+
+    One-sided two-proportion z-test with the pooled rate, so the threshold comes from
+    the two sample sizes, not from a number picked by hand. ``sigmas`` is the same
+    3-sigma convention the referee's within-run regression margin already uses (3x the
+    binomial sd). At 30 episodes against l1_v17's 215/300 it flags 13/30 (0.43) and
+    not 14/30 (0.47): it catches a collapse, not a slip, which only a 300-episode
+    re-measure can resolve.
+
+    Returns ``(regressed, z)``; no reference (``ref_n == 0``) or no episodes is
+    ``(False, 0.0)``.
+    """
+    if not n or not ref_n:
+        return False, 0.0
+    p, q = k / n, ref_k / ref_n
+    pooled = (k + ref_k) / (n + ref_n)
+    se = (pooled * (1 - pooled) * (1 / n + 1 / ref_n)) ** 0.5
+    if se == 0:
+        return False, 0.0
+    z = (p - q) / se
+    return z < -sigmas, z
+
+
 def explicit_dests(parser: argparse.ArgumentParser, argv: Sequence[str]) -> Set[str]:
     """The ``dest`` of every option actually given on ``argv``.
 
@@ -358,6 +461,7 @@ __all__ = [
     "Result",
     "Registry",
     "sha256_of",
+    "regressed_against",
     "explicit_dests",
     "hand_settings_given",
     "current_native_sha256",

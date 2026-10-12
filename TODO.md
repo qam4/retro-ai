@@ -356,7 +356,18 @@ WORK, in order:
       settle 5 read 4/40 vs 32/40 on L4). Needed before capturing L6's start, which can
       come from deep L5 pools (`--seed-checkpoints`/`--seed-pool`) once one L5 princess
       touch exists. Also check its `--seed` against the PPO.load re-seed.
-- [ ] Referee: score every group's level; flag regressions against the champion (binomial).
+- [x] Referee: score every group's level; flag regressions against the champion (binomial).
+      `keep_best_sweep.py --config CFG` takes every level setting from the config and
+      the registry (hand-typed level flags refused) and scores each level the run
+      trains on, through `eval_from_reset.py --config`. With several levels the
+      snapshot score is the MEAN of the level scores, and a snapshot below a level's
+      registered champion (Registry.rate on the same emulator) at 3 sigma
+      (`regressed_against`) cannot become best. `run_train_and_score.sh` now uses
+      `--config` for every run and runs `--check` BEFORE training.
+      WHAT IT CAN RESOLVE, against l1_v17's 215/300 (0.717): 30 episodes flag only
+      <= 0.433, 60 <= 0.517, 100 <= 0.550, even 300 only <= 0.600. So the referee
+      catches a collapse; a slip of ~0.1 is below what any of these sizes can show.
+      v17's referee took 33 min for 40 snapshots at 30 episodes, one level.
 - [ ] Automate step 5 at the end of `run_train_and_score.sh`.
 - [ ] First run: warm from l1_v17, groups L1 reset + L5 save. Control: same warm start,
       L1 only (separates "L5 hurt L1" from drift under continued training).

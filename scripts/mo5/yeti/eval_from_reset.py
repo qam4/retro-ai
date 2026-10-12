@@ -129,8 +129,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--game-level",
         type=int,
         default=None,
-        help="the game level to evaluate --policy on, counted as the game counts them "
-        "(L5 is a level of its own, on L1's layout)",
+        help="the game level to evaluate --policy (or --config) on, counted as the "
+        "game counts them (L5 is a level of its own, on L1's layout)",
+    )
+    p.add_argument(
+        "--config",
+        default=None,
+        help="run config that trained --model (an unregistered model, e.g. a "
+        "snapshot the referee is scoring). With --game-level, takes the policy's view "
+        "from this config and the level settings from the registry, and refuses the "
+        "same hand-typed flags --policy does, except --model.",
     )
     p.add_argument(
         "--seed",
@@ -142,10 +150,42 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _from_config(args: argparse.Namespace, argv: list):
+    """Fill ``args`` for --model + --config + --game-level (an unregistered model)."""
+    from retro_ai.training import yeti_registry as reg
+    from retro_ai.training.run_config import RunConfig
+
+    if args.game_level is None or args.model is None:
+        raise SystemExit("--config needs --model and --game-level")
+    if args.policy is not None:
+        raise SystemExit("pass --policy or --config, not both")
+    owned = [s for s in reg.HAND_SETTINGS if s != "model"]
+    clash = reg.hand_settings_given(build_parser(), argv, owned)
+    if clash:
+        raise SystemExit(
+            f"--config takes {', '.join(clash)} from the run config and the "
+            f"registry; do not pass {'it' if len(clash) == 1 else 'them'} as well"
+        )
+    registry = reg.Registry.load()
+    s = registry.config_eval_settings(RunConfig.from_yaml(args.config), args.game_level)
+    args.stochastic = True
+    args.profile = s.env.profile
+    args.max_steps = s.env.max_steps
+    args.stall_threshold = s.env.stall_threshold
+    args.fruits_total = s.fruits_total
+    args.start_state = s.start_state
+    args.level = s.layout
+    args.resize_mode = s.env.resize_mode
+    args.reach_mode = s.reach_mode
+    return s, registry
+
+
 def _from_registry(args: argparse.Namespace, argv: list):
     """Fill ``args`` from the registry for --policy / --game-level."""
     from retro_ai.training import yeti_registry as reg
 
+    if args.config is not None:
+        return _from_config(args, argv)
     if args.policy is None or args.game_level is None:
         raise SystemExit("--policy and --game-level must be given together")
     clash = reg.hand_settings_given(build_parser(), argv)
@@ -182,10 +222,15 @@ def main() -> None:
     p = build_parser()
     args = p.parse_args(argv)
     settings = registry = None
-    if args.policy is not None or args.game_level is not None:
+    if any(v is not None for v in (args.policy, args.game_level, args.config)):
         settings, registry = _from_registry(args, argv)
     elif args.model is None:
         p.error("--model is required (or use --policy with --game-level)")
+
+    # --policy: a registered model, result written as registry data. --config: an
+    # unregistered model (a referee's snapshot) evaluated under registry level
+    # settings and its run's view; its output is the caller's scratch file.
+    registered = settings is not None and args.policy is not None
 
     def _path(rel):
         # Registry paths are repo-relative; hand-typed ones stay as given.
@@ -194,6 +239,10 @@ def main() -> None:
         from retro_ai.training.yeti_registry import REPO
 
         return str(REPO / rel)
+
+    def _model_path(rel):
+        # Under --config the model is the caller's path, not a registry path.
+        return _path(rel) if registered else rel
 
     # THE SEED THAT IS ACTUALLY USED. SB3's PPO.load calls set_random_seed with the seed
     # saved in the model (42 for every Yeti run), re-seeding random, numpy and torch. So
@@ -208,7 +257,7 @@ def main() -> None:
         seed = secrets.randbits(31)
 
     out_path = args.out
-    if settings is not None:
+    if registered:
         out = (
             Path(args.out)
             if args.out
@@ -220,8 +269,12 @@ def main() -> None:
             raise SystemExit(f"{out} exists; a result file is data, never overwritten")
         out.parent.mkdir(parents=True, exist_ok=True)
         out_path = str(out)
+    elif settings is not None and not args.out:
+        raise SystemExit("--config needs --out (its result is not registry data)")
+    if settings is not None:
+        who = f"policy {args.policy}" if registered else f"config {args.config}"
         print(
-            f"policy {args.policy} on game level {args.game_level}: model "
+            f"{who} on game level {args.game_level}: model "
             f"{args.model}, layout {args.level}, start {args.start_state or 'reset'}, "
             f"profile "
             f"{args.profile}, stop {args.max_steps}/{args.stall_threshold}, resize "
@@ -251,7 +304,7 @@ def main() -> None:
         )
     stack = build_training_env(env_cfg.profile, env_cfg)
 
-    model = PPO.load(_path(args.model), device="auto")
+    model = PPO.load(_model_path(args.model), device="auto")
     if seed is None:
         seed = model.seed  # PPO.load already seeded random, numpy and torch with it
     else:
@@ -357,12 +410,14 @@ def main() -> None:
             # Which emulator build produced these numbers (see 2b0a45d in TODO.md).
             "native_sha256": current_native_sha256(),
         }
-        if settings is not None:
+        if registered:
             provenance.update(
                 policy=args.policy,
                 game_level=args.game_level,
                 model_sha256=settings.model_sha256,
             )
+        elif settings is not None:
+            provenance.update(game_level=args.game_level, config=args.config)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(
                 {

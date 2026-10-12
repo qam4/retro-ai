@@ -182,6 +182,85 @@ def _eval_snapshot(
     )
 
 
+def _eval_snapshot_registry(model_path, episodes, device, tmp_json, config, level):
+    """``_eval_snapshot`` for --config mode: every setting from the run config and the
+    registry (eval_from_reset.py --config), none typed here.
+
+    Returns ``_eval_snapshot``'s five values plus ``(princess_touches, episodes,
+    native_sha256)``, which the champion comparison needs as counts, together with the
+    emulator build the numbers came from.
+    """
+    cmd = [
+        sys.executable,
+        "scripts/mo5/yeti/eval_from_reset.py",
+        "--model",
+        model_path,
+        "--config",
+        config,
+        "--game-level",
+        str(level),
+        "--episodes",
+        str(episodes),
+        "--out",
+        tmp_json,
+    ]
+    env = dict(os.environ)
+    if device == "cpu":
+        env["CUDA_VISIBLE_DEVICES"] = ""
+    subprocess.run(cmd, env=env, capture_output=True, timeout=3600, check=True)
+    with open(tmp_json) as f:
+        data = json.load(f)
+    n = data["episodes"]
+    fruits_total = int(data["fruits_total"])
+    princess = data["princess_touches"] / n
+    reach_top = (
+        sum(v for k, v in data["max_cp_counts"].items() if int(k) >= fruits_total) / n
+    )
+    hits: Counter = Counter()
+    for row in data.get("rows") or ():
+        for pt in row.get("reached_points") or ():
+            hits[pt] += 1
+    rates = {k: v / n for k, v in hits.items()} if n else {}
+    if n:
+        rungs = {int(k): v for k, v in (data.get("rung_counts") or {}).items()}
+        for k in range(1, int(data.get("n_rungs") or 0) + 1):
+            rates[f"rung{k}"] = sum(v for r, v in rungs.items() if r >= k) / n
+    return (
+        princess,
+        reach_top,
+        data.get("mean_rung", 0.0),
+        data.get("n_rungs", 0),
+        rates,
+        int(data["princess_touches"]),
+        int(n),
+        data.get("native_sha256"),
+    )
+
+
+def _score_level(princess, reach_top, mean_rung, n_rungs, rates, route):
+    """One level's ranking score and the parts it is made of (see the note in main)."""
+    depth = (mean_rung / n_rungs) if n_rungs else 0.0
+    fwid, frate = _frontier(rates, route)
+    fdepth = (route.index(fwid) + 1) / len(route) if (fwid and route) else 0.0
+    score = (
+        princess
+        + 1e-2 * fdepth  # how far along the route the frontier sits
+        + 1e-4 * frate  # how reliably it gets there
+        + 1e-6 * depth
+    )
+    return {
+        "princess": princess,
+        "reach_top": reach_top,
+        "mean_rung": mean_rung,
+        "n_rungs": n_rungs,
+        "depth": depth,
+        "frontier": fwid,
+        "frontier_rate": frate,
+        "score": score,
+        "rates": rates,
+    }
+
+
 def _frontier_route(level_route, n_rungs):
     """The ordered list the frontier walks: the level's route order, or its ladder.
 
@@ -245,9 +324,74 @@ def _rate_ci(rate, n, z=1.96):
     return (hi - lo) / 2.0
 
 
-def main() -> None:
+# Flags whose value --config takes from the run config and the registry.
+_LEVEL_FLAGS = (
+    "profile",
+    "fruits_total",
+    "level",
+    "start_state",
+    "stall_threshold",
+    "max_steps",
+    "resize_mode",
+    "reach_mode",
+    "level_route",
+)
+
+
+def _registry_plan(config_path):
+    """``(registry, cfg, [(game_level, settings, route_order)])`` for --config mode.
+
+    Every level the run trains on (its start groups, else its own level), each with the
+    settings it is scored under and its route order. Refuses a run that trained under
+    settings other than a level's (Registry.mismatches): its referee scores would be
+    taken under conditions it never trained in, after the hours of training, so it is
+    checked before -- run_train_and_score.sh calls --check first.
+    """
+    from retro_ai.training.run_config import RunConfig
+    from retro_ai.training.yeti_map import get_level_map
+    from retro_ai.training.yeti_registry import Registry
+
+    registry = Registry.load()
+    cfg = RunConfig.from_yaml(config_path)
+    try:
+        levels = registry.levels_of(cfg)
+    except ValueError as exc:
+        raise SystemExit(f"{config_path}: {exc}") from None
+    plan = []
+    for n in levels:
+        clash = registry.mismatches(cfg, n)
+        if clash:
+            raise SystemExit(
+                f"{config_path} trains under settings other than game level {n}'s: "
+                + "; ".join(clash)
+            )
+        s = registry.config_eval_settings(cfg, n)
+        route = list(getattr(get_level_map(s.layout), "route_order", None) or [])
+        plan.append((n, s, route))
+    return registry, cfg, plan
+
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--snapshots-dir", required=True)
+    p.add_argument(
+        "--config",
+        default=None,
+        help="the run config that produced the snapshots. Takes every level setting "
+        "from it and from experiments/003-yeti/registry.yaml (passing --profile, "
+        "--level, --start-state, --fruits-total, --stall-threshold, --max-steps, "
+        "--resize-mode, --reach-mode or --level-route as well is refused), scores "
+        "EVERY level the run trains on (its curriculum.start_groups), and with more "
+        "than one level only lets a snapshot become best if no level with a "
+        "registered champion scores below that champion's measured rate by more than "
+        "the two sample sizes explain.",
+    )
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="with --config: resolve and print what would be evaluated, then exit "
+        "(non-zero if the config cannot be scored)",
+    )
     p.add_argument(
         "--best-dir",
         default=None,
@@ -318,12 +462,50 @@ def main() -> None:
         "Default: 3x the binomial sd at --episodes, so the flag means 'more than the "
         "measurement can explain' rather than a hand-picked number.",
     )
-    args = p.parse_args()
+    return p
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    p = build_parser()
+    args = p.parse_args(argv)
+
+    # --config: every level setting from the run config and the registry.
+    registry = plan = None
+    if args.config:
+        from retro_ai.training.yeti_registry import hand_settings_given
+
+        clash = hand_settings_given(build_parser(), argv, _LEVEL_FLAGS)
+        if clash:
+            raise SystemExit(
+                f"--config takes {', '.join(clash)} from the run config and the "
+                f"registry; do not pass {'it' if len(clash) == 1 else 'them'} as well"
+            )
+        registry, _cfg, plan = _registry_plan(args.config)
+        for n, s, route in plan:
+            champ = registry.champions.get(n)
+            print(
+                f"[keep-best] level {n}: layout {s.layout}, start "
+                f"{s.start_state or 'reset'}, profile {s.env.profile}, stop "
+                f"{s.env.max_steps}/{s.env.stall_threshold}, resize "
+                f"{s.env.resize_mode}, reach {s.reach_mode}, route "
+                f"{len(route) or 'ladder'}, champion "
+                f"{champ or '-'}",
+                flush=True,
+            )
+        if args.check:
+            return
+    elif args.check:
+        raise SystemExit("--check needs --config")
+    multi = bool(plan) and len(plan) > 1
+    # (level, emulator sha) -> (k, n) of the level's champion; filled on first use,
+    # because the emulator sha comes from the eval output.
+    champion_ref: dict = {}
 
     # Travel order for the frontier. From the level map, so no waypoint is named here.
     route_order: list = []
     _lvl = args.level_route if args.level_route is not None else args.level
-    if _lvl:
+    if _lvl and not plan:
         try:
             from retro_ai.training.yeti_map import get_level_map
 
@@ -364,20 +546,40 @@ def main() -> None:
             last_new = time.time()
             name = os.path.basename(path)
             try:
-                princess, reach_top, mean_rung, n_rungs, rates = _eval_snapshot(
-                    path,
-                    args.episodes,
-                    args.device,
-                    tmp_json,
-                    profile=args.profile,
-                    fruits_total=args.fruits_total,
-                    start_state=args.start_state,
-                    stall_threshold=args.stall_threshold,
-                    max_steps=args.max_steps,
-                    level=args.level,
-                    resize_mode=args.resize_mode,
-                    reach_mode=args.reach_mode,
-                )
+                if plan:
+                    level_results = [
+                        (
+                            n,
+                            route,
+                            _eval_snapshot_registry(
+                                path,
+                                args.episodes,
+                                args.device,
+                                tmp_json,
+                                args.config,
+                                n,
+                            ),
+                        )
+                        for n, _s, route in plan
+                    ]
+                    princess, reach_top, mean_rung, n_rungs, rates = level_results[0][
+                        2
+                    ][:5]
+                else:
+                    princess, reach_top, mean_rung, n_rungs, rates = _eval_snapshot(
+                        path,
+                        args.episodes,
+                        args.device,
+                        tmp_json,
+                        profile=args.profile,
+                        fruits_total=args.fruits_total,
+                        start_state=args.start_state,
+                        stall_threshold=args.stall_threshold,
+                        max_steps=args.max_steps,
+                        level=args.level,
+                        resize_mode=args.resize_mode,
+                        reach_mode=args.reach_mode,
+                    )
             except Exception as e:
                 print(f"[keep-best] {name}: eval FAILED ({e})", flush=True)
                 continue
@@ -404,7 +606,7 @@ def main() -> None:
             # The level's route order, or -- on a level without one (L1, L2) -- its
             # progress ladder. Identical to before wherever a route order exists, so
             # L3/L4 scores stay comparable.
-            route = _frontier_route(route_order, n_rungs)
+            route = _frontier_route(plan[0][2] if plan else route_order, n_rungs)
             fwid, frate = _frontier(rates, route)
             fdepth = (route.index(fwid) + 1) / len(route) if (fwid and route) else 0.0
             score = (
@@ -413,6 +615,46 @@ def main() -> None:
                 + 1e-4 * frate  # how reliably it gets there
                 + 1e-6 * depth
             )
+            # SEVERAL LEVELS (--config with start groups). Every level is scored the
+            # same way and the snapshot's score is their MEAN, so no level is weighted
+            # by a chosen number. A level with a registered champion is also compared
+            # with that champion's measured rate on the same emulator build
+            # (Registry.rate, pooled over its result files): a snapshot below it by more
+            # than the two sample sizes explain (regressed_against, 3 sigma, the same
+            # convention as the within-run margin below) is REGRESSED on that level and
+            # cannot become best, however much it gains elsewhere. That is the rule
+            # "training on L5 must not cost L1". A level with no champion (L5 today)
+            # has nothing to fall below.
+            levels_out = {}
+            champion_regressed = []
+            if plan:
+                from retro_ai.training.yeti_registry import regressed_against
+
+                for n, lroute, res in level_results:
+                    lp, lr, lm, ln, lrates, lk, leps, lnative = res
+                    rec = _score_level(
+                        lp, lr, lm, ln, lrates, _frontier_route(lroute, ln)
+                    )
+                    rec.update(
+                        princess_touches=lk, episodes=leps, native_sha256=lnative
+                    )
+                    champ = registry.champions.get(n)
+                    if multi and champ:
+                        key = (n, lnative)
+                        if key not in champion_ref:
+                            champion_ref[key] = registry.rate(champ, n, lnative)
+                        ck, cn = champion_ref[key]
+                        bad, z = regressed_against(lk, leps, ck, cn)
+                        rec.update(champion=champ, champion_k=ck, champion_n=cn, z=z)
+                        rec["champion_regressed"] = bad
+                        if bad:
+                            champion_regressed.append(n)
+                    levels_out[str(n)] = rec
+                if multi:
+                    score = sum(r["score"] for r in levels_out.values()) / len(
+                        levels_out
+                    )
+            eligible = not champion_regressed
             state["evaluated"][name] = {
                 "step": step,
                 "princess": princess,
@@ -448,6 +690,14 @@ def main() -> None:
                     or (fwid == bf and frate < bfr - margin)
                 )
             )
+            if plan:
+                state["evaluated"][name]["levels"] = levels_out
+            if multi:
+                state["evaluated"][name]["champion_regressed"] = champion_regressed
+                state["evaluated"][name]["eligible"] = eligible
+                # A champion regression counts as a regression for anything acting on
+                # eval_status.json (RegressionStopCallback's patience counter).
+                regressed = regressed or bool(champion_regressed)
             state["evaluated"][name]["regressed"] = regressed
             state["evaluated"][name]["regress_margin"] = margin
             # How well is that rate known? A proportion over `episodes` independent
@@ -461,7 +711,20 @@ def main() -> None:
                 f"rung={mean_rung:.2f}/{n_rungs} "
                 f"(best={best_score():.4f}{' REGRESSED' if regressed else ''})"
             )
-            if score > best_score():
+            if multi:
+                msg += " | " + "  ".join(
+                    f"L{n}: princess={r['princess']:.3f} "
+                    f"frontier={r['frontier'] or '-'}@{r['frontier_rate']:.2f}"
+                    + (
+                        f" vs {r['champion']} {r['champion_k']}/{r['champion_n']} "
+                        f"z={r['z']:+.1f}"
+                        + (" CHAMPION-REGRESSED" if r["champion_regressed"] else "")
+                        if "champion" in r
+                        else ""
+                    )
+                    for n, r in levels_out.items()
+                )
+            if score > best_score() and eligible:
                 shutil.copyfile(path, os.path.join(best_dir, "best_model.zip"))
                 state["best"] = {
                     "model": name,
@@ -475,6 +738,14 @@ def main() -> None:
                     "frontier_rate": frate,
                     "n_eval": args.episodes,
                 }
+                if multi:
+                    state["best"]["levels"] = {
+                        n: {
+                            k: r[k]
+                            for k in ("princess", "frontier", "frontier_rate", "score")
+                        }
+                        for n, r in levels_out.items()
+                    }
                 with open(os.path.join(best_dir, "best_meta.json"), "w") as f:
                     json.dump(state["best"], f, indent=2)
                 msg += "  -> NEW BEST (saved)"
@@ -510,6 +781,33 @@ def main() -> None:
                             "frontier_rate"
                         ),
                         "best_model": os.path.join(best_dir, "best_model.zip"),
+                        # Per level, with --config and start groups. The top-level
+                        # fields above are the FIRST level's.
+                        **(
+                            {
+                                "levels": {
+                                    n: {
+                                        k: r.get(k)
+                                        for k in (
+                                            "princess",
+                                            "princess_touches",
+                                            "episodes",
+                                            "frontier",
+                                            "frontier_rate",
+                                            "champion",
+                                            "champion_k",
+                                            "champion_n",
+                                            "z",
+                                            "champion_regressed",
+                                        )
+                                    }
+                                    for n, r in levels_out.items()
+                                },
+                                "champion_regressed": champion_regressed,
+                            }
+                            if multi
+                            else {}
+                        ),
                     },
                     f,
                     indent=1,
@@ -545,6 +843,24 @@ def main() -> None:
                 if args.resize_mode != "nearest"
                 else ""
             )
+        )
+    elif state["evaluated"]:
+        blocked = sorted(
+            {
+                n
+                for v in state["evaluated"].values()
+                for n in (v.get("champion_regressed") or ())
+            }
+        )
+        print(
+            f"No best: none of {len(state['evaluated'])} evaluated snapshot(s) "
+            "qualified"
+            + (
+                f"; every one fell below a champion on level(s) {blocked}"
+                if blocked
+                else ""
+            )
+            + "."
         )
     else:
         print("No snapshots evaluated.")

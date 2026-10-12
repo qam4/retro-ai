@@ -35,59 +35,36 @@ for CFG in "$@"; do
     echo "========== MISSING CONFIG $CFG -- skipped"
     continue
   fi
-  # EVERYTHING the referee needs comes from the config, never from this script, so the
-  # referee scores the run on the level, view and reach test it trained with. This used
-  # to hardcode L4 (`--level 4 --profile yeti_fruit_level4 --fruits-total 1` and L4's
-  # start state), which would have scored any other level's run as L4 without an error.
-  # Values are shlex-quoted before eval, so a path with spaces cannot split.
-  VARS=$(python3 - "$CFG" <<'PYEOF'
-import shlex
-import sys
-
-from retro_ai.training.run_config import RunConfig
-
-c = RunConfig.from_yaml(sys.argv[1])
-if c.curriculum is None:
-    raise SystemExit("config has no curriculum section")
-vals = {
-    "OUT": c.training.output,
-    "RESIZE_MODE": c.env.resize_mode,
-    "REACH_MODE": c.curriculum.waypoint_reach_mode,
-    "PROFILE": c.env.profile,
-    "LEVEL": int((c.reward.params or {}).get("level", 1)),
-    "FRUITS_TOTAL": c.curriculum.fruits_total,
-    "START_STATE": c.curriculum.start_state or "",
-    "STALL": c.env.stall_threshold,
-    "MAXSTEPS": c.env.max_steps,
-}
-for k, v in vals.items():
-    print(f"{k}={shlex.quote(str(v))}")
-PYEOF
-)
-  if [ -z "$VARS" ]; then
-    echo "========== COULD NOT READ the referee settings FROM $CFG -- skipped"
+  # EVERYTHING the referee needs comes from the config and the registry
+  # (experiments/003-yeti/registry.yaml), never from this script: `keep_best_sweep.py
+  # --config` resolves the level, profile, start, stop rules, view and reach test for
+  # every level the run trains on (its start groups). This used to hardcode L4, which
+  # would have scored any other level's run as L4 without an error; after that it built
+  # the same flags by hand from the config, one level only.
+  OUT=$(python3 -c 'import sys; from retro_ai.training.run_config import RunConfig; print(RunConfig.from_yaml(sys.argv[1]).training.output)' "$CFG")
+  if [ -z "$OUT" ]; then
+    echo "========== COULD NOT READ training.output FROM $CFG -- skipped"
     continue
   fi
-  eval "$VARS"
-  REF_ARGS=(--level "$LEVEL" --profile "$PROFILE" --fruits-total "$FRUITS_TOTAL"
-            --stall-threshold "$STALL" --max-steps "$MAXSTEPS")
-  # L1 starts from a game reset, not a save-state.
-  if [ -n "$START_STATE" ]; then
-    REF_ARGS+=(--start-state "$START_STATE")
+  # Checked BEFORE training: a config the referee cannot score (one that trains under
+  # settings other than its levels' in the registry) fails here in seconds, not after
+  # the run.
+  if ! python3 -u scripts/mo5/yeti/keep_best_sweep.py --snapshots-dir "${OUT}/snapshots" \
+      --config "$CFG" --check; then
+    echo "========== $CFG CANNOT BE SCORED (see above) -- skipped"
+    continue
   fi
 
   echo "========== $CFG TRAIN START $(date -Is)   -> $OUT"
   python3 -u scripts/mo5/yeti/train_checkpoint_curriculum.py --config "$CFG"
   echo "========== $CFG TRAIN EXIT $? $(date -Is)"
 
-  echo "========== $CFG REFEREE START $(date -Is)   resize_mode=$RESIZE_MODE reach_mode=$REACH_MODE ${REF_ARGS[*]}"
+  echo "========== $CFG REFEREE START $(date -Is)"
   python3 -u scripts/mo5/yeti/keep_best_sweep.py \
     --snapshots-dir "${OUT}/snapshots" \
-    --resize-mode "$RESIZE_MODE" \
-    --reach-mode "$REACH_MODE" \
+    --config "$CFG" \
     --episodes 30 \
-    --device cpu \
-    "${REF_ARGS[@]}"
+    --device cpu
   echo "========== $CFG REFEREE EXIT $? $(date -Is)"
 done
 
