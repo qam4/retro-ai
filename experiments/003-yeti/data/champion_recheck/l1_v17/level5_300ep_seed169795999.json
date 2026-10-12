@@ -1,0 +1,5299 @@
+{
+  "seed": 169795999,
+  "profile": "yeti_fruit",
+  "max_steps": 1000,
+  "stall_threshold": 15,
+  "native_sha256": "fdd7e00696a799edf8835a157b2c7f305866e5cc82fc95b2cf4c40cb38704c13",
+  "policy": "l1_v17",
+  "game_level": 5,
+  "model_sha256": "9c066df81e686de6ccc9ad5dc41b78d83959a2069bf7b02a5b310d4ee92015a6",
+  "model": "output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/best/best_model.zip",
+  "episodes": 300,
+  "deterministic": false,
+  "fruits_total": 4,
+  "start_state": "output/mo5/yeti/level5/level5_start.sav",
+  "level": 1,
+  "max_cp_counts": {
+    "2": 180,
+    "1": 111,
+    "0": 6,
+    "3": 3
+  },
+  "princess_touches": 0,
+  "rung_counts": {
+    "2": 180,
+    "1": 111,
+    "0": 6,
+    "3": 3
+  },
+  "n_rungs": 4,
+  "mean_rung": 1.6,
+  "reach_mode": "sprite",
+  "resize_mode": "max",
+  "rows": [
+    {
+      "ep": 0,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 1,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 146,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 2,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 195,
+      "end_reason": "death",
+      "final_x": 75,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 3,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 391,
+      "end_reason": "death",
+      "final_x": 53,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 4,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 5,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 248,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 6,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 250,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 7,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 238,
+      "end_reason": "death",
+      "final_x": 46,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 8,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 9,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 280,
+      "end_reason": "death",
+      "final_x": 67,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 10,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 11,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 12,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 233,
+      "end_reason": "death",
+      "final_x": 66,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 13,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 14,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 215,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 15,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 16,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 184,
+      "end_reason": "death",
+      "final_x": 74,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 17,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 18,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 168,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 19,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 20,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 263,
+      "end_reason": "death",
+      "final_x": 27,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 21,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 148,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 22,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 180,
+      "end_reason": "death",
+      "final_x": 71,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 23,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 24,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 242,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 25,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 175,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 26,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 27,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 28,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 269,
+      "end_reason": "death",
+      "final_x": 47,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 29,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 172,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 30,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 309,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 31,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 165,
+      "end_reason": "death",
+      "final_x": 27,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 32,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 33,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 323,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 34,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 35,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 205,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 36,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 175,
+      "end_reason": "death",
+      "final_x": 67,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 37,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 218,
+      "end_reason": "death",
+      "final_x": 75,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 38,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 39,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 246,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 40,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 146,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 41,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 180,
+      "end_reason": "death",
+      "final_x": 67,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 42,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 176,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 154,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 43,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 295,
+      "end_reason": "death",
+      "final_x": 19,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 44,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 261,
+      "end_reason": "death",
+      "final_x": 31,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 45,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 46,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 372,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 47,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 48,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 49,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 50,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 212,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 51,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 166,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 52,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 53,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 147,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 54,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 241,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 55,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 235,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 56,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 224,
+      "end_reason": "death",
+      "final_x": 72,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 57,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 178,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 58,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 59,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 465,
+      "end_reason": "death",
+      "final_x": 29,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 60,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 293,
+      "end_reason": "death",
+      "final_x": 9,
+      "final_y": 178,
+      "reached_points": []
+    },
+    {
+      "ep": 61,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 379,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 62,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 300,
+      "end_reason": "death",
+      "final_x": 8,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 63,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 240,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 64,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 159,
+      "end_reason": "death",
+      "final_x": 32,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 65,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 246,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 66,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 318,
+      "end_reason": "death",
+      "final_x": 52,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 67,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 391,
+      "end_reason": "death",
+      "final_x": 9,
+      "final_y": 182,
+      "reached_points": []
+    },
+    {
+      "ep": 68,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 249,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 69,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 242,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 70,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 277,
+      "end_reason": "death",
+      "final_x": 37,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 71,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 72,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 33,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 73,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 240,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 74,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 218,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 75,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 150,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 76,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 77,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 240,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 78,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 240,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 79,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 203,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 80,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 349,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 81,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 261,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 82,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 83,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 159,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 84,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 85,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 154,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 86,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 168,
+      "end_reason": "death",
+      "final_x": 29,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 87,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 233,
+      "end_reason": "death",
+      "final_x": 69,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 88,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 240,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 89,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 166,
+      "end_reason": "death",
+      "final_x": 26,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 90,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 268,
+      "end_reason": "death",
+      "final_x": 26,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 91,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 240,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 92,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 341,
+      "end_reason": "death",
+      "final_x": 13,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F2",
+        "F3",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 93,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 151,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 94,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 160,
+      "end_reason": "death",
+      "final_x": 35,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 95,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 289,
+      "end_reason": "death",
+      "final_x": 6,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 96,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 170,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 97,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 246,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 98,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 264,
+      "end_reason": "death",
+      "final_x": 28,
+      "final_y": 178,
+      "reached_points": [
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 99,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 122,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 100,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 220,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 174,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 101,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 102,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 103,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 104,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 36,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 105,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 106,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 169,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 98,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 107,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 253,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 108,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 141,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 109,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 110,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 111,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 158,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 112,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 264,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 113,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 158,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 114,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 260,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 115,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 116,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 228,
+      "end_reason": "death",
+      "final_x": 66,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 117,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 127,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 118,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 147,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 119,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 146,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 120,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 121,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 122,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 278,
+      "end_reason": "death",
+      "final_x": 67,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 123,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 149,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 124,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 125,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 146,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 126,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 127,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 128,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 159,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 129,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 249,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 130,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 168,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 94,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 131,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 173,
+      "end_reason": "death",
+      "final_x": 35,
+      "final_y": 146,
+      "reached_points": [
+        "L12a_bot",
+        "L12a_top"
+      ]
+    },
+    {
+      "ep": 132,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 133,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 160,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 134,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 233,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 135,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 136,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 36,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 137,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 205,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 138,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 156,
+      "end_reason": "death",
+      "final_x": 36,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 139,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 240,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 140,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 141,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 142,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 143,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 279,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 144,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 145,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 210,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 146,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 168,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 98,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 147,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 148,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 232,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 98,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 149,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 247,
+      "end_reason": "death",
+      "final_x": 62,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 150,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 290,
+      "end_reason": "death",
+      "final_x": 10,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 151,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 239,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 152,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 153,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 215,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 154,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 155,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 156,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 225,
+      "end_reason": "death",
+      "final_x": 66,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 157,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 221,
+      "end_reason": "death",
+      "final_x": 66,
+      "final_y": 172,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 158,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 250,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 159,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 241,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 160,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 187,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 161,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 327,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 162,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 150,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 122,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 163,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 147,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 164,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 208,
+      "end_reason": "death",
+      "final_x": 71,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 165,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 392,
+      "end_reason": "death",
+      "final_x": 49,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 166,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 208,
+      "end_reason": "death",
+      "final_x": 63,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 167,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 168,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 159,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 169,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 268,
+      "end_reason": "death",
+      "final_x": 37,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 170,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 148,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 171,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 253,
+      "end_reason": "death",
+      "final_x": 51,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 172,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 150,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 173,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 261,
+      "end_reason": "death",
+      "final_x": 32,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 174,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 293,
+      "end_reason": "death",
+      "final_x": 6,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 175,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 227,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 176,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 307,
+      "end_reason": "death",
+      "final_x": 9,
+      "final_y": 178,
+      "reached_points": []
+    },
+    {
+      "ep": 177,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 152,
+      "end_reason": "death",
+      "final_x": 37,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 178,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 151,
+      "end_reason": "death",
+      "final_x": 38,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 179,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 180,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 278,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 181,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 245,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 182,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 247,
+      "end_reason": "death",
+      "final_x": 62,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 183,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 258,
+      "end_reason": "death",
+      "final_x": 52,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 184,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 36,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 185,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 269,
+      "end_reason": "death",
+      "final_x": 25,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 186,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 187,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 188,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 189,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 279,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 190,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 173,
+      "end_reason": "death",
+      "final_x": 66,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 191,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 245,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 192,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 176,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 193,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 194,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 283,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 195,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 229,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 196,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 197,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 198,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 258,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 199,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 159,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 200,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 268,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 201,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 246,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 202,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 248,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 203,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 154,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 204,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 205,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 206,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 224,
+      "end_reason": "death",
+      "final_x": 28,
+      "final_y": 162,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 207,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 208,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 171,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 209,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 242,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 210,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 160,
+      "end_reason": "death",
+      "final_x": 28,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12a_top"
+      ]
+    },
+    {
+      "ep": 211,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 150,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 212,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 225,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 213,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 261,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 214,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 256,
+      "end_reason": "death",
+      "final_x": 33,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 215,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 172,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 216,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 147,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 217,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 218,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 245,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 219,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 153,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 220,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 258,
+      "end_reason": "death",
+      "final_x": 48,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 221,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 222,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 223,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 259,
+      "end_reason": "death",
+      "final_x": 47,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 224,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 225,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 226,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 255,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 227,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 228,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 156,
+      "end_reason": "death",
+      "final_x": 38,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 229,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 230,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 147,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 231,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 170,
+      "end_reason": "death",
+      "final_x": 23,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 232,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 146,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 233,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 180,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 234,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 228,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 235,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 558,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F2",
+        "F3",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 236,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 374,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 237,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 246,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 238,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 239,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 240,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 276,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 241,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 203,
+      "end_reason": "death",
+      "final_x": 73,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 242,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 175,
+      "end_reason": "death",
+      "final_x": 66,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 243,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 244,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 219,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 245,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 159,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 246,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 266,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 247,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 269,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 248,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 313,
+      "end_reason": "death",
+      "final_x": 4,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 249,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 158,
+      "end_reason": "death",
+      "final_x": 37,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 250,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 33,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 251,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 141,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 106,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 252,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 170,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 253,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 212,
+      "end_reason": "death",
+      "final_x": 63,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 254,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 255,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 164,
+      "end_reason": "death",
+      "final_x": 28,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 256,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 163,
+      "end_reason": "death",
+      "final_x": 30,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 257,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 258,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 259,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 212,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 154,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 260,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 153,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 261,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 262,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 168,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 98,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 263,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 264,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 265,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 116,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 266,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 267,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 37,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 268,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 208,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ]
+    },
+    {
+      "ep": 269,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 266,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 270,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 147,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 271,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 246,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 272,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 273,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 274,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 275,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 276,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 350,
+      "end_reason": "death",
+      "final_x": 21,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F2",
+        "F3",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 277,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 278,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 279,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 280,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 169,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 281,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 282,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 283,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 265,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 284,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 322,
+      "end_reason": "death",
+      "final_x": 24,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 285,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 164,
+      "end_reason": "death",
+      "final_x": 27,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12a_top"
+      ]
+    },
+    {
+      "ep": 286,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 256,
+      "end_reason": "death",
+      "final_x": 50,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 287,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 289,
+      "end_reason": "death",
+      "final_x": 23,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ]
+    },
+    {
+      "ep": 288,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 289,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 163,
+      "end_reason": "death",
+      "final_x": 31,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 290,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 38,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 291,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 227,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 292,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 184,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 293,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 294,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 153,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 295,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 177,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 162,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ]
+    },
+    {
+      "ep": 296,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 154,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ]
+    },
+    {
+      "ep": 297,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 301,
+      "end_reason": "death",
+      "final_x": 11,
+      "final_y": 182,
+      "reached_points": []
+    },
+    {
+      "ep": 298,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 276,
+      "end_reason": "death",
+      "final_x": 35,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    },
+    {
+      "ep": 299,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ]
+    }
+  ]
+}
