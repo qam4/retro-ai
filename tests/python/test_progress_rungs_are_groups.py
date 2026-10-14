@@ -153,7 +153,9 @@ def test_route_table_lists_every_fruit_before_any_is_reached():
     m.wp_reach_ema["L12a_top"] = 0.5  # one waypoint already has data
     table = m.route_table()
     rows = [line.split()[0] for line in table.splitlines()[1:]]
-    assert rows[:4] == ["F1", "F2", "F3", "F4"], rows
+    # The level start leads the table (it is where every route begins); the fruits
+    # follow it, in order, before anything else.
+    assert rows[:5] == ["level-start", "F1", "F2", "F3", "F4"], rows
     assert "L12a_top" in rows
     f2 = next(line for line in table.splitlines() if line.split()[0] == "F2")
     assert f2.split()[1] == "—", f"an unreached fruit must read as no data: {f2!r}"

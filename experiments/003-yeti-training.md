@@ -416,6 +416,9 @@ waypoint pools -- it was misread here as "the reverse curriculum is off". `wp_st
 is incremented and never read anywhere, so the metric that would have shown the `F1` bug
 directly has been dead the whole time. Same shape as `self.frontier`. Per-episode
 `start_key` in episodes.csv is the only trustworthy source for where starts come from.
+*Since paid:* curriculum_diag.csv's `level_start_share` counts every start, and
+pool_diag.csv gives starts, share and goal score per pool, keyed like `start_key`
+(`tests/python/test_training_logs.py`). Files written before that keep the old columns.
 
 
 ### Why PPO does this at all

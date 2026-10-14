@@ -340,7 +340,8 @@ WORK, in order:
       start, so pools, goal scores, reach EMAs and counters are per group by
       construction. Groups drawn by 1 - goal of each group's level start; a one-group
       run makes no extra random draw. Per-group files: checkpoints_L5.pkl,
-      curriculum_diag_L5.csv, admission_diag_L5.csv; episodes.csv gains `start_group`.
+      curriculum_diag_L5.csv, pool_diag_L5.csv (was admission_diag_L5.csv); episodes.csv
+      gains `start_group`.
       A group whose layout, profile, fruit count or stop rules differ from the run's is
       refused. Checked: a 1-env single-group run gives the same 12 episodes as HEAD's
       trainer (all fields except start_state_hash, which also differs between two HEAD

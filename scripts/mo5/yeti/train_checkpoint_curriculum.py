@@ -1070,16 +1070,56 @@ class CheckpointManager:
         _src, _bonus, state, stack, reached = self.checkpoints[key].sample()
         return key, state, stack, reached
 
+    def start_sources(self):
+        """Every place an episode can start from, as ``(key, pool, starts)``.
+
+        ``key`` is what episodes.csv records as ``start_key``: 0 is the LEVEL START (the
+        game reset, or a respawn drawn from the root pool -- both count as the level
+        start everywhere), a rung number is a rung slot, a name is a named pool.
+        ``starts`` counts this run only: the counters are not inherited (see
+        load_from_disk).
+
+        Rung slots are listed only while they hold states or have been started from.
+        Training no longer writes them -- every target, fruits included, seeds into a
+        pool named for it -- so only an inherited pool file from before that change, or
+        ``seed_archive``, can fill one. Printing them unconditionally is what left
+        ``success=[0->1:100%, 1->2:N/A, ...]`` and ``gscore=[0.47, 0.00, ...]`` on every
+        L1 v19 status line while the agent was reaching F4 half the time: 5197 of its
+        first 7325 episodes started from named pools, the other 2128 from the level
+        start, none from a rung slot.
+        """
+        out = [(0, self.checkpoints[0], self.stats["starts"][0])]
+        for n in range(1, self.N_RUNGS + 1):
+            if len(self.checkpoints[n]) or self.stats["starts"][n]:
+                out.append((n, self.checkpoints[n], self.stats["starts"][n]))
+        for w, pool in self.waypoints.items():
+            out.append((w, pool, self.wp_start_counts.get(w, 0)))
+        return out
+
+    def admission_counts(self, key):
+        """Lifetime admission tallies for one capture target, as ``(admitted_reached,
+        admitted_survived, rejected, rejected_airborne)``, or None for the level start
+        (nothing is captured into it). Named targets and rung slots keep these in
+        different structures."""
+        if isinstance(key, str):
+            return (
+                self.wp_admit_reached.get(key, 0),
+                self.wp_admit_survived.get(key, 0),
+                self.wp_rejected_precarious.get(key, 0),
+                self.wp_rejected_airborne.get(key, 0),
+            )
+        if key == 0:
+            return None
+        s = self.stats
+        return (
+            s["admit_reached"][key],
+            s["admit_survived"][key],
+            s["rejected_precarious"][key],
+            s["rejected_airborne"][key],
+        )
+
     def summary(self):
-        rates = []
-        for i in range(self.N_RUNGS + 1):
-            if self.segment_attempts[i] > 0:
-                pct = 100 * self.segment_successes[i] / self.segment_attempts[i]
-                rates.append(f"{i}->{i+1}:{pct:.0f}%")
-            else:
-                rates.append(f"{i}->{i+1}:N/A")
         reach = "[" + ", ".join(f"{r:.2f}" for r in self.reset_reach_ema) + "]"
-        gscore = "[" + ", ".join(f"{p.goal_score:.2f}" for p in self.checkpoints) + "]"
         # SEEDS, not "cp". Every seedable target -- fruits included -- owns a pool keyed
         # by NAME, so the old rung-keyed `cp=[...]` is gone. It printed N_RUNGS+1 slots
         # and could only ever fill the one a fruit pickup landed in: on L4 that was a
@@ -1087,13 +1127,18 @@ class CheckpointManager:
         # zero forever because its states lived in a name-keyed pool. Two numbers that
         # cannot mislead: how many pools hold anything, and the total states held. The
         # per-pool detail is in route_table(), route-ordered.
-        _pools = {k: len(v) for k, v in self.waypoints.items() if len(v)}
+        #
+        # `success=[...]` and `gscore=[...]` went for the same reason: both were indexed
+        # by rung slot (see start_sources). Of what they printed, only the level start
+        # ever had data -- `0->1` duplicated reset_reach[1] and `gscore[0]` is the level
+        # start's score, kept below. Per-pool scores and shares are in the route table.
+        _pools = {k: len(p) for k, p, _n in self.start_sources() if k != 0 and len(p)}
         base = (
             f"seeds={sum(_pools.values())} in {len(_pools)} pools "
             f"rejected={sum(self.wp_rejected_precarious.values())} "
             f"(air {sum(self.wp_rejected_airborne.values())}) "
-            f"success=[{', '.join(rates)}] "
-            f"reset_reach={reach} gscore={gscore}"
+            f"reset_reach={reach} "
+            f"level_start_score={self.checkpoints[0].goal_score:.2f}"
         )
         # Loudly, on every status line, if the run has seen a pose we cannot name.
         # Silence here is the assertion that the pose catalogue is complete.
@@ -1136,15 +1181,17 @@ class CheckpointManager:
         done = sum(1 for v in self.wp_reach_ema.values() if v >= 0.5)
         return f"{done}/{len(self.wp_reach_ema)} reached>=0.5 from reset"
 
-    def route_table(self, route_order=None) -> str:
+    def route_table(self, route_order=None, shares=None) -> str:
         """The canonical route view: one row per route point, route-ordered.
 
-        Columns are the four signals that actually drive a decision, and they are
+        Columns are the signals that actually drive a decision, and they are
         1-D PROJECTIONS of the start x reached MATRIX (which is ~N^2 and belongs
         in episodes.csv, not a log — render it with route_report.py):
           reach     reset-origin reach EMA        -> does the chain compose?
           prog      order-free progress EMA       -> is this hand-off healthy?
           pool      seed pool size                -> exploration frontier
+          score     the pool's goal score         -> pick_start draws by 1 - this
+          share     share of all starts           -> where the budget actually went
           near      closest grounded approach px  -> got near but never landed?
           cap/rej   admitted vs precarious-rejected captures, and of those
                     rejections how many were for ending the window AIRBORNE
@@ -1153,6 +1200,12 @@ class CheckpointManager:
                     `admit_requires_grounded` stayed dead through a 1M run.
         ``route_order`` is display-only (LevelMap.route_order); unlisted points
         are appended in a stable order so nothing is ever hidden.
+
+        The first row is the LEVEL START, and any rung slot that holds states follows
+        it (see start_sources). ``shares`` maps a start key (0, a rung, a pool name) to
+        its fraction of starts over whatever window the caller chose -- the training
+        callback passes the interval since its previous table. Without it the column
+        reads "—".
         """
         ids = list(route_order or [])
         # Every FRUIT on the progress ladder gets a row from the first table on. A
@@ -1176,24 +1229,50 @@ class CheckpointManager:
         ids += [w for w in rest if w not in ids]
         if not ids:
             return ""
-        lines = [
-            "  route                reach   prog   pool   near   cap/rej(air)",
-        ]
+        shares = shares or {}
+
+        def _f(v):
+            return "—" if v is None else f"{v:.2f}"
+
+        row = "  {:<18s} {:>6s} {:>6s} {:>6s} {:>6s} {:>6s} {:>6s}   {}"
+        cols = ("route", "reach", "prog", "pool", "score", "share", "near")
+        lines = [row.format(*cols, "cap/rej(air)")]
+        # Level start, then any rung slot that holds states. Neither is a route point,
+        # so reach / near / captures do not apply to the level start; a rung slot's
+        # reach is reset_reach at its index.
+        for key, pool, _n in self.start_sources():
+            if isinstance(key, str):
+                continue
+            adm = self.admission_counts(key)
+            lines.append(
+                row.format(
+                    "level-start" if key == 0 else f"rung{key}",
+                    "—" if key == 0 else _f(self.reset_reach_ema[key]),
+                    _f(self.progress_ema.get(key)),
+                    "—" if key == 0 else str(len(pool)),
+                    _f(pool.goal_score),
+                    _f(shares.get(key)),
+                    "—",
+                    "—" if adm is None else f"{adm[0] + adm[1]}/{adm[2]}({adm[3]})",
+                )
+            )
         for wid in ids:
             pool = self.waypoints.get(wid)
-            reach = self.wp_reach_ema.get(wid)
-            prog = self.progress_ema.get(wid)
             near = self.wp_closest.get(wid)
             lines.append(
-                "  {:<18s} {:>6s} {:>6s} {:>6s} {:>6s}   {}/{}({})".format(
+                row.format(
                     wid,
-                    "—" if reach is None else f"{reach:.2f}",
-                    "—" if prog is None else f"{prog:.2f}",
+                    _f(self.wp_reach_ema.get(wid)),
+                    _f(self.progress_ema.get(wid)),
                     "—" if pool is None else str(len(pool)),
+                    "—" if pool is None else _f(pool.goal_score),
+                    _f(shares.get(wid)),
                     "—" if near is None else str(near),
-                    self.wp_captures.get(wid, 0),
-                    self.wp_rejected_precarious.get(wid, 0),
-                    self.wp_rejected_airborne.get(wid, 0),
+                    "{}/{}({})".format(
+                        self.wp_captures.get(wid, 0),
+                        self.wp_rejected_precarious.get(wid, 0),
+                        self.wp_rejected_airborne.get(wid, 0),
+                    ),
                 )
             )
         return "\n".join(lines)
@@ -2595,6 +2674,24 @@ class RegressionStopCallback(BaseCallback):
         return True
 
 
+def _start_label(key) -> str:
+    """How logs name a start key: the level start, a rung slot, or a pool's own name."""
+    if isinstance(key, str):
+        return key
+    return "level-start" if key == 0 else f"rung{key}"
+
+
+def _interval_shares(counts: dict, last: dict):
+    """Each start key's fraction of the starts made since ``last`` (lifetime counts at
+    the previous report), or None if there were none -- an empty interval has no
+    shares, and printing zeros for it would read as "nothing started here"."""
+    delta = {k: c - last.get(k, 0) for k, c in counts.items()}
+    total = sum(delta.values())
+    if total <= 0:
+        return None
+    return {k: d / total for k, d in delta.items()}
+
+
 class CurriculumCallback(BaseCallback):
     """Log curriculum progress during training."""
 
@@ -2626,20 +2723,14 @@ class CurriculumCallback(BaseCallback):
         self._primary = primary
         self._diag_path = diag_path
         self._diag_file = None
-        self._adm_file = None
-        # One counter per progress rung, plus rung 0 (the game start).
+        self._pool_file = None
         self._n_rungs = int(n_rungs)
-        n = self._n_rungs + 1
-        self._last_starts = [0] * n
-        # H-R instrumentation: last cumulative admission counters, for
-        # per-interval deltas.
-        self._last_adm_reached = [0] * n
-        self._last_adm_survived = [0] * n
-        self._last_rejected = [0] * n
-        # First diag write captures current counters as the baseline so
-        # interval deltas don't include history loaded from a resumed
-        # checkpoints.pkl.
-        self._baseline_captured = False
+        # Lifetime counters at the previous diag row / route table, keyed by start key,
+        # for per-interval deltas. They start empty because the counters do: nothing a
+        # pool file carries is inherited (see load_from_disk).
+        self._last_starts: dict = {}
+        self._last_adm: dict = {}
+        self._last_table_starts: dict = {}
         self._total = total_timesteps
         self._log_interval = log_interval
         self._last_log = 0
@@ -2700,118 +2791,144 @@ class CurriculumCallback(BaseCallback):
         if mgr is not None and self.num_timesteps - self._last_table >= (
             self._table_interval
         ):
-            table = mgr.route_table(self._route_order)
+            counts = {k: n for k, _p, n in mgr.start_sources()}
+            shares = _interval_shares(counts, self._last_table_starts)
+            self._last_table_starts = counts
+            table = mgr.route_table(self._route_order, shares=shares)
             if table:
                 print(
                     f"\nROUTE {tag}@ step {self.num_timesteps} "
-                    f"(reach=from-reset, prog=order-free progress)\n{table}\n",
+                    f"(reach=from-reset, prog=order-free progress, score=goal score, "
+                    f"share=of starts since the last table)\n{table}\n",
                     flush=True,
                 )
             self._last_table = self.num_timesteps
         return True
 
     def _write_diag(self) -> None:
-        """Append a diagnostics row to correlate from-reset reach with the
-        curriculum's start distribution and per-segment success (to chase
-        the decay/oscillation mechanism). PPO-side metrics (kl, entropy,
-        explained_variance) are in tensorboard."""
+        """Append a row to curriculum_diag.csv and one row per pool to pool_diag.csv.
+
+        curriculum_diag.csv is the level view, one row per interval:
+          reach1..reach_N, reach_princess   reset_reach, unchanged (run_retrospective
+                                            reads these)
+          level_start_share                 level-start starts / ALL starts this
+                                            interval; empty if there were none
+          level_start_score                 the level start's goal score
+        It used to carry succ_ema1..N, start_frac0..N and gscore0..N, all indexed by
+        rung slot. Nothing has filled a rung slot since fruits moved to named pools, so
+        on L1 v19 every one of those columns past index 0 read 0 for the whole run, and
+        start_frac0 read 1.000 while 29% of starts were from the level start -- its
+        denominator counted rung-slot starts only (noted as method debt in
+        003-yeti-training.md, "start_frac ... reads ~1.00"). The share is renamed rather
+        than corrected in place so an old file cannot be read as the new quantity.
+
+        pool_diag.csv is the per-pool view; see _write_pool_diag. PPO-side metrics (kl,
+        entropy, explained_variance) are in tensorboard."""
         mgr = self._mgr()
         if self._diag_path is None or mgr is None:
             return
-        if not self._baseline_captured:
-            # Resumed runs load lifetime counters from checkpoints.pkl;
-            # seed the per-interval baselines from current values so the
-            # first emitted deltas reflect only new activity.
-            self._last_starts = list(mgr.stats["starts"])
-            self._last_adm_reached = list(mgr.stats["admit_reached"])
-            self._last_adm_survived = list(mgr.stats["admit_survived"])
-            self._last_rejected = list(mgr.stats["rejected_precarious"])
-            self._baseline_captured = True
+        n = self._n_rungs
         if self._diag_file is None:
             self._diag_file = open(self._diag_path, "w")
-            n = self._n_rungs
             reach_cols = [f"reach{i}" for i in range(1, n + 1)] + ["reach_princess"]
-            succ_cols = [f"succ_ema{i}" for i in range(1, n + 1)]
-            sfrac_cols = [f"start_frac{i}" for i in range(0, n + 1)]
-            gscore_cols = [f"gscore{i}" for i in range(0, n + 1)]
-            header = ["step"] + reach_cols + succ_cols + sfrac_cols + gscore_cols
+            header = ["step"] + reach_cols + ["level_start_share", "level_start_score"]
             self._diag_file.write(",".join(header) + "\n")
-        n = self._n_rungs
-        starts = mgr.stats["starts"]
-        delta = [starts[i] - self._last_starts[i] for i in range(n + 1)]
-        self._last_starts = list(starts)
-        tot = sum(delta) or 1
-        fr = [d / tot for d in delta]
+        sources = mgr.start_sources()
+        counts = {k: c for k, _p, c in sources}
+        shares = _interval_shares(counts, self._last_starts)
         rr = mgr.reset_reach_ema
-        se = mgr.seg_success_ema
-        gs = [p.goal_score for p in mgr.checkpoints]
-        # reach1..reach_N then princess (index N+1); succ_ema1..N;
-        # start_frac0..N; gscore0..N.
         vals = [str(self.num_timesteps)]
         vals += [f"{rr[i]:.3f}" for i in range(1, n + 2)]
-        vals += [f"{se[i]:.3f}" for i in range(1, n + 1)]
-        vals += [f"{fr[i]:.3f}" for i in range(0, n + 1)]
-        vals += [f"{gs[i]:.3f}" for i in range(0, n + 1)]
+        vals += [
+            "" if shares is None else f"{shares[0]:.3f}",
+            f"{mgr.checkpoints[0].goal_score:.3f}",
+        ]
         self._diag_file.write(",".join(vals) + "\n")
         self._diag_file.flush()
-        self._write_admission_diag()
+        self._write_pool_diag(mgr, sources, counts, shares)
+        self._last_starts = counts
 
-    def _write_admission_diag(self) -> None:
-        """Per-CP time series of the seed-admission filter (H-R): how many
-        snapshots this interval were admitted via reaching the next CP
-        (a_reach), admitted only on survival (a_surv), or rejected (rej);
-        plus pool diversity (distinct = unique save-states; psize = pool
-        size). Shows whether a stricter filter admits fewer CPs and/or
-        collapses pool diversity over time."""
-        mgr = self._mgr()
-        if self._diag_path is None or mgr is None:
-            return
-        if self._adm_file is None:
+    POOL_DIAG_COLUMNS = (
+        "step",
+        "pool",
+        "starts",
+        "share",
+        "score",
+        "size",
+        "distinct",
+        "admitted_reached",
+        "admitted_survived",
+        "rejected",
+        "rejected_airborne",
+    )
+
+    def _write_pool_diag(self, mgr, sources, counts, shares) -> None:
+        """One row per start source and capture target per interval, long format so a
+        pool created mid-run needs no new column.
+
+          pool        level-start, rungN, or the pool's name (episodes.csv start_key)
+          starts      episodes started from it this interval
+          share       starts / all starts this interval (empty if there were none)
+          score       its goal score; pick_start draws by 1 - this
+          size        states held; distinct = unique save-states among them
+          admitted_reached, admitted_survived, rejected, rejected_airborne
+                      captures this interval, by the play-based admission verdict
+                      (see _admit_by_play); empty for the level start
+
+        Replaces admission_diag.csv, which reported those verdicts per RUNG SLOT and so
+        read zero in every column once fruits moved to named pools. A target that has
+        only ever been rejected has no pool yet; it gets a row anyway (size 0), because
+        "everything captured here is refused" is what that file existed to show.
+        """
+        if self._pool_file is None:
             # Beside the curriculum diag, same group suffix: curriculum_diag.csv ->
-            # admission_diag.csv, curriculum_diag_L5.csv -> admission_diag_L5.csv.
-            adm_path = os.path.join(
-                os.path.dirname(self._diag_path),
-                os.path.basename(self._diag_path).replace(
-                    "curriculum_diag", "admission_diag", 1
-                ),
+            # pool_diag.csv, curriculum_diag_L5.csv -> pool_diag_L5.csv.
+            base = os.path.basename(self._diag_path)
+            name = base.replace("curriculum_diag", "pool_diag", 1)
+            if name == base:
+                name = "pool_diag.csv"
+            self._pool_file = open(
+                os.path.join(os.path.dirname(self._diag_path), name), "w"
             )
-            if adm_path == self._diag_path:
-                adm_path = os.path.join(
-                    os.path.dirname(self._diag_path), "admission_diag.csv"
-                )
-            self._adm_file = open(adm_path, "w")
-            cols = ["step"]
-            for cp in range(1, mgr.N_RUNGS + 1):
-                cols += [
-                    f"a_reach{cp}",
-                    f"a_surv{cp}",
-                    f"rej{cp}",
-                    f"distinct{cp}",
-                    f"psize{cp}",
-                ]
-            self._adm_file.write(",".join(cols) + "\n")
-        ar = mgr.stats["admit_reached"]
-        asv = mgr.stats["admit_survived"]
-        rj = mgr.stats["rejected_precarious"]
-        row = [str(self.num_timesteps)]
-        for cp in range(1, mgr.N_RUNGS + 1):
-            d_reach = ar[cp] - self._last_adm_reached[cp]
-            d_surv = asv[cp] - self._last_adm_survived[cp]
-            d_rej = rj[cp] - self._last_rejected[cp]
-            pool = mgr.checkpoints[cp]
-            distinct = len({e[2] for e in pool.states})
-            row += [
-                str(d_reach),
-                str(d_surv),
-                str(d_rej),
-                str(distinct),
-                str(len(pool)),
+            self._pool_file.write(",".join(self.POOL_DIAG_COLUMNS) + "\n")
+        pools = {k: p for k, p, _c in sources}
+        keys = [k for k, _p, _c in sources]
+        keys += sorted(
+            k
+            for k in (set(mgr.wp_rejected_precarious) | set(mgr.wp_admit_reached))
+            | set(mgr.wp_admit_survived)
+            if k not in pools
+        )
+        for key in keys:
+            pool = pools.get(key)
+            adm = mgr.admission_counts(key)
+            if adm is None:
+                d_adm = ["", "", "", ""]
+            else:
+                was = self._last_adm.get(key, (0, 0, 0, 0))
+                d_adm = [str(a - b) for a, b in zip(adm, was)]
+                self._last_adm[key] = adm
+            row = [
+                str(self.num_timesteps),
+                _start_label(key),
+                str(counts.get(key, 0) - self._last_starts.get(key, 0)),
+                "" if shares is None else f"{shares.get(key, 0.0):.3f}",
+                "" if pool is None else f"{pool.goal_score:.3f}",
+                *(
+                    # The level start holds no states here: the game reset and the
+                    # root-pool respawns live on the StartGroup, not the manager.
+                    ["", ""]
+                    if key == 0
+                    else (
+                        ["0", "0"]
+                        if pool is None
+                        else [str(len(pool)), str(len({e[2] for e in pool.states}))]
+                    )
+                ),
+                *d_adm,
             ]
-        self._last_adm_reached = list(ar)
-        self._last_adm_survived = list(asv)
-        self._last_rejected = list(rj)
-        self._adm_file.write(",".join(row) + "\n")
-        self._adm_file.flush()
+            self._pool_file.write(",".join(row) + "\n")
+        self._pool_file.flush()
 
 
 def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
