@@ -371,8 +371,21 @@ WORK, in order:
 - [ ] Automate step 5 at the end of `run_train_and_score.sh`.
 - [ ] First run: warm from l1_v17, groups L1 reset + L5 save. Control: same warm start,
       L1 only (separates "L5 hurt L1" from drift under continued training).
-- [ ] Full-game runner. Probe first: what happens after a death (level restart? fruits
-      kept? lives)? Every training episode ends at the first death.
+- [x] **Snowballs and overfitting (2026-10-13/14), see
+      experiments/003-yeti/snowball_rng_notes.md.** Route choices come from a generator
+      a level start fixes; inputs within a life do not change them; each death gives a
+      new sequence. l1_v17 memorised L1's first-life sequence: 215/300 from reset, 0/300
+      from held-out respawns (control l1_v18 also 0/300). After a death: back to the
+      start, fruits back, bonus 1000, score kept, lives -1.
+- [x] Root pool of respawns: `curriculum.root_pool` (train split joins the level
+      starts, uniform over snowball sequences), `eval_from_reset.py --start-pool`,
+      referee scores the held-out split as "1-heldout". Pool `l1_r1`: 31 sequences, 10
+      held out.
+- [ ] Run v19 (root pool, warm from l1_v17, 6M) against l1_v18. Read: held-out respawns
+      and reset, 300 episodes each. The referee's champion check compares the reset
+      with l1_v17's memorised 0.72 and may refuse every snapshot; results are kept.
+- [ ] Full-game runner. The death behaviour is now known (notes above); a run past a
+      death needs the respawn handling, and L5's sequence may depend on L4's play.
 - [ ] Later: best time (leftover bonus), starting on L2.
 
 ## Yeti Level 3 — reward graph

@@ -1,0 +1,5388 @@
+{
+  "seed": 861372030,
+  "profile": "yeti_fruit",
+  "max_steps": 1000,
+  "stall_threshold": 15,
+  "native_sha256": "fdd7e00696a799edf8835a157b2c7f305866e5cc82fc95b2cf4c40cb38704c13",
+  "policy": "l1_v17",
+  "game_level": 1,
+  "model_sha256": "9c066df81e686de6ccc9ad5dc41b78d83959a2069bf7b02a5b310d4ee92015a6",
+  "start_pool": "experiments/003-yeti/data/respawns/l1_r1.json",
+  "start_pool_sha256": "1999e8f9f5ee5dce4ed2d699ec99592c50d2a02479f73d269c7b5b35164067cf",
+  "pool_split": "heldout",
+  "pool_sequences": 10,
+  "pool_states": 114,
+  "model": "output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/best/best_model.zip",
+  "episodes": 300,
+  "deterministic": false,
+  "fruits_total": 4,
+  "start_state": null,
+  "level": 1,
+  "max_cp_counts": {
+    "1": 166,
+    "2": 108,
+    "3": 15,
+    "0": 11
+  },
+  "princess_touches": 0,
+  "rung_counts": {
+    "1": 166,
+    "2": 108,
+    "3": 15,
+    "0": 11
+  },
+  "n_rungs": 4,
+  "mean_rung": 1.4233333333333333,
+  "reach_mode": "sprite",
+  "resize_mode": "max",
+  "rows": [
+    {
+      "ep": 0,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 126,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 138,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_46.sav"
+    },
+    {
+      "ep": 1,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 243,
+      "end_reason": "death",
+      "final_x": 47,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 2,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 328,
+      "end_reason": "death",
+      "final_x": 69,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_21.sav"
+    },
+    {
+      "ep": 3,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 216,
+      "end_reason": "death",
+      "final_x": 67,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_69.sav"
+    },
+    {
+      "ep": 4,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 162,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 138,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 5,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 125,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_32.sav"
+    },
+    {
+      "ep": 6,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 179,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_9.sav"
+    },
+    {
+      "ep": 7,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 263,
+      "end_reason": "death",
+      "final_x": 63,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 8,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 69,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 9,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 163,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_52.sav"
+    },
+    {
+      "ep": 10,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 158,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 11,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_61.sav"
+    },
+    {
+      "ep": 12,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 13,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 378,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_43.sav"
+    },
+    {
+      "ep": 14,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 155,
+      "end_reason": "death",
+      "final_x": 70,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav"
+    },
+    {
+      "ep": 15,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 316,
+      "end_reason": "death",
+      "final_x": 50,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_70.sav"
+    },
+    {
+      "ep": 16,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 174,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 17,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 306,
+      "end_reason": "death",
+      "final_x": 8,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_30.sav"
+    },
+    {
+      "ep": 18,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 397,
+      "end_reason": "death",
+      "final_x": 22,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F2",
+        "F3",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav"
+    },
+    {
+      "ep": 19,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 322,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 20,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 272,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 21,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 174,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 22,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 126,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 138,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 23,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 197,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 24,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 232,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_13.sav"
+    },
+    {
+      "ep": 25,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 310,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 26,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 201,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_13.sav"
+    },
+    {
+      "ep": 27,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 261,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 106,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_74.sav"
+    },
+    {
+      "ep": 28,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 228,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 29,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 158,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_38.sav"
+    },
+    {
+      "ep": 30,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 227,
+      "end_reason": "death",
+      "final_x": 49,
+      "final_y": 78,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 31,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 274,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_53.sav"
+    },
+    {
+      "ep": 32,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 228,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 33,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 257,
+      "end_reason": "death",
+      "final_x": 67,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 34,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 305,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav"
+    },
+    {
+      "ep": 35,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 387,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 36,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 129,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_22.sav"
+    },
+    {
+      "ep": 37,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 38,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 124,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 39,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 259,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav"
+    },
+    {
+      "ep": 40,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 256,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 154,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_71.sav"
+    },
+    {
+      "ep": 41,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 166,
+      "end_reason": "death",
+      "final_x": 52,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 42,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 141,
+      "end_reason": "death",
+      "final_x": 63,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 43,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 256,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_53.sav"
+    },
+    {
+      "ep": 44,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 221,
+      "end_reason": "death",
+      "final_x": 70,
+      "final_y": 82,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_21.sav"
+    },
+    {
+      "ep": 45,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 128,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_52.sav"
+    },
+    {
+      "ep": 46,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 163,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_70.sav"
+    },
+    {
+      "ep": 47,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 303,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav"
+    },
+    {
+      "ep": 48,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 259,
+      "end_reason": "death",
+      "final_x": 63,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_15.sav"
+    },
+    {
+      "ep": 49,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 276,
+      "end_reason": "death",
+      "final_x": 69,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_7.sav"
+    },
+    {
+      "ep": 50,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 120,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_69.sav"
+    },
+    {
+      "ep": 51,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 338,
+      "end_reason": "death",
+      "final_x": 28,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 52,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 261,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 53,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 265,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_15.sav"
+    },
+    {
+      "ep": 54,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 369,
+      "end_reason": "death",
+      "final_x": 24,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_58.sav"
+    },
+    {
+      "ep": 55,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 195,
+      "end_reason": "death",
+      "final_x": 9,
+      "final_y": 178,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_42.sav"
+    },
+    {
+      "ep": 56,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 128,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 57,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 124,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_32.sav"
+    },
+    {
+      "ep": 58,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 189,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 172,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 59,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 161,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 60,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 127,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_10.sav"
+    },
+    {
+      "ep": 61,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 266,
+      "end_reason": "death",
+      "final_x": 48,
+      "final_y": 76,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_36.sav"
+    },
+    {
+      "ep": 62,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 123,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 63,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 197,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav"
+    },
+    {
+      "ep": 64,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 166,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_44.sav"
+    },
+    {
+      "ep": 65,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 360,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_31.sav"
+    },
+    {
+      "ep": 66,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 238,
+      "end_reason": "death",
+      "final_x": 51,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 67,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 290,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 174,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_63.sav"
+    },
+    {
+      "ep": 68,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 222,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_62.sav"
+    },
+    {
+      "ep": 69,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_23.sav"
+    },
+    {
+      "ep": 70,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 171,
+      "end_reason": "death",
+      "final_x": 46,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_23.sav"
+    },
+    {
+      "ep": 71,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 158,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_47.sav"
+    },
+    {
+      "ep": 72,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 313,
+      "end_reason": "death",
+      "final_x": 50,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 73,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 194,
+      "end_reason": "death",
+      "final_x": 10,
+      "final_y": 182,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 74,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 132,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 75,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 148,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 158,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_14.sav"
+    },
+    {
+      "ep": 76,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 169,
+      "end_reason": "death",
+      "final_x": 26,
+      "final_y": 174,
+      "reached_points": [
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 77,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 215,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 158,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_3.sav"
+    },
+    {
+      "ep": 78,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 267,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 79,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 191,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 80,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 137,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 81,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 82,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 120,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 83,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 287,
+      "end_reason": "death",
+      "final_x": 27,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_42.sav"
+    },
+    {
+      "ep": 84,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 143,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 162,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_10.sav"
+    },
+    {
+      "ep": 85,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 130,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav"
+    },
+    {
+      "ep": 86,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 136,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav"
+    },
+    {
+      "ep": 87,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 233,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_15.sav"
+    },
+    {
+      "ep": 88,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 170,
+      "end_reason": "death",
+      "final_x": 73,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_52.sav"
+    },
+    {
+      "ep": 89,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 231,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_64.sav"
+    },
+    {
+      "ep": 90,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 188,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 102,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 91,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 215,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 82,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_36.sav"
+    },
+    {
+      "ep": 92,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 124,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 93,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 171,
+      "end_reason": "death",
+      "final_x": 27,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_62.sav"
+    },
+    {
+      "ep": 94,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 254,
+      "end_reason": "death",
+      "final_x": 40,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 95,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 277,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 86,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_74.sav"
+    },
+    {
+      "ep": 96,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 260,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_66.sav"
+    },
+    {
+      "ep": 97,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 139,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_23.sav"
+    },
+    {
+      "ep": 98,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 161,
+      "end_reason": "death",
+      "final_x": 1,
+      "final_y": 182,
+      "reached_points": [
+        "F2",
+        "L12a_bot",
+        "L12a_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_44.sav"
+    },
+    {
+      "ep": 99,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 474,
+      "end_reason": "death",
+      "final_x": 19,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 100,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 190,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 101,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 306,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_53.sav"
+    },
+    {
+      "ep": 102,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 307,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_54.sav"
+    },
+    {
+      "ep": 103,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 69,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_35.sav"
+    },
+    {
+      "ep": 104,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 253,
+      "end_reason": "death",
+      "final_x": 21,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 105,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 125,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 106,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 287,
+      "end_reason": "death",
+      "final_x": 72,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 107,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 135,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_17.sav"
+    },
+    {
+      "ep": 108,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 152,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_44.sav"
+    },
+    {
+      "ep": 109,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 110,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 237,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 138,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_9.sav"
+    },
+    {
+      "ep": 111,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 295,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 170,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_41.sav"
+    },
+    {
+      "ep": 112,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 189,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_46.sav"
+    },
+    {
+      "ep": 113,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 303,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 114,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 343,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_13.sav"
+    },
+    {
+      "ep": 115,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 161,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_74.sav"
+    },
+    {
+      "ep": 116,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 379,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_54.sav"
+    },
+    {
+      "ep": 117,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 122,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 118,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 231,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_23.sav"
+    },
+    {
+      "ep": 119,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 123,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 120,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 239,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 121,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 147,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_38.sav"
+    },
+    {
+      "ep": 122,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 273,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 123,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 129,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_17.sav"
+    },
+    {
+      "ep": 124,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 328,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_6.sav"
+    },
+    {
+      "ep": 125,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 126,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 239,
+      "end_reason": "death",
+      "final_x": 28,
+      "final_y": 182,
+      "reached_points": [
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 127,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 361,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_38.sav"
+    },
+    {
+      "ep": 128,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 158,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 129,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 178,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_27.sav"
+    },
+    {
+      "ep": 130,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 209,
+      "end_reason": "death",
+      "final_x": 53,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 131,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 211,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_74.sav"
+    },
+    {
+      "ep": 132,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 264,
+      "end_reason": "death",
+      "final_x": 48,
+      "final_y": 76,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_43.sav"
+    },
+    {
+      "ep": 133,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 153,
+      "end_reason": "death",
+      "final_x": 69,
+      "final_y": 172,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 134,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 123,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 135,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 135,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_54.sav"
+    },
+    {
+      "ep": 136,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 267,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_21.sav"
+    },
+    {
+      "ep": 137,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 167,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_14.sav"
+    },
+    {
+      "ep": 138,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 144,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_46.sav"
+    },
+    {
+      "ep": 139,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 145,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 140,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 167,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_60.sav"
+    },
+    {
+      "ep": 141,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 167,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 142,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 206,
+      "end_reason": "death",
+      "final_x": 0,
+      "final_y": 182,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 143,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 183,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 144,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 220,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 172,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_33.sav"
+    },
+    {
+      "ep": 145,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 174,
+      "end_reason": "death",
+      "final_x": 30,
+      "final_y": 174,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_36.sav"
+    },
+    {
+      "ep": 146,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 237,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_38.sav"
+    },
+    {
+      "ep": 147,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 180,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 148,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 234,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 172,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 149,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 348,
+      "end_reason": "death",
+      "final_x": 39,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_37.sav"
+    },
+    {
+      "ep": 150,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 123,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_44.sav"
+    },
+    {
+      "ep": 151,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 119,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_14.sav"
+    },
+    {
+      "ep": 152,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 129,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_31.sav"
+    },
+    {
+      "ep": 153,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 260,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_41.sav"
+    },
+    {
+      "ep": 154,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 121,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_67.sav"
+    },
+    {
+      "ep": 155,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 230,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_70.sav"
+    },
+    {
+      "ep": 156,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 136,
+      "end_reason": "death",
+      "final_x": 62,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_22.sav"
+    },
+    {
+      "ep": 157,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 273,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 158,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 171,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 159,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 123,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 160,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 237,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 161,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 162,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 189,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_67.sav"
+    },
+    {
+      "ep": 163,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 241,
+      "end_reason": "death",
+      "final_x": 17,
+      "final_y": 182,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_52.sav"
+    },
+    {
+      "ep": 164,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 220,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_13.sav"
+    },
+    {
+      "ep": 165,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 248,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_27.sav"
+    },
+    {
+      "ep": 166,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 193,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_55.sav"
+    },
+    {
+      "ep": 167,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 146,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 154,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_60.sav"
+    },
+    {
+      "ep": 168,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 269,
+      "end_reason": "death",
+      "final_x": 47,
+      "final_y": 78,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_74.sav"
+    },
+    {
+      "ep": 169,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 175,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_29.sav"
+    },
+    {
+      "ep": 170,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 270,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_42.sav"
+    },
+    {
+      "ep": 171,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 125,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_52.sav"
+    },
+    {
+      "ep": 172,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 176,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_24.sav"
+    },
+    {
+      "ep": 173,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 230,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_6.sav"
+    },
+    {
+      "ep": 174,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 233,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 175,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 157,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 108,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_74.sav"
+    },
+    {
+      "ep": 176,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 345,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 177,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 307,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_34.sav"
+    },
+    {
+      "ep": 178,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 321,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_14.sav"
+    },
+    {
+      "ep": 179,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 160,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_60.sav"
+    },
+    {
+      "ep": 180,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 124,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_38.sav"
+    },
+    {
+      "ep": 181,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 267,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_71.sav"
+    },
+    {
+      "ep": 182,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 163,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 183,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 176,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 184,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 167,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 185,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 225,
+      "end_reason": "death",
+      "final_x": 28,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 186,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 212,
+      "end_reason": "death",
+      "final_x": 62,
+      "final_y": 86,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_13.sav"
+    },
+    {
+      "ep": 187,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 266,
+      "end_reason": "death",
+      "final_x": 49,
+      "final_y": 76,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_55.sav"
+    },
+    {
+      "ep": 188,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 45,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 189,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 121,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 190,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 274,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 191,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 192,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_21.sav"
+    },
+    {
+      "ep": 192,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 229,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 102,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_55.sav"
+    },
+    {
+      "ep": 193,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 159,
+      "end_reason": "death",
+      "final_x": 70,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_14.sav"
+    },
+    {
+      "ep": 194,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 225,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 158,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 195,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 288,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 196,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 308,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_65.sav"
+    },
+    {
+      "ep": 197,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 198,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_8.sav"
+    },
+    {
+      "ep": 198,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 276,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 199,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 161,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_71.sav"
+    },
+    {
+      "ep": 200,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 127,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 201,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 469,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav"
+    },
+    {
+      "ep": 202,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 299,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_34.sav"
+    },
+    {
+      "ep": 203,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 274,
+      "end_reason": "death",
+      "final_x": 8,
+      "final_y": 178,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_69.sav"
+    },
+    {
+      "ep": 204,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 207,
+      "end_reason": "death",
+      "final_x": 61,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 205,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 230,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 134,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_71.sav"
+    },
+    {
+      "ep": 206,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 160,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_63.sav"
+    },
+    {
+      "ep": 207,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 251,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 208,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 138,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 209,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 164,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_32.sav"
+    },
+    {
+      "ep": 210,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 185,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 90,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_36.sav"
+    },
+    {
+      "ep": 211,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 181,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 212,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 310,
+      "end_reason": "death",
+      "final_x": 52,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_54.sav"
+    },
+    {
+      "ep": 213,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 270,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 214,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 158,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_44.sav"
+    },
+    {
+      "ep": 215,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 158,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_10.sav"
+    },
+    {
+      "ep": 216,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 139,
+      "end_reason": "death",
+      "final_x": 62,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 217,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 129,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_29.sav"
+    },
+    {
+      "ep": 218,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 304,
+      "end_reason": "death",
+      "final_x": 65,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_25.sav"
+    },
+    {
+      "ep": 219,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 0,
+      "final_y": 178,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav"
+    },
+    {
+      "ep": 220,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 183,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 162,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 221,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 306,
+      "end_reason": "death",
+      "final_x": 71,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_33.sav"
+    },
+    {
+      "ep": 222,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 275,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_55.sav"
+    },
+    {
+      "ep": 223,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 228,
+      "end_reason": "death",
+      "final_x": 52,
+      "final_y": 86,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_54.sav"
+    },
+    {
+      "ep": 224,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 262,
+      "end_reason": "death",
+      "final_x": 0,
+      "final_y": 178,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_22.sav"
+    },
+    {
+      "ep": 225,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 142,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_60.sav"
+    },
+    {
+      "ep": 226,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 153,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_22.sav"
+    },
+    {
+      "ep": 227,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 311,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 86,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 228,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 265,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_21.sav"
+    },
+    {
+      "ep": 229,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 153,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 230,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 206,
+      "end_reason": "death",
+      "final_x": 25,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 231,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 196,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 138,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 232,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 178,
+      "end_reason": "death",
+      "final_x": 41,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_23.sav"
+    },
+    {
+      "ep": 233,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 181,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_21.sav"
+    },
+    {
+      "ep": 234,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 253,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 235,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 163,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_9.sav"
+    },
+    {
+      "ep": 236,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 46,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 237,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 165,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_68.sav"
+    },
+    {
+      "ep": 238,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 267,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_64.sav"
+    },
+    {
+      "ep": 239,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 129,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav"
+    },
+    {
+      "ep": 240,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 241,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 82,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_43.sav"
+    },
+    {
+      "ep": 241,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 226,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 242,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 310,
+      "end_reason": "death",
+      "final_x": 54,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_64.sav"
+    },
+    {
+      "ep": 243,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 282,
+      "end_reason": "death",
+      "final_x": 51,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 244,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 231,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_21.sav"
+    },
+    {
+      "ep": 245,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 176,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 246,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 126,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 138,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_60.sav"
+    },
+    {
+      "ep": 247,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 158,
+      "end_reason": "death",
+      "final_x": 42,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 248,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 268,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_15.sav"
+    },
+    {
+      "ep": 249,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 207,
+      "end_reason": "death",
+      "final_x": 74,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_46.sav"
+    },
+    {
+      "ep": 250,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 168,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 251,
+      "max_cp": 3,
+      "max_rung": 3,
+      "steps": 275,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_36.sav"
+    },
+    {
+      "ep": 252,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 165,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 253,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 263,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 254,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 161,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 110,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_47.sav"
+    },
+    {
+      "ep": 255,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 228,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 256,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 235,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 138,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 257,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 149,
+      "end_reason": "death",
+      "final_x": 68,
+      "final_y": 166,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_66.sav"
+    },
+    {
+      "ep": 258,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 164,
+      "end_reason": "death",
+      "final_x": 52,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_42.sav"
+    },
+    {
+      "ep": 259,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 209,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 82,
+      "reached_points": [
+        "F1",
+        "F4",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_7.sav"
+    },
+    {
+      "ep": 260,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 229,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 130,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 261,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 269,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 262,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 231,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_23.sav"
+    },
+    {
+      "ep": 263,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 296,
+      "end_reason": "death",
+      "final_x": 62,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_61.sav"
+    },
+    {
+      "ep": 264,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 238,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 265,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 268,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav"
+    },
+    {
+      "ep": 266,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 135,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 267,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 197,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav"
+    },
+    {
+      "ep": 268,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 216,
+      "end_reason": "death",
+      "final_x": 66,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_55.sav"
+    },
+    {
+      "ep": 269,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 173,
+      "end_reason": "death",
+      "final_x": 60,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 270,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 305,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_65.sav"
+    },
+    {
+      "ep": 271,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 238,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_65.sav"
+    },
+    {
+      "ep": 272,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 176,
+      "end_reason": "death",
+      "final_x": 70,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_28.sav"
+    },
+    {
+      "ep": 273,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 257,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_2.sav"
+    },
+    {
+      "ep": 274,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 266,
+      "end_reason": "death",
+      "final_x": 43,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_62.sav"
+    },
+    {
+      "ep": 275,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 178,
+      "end_reason": "death",
+      "final_x": 25,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 276,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 265,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_2.sav"
+    },
+    {
+      "ep": 277,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 314,
+      "end_reason": "death",
+      "final_x": 52,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_61.sav"
+    },
+    {
+      "ep": 278,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 264,
+      "end_reason": "death",
+      "final_x": 10,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "F2",
+        "L12a_bot",
+        "L12a_top",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 279,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 133,
+      "end_reason": "death",
+      "final_x": 55,
+      "final_y": 140,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_69.sav"
+    },
+    {
+      "ep": 280,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 169,
+      "end_reason": "death",
+      "final_x": 37,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_47.sav"
+    },
+    {
+      "ep": 281,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 182,
+      "end_reason": "death",
+      "final_x": 64,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_28.sav"
+    },
+    {
+      "ep": 282,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 244,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_31.sav"
+    },
+    {
+      "ep": 283,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 228,
+      "end_reason": "death",
+      "final_x": 48,
+      "final_y": 78,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot",
+        "L34_top",
+        "L45_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_23.sav"
+    },
+    {
+      "ep": 284,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 348,
+      "end_reason": "death",
+      "final_x": 57,
+      "final_y": 146,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_43.sav"
+    },
+    {
+      "ep": 285,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 192,
+      "end_reason": "death",
+      "final_x": 58,
+      "final_y": 126,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_55.sav"
+    },
+    {
+      "ep": 286,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 165,
+      "end_reason": "death",
+      "final_x": 38,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav"
+    },
+    {
+      "ep": 287,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 205,
+      "end_reason": "death",
+      "final_x": 24,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_17.sav"
+    },
+    {
+      "ep": 288,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 235,
+      "end_reason": "death",
+      "final_x": 56,
+      "final_y": 142,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav"
+    },
+    {
+      "ep": 289,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 277,
+      "end_reason": "death",
+      "final_x": 20,
+      "final_y": 182,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav"
+    },
+    {
+      "ep": 290,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 282,
+      "end_reason": "death",
+      "final_x": 74,
+      "final_y": 178,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav"
+    },
+    {
+      "ep": 291,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 123,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav"
+    },
+    {
+      "ep": 292,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 154,
+      "end_reason": "death",
+      "final_x": 76,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_69.sav"
+    },
+    {
+      "ep": 293,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 320,
+      "end_reason": "death",
+      "final_x": 44,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_65.sav"
+    },
+    {
+      "ep": 294,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 250,
+      "end_reason": "death",
+      "final_x": 63,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_36.sav"
+    },
+    {
+      "ep": 295,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 310,
+      "end_reason": "death",
+      "final_x": 53,
+      "final_y": 118,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav"
+    },
+    {
+      "ep": 296,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 304,
+      "end_reason": "death",
+      "final_x": 74,
+      "final_y": 182,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_7.sav"
+    },
+    {
+      "ep": 297,
+      "max_cp": 2,
+      "max_rung": 2,
+      "steps": 173,
+      "end_reason": "death",
+      "final_x": 46,
+      "final_y": 114,
+      "reached_points": [
+        "F1",
+        "F3",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot",
+        "L23_top",
+        "L34_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H4_17.sav"
+    },
+    {
+      "ep": 298,
+      "max_cp": 0,
+      "max_rung": 0,
+      "steps": 205,
+      "end_reason": "death",
+      "final_x": 0,
+      "final_y": 182,
+      "reached_points": [],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H1_41.sav"
+    },
+    {
+      "ep": 299,
+      "max_cp": 1,
+      "max_rung": 1,
+      "steps": 138,
+      "end_reason": "death",
+      "final_x": 59,
+      "final_y": 150,
+      "reached_points": [
+        "F1",
+        "L12a_bot",
+        "L12b_bot",
+        "L12b_top",
+        "L23_bot"
+      ],
+      "start": "output/mo5/yeti/respawns/l1_r1/states/H2_14.sav"
+    }
+  ]
+}

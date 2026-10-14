@@ -1,0 +1,86 @@
+# ============================================================================
+# L1 v19 -- RESPAWN ROOT POOL, warm from l1_v17, 6M, seed 42. ONE lever vs the control
+# yeti_curriculum_l1_v18_ctrl_warm_v17_6m (already run): `curriculum.root_pool`.
+#
+# WHY. L1's game reset always plays the same snowball sequence, and l1_v17 memorised it:
+# 215/300 from reset, 75/150 from the same reset started 4 steps later, 6/300 with the
+# route generator changed, and 0/330 from 198 real respawns (26 other sequences). The
+# game makes new sequences itself: each death leads to a respawn whose snowballs depend
+# on how the life ended (experiments/003-yeti/snowball_rng_notes.md).
+#
+# THE LEVER. Episodes that start at the level start draw it from: the game reset, or one
+# of the TRAIN respawns of experiments/003-yeti/data/respawns/l1_r1.json (21 of its 31
+# sequences, 185 states) -- uniform over the 22 sequences, then over states. Its 10
+# held-out sequences (114 states) are never trained on.
+#
+# READ IT ON, best snapshot, 300 episodes each:
+#   L1 held-out respawns   does it REACT? (l1_v17 and l1_v18's best: measured before
+#                          launch, see the notes)
+#   L1 game reset          the memorised sequence (l1_v17 215/300, l1_v18 208/300)
+# The referee scores both. Its champion check compares the reset with l1_v17's 0.72,
+# which is the memorised number; if randomised training costs that, it will refuse
+# every snapshot. All per-snapshot results are kept in sweep_state.json either way.
+# ============================================================================
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l1_v19_respawns_warm_v17_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/best/best_model.zip
+  warmstart_weights_only: true
+  resume_pools: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/checkpoints.pkl
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1000
+  stall_threshold: 15
+  resize: [84, 84]
+  resize_mode: max
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 1
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 4
+  fruit_presence_addrs:
+    1: 12205
+    2: 12032
+    3: 11880
+    4: 11736
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
+  root_pool: experiments/003-yeti/data/respawns/l1_r1.json

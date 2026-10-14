@@ -1,0 +1,5726 @@
+{
+ "what": "Respawn states (game restarts after a death), grouped by snowball sequence. Made by scripts/mo5/yeti/harvest_respawns.py. States are local files; sha256 pins each one.",
+ "created": "2026-10-14T20:57:50+00:00",
+ "game_level": 1,
+ "layout": 1,
+ "policy": "l1_v17",
+ "parts": [
+  {
+   "part": "H1",
+   "seed": 10000,
+   "episodes": 75
+  },
+  {
+   "part": "H2",
+   "seed": 20000,
+   "episodes": 75
+  },
+  {
+   "part": "H3",
+   "seed": 30000,
+   "episodes": 75
+  },
+  {
+   "part": "H4",
+   "seed": 40000,
+   "episodes": 75
+  }
+ ],
+ "heldout_every": 3,
+ "n_sequences": 31,
+ "heldout_sequences": [
+  2,
+  5,
+  8,
+  11,
+  14,
+  17,
+  20,
+  23,
+  26,
+  29
+ ],
+ "states": [
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_0.sav",
+   "sha256": "bb5e75e240815b24e43317156fcc1f464ce59c614407ef6ce5512eae38537543",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_0.npz",
+   "death_step": 394,
+   "death_floor": 2,
+   "death_px": 108,
+   "fruits_collected": 4,
+   "respawn_after": 352,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_1.sav",
+   "sha256": "9497286ce16177f63c646192c3a4c6178cb03bd76898a41fa52b3178a71cc696",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_1.npz",
+   "death_step": 445,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 3,
+   "respawn_after": 316,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 1,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_2.sav",
+   "sha256": "7e3dd42586228056d74fb49c65f45f9609efa4cad3d2cba6571a0005823ef030",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_2.npz",
+   "death_step": 231,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 2,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_3.sav",
+   "sha256": "3884e3f2a219688e2cb3f91bc7c76bce1d2081375336a658016ea58e0b5692ee",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_3.npz",
+   "death_step": 254,
+   "death_floor": 1,
+   "death_px": 244,
+   "fruits_collected": 1,
+   "respawn_after": 395,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_4.sav",
+   "sha256": "cd07b22586398ff480d74033c50110fe8f83b42203bb643430248ba289db3b68",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_4.npz",
+   "death_step": 283,
+   "death_floor": 1,
+   "death_px": 136,
+   "fruits_collected": 0,
+   "respawn_after": 390,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_5.sav",
+   "sha256": "493780818464d71d4d706aaa6345fb7a8cb2580a4abab1194683da18750808f7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_5.npz",
+   "death_step": 284,
+   "death_floor": 1,
+   "death_px": 136,
+   "fruits_collected": 0,
+   "respawn_after": 389,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_6.sav",
+   "sha256": "b1b3c06926282a859876a6ae08efb0cd831c7b60dea88bc7deb3b54948c4658f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_6.npz",
+   "death_step": 639,
+   "death_floor": 4,
+   "death_px": 196,
+   "fruits_collected": 4,
+   "respawn_after": 265,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 5,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_7.sav",
+   "sha256": "37ec07ab31c8901a72bf37228f02e4832d1f661d355412508ebca100278d7545",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_7.npz",
+   "death_step": 218,
+   "death_floor": 3,
+   "death_px": 96,
+   "fruits_collected": 2,
+   "respawn_after": 300,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_8.sav",
+   "sha256": "c8ff2e3c76f69f38f8c2e4b659ab2abd0105d85b4391f250cbe2dfae193867ea",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_8.npz",
+   "death_step": 242,
+   "death_floor": 4,
+   "death_px": 260,
+   "fruits_collected": 3,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_9.sav",
+   "sha256": "48c6453fe35b4224cc0929970905d711645cb2c5e54da406ed2d174ee0432a09",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_9.npz",
+   "death_step": 226,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 384,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 7,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_10.sav",
+   "sha256": "96f14f37c17af3794ea5e9de0fe4166ea00a7864937195f741ce97f87ec7b21d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_10.npz",
+   "death_step": 236,
+   "death_floor": 4,
+   "death_px": 244,
+   "fruits_collected": 2,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_11.sav",
+   "sha256": "64c87b0c3cb0d06a3f3eeb9e438703810537c5e78142b60a0eddad6d152fb3ca",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_11.npz",
+   "death_step": 359,
+   "death_floor": 1,
+   "death_px": 24,
+   "fruits_collected": 4,
+   "respawn_after": 385,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_12.sav",
+   "sha256": "7396318f63ef09d36353242ae384ec325fed86dbefb6ced0814f0a63e96dd71e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_12.npz",
+   "death_step": 449,
+   "death_floor": 3,
+   "death_px": 232,
+   "fruits_collected": 4,
+   "respawn_after": 311,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 8,
+   "heldout": true,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_13.sav",
+   "sha256": "0f11214cb97bda5e15f419eed5bc020ac4c7288eb048fed09e644916fd7fb831",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_13.npz",
+   "death_step": 229,
+   "death_floor": 4,
+   "death_px": 220,
+   "fruits_collected": 2,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_14.sav",
+   "sha256": "ff3a1466735402d0a4968fabc92aada58cf038582fc59a78222472126f9a4224",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_14.npz",
+   "death_step": 242,
+   "death_floor": 1,
+   "death_px": 272,
+   "fruits_collected": 1,
+   "respawn_after": 387,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 9,
+   "heldout": false,
+   "choices_seen": 21
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_15.sav",
+   "sha256": "0594270aa5622358ea310eccd3af0ab5210f7073b73a66f704408fe89bb4757c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_15.npz",
+   "death_step": 242,
+   "death_floor": 1,
+   "death_px": 272,
+   "fruits_collected": 1,
+   "respawn_after": 387,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 9,
+   "heldout": false,
+   "choices_seen": 21
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_16.sav",
+   "sha256": "3af6e219ee7343da7096918d9b5298af7c3dc21225b9c5c038db5b380ead0384",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_16.npz",
+   "death_step": 474,
+   "death_floor": null,
+   "death_px": 120,
+   "fruits_collected": 4,
+   "respawn_after": 382,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 10,
+   "heldout": false,
+   "choices_seen": 13
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_17.sav",
+   "sha256": "3a6595c702a851ca5d35687595e5d11dc44b80fa8a0fa782f787dd9129623bef",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_17.npz",
+   "death_step": 444,
+   "death_floor": 2,
+   "death_px": 256,
+   "fruits_collected": 4,
+   "respawn_after": 354,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_18.sav",
+   "sha256": "791fee7a2d934a78abba3016009233f02a5b009e5f3fd0e43a2b7eb56063e5ed",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_18.npz",
+   "death_step": 381,
+   "death_floor": 2,
+   "death_px": 68,
+   "fruits_collected": 4,
+   "respawn_after": 352,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_19.sav",
+   "sha256": "3e6cb959b90cf2f3abdcce1bb79729d63be5ca1e7a67616f890416ecbb1f3570",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_19.npz",
+   "death_step": 297,
+   "death_floor": 3,
+   "death_px": 236,
+   "fruits_collected": 3,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_20.sav",
+   "sha256": "32652deda7d4407c7ad64640bfeae75da58184b7d6d15d643eb5e615ecbe37c6",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_20.npz",
+   "death_step": 218,
+   "death_floor": null,
+   "death_px": 208,
+   "fruits_collected": 3,
+   "respawn_after": 241,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_21.sav",
+   "sha256": "876ab155eae2234f6773fc9334a06b459f5578923524a51868da5e093146b40d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_21.npz",
+   "death_step": 388,
+   "death_floor": 2,
+   "death_px": 96,
+   "fruits_collected": 3,
+   "respawn_after": 346,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_22.sav",
+   "sha256": "a7f37cd2451f08670a954e5313b771d17cd1d0b5c514849911d4a9cafe341f86",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_22.npz",
+   "death_step": 434,
+   "death_floor": 2,
+   "death_px": 228,
+   "fruits_collected": 4,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 12,
+   "heldout": false,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_23.sav",
+   "sha256": "ad4127e3bc874b21303679c038d316ff1e1d0494560c44e60fec5b5b5b325ca4",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_23.npz",
+   "death_step": 432,
+   "death_floor": 2,
+   "death_px": 220,
+   "fruits_collected": 4,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_24.sav",
+   "sha256": "9979452b464fd78e22c3902cfce940c69c7cb4f314cdf01da3774dbad0a25676",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_24.npz",
+   "death_step": 276,
+   "death_floor": 1,
+   "death_px": 172,
+   "fruits_collected": 0,
+   "respawn_after": 396,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 9
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_25.sav",
+   "sha256": "67cc3835a825cdb5160e7b0cb2fe24a1bb70d4ff9280d2ad90c899b3635aa5b8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_25.npz",
+   "death_step": 306,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 3,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_26.sav",
+   "sha256": "cad0d311a17264376c4f4e79bc7bde2e4d1b89909af5cc87e5990ae21311c510",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_26.npz",
+   "death_step": 190,
+   "death_floor": 3,
+   "death_px": 228,
+   "fruits_collected": 1,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 15,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_27.sav",
+   "sha256": "3e5b9eb9805c96ba002a002966667d1bf75b53a2ed96f87ff704d82f701cc6f3",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_27.npz",
+   "death_step": 305,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 3,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_28.sav",
+   "sha256": "bc594af51c49baa904349851756f17f645a5c3b24e9e3dec52ae0f80b77cbc7e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_28.npz",
+   "death_step": 449,
+   "death_floor": 3,
+   "death_px": 236,
+   "fruits_collected": 4,
+   "respawn_after": 315,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 1,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_29.sav",
+   "sha256": "e2a89312aac61f54c4d479cd363cffba6f9b8afb825cf8e29ea58e943f23fcfd",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_29.npz",
+   "death_step": 191,
+   "death_floor": null,
+   "death_px": 240,
+   "fruits_collected": 2,
+   "respawn_after": 320,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_30.sav",
+   "sha256": "f5588ee86ed4214d9e6fa45b0c0e2fbf7c2937221c52b643d5a84208de9db335",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_30.npz",
+   "death_step": 230,
+   "death_floor": 4,
+   "death_px": 224,
+   "fruits_collected": 2,
+   "respawn_after": 260,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_31.sav",
+   "sha256": "0a080602dc248c0189c9f4e6bb9373c52371f4dc84b8ffa72e46113651b78714",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_31.npz",
+   "death_step": 306,
+   "death_floor": 3,
+   "death_px": 208,
+   "fruits_collected": 3,
+   "respawn_after": 305,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_32.sav",
+   "sha256": "885eb949a87b303ac32560f78fc5a648a4769463ac51f51ed2a48794954978ff",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_32.npz",
+   "death_step": 159,
+   "death_floor": 3,
+   "death_px": 308,
+   "fruits_collected": 1,
+   "respawn_after": 302,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 16,
+   "heldout": false,
+   "choices_seen": 21
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_33.sav",
+   "sha256": "15e1ffbf53929309daf782f060190194476be25b77cd6dce81e93a896518203b",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_33.npz",
+   "death_step": 225,
+   "death_floor": 4,
+   "death_px": 196,
+   "fruits_collected": 3,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_34.sav",
+   "sha256": "b2104c56c3e0d1b9185dfd419a6b48d10051e3ed5ab8c323db352dbbdd06c344",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_34.npz",
+   "death_step": 405,
+   "death_floor": 2,
+   "death_px": 140,
+   "fruits_collected": 4,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_35.sav",
+   "sha256": "a380d7e511422cacc66c02be92dc9e30fbc543f86601c8c8acf358af44d96462",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_35.npz",
+   "death_step": 203,
+   "death_floor": 2,
+   "death_px": 264,
+   "fruits_collected": 1,
+   "respawn_after": 340,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_36.sav",
+   "sha256": "18fa2f90ea069efd8695e6499b75577d5b2d2635442a87334a84142a9a9738a6",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_36.npz",
+   "death_step": 182,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 379,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_37.sav",
+   "sha256": "dd52b1f2a213a768403106ea85db5c90058988a34d6b7123e4610ec7259a18a1",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_37.npz",
+   "death_step": 218,
+   "death_floor": 4,
+   "death_px": 176,
+   "fruits_collected": 3,
+   "respawn_after": 265,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_38.sav",
+   "sha256": "9b7745da90de42debe56c364dffa4db695d6d9d812fda113652ac55549d616ec",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_38.npz",
+   "death_step": 219,
+   "death_floor": 4,
+   "death_px": 176,
+   "fruits_collected": 3,
+   "respawn_after": 259,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_39.sav",
+   "sha256": "d1d47e51acdc069e06738b81e6026732cac4f8829d9f4997d6ed6174f1a0d9cb",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_39.npz",
+   "death_step": 174,
+   "death_floor": 3,
+   "death_px": 276,
+   "fruits_collected": 1,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_40.sav",
+   "sha256": "76283c0325846cee745435f8996e2e37e5501102d534f9e210f2f8f89064b3c3",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_40.npz",
+   "death_step": 388,
+   "death_floor": 2,
+   "death_px": 92,
+   "fruits_collected": 4,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_41.sav",
+   "sha256": "a05e03ed0e2443980eb2cd22f6d13a0e218fefb759e8eebdeeb4fd2807bd7d12",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_41.npz",
+   "death_step": 295,
+   "death_floor": null,
+   "death_px": 240,
+   "fruits_collected": 3,
+   "respawn_after": 323,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_42.sav",
+   "sha256": "5009acb21f824a13c7c9ddbde353846e2271144aeed46fb830ddfa2becb0cace",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_42.npz",
+   "death_step": 425,
+   "death_floor": 2,
+   "death_px": 200,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_43.sav",
+   "sha256": "81548a232ec4f558b584852462d239c687cbe42d9bacd73463823f472e824bd2",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_43.npz",
+   "death_step": 303,
+   "death_floor": 3,
+   "death_px": 200,
+   "fruits_collected": 1,
+   "respawn_after": 306,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_44.sav",
+   "sha256": "8228689d23ef1045e711762b5e772bdfcadd15c8be24f33878fb2ce53769edbe",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_44.npz",
+   "death_step": 298,
+   "death_floor": 3,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 306,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_45.sav",
+   "sha256": "97fa9240f6183f41498442dbb719fbb1725d03f3a0d3027d20ff006ded12d75f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_45.npz",
+   "death_step": 446,
+   "death_floor": null,
+   "death_px": 240,
+   "fruits_collected": 4,
+   "respawn_after": 327,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_46.sav",
+   "sha256": "5786b94e37d8df08531cb2cb82453777ec0caff8bd2028af1b0a7e506a41b331",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_46.npz",
+   "death_step": 466,
+   "death_floor": 3,
+   "death_px": 188,
+   "fruits_collected": 4,
+   "respawn_after": 315,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_47.sav",
+   "sha256": "4ef37055d0379481e8599e33a569be05c2d6a040ff68dfb76281a2ef5102f9a5",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_47.npz",
+   "death_step": 178,
+   "death_floor": 4,
+   "death_px": 164,
+   "fruits_collected": 2,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_48.sav",
+   "sha256": "64ec785719272705f61c2211c351c9a943394ad661bd9ed7ee4a51a85d7ad253",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_48.npz",
+   "death_step": 176,
+   "death_floor": 1,
+   "death_px": 72,
+   "fruits_collected": 0,
+   "respawn_after": 379,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_49.sav",
+   "sha256": "27b867ab7b7fa98fd7aab4ef727c3749601ff29b15fb90f355cc153a94ad896d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_49.npz",
+   "death_step": 370,
+   "death_floor": null,
+   "death_px": 176,
+   "fruits_collected": 2,
+   "respawn_after": 284,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 19,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_50.sav",
+   "sha256": "67f0d1231769f6e51096f587a326700ee1a8249fe3906f6fa8522834c2109dfb",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_50.npz",
+   "death_step": 170,
+   "death_floor": 4,
+   "death_px": 144,
+   "fruits_collected": 2,
+   "respawn_after": 260,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 16,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_51.sav",
+   "sha256": "6d20b5e496176a39af89d853f26022197b2d24f9bbe00d5f5caaff4c95c4d4e0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_51.npz",
+   "death_step": 176,
+   "death_floor": 3,
+   "death_px": 276,
+   "fruits_collected": 1,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_52.sav",
+   "sha256": "cef1c5a7fe5515390ef16d8da5e485af048f7cbb5a868092075607bb6db901f3",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_52.npz",
+   "death_step": 304,
+   "death_floor": null,
+   "death_px": 240,
+   "fruits_collected": 2,
+   "respawn_after": 328,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_53.sav",
+   "sha256": "43d3cf132f1a233df9a4b5f049f0c1f70d2c3b72b9008ea78de243cf2e30ec35",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_53.npz",
+   "death_step": 252,
+   "death_floor": 1,
+   "death_px": 240,
+   "fruits_collected": 1,
+   "respawn_after": 389,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_54.sav",
+   "sha256": "2c74c36ee20d306ff8645a3683a2d927fb0c031917b6b37227c6422c2495ce47",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_54.npz",
+   "death_step": 397,
+   "death_floor": 2,
+   "death_px": 128,
+   "fruits_collected": 3,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_55.sav",
+   "sha256": "13e79bf3dde19a85b096b3c23828479a14fa4ad2f3bb2dc172b1c24ada9c527c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_55.npz",
+   "death_step": 409,
+   "death_floor": 2,
+   "death_px": 152,
+   "fruits_collected": 4,
+   "respawn_after": 349,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 20,
+   "heldout": true,
+   "choices_seen": 13
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_56.sav",
+   "sha256": "6e0bf15cb0f52f112768ae0dee3147688b04081f0b69acf3df0c1c5df5ae375b",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_56.npz",
+   "death_step": 122,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 373,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 21,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_57.sav",
+   "sha256": "ebc70bcbadf28693c7657fbedf47b3e4f24cbb87dc2b75fb6480817715c1f35e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_57.npz",
+   "death_step": 442,
+   "death_floor": null,
+   "death_px": 176,
+   "fruits_collected": 4,
+   "respawn_after": 283,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 12,
+   "heldout": false,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_58.sav",
+   "sha256": "ceffce200e8024ce457ace74e1c3a8bccc8304ea139259e5a4e4172e201a31b3",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_58.npz",
+   "death_step": 239,
+   "death_floor": 1,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 387,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 22,
+   "heldout": false,
+   "choices_seen": 22
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_59.sav",
+   "sha256": "2b512a7d8820e044c8a5a82134a539129bb75052ea9a8720c86b21aec5bf2d17",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_59.npz",
+   "death_step": 206,
+   "death_floor": 2,
+   "death_px": 272,
+   "fruits_collected": 1,
+   "respawn_after": 340,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_60.sav",
+   "sha256": "6ce5bc9d7e9c055b3427d660f71041eab977da9aad9d44f797aa0527b48a3b15",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_60.npz",
+   "death_step": 415,
+   "death_floor": 2,
+   "death_px": 168,
+   "fruits_collected": 4,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 23,
+   "heldout": true,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_61.sav",
+   "sha256": "72269da9f5fb2f6e455425e3bc69754f32992726d480c20348605ce2707e0cf7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_61.npz",
+   "death_step": 430,
+   "death_floor": 2,
+   "death_px": 216,
+   "fruits_collected": 4,
+   "respawn_after": 352,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_62.sav",
+   "sha256": "eb4e9a6a85e0c798cf1dd72d347dfd4e898faff3c0e46b2fbfeb7a5bcebea79b",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_62.npz",
+   "death_step": 186,
+   "death_floor": 3,
+   "death_px": 168,
+   "fruits_collected": 1,
+   "respawn_after": 299,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_63.sav",
+   "sha256": "c80317ecb794f17eb6b52a042f89cbd07a997f9ccd7a1cfbc54cb223dafe632c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_63.npz",
+   "death_step": 445,
+   "death_floor": null,
+   "death_px": 176,
+   "fruits_collected": 4,
+   "respawn_after": 293,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 12,
+   "heldout": false,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_64.sav",
+   "sha256": "f59d65fe08eaeb7ea9afefab3b37b19f801806e397deb4b8b5d19a4ab1d5f122",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_64.npz",
+   "death_step": 416,
+   "death_floor": 2,
+   "death_px": 176,
+   "fruits_collected": 4,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_65.sav",
+   "sha256": "220f6f4fda87911223d3fca24132f3b5ebef7e804567a8c25d7533a663817466",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_65.npz",
+   "death_step": 344,
+   "death_floor": 2,
+   "death_px": 240,
+   "fruits_collected": 3,
+   "respawn_after": 343,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 19,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_66.sav",
+   "sha256": "dd8a51f51aa1a154fbea5cb0ae7c77010fe255543d1a0bf002e67188009fb572",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_66.npz",
+   "death_step": 429,
+   "death_floor": 2,
+   "death_px": 212,
+   "fruits_collected": 4,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_67.sav",
+   "sha256": "ba735b731dbee8df377fa4944e364a384adfefb26161bdb3e96ca3ed2837c2f7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_67.npz",
+   "death_step": 215,
+   "death_floor": 3,
+   "death_px": 92,
+   "fruits_collected": 2,
+   "respawn_after": 304,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_68.sav",
+   "sha256": "3c49457881041c13d5d1b71e939e1cd31d87e5644efebf314c9d9b200ee53a12",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_68.npz",
+   "death_step": 239,
+   "death_floor": 1,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 387,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 22,
+   "heldout": false,
+   "choices_seen": 22
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_69.sav",
+   "sha256": "44e87ae6291b2a38189fb7a5fec8e32139eb033861d27412edfba49f6e6ee7c0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_69.npz",
+   "death_step": 223,
+   "death_floor": 4,
+   "death_px": 208,
+   "fruits_collected": 3,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_70.sav",
+   "sha256": "0f66e3bde5aeabd11a7f5aa06bcb5b9e4f7bb9290858eb327cdea3384951c2eb",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_70.npz",
+   "death_step": 366,
+   "death_floor": 2,
+   "death_px": 304,
+   "fruits_collected": 3,
+   "respawn_after": 345,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_71.sav",
+   "sha256": "eb47c06654d65606571429bed580d2cc35bdeee11457ccd699d5a79776d876b0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_71.npz",
+   "death_step": 239,
+   "death_floor": 1,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 387,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 22,
+   "heldout": false,
+   "choices_seen": 22
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_72.sav",
+   "sha256": "def7c3644c6d80bd179c97946b84d3cdda1cd94f1a4d9db071f6a1e018ed7d84",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_72.npz",
+   "death_step": 281,
+   "death_floor": 1,
+   "death_px": 144,
+   "fruits_collected": 0,
+   "respawn_after": 390,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_73.sav",
+   "sha256": "1acc7365d3c3254682de21e1eb00c2cc91fa82b0a5635b90698300e2bacb667c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_73.npz",
+   "death_step": 261,
+   "death_floor": 1,
+   "death_px": 208,
+   "fruits_collected": 1,
+   "respawn_after": 390,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H1_74.sav",
+   "sha256": "3fc5dfdcc9ad4a8d8a3a6943762b734b16370b9b65ebe358824619cadddea265",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H1_74.npz",
+   "death_step": 246,
+   "death_floor": 1,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 377,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 22,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_0.sav",
+   "sha256": "e6826df350e4b81c505d420571a7e007367ee57c398a3476e900e5c14d94e024",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_0.npz",
+   "death_step": 285,
+   "death_floor": 3,
+   "death_px": 276,
+   "fruits_collected": 3,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_1.sav",
+   "sha256": "e5587b02d3ee18dbcbff29686b26b6e29328d9c85a2cebe9d326370df2aeece7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_1.npz",
+   "death_step": 192,
+   "death_floor": 2,
+   "death_px": 240,
+   "fruits_collected": 1,
+   "respawn_after": 341,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_2.sav",
+   "sha256": "c8f937a20123e998169b91b0975bee07c6d7fc37ccf5d37ae571acfbc87013e7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_2.npz",
+   "death_step": 224,
+   "death_floor": 4,
+   "death_px": 200,
+   "fruits_collected": 3,
+   "respawn_after": 260,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_3.sav",
+   "sha256": "444da5dc834c5589906edeb61ca8cc533c34ca3bc510231e5c1618ee01942356",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_3.npz",
+   "death_step": 316,
+   "death_floor": 3,
+   "death_px": 176,
+   "fruits_collected": 3,
+   "respawn_after": 300,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_4.sav",
+   "sha256": "c4ce1fe740dfaf9a67cd0f4fcb8f2149c7a6e0ce6c3856769b50dcc93e1aeef5",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_4.npz",
+   "death_step": 189,
+   "death_floor": 3,
+   "death_px": 168,
+   "fruits_collected": 2,
+   "respawn_after": 300,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_5.sav",
+   "sha256": "7599ead5dff8e39b944c0d8c01952bd4761b1c9b9e4b54f4ee0c85389bbdb1db",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_5.npz",
+   "death_step": 242,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 256,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_6.sav",
+   "sha256": "09f12aa425e894cc58d94a8d4cc38815fb8c97af7ddc07d785626ff1c4f2b77a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_6.npz",
+   "death_step": 213,
+   "death_floor": 3,
+   "death_px": 96,
+   "fruits_collected": 2,
+   "respawn_after": 300,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_7.sav",
+   "sha256": "f28f33ad8650ae54d0a23be1da1a6f29ed87980fd6b6b6f04676f71fcfe8cec0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_7.npz",
+   "death_step": 187,
+   "death_floor": null,
+   "death_px": 240,
+   "fruits_collected": 2,
+   "respawn_after": 319,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_8.sav",
+   "sha256": "55b73f2282dbf9e4568ed2398283a39a9140e826ae2bc4aab5657a8532f7004b",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_8.npz",
+   "death_step": 197,
+   "death_floor": 3,
+   "death_px": 144,
+   "fruits_collected": 2,
+   "respawn_after": 300,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_9.sav",
+   "sha256": "700f7651e58f620be4d87ee79e4a88060df3fb79dc1d40a279ea1d830558cba6",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_9.npz",
+   "death_step": 306,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 3,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 9
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_10.sav",
+   "sha256": "31239a327569e8b03e0a15e95310ee45c36f0a8cacba3c4b75fd823def0d6717",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_10.npz",
+   "death_step": 446,
+   "death_floor": 2,
+   "death_px": 260,
+   "fruits_collected": 4,
+   "respawn_after": 359,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_11.sav",
+   "sha256": "cde07375b91928e94a7accc8e88c23e973edd2dfccaa2fa743269b60885039cc",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_11.npz",
+   "death_step": 442,
+   "death_floor": 4,
+   "death_px": 176,
+   "fruits_collected": 4,
+   "respawn_after": 278,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 12,
+   "heldout": false,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_12.sav",
+   "sha256": "e9cc7fd51be5b9e41ce59f5387e2027009e9727d6c72ad5ae38483c9d5a0a953",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_12.npz",
+   "death_step": 284,
+   "death_floor": 3,
+   "death_px": 292,
+   "fruits_collected": 2,
+   "respawn_after": 305,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_13.sav",
+   "sha256": "820f416c4c5d18d6ce1167ab0d4afed7234f8bd317e04a263c5f518f357da93a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_13.npz",
+   "death_step": 411,
+   "death_floor": 2,
+   "death_px": 156,
+   "fruits_collected": 4,
+   "respawn_after": 354,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 20,
+   "heldout": true,
+   "choices_seen": 12
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_14.sav",
+   "sha256": "89d0af143d81095bb9b0a425558c462aa897789b032242fc70eba720516d9c04",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_14.npz",
+   "death_step": 410,
+   "death_floor": 2,
+   "death_px": 164,
+   "fruits_collected": 3,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 23,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_15.sav",
+   "sha256": "681b93c78a409ccafdbc176a7d2903b6da91d9d0bbad1a3357951e236d923fac",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_15.npz",
+   "death_step": 183,
+   "death_floor": null,
+   "death_px": 176,
+   "fruits_collected": 2,
+   "respawn_after": 285,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_16.sav",
+   "sha256": "4b4e07d235295b4eeac06e2c66620810fb9bb848abc056bbc3ae74e1106bdb98",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_16.npz",
+   "death_step": 187,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 2,
+   "respawn_after": 294,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_17.sav",
+   "sha256": "4d2f1e5216295e2c3e4a4280a5781cf52aac69b26d9445ded86a5dc7606d716c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_17.npz",
+   "death_step": 308,
+   "death_floor": 3,
+   "death_px": 196,
+   "fruits_collected": 2,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_18.sav",
+   "sha256": "05a501badd167a472c87e907a29c712d5f2b51019d1487e8446680850ee3c1ec",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_18.npz",
+   "death_step": 438,
+   "death_floor": 2,
+   "death_px": 236,
+   "fruits_collected": 4,
+   "respawn_after": 357,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 8,
+   "heldout": true,
+   "choices_seen": 13
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_19.sav",
+   "sha256": "3abc00507f079f9454a5efa3e4b2f62f70412ede27a71e73bd940343741da9a4",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_19.npz",
+   "death_step": 172,
+   "death_floor": 3,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 299,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_20.sav",
+   "sha256": "ec9ff63dedfbb281063234df5745fdce13420a033ac11ddfb198a248f468ab03",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_20.npz",
+   "death_step": 187,
+   "death_floor": 3,
+   "death_px": 244,
+   "fruits_collected": 2,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_21.sav",
+   "sha256": "8446524f534d1061439722c2f006b7f247e25948d53fef6699e529ec0337fd4e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_21.npz",
+   "death_step": 233,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_22.sav",
+   "sha256": "4b4ffdcc28b7a9ff1d25327c7aba8b62165d5e5c6c80d69a7c8cf530e9583354",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_22.npz",
+   "death_step": 284,
+   "death_floor": 1,
+   "death_px": 136,
+   "fruits_collected": 0,
+   "respawn_after": 390,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_23.sav",
+   "sha256": "0c3762036f86b4a150504d235a03363eb69998660c861a8699f0f7b4bc6553db",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_23.npz",
+   "death_step": 273,
+   "death_floor": 1,
+   "death_px": 180,
+   "fruits_collected": 1,
+   "respawn_after": 396,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_25.sav",
+   "sha256": "4cc7fd2d78c8d1343086cf8f271a9f3bf91b1dee692fe11fe76c12c709140d18",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_25.npz",
+   "death_step": 207,
+   "death_floor": 2,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_26.sav",
+   "sha256": "f8abfebc7c9c6445fa757c5f3010a1b144176798405b63635f4b52ec24f46217",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_26.npz",
+   "death_step": 253,
+   "death_floor": 1,
+   "death_px": 244,
+   "fruits_collected": 1,
+   "respawn_after": 395,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_27.sav",
+   "sha256": "5ed86e569233b97f1136f850ba41e07062feedfcaaf02b50895c603826a4ec2c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_27.npz",
+   "death_step": 230,
+   "death_floor": 4,
+   "death_px": 224,
+   "fruits_collected": 2,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_28.sav",
+   "sha256": "c4bb66f4ee6ffc74ed0cf2620ef2030c8f0ca63ab65abce543c8320c60db55b8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_28.npz",
+   "death_step": 247,
+   "death_floor": 4,
+   "death_px": 272,
+   "fruits_collected": 3,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_29.sav",
+   "sha256": "bf837ff9209adf9b714c5f734d4345bab612bbc0caa37a1612cce3bfe45c9efc",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_29.npz",
+   "death_step": 225,
+   "death_floor": null,
+   "death_px": 200,
+   "fruits_collected": 3,
+   "respawn_after": 247,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_30.sav",
+   "sha256": "893753c8a76a5f0d08910b7a0465fa19a815ea9b7b8e27ccca862de404339a35",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_30.npz",
+   "death_step": 244,
+   "death_floor": 4,
+   "death_px": 268,
+   "fruits_collected": 3,
+   "respawn_after": 264,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_31.sav",
+   "sha256": "939d606f48f92814181fa7a3b33d2860e2aa5aa51cc37510925ff1157b68653f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_31.npz",
+   "death_step": 187,
+   "death_floor": 3,
+   "death_px": 164,
+   "fruits_collected": 2,
+   "respawn_after": 302,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_32.sav",
+   "sha256": "d72e807a90179722cb3dfa115242925f6b357349d8984e746e7f39bc311afee9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_32.npz",
+   "death_step": 458,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 4,
+   "respawn_after": 314,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_33.sav",
+   "sha256": "6019a002faf361518a37ef78756da352fe1cb4678afeadfca682328ffa560d0c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_33.npz",
+   "death_step": 240,
+   "death_floor": 4,
+   "death_px": 256,
+   "fruits_collected": 2,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_34.sav",
+   "sha256": "580616f4c5202f04ff0db89b1f8dff8b1b26f120f3a51845092618424369653f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_34.npz",
+   "death_step": 187,
+   "death_floor": 3,
+   "death_px": 164,
+   "fruits_collected": 2,
+   "respawn_after": 293,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_35.sav",
+   "sha256": "6fb9ab2f4322d35944bbe318b0c5b4073428b79202d2840bf179f445bb8a43e8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_35.npz",
+   "death_step": 424,
+   "death_floor": 2,
+   "death_px": 196,
+   "fruits_collected": 4,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_36.sav",
+   "sha256": "274650171c0d2a1032e7c309946a07197bd1650f2dc0ef295eb4cc341b2a7045",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_36.npz",
+   "death_step": 408,
+   "death_floor": 2,
+   "death_px": 156,
+   "fruits_collected": 2,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 20,
+   "heldout": true,
+   "choices_seen": 12
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_37.sav",
+   "sha256": "a94b00e676620d909550b1167b58ceadfc1eef086df7988547e30a91baab0715",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_37.npz",
+   "death_step": 404,
+   "death_floor": 2,
+   "death_px": 140,
+   "fruits_collected": 4,
+   "respawn_after": 354,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_38.sav",
+   "sha256": "6f318f392e45b7c79062d263f4282d0a9e5d85a9222b722e46f993aad861ee5d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_38.npz",
+   "death_step": 207,
+   "death_floor": null,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_39.sav",
+   "sha256": "c7c287752002a344fd7ede340a170b034c083f7aba052880c7792834ce721911",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_39.npz",
+   "death_step": 214,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 381,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_40.sav",
+   "sha256": "9afe8fc4365d275e2848ee6799537352348c7452b0b5ca8d088d4d47abce288e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_40.npz",
+   "death_step": 169,
+   "death_floor": 1,
+   "death_px": 100,
+   "fruits_collected": 0,
+   "respawn_after": 384,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_41.sav",
+   "sha256": "7bc23e45f6e148954d2ac1cbd61ae383abb23e2156670febdbf23931bc5c4fb7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_41.npz",
+   "death_step": 120,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 373,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 21,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_42.sav",
+   "sha256": "80c2c51ff6897928a731b572c1eeedfe3c8b6a99f21a70c69b45f8cb0f7a2e0a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_42.npz",
+   "death_step": 100,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 370,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 21,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_43.sav",
+   "sha256": "a7945f04109b36fff54e22f155888faa87c151fc3163684f74b6a9b9f36040d9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_43.npz",
+   "death_step": 226,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 383,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 7,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_44.sav",
+   "sha256": "70f3ba527319cc9eca7c7e39ee0919a4fa642498a20a75c22e1cc2654fcb5d43",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_44.npz",
+   "death_step": 187,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 2,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 15,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_45.sav",
+   "sha256": "858de4f6b13c0caa91b117ecd24abd1f617fb7cc28c2d65668cb85490ec13779",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_45.npz",
+   "death_step": 256,
+   "death_floor": 1,
+   "death_px": 236,
+   "fruits_collected": 1,
+   "respawn_after": 395,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_46.sav",
+   "sha256": "6142a0088e8450320fe92f5d00bb9d8c55824d9e7e141187f1dc26846f273fb6",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_46.npz",
+   "death_step": 459,
+   "death_floor": 3,
+   "death_px": 204,
+   "fruits_collected": 4,
+   "respawn_after": 315,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_47.sav",
+   "sha256": "4d3d6cb3181c4d35864215b278a274652971f0db0b1904921c858f8beffa0e15",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_47.npz",
+   "death_step": 421,
+   "death_floor": 2,
+   "death_px": 188,
+   "fruits_collected": 4,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_48.sav",
+   "sha256": "3cf5014aeec81d8a086446bf2a8d23fda114670d49d1fdf0b17e766253b1bbbb",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_48.npz",
+   "death_step": 183,
+   "death_floor": null,
+   "death_px": 240,
+   "fruits_collected": 1,
+   "respawn_after": 314,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 15,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_49.sav",
+   "sha256": "0f3475918d6a094588e2efa8829eb805118118dae428a88f7a65d350399cd3ad",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_49.npz",
+   "death_step": 304,
+   "death_floor": 3,
+   "death_px": 200,
+   "fruits_collected": 1,
+   "respawn_after": 305,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_50.sav",
+   "sha256": "9e3e51eb39dbb71dbbf8649fec9cc2b94794440ce6e2f1e7551fbc32ba05fe6d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_50.npz",
+   "death_step": 213,
+   "death_floor": 3,
+   "death_px": 100,
+   "fruits_collected": 2,
+   "respawn_after": 304,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_51.sav",
+   "sha256": "35c2ab961fb3b740d9229406e29a98b124cf55e8bb45e87b5c65a634766a04f1",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_51.npz",
+   "death_step": 426,
+   "death_floor": 2,
+   "death_px": 200,
+   "fruits_collected": 4,
+   "respawn_after": 352,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_52.sav",
+   "sha256": "bded9bf34856bfa5a69d9fde2e85ce388097301162bf1bd12a74190377aa7897",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_52.npz",
+   "death_step": 446,
+   "death_floor": null,
+   "death_px": 240,
+   "fruits_collected": 4,
+   "respawn_after": 326,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_53.sav",
+   "sha256": "c119cf18584c4a5a96a5b17e3fffe7c930543d6ee98afa2cf754751bd460b893",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_53.npz",
+   "death_step": 306,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 3,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_54.sav",
+   "sha256": "66fe687052f410ddc1dca02e0b34ae0678ca1bf16a4d1d42fedf3662bf60a74d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_54.npz",
+   "death_step": 344,
+   "death_floor": 2,
+   "death_px": 240,
+   "fruits_collected": 3,
+   "respawn_after": 343,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 19,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_55.sav",
+   "sha256": "d3c3371ae1ebc9a1004998bc453c1620e4b521961e3fe90bc796cda5059d4ade",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_55.npz",
+   "death_step": 195,
+   "death_floor": null,
+   "death_px": 228,
+   "fruits_collected": 1,
+   "respawn_after": 331,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_56.sav",
+   "sha256": "28cacdcc9037f3e9f344867dd19d7d668a36b2517b1afa3749db0b6f0e941618",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_56.npz",
+   "death_step": 236,
+   "death_floor": 4,
+   "death_px": 248,
+   "fruits_collected": 2,
+   "respawn_after": 262,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_57.sav",
+   "sha256": "e62c2b72451b41bf315ed68ccd0581936b918054b7374407de18f8f9a074b77c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_57.npz",
+   "death_step": 285,
+   "death_floor": 3,
+   "death_px": 276,
+   "fruits_collected": 3,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_58.sav",
+   "sha256": "ad3d3ec2590985eeb61fa9584001d99c4fc2234ce2bedf3e4d8620f63586581a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_58.npz",
+   "death_step": 180,
+   "death_floor": 3,
+   "death_px": 260,
+   "fruits_collected": 1,
+   "respawn_after": 304,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_59.sav",
+   "sha256": "87d711c627625f9b6f7d7741a99aa413c224f0719c285df892652914ce240e49",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_59.npz",
+   "death_step": 526,
+   "death_floor": 4,
+   "death_px": 212,
+   "fruits_collected": 4,
+   "respawn_after": 271,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 25,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_60.sav",
+   "sha256": "e070bf22a90ad8b12a0cc8825516614fa112b750c534dec4334ce74e697e931e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_60.npz",
+   "death_step": 184,
+   "death_floor": 3,
+   "death_px": 176,
+   "fruits_collected": 2,
+   "respawn_after": 290,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_61.sav",
+   "sha256": "86bfb8e9bb482f8c887a5c40bf236ec063e3a6c2e5d76273fdcf0e6462f3f59d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_61.npz",
+   "death_step": 401,
+   "death_floor": 2,
+   "death_px": 132,
+   "fruits_collected": 3,
+   "respawn_after": 352,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_62.sav",
+   "sha256": "2351da141899ee3474eda729a5f536a1fd5d7a8ed8444f8fb5a7076792d77a3f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_62.npz",
+   "death_step": 425,
+   "death_floor": 2,
+   "death_px": 200,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_63.sav",
+   "sha256": "b84b37db7696fb95511169af6d67e71aad38e9e795a16aceea8402f86602d89e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_63.npz",
+   "death_step": 387,
+   "death_floor": 2,
+   "death_px": 96,
+   "fruits_collected": 3,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_64.sav",
+   "sha256": "75fb242ae82a7afc092ae7fa48118da4f917e42f8e5c89ff2167acab397c0265",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_64.npz",
+   "death_step": 423,
+   "death_floor": 2,
+   "death_px": 204,
+   "fruits_collected": 3,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_65.sav",
+   "sha256": "ea67cef06c7d7eae1446ac892ce3f3af606fa2a0d7ede7577a2a2b14b9b676e9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_65.npz",
+   "death_step": 402,
+   "death_floor": 2,
+   "death_px": 136,
+   "fruits_collected": 4,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_66.sav",
+   "sha256": "5310530af86a1794cc3932e343b731757eb860d5cd8d6ae522211dd17179c484",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_66.npz",
+   "death_step": 233,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 260,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_67.sav",
+   "sha256": "c5e73ba423a2fd617ecdddfa3a11d64df6eb57ccc28534dc9ea8ca0e6f57c00e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_67.npz",
+   "death_step": 103,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 370,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 21,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_68.sav",
+   "sha256": "da39123114357a861124d832fae31654dda227c634ea1e0cef610ecb3cfd536a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_68.npz",
+   "death_step": 317,
+   "death_floor": 3,
+   "death_px": 176,
+   "fruits_collected": 3,
+   "respawn_after": 305,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_69.sav",
+   "sha256": "4bd10f0e074cef95291d2ad914aabff455af5a1084a49b148a8bcbb71d854871",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_69.npz",
+   "death_step": 410,
+   "death_floor": 2,
+   "death_px": 168,
+   "fruits_collected": 3,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 23,
+   "heldout": true,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_70.sav",
+   "sha256": "17ad35e411478168c84edf301c4b24000fe0fd8a566db25d306fac894b8798b9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_70.npz",
+   "death_step": 285,
+   "death_floor": 3,
+   "death_px": 276,
+   "fruits_collected": 3,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_71.sav",
+   "sha256": "268b05f0044310631f9a59bb90e41ca8fec368ccb7f25e67c54673cac228daac",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_71.npz",
+   "death_step": 233,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 260,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_72.sav",
+   "sha256": "90c2e75e0df44938364a25915f8f27f80b11c6c34dac9e9f1300b91f9107ce4a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_72.npz",
+   "death_step": 187,
+   "death_floor": 3,
+   "death_px": 172,
+   "fruits_collected": 2,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_73.sav",
+   "sha256": "931ca7fe0a7e4b7c328bc81299646eb783b30070eceda21130d58601e204710b",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_73.npz",
+   "death_step": 422,
+   "death_floor": 2,
+   "death_px": 188,
+   "fruits_collected": 4,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H2_74.sav",
+   "sha256": "3fb3d64aa39fa8fee9fcb54eefec732fd0f72f3ff64a8a0ac883cbb488468c94",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H2_74.npz",
+   "death_step": 167,
+   "death_floor": 3,
+   "death_px": 300,
+   "fruits_collected": 1,
+   "respawn_after": 302,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_0.sav",
+   "sha256": "e1f847cf2f7f6e961df4e642ef8d1483ed3fc39d3ad8df21f4509aaa75d6aa69",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_0.npz",
+   "death_step": 230,
+   "death_floor": 1,
+   "death_px": 308,
+   "fruits_collected": 1,
+   "respawn_after": 390,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 7,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_1.sav",
+   "sha256": "16f802469bdf602b44b7beb81e222bd7422af8a80e7441aed2187e67691b2f05",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_1.npz",
+   "death_step": 193,
+   "death_floor": 3,
+   "death_px": 160,
+   "fruits_collected": 2,
+   "respawn_after": 299,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_2.sav",
+   "sha256": "a25df313802c27d204fd3a5ebc6a8fc1a1f380cc06e4f38b399f6bf8120e19ce",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_2.npz",
+   "death_step": 423,
+   "death_floor": 2,
+   "death_px": 204,
+   "fruits_collected": 3,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_3.sav",
+   "sha256": "4c4a9f9fe341fede99abb4fff33815381b0b51a35e8882c63633d740182029a0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_3.npz",
+   "death_step": 204,
+   "death_floor": 3,
+   "death_px": 152,
+   "fruits_collected": 2,
+   "respawn_after": 295,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_4.sav",
+   "sha256": "14a3c83ec322d834d9d7c017b48525ec51f58605a1cf36395ac33cab3d55e377",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_4.npz",
+   "death_step": 293,
+   "death_floor": 3,
+   "death_px": 248,
+   "fruits_collected": 3,
+   "respawn_after": 306,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_5.sav",
+   "sha256": "bae2abd37fafc6fa2a7525c9ade5d0ec3b56a6e72a8a847dd6aece7be9d5f90f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_5.npz",
+   "death_step": 199,
+   "death_floor": 3,
+   "death_px": 160,
+   "fruits_collected": 2,
+   "respawn_after": 296,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_6.sav",
+   "sha256": "e8d0257d36bf8cb95adb372283f33f7e46e7ab671f894fce6a323b51b2001600",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_6.npz",
+   "death_step": 400,
+   "death_floor": 2,
+   "death_px": 132,
+   "fruits_collected": 3,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_7.sav",
+   "sha256": "58e86447ebb98ff155ace6eff0dfbc15bf86b6a938e5169aea833538c4b8ca14",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_7.npz",
+   "death_step": 253,
+   "death_floor": 1,
+   "death_px": 244,
+   "fruits_collected": 1,
+   "respawn_after": 394,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_8.sav",
+   "sha256": "df192b958be41c1f6f2c388269cc4a71b3c35de8a7353324bd5edddf02dba47c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_8.npz",
+   "death_step": 240,
+   "death_floor": 1,
+   "death_px": 284,
+   "fruits_collected": 1,
+   "respawn_after": 393,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 22,
+   "heldout": false,
+   "choices_seen": 22
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_9.sav",
+   "sha256": "968c67a175757a450c117f9369da8d17c419c876394e1c152a67140afd5e22ca",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_9.npz",
+   "death_step": 188,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 2,
+   "respawn_after": 294,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_10.sav",
+   "sha256": "f58f76fe4a4248c58b75fd3ab30daa36b6a048e01ea6098136f6a7a2e988611d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_10.npz",
+   "death_step": 183,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 1,
+   "respawn_after": 300,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_11.sav",
+   "sha256": "3680ef4d379182ba7bfa1a68a76aeae3351f6532bf9b625e3bced93d1c6b9362",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_11.npz",
+   "death_step": 391,
+   "death_floor": 2,
+   "death_px": 100,
+   "fruits_collected": 4,
+   "respawn_after": 352,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_12.sav",
+   "sha256": "ed1fc8eb9dca6a3bbab9e78d6fce8b77c2afab6fcc54ff7523715d8cd4a8c2ca",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_12.npz",
+   "death_step": 288,
+   "death_floor": 1,
+   "death_px": 132,
+   "fruits_collected": 0,
+   "respawn_after": 396,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_13.sav",
+   "sha256": "8f265cf5d3c313621ed0161a7080dcc8ec224a68ee4a5384e0529e417bc233b5",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_13.npz",
+   "death_step": 397,
+   "death_floor": 2,
+   "death_px": 120,
+   "fruits_collected": 4,
+   "respawn_after": 347,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_14.sav",
+   "sha256": "346f5a27669f3767e172184448e5112414eeea7391c71a09aee8ce927f3b28b2",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_14.npz",
+   "death_step": 317,
+   "death_floor": 3,
+   "death_px": 176,
+   "fruits_collected": 3,
+   "respawn_after": 299,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_15.sav",
+   "sha256": "cd97c768f61e35378e41b8f1a7e5f491fb5de2cb07a92c1f30b57881f9f8e264",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_15.npz",
+   "death_step": 405,
+   "death_floor": 2,
+   "death_px": 144,
+   "fruits_collected": 4,
+   "respawn_after": 349,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_16.sav",
+   "sha256": "0dbf71c8d2b97da2d8cc758567a741599be87c1831e3077ec9808cd2b267b0d5",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_16.npz",
+   "death_step": 447,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 4,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 1,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_17.sav",
+   "sha256": "7320f05ea3bafcb5524555f4bee44305d0c3041a7c3d3e8cf54cc5886db2e50e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_17.npz",
+   "death_step": 409,
+   "death_floor": 2,
+   "death_px": 160,
+   "fruits_collected": 4,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 26,
+   "heldout": true,
+   "choices_seen": 12
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_18.sav",
+   "sha256": "b07f0e638c0722308403da13aca7e8d79cb928e69dc9b745dc3ecee6b27e2dfd",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_18.npz",
+   "death_step": 538,
+   "death_floor": 4,
+   "death_px": 236,
+   "fruits_collected": 4,
+   "respawn_after": 269,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 27,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_19.sav",
+   "sha256": "f79f6099d7d8d8f736d7beedb2e3f95a3c86bc19c8f5f8d3c2113802196f99b6",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_19.npz",
+   "death_step": 449,
+   "death_floor": 3,
+   "death_px": 236,
+   "fruits_collected": 4,
+   "respawn_after": 313,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 1,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_20.sav",
+   "sha256": "eab6a4b6aea50834c88ef4684b4f76d9e4913fc2e15ca6805b2711cba2671f59",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_20.npz",
+   "death_step": 206,
+   "death_floor": 2,
+   "death_px": 268,
+   "fruits_collected": 1,
+   "respawn_after": 345,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_21.sav",
+   "sha256": "e6015996f8d7475217c482dc6e8e342d271147165ff9b6c5a616f8299a98d4d8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_21.npz",
+   "death_step": 253,
+   "death_floor": 1,
+   "death_px": 244,
+   "fruits_collected": 1,
+   "respawn_after": 395,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_22.sav",
+   "sha256": "b20eedfa36dba3a3298e705361b7709bb4dd8b0eb639762cb83f234e1b07c3e2",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_22.npz",
+   "death_step": 418,
+   "death_floor": 2,
+   "death_px": 180,
+   "fruits_collected": 4,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_23.sav",
+   "sha256": "88ab50c34ed014059186e915a0c45d14a1cba3ab7d356a05628c1c9d92f9b787",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_23.npz",
+   "death_step": 459,
+   "death_floor": 2,
+   "death_px": 300,
+   "fruits_collected": 4,
+   "respawn_after": 360,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_24.sav",
+   "sha256": "f959ddb46e4da06af8d76377f4ca8c01ac83d4412c297416796b2a9bd665bb34",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_24.npz",
+   "death_step": 217,
+   "death_floor": 2,
+   "death_px": 304,
+   "fruits_collected": 1,
+   "respawn_after": 342,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_25.sav",
+   "sha256": "e142269245813a68339c5d67f38495f2a6ae4b21426aae7aaeb271826c352a4a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_25.npz",
+   "death_step": 224,
+   "death_floor": 4,
+   "death_px": 196,
+   "fruits_collected": 3,
+   "respawn_after": 264,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_26.sav",
+   "sha256": "4eac3717969dff1ae8bd2c6df5addbacd187af6007dfe753d6a4f79e93142190",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_26.npz",
+   "death_step": 378,
+   "death_floor": 2,
+   "death_px": 60,
+   "fruits_collected": 4,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_27.sav",
+   "sha256": "690387fefa15ad45cc5bdd05964fbd5fd87dbf4b24030fadff36b730010f40de",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_27.npz",
+   "death_step": 447,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 4,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 1,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_28.sav",
+   "sha256": "068938af1e47bb7714bd0ac9146a1e17aaced8bfa17d76db0fa0b0ab0cceb357",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_28.npz",
+   "death_step": 215,
+   "death_floor": 3,
+   "death_px": 88,
+   "fruits_collected": 2,
+   "respawn_after": 301,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_29.sav",
+   "sha256": "a2a7db1eee3899a82b0d0e6dd5a202d757b996c7a628c3a52c0878d6ef5b88ae",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_29.npz",
+   "death_step": 284,
+   "death_floor": 1,
+   "death_px": 136,
+   "fruits_collected": 0,
+   "respawn_after": 389,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_30.sav",
+   "sha256": "9a32ba1c520559011397fc0a370e05f7572d098a32d3fbdefec5350277986cb9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_30.npz",
+   "death_step": 244,
+   "death_floor": 2,
+   "death_px": 252,
+   "fruits_collected": 1,
+   "respawn_after": 343,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 7,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_31.sav",
+   "sha256": "d91c302430760d052ac43a76252f808bc1e67bec8eb969a9ae02a02e1547b8e9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_31.npz",
+   "death_step": 388,
+   "death_floor": 2,
+   "death_px": 96,
+   "fruits_collected": 4,
+   "respawn_after": 347,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_32.sav",
+   "sha256": "91086be99f184bc0bf10a22b521c947b93b880d5f3d02e68c13e35c20d3b57dd",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_32.npz",
+   "death_step": 189,
+   "death_floor": 3,
+   "death_px": 172,
+   "fruits_collected": 2,
+   "respawn_after": 294,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_33.sav",
+   "sha256": "b58cc28cf2f240545d2c0609b990110ea288b7f7c397f4310e77efd80a70d061",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_33.npz",
+   "death_step": 401,
+   "death_floor": 2,
+   "death_px": 132,
+   "fruits_collected": 3,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_34.sav",
+   "sha256": "8f1497bd55aa0134a314450ba1d07f2b61b4df7484e356fd2a1fc4b0579d8077",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_34.npz",
+   "death_step": 400,
+   "death_floor": 2,
+   "death_px": 132,
+   "fruits_collected": 3,
+   "respawn_after": 354,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_35.sav",
+   "sha256": "ecbd753aed5dbb4cfa7dea10cc8103a0a9432cf9fd6bdf39d2a62772ff9e23c4",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_35.npz",
+   "death_step": 371,
+   "death_floor": 2,
+   "death_px": 52,
+   "fruits_collected": 4,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_36.sav",
+   "sha256": "dd6ff01176a9125561eb28d3cf88cf00977f483b5438de42d579d8053dda2e54",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_36.npz",
+   "death_step": 309,
+   "death_floor": 3,
+   "death_px": 204,
+   "fruits_collected": 3,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_37.sav",
+   "sha256": "45afe624dab0e70f95a350b823ffa0b275292224acbe55d6712a6423613e2321",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_37.npz",
+   "death_step": 229,
+   "death_floor": 4,
+   "death_px": 220,
+   "fruits_collected": 3,
+   "respawn_after": 264,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_38.sav",
+   "sha256": "cec25a4aa1902608d5686ac4ce1fb01a53a91b3f9cb4cce9edab177cb7d8a371",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_38.npz",
+   "death_step": 460,
+   "death_floor": 3,
+   "death_px": 204,
+   "fruits_collected": 3,
+   "respawn_after": 315,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_39.sav",
+   "sha256": "a9495ad5cd07e73c3232fde2c7c6c4f147d7ffb839c6c8b373114a48c7cff325",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_39.npz",
+   "death_step": 411,
+   "death_floor": 2,
+   "death_px": 168,
+   "fruits_collected": 3,
+   "respawn_after": 349,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 23,
+   "heldout": true,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_40.sav",
+   "sha256": "b3b3d9f23a457f4177734803d051f589c3fc3a2477442796b02c7d446cfb218f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_40.npz",
+   "death_step": 261,
+   "death_floor": 1,
+   "death_px": 208,
+   "fruits_collected": 1,
+   "respawn_after": 391,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_41.sav",
+   "sha256": "1941e9bc3787c42ab27045adfe8f9c81a0f711f49b55acb88278458a49a16103",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_41.npz",
+   "death_step": 306,
+   "death_floor": 3,
+   "death_px": 204,
+   "fruits_collected": 2,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_42.sav",
+   "sha256": "e5199b8480de2b24adb8af315299cae6712bbf648ee4128e48394a3f4339d817",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_42.npz",
+   "death_step": 235,
+   "death_floor": 4,
+   "death_px": 236,
+   "fruits_collected": 3,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_43.sav",
+   "sha256": "95dd1962d0e2fdd20a0c02057bd058705b47d34129fc48dd04970f26e7bdb3a4",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_43.npz",
+   "death_step": 296,
+   "death_floor": 3,
+   "death_px": 240,
+   "fruits_collected": 3,
+   "respawn_after": 312,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_44.sav",
+   "sha256": "46d862169b5df2f81ffba1904b53141d57628fba4109f74a8ec0f6aa40519259",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_44.npz",
+   "death_step": 410,
+   "death_floor": 2,
+   "death_px": 168,
+   "fruits_collected": 3,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 23,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_45.sav",
+   "sha256": "c7d95b5e220485d1f0aba93e5e368d960ac178e57d5e110fa6403fb5dafb5570",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_45.npz",
+   "death_step": 378,
+   "death_floor": 2,
+   "death_px": 60,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_46.sav",
+   "sha256": "754bc91ffa77c1bba1b1f1bd40a6158e9a4b5918557c369bedf72cb9443495b3",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_46.npz",
+   "death_step": 525,
+   "death_floor": 4,
+   "death_px": 212,
+   "fruits_collected": 4,
+   "respawn_after": 270,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 25,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_47.sav",
+   "sha256": "730349fc13531e4157819b1c0a17cfa517e77bf81d58c0774293b72460fa6dd5",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_47.npz",
+   "death_step": 187,
+   "death_floor": 3,
+   "death_px": 168,
+   "fruits_collected": 2,
+   "respawn_after": 299,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_48.sav",
+   "sha256": "10f182801b3d18a88b188a39d7109ebe108290e57fa94f882ac2d94bf406dde0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_48.npz",
+   "death_step": 308,
+   "death_floor": 3,
+   "death_px": 204,
+   "fruits_collected": 3,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_49.sav",
+   "sha256": "272b4ce637263ae6012d4a125b54a4862a0088d6b7a3f5958f779b036bebb5c7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_49.npz",
+   "death_step": 289,
+   "death_floor": 1,
+   "death_px": 132,
+   "fruits_collected": 0,
+   "respawn_after": 396,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_50.sav",
+   "sha256": "4ad4cc0befce91c875e98004a3e8da6b1f1dbbaa2f1afc695b4f9aca7331ba86",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_50.npz",
+   "death_step": 394,
+   "death_floor": 2,
+   "death_px": 108,
+   "fruits_collected": 4,
+   "respawn_after": 352,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_51.sav",
+   "sha256": "75f76b5ee8a091cbb454e252ae24fa60038b2525e77083593332b2d70149d105",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_51.npz",
+   "death_step": 220,
+   "death_floor": 2,
+   "death_px": 208,
+   "fruits_collected": 1,
+   "respawn_after": 342,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_52.sav",
+   "sha256": "76e72a89ab5f85c6462150ff9c39e5e5e37e7babc151cf46b87ba0b6bba8cbdd",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_52.npz",
+   "death_step": 213,
+   "death_floor": 4,
+   "death_px": 160,
+   "fruits_collected": 2,
+   "respawn_after": 259,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_53.sav",
+   "sha256": "49f173a2fa553223744dee632cea886e0866d4207e074571724f692bfa7d08d0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_53.npz",
+   "death_step": 309,
+   "death_floor": 3,
+   "death_px": 204,
+   "fruits_collected": 3,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_54.sav",
+   "sha256": "18366b25670d5d9aaf5e899657c2567cc1b3b35a81ad84fd5d439658a71b14cf",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_54.npz",
+   "death_step": 467,
+   "death_floor": 3,
+   "death_px": 128,
+   "fruits_collected": 4,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_55.sav",
+   "sha256": "3205a441a1d90f32ac586bde4610333f74dcb75509835d496ff712cf20fcb402",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_55.npz",
+   "death_step": 407,
+   "death_floor": 2,
+   "death_px": 148,
+   "fruits_collected": 4,
+   "respawn_after": 354,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 28,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_56.sav",
+   "sha256": "8c78228fe0924f142b61c634ac291dbb9aefe4c21bed5a24510c4c0d10660774",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_56.npz",
+   "death_step": 194,
+   "death_floor": 3,
+   "death_px": 160,
+   "fruits_collected": 2,
+   "respawn_after": 300,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_57.sav",
+   "sha256": "64a3a491f7a7cf1f9a72233889effad2dd328ac3b7bb39c0c6d718c475b0a99a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_57.npz",
+   "death_step": 379,
+   "death_floor": 2,
+   "death_px": 64,
+   "fruits_collected": 4,
+   "respawn_after": 346,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_58.sav",
+   "sha256": "dce512ef555e2cd0dac99d9545be8f1069f3027635aa428eb7af49e0b4740f14",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_58.npz",
+   "death_step": 233,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 260,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_59.sav",
+   "sha256": "8432eebfa4e53290d1b2c9bc63283773f883c9fccc730a4ec7b1d30125e2ddf9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_59.npz",
+   "death_step": 420,
+   "death_floor": 2,
+   "death_px": 192,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_60.sav",
+   "sha256": "b3e424a8aeace0d6a292efe8b445141bd8a5a32346958f216188842effe397fd",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_60.npz",
+   "death_step": 449,
+   "death_floor": 3,
+   "death_px": 164,
+   "fruits_collected": 4,
+   "respawn_after": 314,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 1,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_61.sav",
+   "sha256": "490356f58f298cc89a848eed9db656a294e344ec352f1dcb03f7ddc830c7f431",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_61.npz",
+   "death_step": 218,
+   "death_floor": 4,
+   "death_px": 176,
+   "fruits_collected": 3,
+   "respawn_after": 264,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_62.sav",
+   "sha256": "3eb80b22ba3da990dc9eadcb47e774436efadec8dbcee728bd3be5d16744bc3c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_62.npz",
+   "death_step": 408,
+   "death_floor": 2,
+   "death_px": 152,
+   "fruits_collected": 4,
+   "respawn_after": 349,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 20,
+   "heldout": true,
+   "choices_seen": 12
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_63.sav",
+   "sha256": "cf844b21671a6132e6ac89e473ba8adc0cf0e1205b1482acf19675b5c4f001dd",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_63.npz",
+   "death_step": 244,
+   "death_floor": null,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 372,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 22,
+   "heldout": false,
+   "choices_seen": 22
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_64.sav",
+   "sha256": "d47636a8125e0479dbccf3d987ae2e2a197502953157766b12bea5af88dbaa88",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_64.npz",
+   "death_step": 181,
+   "death_floor": 4,
+   "death_px": 176,
+   "fruits_collected": 2,
+   "respawn_after": 266,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_65.sav",
+   "sha256": "5a1d36413fb6cd230c8a54e36e7fb2e362304218deb6405e97755a3edd91541d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_65.npz",
+   "death_step": 202,
+   "death_floor": 3,
+   "death_px": 156,
+   "fruits_collected": 2,
+   "respawn_after": 299,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_66.sav",
+   "sha256": "5f1141e45a1ff540c771de4bacf7899aa581d59174970cd06141bb778af74b76",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_66.npz",
+   "death_step": 541,
+   "death_floor": 4,
+   "death_px": 248,
+   "fruits_collected": 4,
+   "respawn_after": 267,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 27,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_67.sav",
+   "sha256": "e0426ee344372dc2b53664799230b49312f46b41c13885e337b3db1950cc1578",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_67.npz",
+   "death_step": 236,
+   "death_floor": 4,
+   "death_px": 244,
+   "fruits_collected": 2,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_68.sav",
+   "sha256": "5666cff737ba055f1e3786bea9891042e7da9b2e7f5d1f76b43e437d685076ff",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_68.npz",
+   "death_step": 228,
+   "death_floor": 4,
+   "death_px": 220,
+   "fruits_collected": 2,
+   "respawn_after": 264,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_69.sav",
+   "sha256": "c08419be1188d800acc80d8e4d86730bfe908187191c0e178ec3abc70611f3ff",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_69.npz",
+   "death_step": 398,
+   "death_floor": 2,
+   "death_px": 120,
+   "fruits_collected": 4,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 29,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_70.sav",
+   "sha256": "4cca00ffc2f2d3c673a804e1dc96591cb7f048d4d0c656de69465fd9bf8b1e90",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_70.npz",
+   "death_step": 401,
+   "death_floor": 2,
+   "death_px": 136,
+   "fruits_collected": 4,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_71.sav",
+   "sha256": "28d84b8cec3da4596c9f5e3127defab63524b6985c9095b67660eaac80be675a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_71.npz",
+   "death_step": 251,
+   "death_floor": 1,
+   "death_px": 240,
+   "fruits_collected": 1,
+   "respawn_after": 389,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_72.sav",
+   "sha256": "c0d5fc4c5f40694c934e1c6fda613780515f78b6f0e67021328298cad9901de9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_72.npz",
+   "death_step": 293,
+   "death_floor": 3,
+   "death_px": 248,
+   "fruits_collected": 3,
+   "respawn_after": 307,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_73.sav",
+   "sha256": "a4927edd5650b254303e65ebdc09bc55850dd89ecb574ee56b9363858be4d6a2",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_73.npz",
+   "death_step": 186,
+   "death_floor": 3,
+   "death_px": 180,
+   "fruits_collected": 1,
+   "respawn_after": 304,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H3_74.sav",
+   "sha256": "fb640ee61a830e0af1beff625b9f9322aa0251c981ea2ccc9d9dff7949911f6a",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H3_74.npz",
+   "death_step": 410,
+   "death_floor": 2,
+   "death_px": 156,
+   "fruits_collected": 4,
+   "respawn_after": 355,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 20,
+   "heldout": true,
+   "choices_seen": 13
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_0.sav",
+   "sha256": "604e0a76c51d81a5243aa45eb55ed98b5af06a52f034e5b54148bc711991ddf4",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_0.npz",
+   "death_step": 194,
+   "death_floor": 2,
+   "death_px": 240,
+   "fruits_collected": 1,
+   "respawn_after": 336,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_1.sav",
+   "sha256": "1394166ca500d0226a9f7e811cdd838f9d8d6f770484b0d26f3d73f20a86b758",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_1.npz",
+   "death_step": 250,
+   "death_floor": 4,
+   "death_px": 288,
+   "fruits_collected": 3,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 7,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_2.sav",
+   "sha256": "93ddb54c47df6c14e14c924d8111cd208c64afca6edc482ba11edbe3fa0b9b26",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_2.npz",
+   "death_step": 261,
+   "death_floor": 1,
+   "death_px": 208,
+   "fruits_collected": 1,
+   "respawn_after": 390,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_3.sav",
+   "sha256": "c4f2024ef3c90963800093b24b35d3d891e5a1bb54eaae8721f64a9c5aa7acd1",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_3.npz",
+   "death_step": 208,
+   "death_floor": 2,
+   "death_px": 280,
+   "fruits_collected": 1,
+   "respawn_after": 340,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_4.sav",
+   "sha256": "3c69782b4c733fc9ec172f38e9994e3bc18f6661217cb1a354393b4e530bb332",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_4.npz",
+   "death_step": 416,
+   "death_floor": 2,
+   "death_px": 176,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_5.sav",
+   "sha256": "88290b577fbbc207dd62b346b2f9086376ccd44b695269370e7a04d7ccbe8d0c",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_5.npz",
+   "death_step": 429,
+   "death_floor": 2,
+   "death_px": 220,
+   "fruits_collected": 3,
+   "respawn_after": 357,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_6.sav",
+   "sha256": "fc26fa6f1378d108b9655ae2a5c01f6ccb1a6da04462ae0e37fdd519fb0a5591",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_6.npz",
+   "death_step": 424,
+   "death_floor": 2,
+   "death_px": 204,
+   "fruits_collected": 2,
+   "respawn_after": 357,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_7.sav",
+   "sha256": "552e42666cb6a82246a9d3571af1f509049c56aacdbac16cb73a1c70276d02ab",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_7.npz",
+   "death_step": 221,
+   "death_floor": 4,
+   "death_px": 184,
+   "fruits_collected": 3,
+   "respawn_after": 256,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_8.sav",
+   "sha256": "09ec0a26419936f525d85bd71d34583f5e9f85a6a8f5f235c61915f1d657395f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_8.npz",
+   "death_step": 350,
+   "death_floor": 2,
+   "death_px": 252,
+   "fruits_collected": 3,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 19,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_9.sav",
+   "sha256": "40d8c657a794ffef568dcacd25cdd4b790af03d6660f4c3d914dc963a769d71d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_9.npz",
+   "death_step": 188,
+   "death_floor": 3,
+   "death_px": 176,
+   "fruits_collected": 2,
+   "respawn_after": 299,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_10.sav",
+   "sha256": "7fb5b3a6712a8297fdeec4e012a61784fc2bc17c34eb23c8aba2b040df70e925",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_10.npz",
+   "death_step": 434,
+   "death_floor": 2,
+   "death_px": 228,
+   "fruits_collected": 4,
+   "respawn_after": 357,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 12,
+   "heldout": false,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_11.sav",
+   "sha256": "3f071d3ab872fca3b220ae919a592b01ac8768f5e81e5e7b198d2996bf4643c2",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_11.npz",
+   "death_step": 422,
+   "death_floor": 2,
+   "death_px": 196,
+   "fruits_collected": 3,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_12.sav",
+   "sha256": "7ab4d68a881ccd4ae9ff6462dfe0292c918f4687850b76c1f27cf1cf910b31b0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_12.npz",
+   "death_step": 420,
+   "death_floor": 2,
+   "death_px": 184,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_13.sav",
+   "sha256": "8cf2adc50c886f66c15440f6154183aabd3b651b89dec4b17198b61ba15c58ad",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_13.npz",
+   "death_step": 378,
+   "death_floor": 2,
+   "death_px": 60,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_14.sav",
+   "sha256": "2c022b94fe11f568452930e4ecbd70cd4980f117401a1cfb3cfc39d9945bc575",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_14.npz",
+   "death_step": 407,
+   "death_floor": 2,
+   "death_px": 148,
+   "fruits_collected": 4,
+   "respawn_after": 354,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 28,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_15.sav",
+   "sha256": "41c37309ecd3af93174c04b9e57d97a5c1bbcbc883a519078814cc6b45222195",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_15.npz",
+   "death_step": 388,
+   "death_floor": 2,
+   "death_px": 88,
+   "fruits_collected": 4,
+   "respawn_after": 347,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_16.sav",
+   "sha256": "3471e0a230cc38c09735b068ef387e02a11815ea5649d20ef601b5e47e31b7ba",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_16.npz",
+   "death_step": 243,
+   "death_floor": 4,
+   "death_px": 256,
+   "fruits_collected": 3,
+   "respawn_after": 256,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_17.sav",
+   "sha256": "4ee162a5b59828a370e1bd326f7743c834af7ceac1abaecbea82dd032306df30",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_17.npz",
+   "death_step": 299,
+   "death_floor": 3,
+   "death_px": 220,
+   "fruits_collected": 1,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_18.sav",
+   "sha256": "b96acdfba9ae382b50ae2c2b9b9ea36baab4690db8174eb9cc3f36828f5cc1a8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_18.npz",
+   "death_step": 307,
+   "death_floor": 3,
+   "death_px": 196,
+   "fruits_collected": 1,
+   "respawn_after": 309,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_19.sav",
+   "sha256": "8f4bfb5a76f70121db56259af28e23d7d0e5d658f520b7ef87967c662c8a9449",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_19.npz",
+   "death_step": 541,
+   "death_floor": 4,
+   "death_px": 248,
+   "fruits_collected": 4,
+   "respawn_after": 267,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 27,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_20.sav",
+   "sha256": "7d8a8f42dbd9ee6e240d4ce4ef14bb0866b54d3cfc55a8d2dd788626337e3422",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_20.npz",
+   "death_step": 189,
+   "death_floor": 3,
+   "death_px": 180,
+   "fruits_collected": 2,
+   "respawn_after": 298,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_21.sav",
+   "sha256": "b71fa1e5ae4ec719d299a7d859d17a7c42ce722c8362fb5aedcd5a8fa0242353",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_21.npz",
+   "death_step": 408,
+   "death_floor": 2,
+   "death_px": 156,
+   "fruits_collected": 3,
+   "respawn_after": 354,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 20,
+   "heldout": true,
+   "choices_seen": 12
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_22.sav",
+   "sha256": "4a686cbe02d89ff00f98af68a9e581ab5df5feed5e9175ea5bdfbdbdf721f2ac",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_22.npz",
+   "death_step": 458,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 3,
+   "respawn_after": 314,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_23.sav",
+   "sha256": "94fa8b0528ed1e4a6c506c9204ac7a9704474f12abc5ee14af250ccea60264a0",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_23.npz",
+   "death_step": 415,
+   "death_floor": 2,
+   "death_px": 184,
+   "fruits_collected": 2,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_24.sav",
+   "sha256": "b20ca86de9eb71dca4b1ec6c67b8974b4b9de5ca25d8ebe2382231ce19a7a3a4",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_24.npz",
+   "death_step": 233,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_25.sav",
+   "sha256": "3b807e5d157645033f81a8083ee84d632a91c9839817f2709c5706c534611106",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_25.npz",
+   "death_step": 435,
+   "death_floor": 2,
+   "death_px": 228,
+   "fruits_collected": 4,
+   "respawn_after": 357,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 12,
+   "heldout": false,
+   "choices_seen": 11
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_26.sav",
+   "sha256": "4b71fe1047c7c44095c33fdfee1bd1a92a62e477d3eef2544796716aa962a066",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_26.npz",
+   "death_step": 344,
+   "death_floor": 2,
+   "death_px": 236,
+   "fruits_collected": 3,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 19,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_27.sav",
+   "sha256": "71218efe84a13990f4954aaf7d70e88da4dbc9e234776514597dc80a5bfb51d6",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_27.npz",
+   "death_step": 316,
+   "death_floor": 1,
+   "death_px": 8,
+   "fruits_collected": 1,
+   "respawn_after": 381,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 30,
+   "heldout": false,
+   "choices_seen": 13
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_28.sav",
+   "sha256": "42fb0b621e7b893b1a213a0101f39ea65499add387e241decce6e761e0464818",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_28.npz",
+   "death_step": 463,
+   "death_floor": 3,
+   "death_px": 196,
+   "fruits_collected": 4,
+   "respawn_after": 314,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_29.sav",
+   "sha256": "f2d30f4a786918c3beb46e53b96d30201a2827bccd884b4cbf9335019a34f19d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_29.npz",
+   "death_step": 236,
+   "death_floor": 4,
+   "death_px": 248,
+   "fruits_collected": 2,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 6,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_30.sav",
+   "sha256": "544f500b0294d33166e7e725f54b9f77e36bff18fc632506b19b04a25e68ecab",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_30.npz",
+   "death_step": 232,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 2,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_31.sav",
+   "sha256": "c37b179ad1bf4a25218d604cf40b3584280a27a3d9f7d74021590888cd0a6766",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_31.npz",
+   "death_step": 422,
+   "death_floor": 2,
+   "death_px": 192,
+   "fruits_collected": 4,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_32.sav",
+   "sha256": "83e2ddb121e6ab31e8360768592cfe7727f7ce039c2434fa29f72354f3adda2b",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_32.npz",
+   "death_step": 226,
+   "death_floor": 4,
+   "death_px": 192,
+   "fruits_collected": 3,
+   "respawn_after": 255,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_33.sav",
+   "sha256": "0be6f003cc0f8597b0136bfd6e87aa3b35c9bc4032a454ad453acc9f5e5bb418",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_33.npz",
+   "death_step": 103,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 370,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 21,
+   "heldout": false,
+   "choices_seen": 18
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_34.sav",
+   "sha256": "d961cb9fe6f2feaba2614cc0f72910dd76997602efdfc3341bc58db564cbf429",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_34.npz",
+   "death_step": 391,
+   "death_floor": 2,
+   "death_px": 104,
+   "fruits_collected": 4,
+   "respawn_after": 347,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_35.sav",
+   "sha256": "0c0b442932cf991ec2182c474d161d6e833c9e67c13f1f1343b1626431d59159",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_35.npz",
+   "death_step": 481,
+   "death_floor": 4,
+   "death_px": 176,
+   "fruits_collected": 4,
+   "respawn_after": 267,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_36.sav",
+   "sha256": "d03939ce59ad735099a161df8300cb870cafe2b4251ad5aa63bbc754a5889545",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_36.npz",
+   "death_step": 404,
+   "death_floor": 2,
+   "death_px": 140,
+   "fruits_collected": 4,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_37.sav",
+   "sha256": "caac747b6cc88aba2bb3e462b1d1aa4241fbe412b7253caa0dfbf17b36814700",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_37.npz",
+   "death_step": 261,
+   "death_floor": 1,
+   "death_px": 220,
+   "fruits_collected": 1,
+   "respawn_after": 395,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_38.sav",
+   "sha256": "9dfee5db230f8a2474561ba315f74cdd3755dd194ca53005170447322834963f",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_38.npz",
+   "death_step": 305,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 3,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_39.sav",
+   "sha256": "a00ed0048ca009eb98ba44a4137b151982f629f1d672fb74b4c1d5a9300831cb",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_39.npz",
+   "death_step": 285,
+   "death_floor": 3,
+   "death_px": 276,
+   "fruits_collected": 3,
+   "respawn_after": 310,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_40.sav",
+   "sha256": "333a789767b03102a3c198f837a3545847dba4ef10d078e43567342ad04dc6b1",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_40.npz",
+   "death_step": 253,
+   "death_floor": 1,
+   "death_px": 244,
+   "fruits_collected": 1,
+   "respawn_after": 394,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 23
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_41.sav",
+   "sha256": "4a9ea101ffee42b8d840cb3a540d76360000a36639da6deb6f61d180f01260f1",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_41.npz",
+   "death_step": 312,
+   "death_floor": 3,
+   "death_px": 184,
+   "fruits_collected": 2,
+   "respawn_after": 305,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_42.sav",
+   "sha256": "7a146e6489149c6027d2fcc528465b11d8e1675465aeb5140fb604aaa2e5607d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_42.npz",
+   "death_step": 274,
+   "death_floor": 1,
+   "death_px": 168,
+   "fruits_collected": 0,
+   "respawn_after": 390,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 14,
+   "heldout": true,
+   "choices_seen": 8
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_43.sav",
+   "sha256": "83441cacc6120f0f6b4d9b4a3c59293a7b9b07029d585aa3597dd1e638e45826",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_43.npz",
+   "death_step": 405,
+   "death_floor": 2,
+   "death_px": 144,
+   "fruits_collected": 4,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_44.sav",
+   "sha256": "640097b5969e3033f13a36f0b4cd109cdcf858c8fde236c063f7142bd0c08bbb",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_44.npz",
+   "death_step": 457,
+   "death_floor": 3,
+   "death_px": 212,
+   "fruits_collected": 4,
+   "respawn_after": 314,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_45.sav",
+   "sha256": "14f2178831e64dcba873b49b3a06187d10dfd60809df6e3a031d4c31a51a9ffa",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_45.npz",
+   "death_step": 394,
+   "death_floor": 2,
+   "death_px": 112,
+   "fruits_collected": 2,
+   "respawn_after": 348,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 0,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_46.sav",
+   "sha256": "2ff23d54a5540745846f59fadcd1434e008adf0bd1bb4fd307f332639d55a661",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_46.npz",
+   "death_step": 457,
+   "death_floor": 2,
+   "death_px": 292,
+   "fruits_collected": 4,
+   "respawn_after": 358,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_47.sav",
+   "sha256": "585d0c6ccce04e58297303e27c365722b566b2a96e62a9a6e98c2e57cf165bb2",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_47.npz",
+   "death_step": 428,
+   "death_floor": 2,
+   "death_px": 204,
+   "fruits_collected": 4,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_48.sav",
+   "sha256": "445e1b69ed21aceb9487974ece5ac6f7c231ec74f14b3b9d5845fd249831f0e8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_48.npz",
+   "death_step": 184,
+   "death_floor": 3,
+   "death_px": 176,
+   "fruits_collected": 2,
+   "respawn_after": 290,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 18,
+   "heldout": false,
+   "choices_seen": 14
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_49.sav",
+   "sha256": "c67fa2ca7af6b009b9f592103a48c19f53063e561626412ae3bf30040c0ae305",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_49.npz",
+   "death_step": 427,
+   "death_floor": 2,
+   "death_px": 204,
+   "fruits_collected": 4,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_50.sav",
+   "sha256": "8de5b2f481233c817bf57ce15aa091ad4bbffcd4fb5fe178fbd0f90c7d156408",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_50.npz",
+   "death_step": 251,
+   "death_floor": 1,
+   "death_px": 240,
+   "fruits_collected": 1,
+   "respawn_after": 389,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 3,
+   "heldout": false,
+   "choices_seen": 24
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_51.sav",
+   "sha256": "1b9c47475f84eaa84f3d9f83c15912413b6a8682278321f3c344e47897093aa5",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_51.npz",
+   "death_step": 186,
+   "death_floor": 3,
+   "death_px": 236,
+   "fruits_collected": 1,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 24,
+   "heldout": false,
+   "choices_seen": 19
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_52.sav",
+   "sha256": "df289f358bc9b6d5c0eabee7914b453d2ece6241d9d118c9003071eb32cbb4c8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_52.npz",
+   "death_step": 460,
+   "death_floor": 3,
+   "death_px": 148,
+   "fruits_collected": 4,
+   "respawn_after": 315,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_53.sav",
+   "sha256": "d77c580678b0f52f4611429d02df2bec92ccecf1ce49b351680ae6bea81a1144",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_53.npz",
+   "death_step": 415,
+   "death_floor": 2,
+   "death_px": 184,
+   "fruits_collected": 3,
+   "respawn_after": 350,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_54.sav",
+   "sha256": "f7e25baf3139b50669338e862f7bb3f37d8a2d47464fc6bc55cf63975bb7f195",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_54.npz",
+   "death_step": 443,
+   "death_floor": 2,
+   "death_px": 252,
+   "fruits_collected": 4,
+   "respawn_after": 358,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_55.sav",
+   "sha256": "ec0470eaac8d72a9ed71d5ff84301d8d3836afd9349b9fae66318128f2bdf6b8",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_55.npz",
+   "death_step": 423,
+   "death_floor": 2,
+   "death_px": 196,
+   "fruits_collected": 4,
+   "respawn_after": 357,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_56.sav",
+   "sha256": "c220acf15e490fa1cc37240506647f7bf039a29103a17563e58e4cf9d57a2461",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_56.npz",
+   "death_step": 444,
+   "death_floor": 2,
+   "death_px": 252,
+   "fruits_collected": 3,
+   "respawn_after": 358,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_57.sav",
+   "sha256": "c9fa8827a511e38161dd8da54812f4e570c2904a9e4e86f16a056ab748073b63",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_57.npz",
+   "death_step": 420,
+   "death_floor": 2,
+   "death_px": 188,
+   "fruits_collected": 4,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_58.sav",
+   "sha256": "4b45b7be695f3cc91da34a25499709810d068da67de18cbed7e7989b7e7fb064",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_58.npz",
+   "death_step": 226,
+   "death_floor": 1,
+   "death_px": 312,
+   "fruits_collected": 1,
+   "respawn_after": 384,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 7,
+   "heldout": false,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_59.sav",
+   "sha256": "5c1c8502ce8ba7759b9f2e63c28f3703200f1c0d23eb5c2b3b2f4bbb42b5e6c7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_59.npz",
+   "death_step": 427,
+   "death_floor": 2,
+   "death_px": 204,
+   "fruits_collected": 4,
+   "respawn_after": 356,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_60.sav",
+   "sha256": "d5870e93235e67619b471e29bd73da368cd5fd9d5584adad206f8b1702700285",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_60.npz",
+   "death_step": 213,
+   "death_floor": 3,
+   "death_px": 100,
+   "fruits_collected": 2,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_61.sav",
+   "sha256": "9553f4665426da634e50b9ba0b89f536df290cfea5d3bf614fb75640e3fa66b7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_61.npz",
+   "death_step": 420,
+   "death_floor": 2,
+   "death_px": 192,
+   "fruits_collected": 4,
+   "respawn_after": 351,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_62.sav",
+   "sha256": "86616e55bc3e4c31f1d084b723c61516f4353a1e4af1170bd558a8051772a159",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_62.npz",
+   "death_step": 215,
+   "death_floor": 3,
+   "death_px": 88,
+   "fruits_collected": 2,
+   "respawn_after": 301,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_63.sav",
+   "sha256": "bbb30d384a86dde5745be7d35da11e15efbdd959406278678bc3465b15bdbde6",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_63.npz",
+   "death_step": 232,
+   "death_floor": 4,
+   "death_px": 232,
+   "fruits_collected": 3,
+   "respawn_after": 261,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_64.sav",
+   "sha256": "bde8c90d6df9c6e084406b77fbf14f0dc13f1e43e23cc4518051b4ba33e1d8e4",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_64.npz",
+   "death_step": 403,
+   "death_floor": 2,
+   "death_px": 140,
+   "fruits_collected": 3,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_65.sav",
+   "sha256": "92d00ed595ba941c06dc675257274683f97072b6b637a74dcf820ff3d348eb91",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_65.npz",
+   "death_step": 238,
+   "death_floor": 1,
+   "death_px": 288,
+   "fruits_collected": 1,
+   "respawn_after": 385,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 22,
+   "heldout": false,
+   "choices_seen": 22
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_66.sav",
+   "sha256": "006360d5c0633de211d139b6e2e34e98f8b8de716e9b60489314f1b949a681c7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_66.npz",
+   "death_step": 481,
+   "death_floor": 4,
+   "death_px": 176,
+   "fruits_collected": 4,
+   "respawn_after": 266,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_67.sav",
+   "sha256": "43863bd01ddbf39072c8a78299f64471ce51e5ccfe9868e969c8993b9aea67b9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_67.npz",
+   "death_step": 460,
+   "death_floor": 3,
+   "death_px": 200,
+   "fruits_collected": 4,
+   "respawn_after": 311,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 11,
+   "heldout": true,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_68.sav",
+   "sha256": "a8461f21739c2a06b2569883b7d102cccebffab6e7bd693727b9b4f85a86105e",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_68.npz",
+   "death_step": 170,
+   "death_floor": 4,
+   "death_px": 140,
+   "fruits_collected": 2,
+   "respawn_after": 263,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 16,
+   "heldout": false,
+   "choices_seen": 20
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_69.sav",
+   "sha256": "a4f05d2806217e05f2d3ef05b74bcb0f88b4be965b9a8333d4cbd621b03f3e49",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_69.npz",
+   "death_step": 190,
+   "death_floor": 3,
+   "death_px": 228,
+   "fruits_collected": 2,
+   "respawn_after": 303,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 15,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_70.sav",
+   "sha256": "0d991ce2725f2cc1badbca50ab3836e80d744fbb94155a12c8555e8592dfa8b7",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_70.npz",
+   "death_step": 194,
+   "death_floor": 3,
+   "death_px": 156,
+   "fruits_collected": 2,
+   "respawn_after": 305,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 2,
+   "heldout": true,
+   "choices_seen": 17
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_71.sav",
+   "sha256": "bda8a5902d39eca7503357c6f50ff009d072a76f90b3ade7e9564d66b5b8f784",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_71.npz",
+   "death_step": 400,
+   "death_floor": 2,
+   "death_px": 132,
+   "fruits_collected": 3,
+   "respawn_after": 353,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 17,
+   "heldout": true,
+   "choices_seen": 10
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_72.sav",
+   "sha256": "b1ba5302d577a751b7a373e306e0a316d5bb3557c81f9148b15b9e9ecfcebfe9",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_72.npz",
+   "death_step": 428,
+   "death_floor": 3,
+   "death_px": 300,
+   "fruits_collected": 4,
+   "respawn_after": 312,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 13,
+   "heldout": false,
+   "choices_seen": 16
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_73.sav",
+   "sha256": "6f43f56c95b3665a599e335f0c3cc8c4648c227315cf8718f2b470fe8bbbc77d",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_73.npz",
+   "death_step": 316,
+   "death_floor": 3,
+   "death_px": 176,
+   "fruits_collected": 3,
+   "respawn_after": 306,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 999,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 4,
+   "heldout": false,
+   "choices_seen": 15
+  },
+  {
+   "path": "output/mo5/yeti/respawns/l1_r1/states/H4_74.sav",
+   "sha256": "f4fd365b596794fee67005b30556cdaca8a1c83ce54fd3c70c8e4451fb01c9b2",
+   "signature": "output/mo5/yeti/respawns/l1_r1/sig/H4_74.npz",
+   "death_step": 440,
+   "death_floor": 3,
+   "death_px": 260,
+   "fruits_collected": 3,
+   "respawn_after": 314,
+   "at_respawn": {
+    "lives": 4,
+    "bonus": 1000,
+    "fruits_left": 4
+   },
+   "bonus_ticks": true,
+   "sequence": 12,
+   "heldout": false,
+   "choices_seen": 11
+  }
+ ]
+}
