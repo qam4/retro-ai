@@ -182,7 +182,9 @@ def _eval_snapshot(
     )
 
 
-def _eval_snapshot_registry(model_path, episodes, device, tmp_json, config, level):
+def _eval_snapshot_registry(
+    model_path, episodes, device, tmp_json, config, level, pool=None
+):
     """``_eval_snapshot`` for --config mode: every setting from the run config and the
     registry (eval_from_reset.py --config), none typed here.
 
@@ -204,6 +206,8 @@ def _eval_snapshot_registry(model_path, episodes, device, tmp_json, config, leve
         "--out",
         tmp_json,
     ]
+    if pool:
+        cmd += ["--start-pool", pool, "--pool-split", "heldout"]
     env = dict(os.environ)
     if device == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""
@@ -367,8 +371,26 @@ def _registry_plan(config_path):
             )
         s = registry.config_eval_settings(cfg, n)
         route = list(getattr(get_level_map(s.layout), "route_order", None) or [])
-        plan.append((n, s, route))
+        plan.append((n, s, route, None))
+    # A run with a root pool is also scored on the pool's HELD-OUT snowball sequences,
+    # which it never trains on: the "does it react?" number beside the level start's.
+    pool_path = getattr(cfg.curriculum, "root_pool", None)
+    if pool_path:
+        from retro_ai.training import root_pool
+
+        pool = root_pool.load(pool_path, "heldout")
+        base = next((e for e in plan if e[0] == pool.game_level), None)
+        if base is None:
+            raise SystemExit(
+                f"root pool {pool_path} is for game level {pool.game_level}, not "
+                f"one of the run's levels {levels}"
+            )
+        plan.append((pool.game_level, base[1], base[2], pool_path))
     return registry, cfg, plan
+
+
+def _entry_key(n, pool) -> str:
+    return f"{n}" if pool is None else f"{n}-heldout"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -482,11 +504,14 @@ def main() -> None:
                 f"registry; do not pass {'it' if len(clash) == 1 else 'them'} as well"
             )
         registry, _cfg, plan = _registry_plan(args.config)
-        for n, s, route in plan:
-            champ = registry.champions.get(n)
+        for n, s, route, pool in plan:
+            champ = registry.champions.get(n) if pool is None else None
+            start = s.start_state or "reset"
+            if pool is not None:
+                start = f"held-out respawns of {pool}"
             print(
-                f"[keep-best] level {n}: layout {s.layout}, start "
-                f"{s.start_state or 'reset'}, profile {s.env.profile}, stop "
+                f"[keep-best] level {_entry_key(n, pool)}: layout {s.layout}, start "
+                f"{start}, profile {s.env.profile}, stop "
                 f"{s.env.max_steps}/{s.env.stall_threshold}, resize "
                 f"{s.env.resize_mode}, reach {s.reach_mode}, route "
                 f"{len(route) or 'ladder'}, champion "
@@ -551,6 +576,7 @@ def main() -> None:
                         (
                             n,
                             route,
+                            pool,
                             _eval_snapshot_registry(
                                 path,
                                 args.episodes,
@@ -558,12 +584,13 @@ def main() -> None:
                                 tmp_json,
                                 args.config,
                                 n,
+                                pool,
                             ),
                         )
-                        for n, _s, route in plan
+                        for n, _s, route, pool in plan
                     ]
                     princess, reach_top, mean_rung, n_rungs, rates = level_results[0][
-                        2
+                        3
                     ][:5]
                 else:
                     princess, reach_top, mean_rung, n_rungs, rates = _eval_snapshot(
@@ -607,6 +634,7 @@ def main() -> None:
             # progress ladder. Identical to before wherever a route order exists, so
             # L3/L4 scores stay comparable.
             route = _frontier_route(plan[0][2] if plan else route_order, n_rungs)
+            # (plan entries are (game level, settings, route, root pool or None))
             fwid, frate = _frontier(rates, route)
             fdepth = (route.index(fwid) + 1) / len(route) if (fwid and route) else 0.0
             score = (
@@ -630,7 +658,7 @@ def main() -> None:
             if plan:
                 from retro_ai.training.yeti_registry import regressed_against
 
-                for n, lroute, res in level_results:
+                for n, lroute, lpool, res in level_results:
                     lp, lr, lm, ln, lrates, lk, leps, lnative = res
                     rec = _score_level(
                         lp, lr, lm, ln, lrates, _frontier_route(lroute, ln)
@@ -638,7 +666,9 @@ def main() -> None:
                     rec.update(
                         princess_touches=lk, episodes=leps, native_sha256=lnative
                     )
-                    champ = registry.champions.get(n)
+                    # A champion's rate was measured at the level start; a held-out
+                    # pool entry is another measurement and has none to fall below.
+                    champ = registry.champions.get(n) if lpool is None else None
                     if multi and champ:
                         key = (n, lnative)
                         if key not in champion_ref:
@@ -649,7 +679,7 @@ def main() -> None:
                         rec["champion_regressed"] = bad
                         if bad:
                             champion_regressed.append(n)
-                    levels_out[str(n)] = rec
+                    levels_out[_entry_key(n, lpool)] = rec
                 if multi:
                     score = sum(r["score"] for r in levels_out.values()) / len(
                         levels_out

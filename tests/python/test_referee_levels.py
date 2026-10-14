@@ -51,7 +51,7 @@ def test_a_plain_run_is_scored_on_its_own_level(ref):
     _reg, _cfg, plan = ref._registry_plan(
         str(_CFG / "yeti_curriculum_l4_v30_blockmax_cold_15m.yaml")
     )
-    assert [n for n, _s, _r in plan] == [4]
+    assert [(n, pool) for n, _s, _r, pool in plan] == [(4, None)]
     s = plan[0][1]
     assert s.start_state == "output/mo5/yeti/level4/level4_start.sav"
     assert (s.env.resize_mode, s.reach_mode) == ("max", "sprite")
@@ -63,7 +63,7 @@ def test_a_grouped_run_is_scored_on_every_group(ref, tmp_path):
         tmp_path, "yeti_curriculum_l1_v17_v30recipe_cold_10m.yaml", start_groups=[1, 5]
     )
     registry, _cfg, plan = ref._registry_plan(cfg)
-    assert [n for n, _s, _r in plan] == [1, 5]
+    assert [n for n, _s, _r, _pool in plan] == [1, 5]
     assert plan[1][1].start_state == "output/mo5/yeti/level5/level5_start.sav"
     assert registry.champions.get(1) == "l1_v17" and registry.champions.get(5) is None
 

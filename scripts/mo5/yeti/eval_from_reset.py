@@ -141,6 +141,21 @@ def build_parser() -> argparse.ArgumentParser:
         "same hand-typed flags --policy does, except --model.",
     )
     p.add_argument(
+        "--start-pool",
+        default=None,
+        help="respawn-harvest manifest (scripts/mo5/yeti/harvest_respawns.py). Each "
+        "episode starts from a state drawn from it, uniform over snowball sequences "
+        "then states, instead of the level start. Needs --policy or --config with "
+        "--game-level equal to the manifest's.",
+    )
+    p.add_argument(
+        "--pool-split",
+        default="heldout",
+        choices=["heldout", "train", "all"],
+        help="which sequences of --start-pool to draw from (default: the held-out "
+        "ones, never trained on)",
+    )
+    p.add_argument(
         "--seed",
         type=int,
         default=None,
@@ -256,13 +271,39 @@ def main() -> None:
     if seed is None and settings is not None:
         seed = secrets.randbits(31)
 
+    # Respawn starts instead of the level start (see retro_ai.training.root_pool).
+    pool = None
+    if args.start_pool:
+        from retro_ai.training import root_pool
+
+        if settings is None:
+            raise SystemExit(
+                "--start-pool needs --policy or --config with --game-level"
+            )
+        pool = root_pool.load(args.start_pool, args.pool_split)
+        if pool.game_level != args.game_level or pool.layout != settings.layout:
+            raise SystemExit(
+                f"{args.start_pool} is for game level {pool.game_level} (layout "
+                f"{pool.layout}), not --game-level {args.game_level} (layout "
+                f"{settings.layout})"
+            )
+        print(f"start pool: {root_pool.describe(pool)}", flush=True)
+
     out_path = args.out
     if registered:
         out = (
             Path(args.out)
             if args.out
             else registry.default_result_path(
-                args.policy, args.game_level, args.episodes, seed
+                args.policy,
+                args.game_level,
+                args.episodes,
+                seed,
+                pool_tag=(
+                    f"pool-{Path(args.start_pool).stem}-{args.pool_split}"
+                    if pool is not None
+                    else None
+                ),
             )
         )
         if out.exists():
@@ -314,6 +355,9 @@ def main() -> None:
 
     level = args.level if args.level is not None else (2 if start_state_bytes else 1)
     track = not args.no_depth
+    # Drawn with the seeded `random`, after the seeding above, so a seed repeats the
+    # same starts as well as the same actions.
+    pool_rng = random.Random(seed)
 
     rows = []
     max_cp_counts: Counter[int] = Counter()
@@ -325,12 +369,15 @@ def main() -> None:
         # Shared rollout harness: identical termination (princess -> death via
         # 0x2AFC -> stall -> env done -> max_steps) and CP tracking for all
         # eval/analysis scripts. Level 2 boots from a save-state.
+        ep_start, ep_start_path = start_state_bytes, None
+        if pool is not None:
+            ep_start_path, ep_start = pool.draw(pool_rng)
         result = rollout_episode(
             stack,
             model,
             level=level,
             fruits_total=fruits_total,
-            start_state=start_state_bytes,
+            start_state=ep_start,
             max_steps=args.max_steps,
             stall_threshold=args.stall_threshold,
             deterministic=deterministic,
@@ -354,6 +401,7 @@ def main() -> None:
                 "final_x": result.final_x,
                 "final_y": result.final_y,
                 "reached_points": sorted(result.reached_points),
+                **({"start": ep_start_path} if pool is not None else {}),
             }
         )
         if (ep + 1) % 25 == 0:
@@ -418,6 +466,16 @@ def main() -> None:
             )
         elif settings is not None:
             provenance.update(game_level=args.game_level, config=args.config)
+        if pool is not None:
+            # A pooled result is a DIFFERENT measurement from the level start's; the
+            # registry keeps the two apart by these keys (Registry.results).
+            provenance.update(
+                start_pool=args.start_pool,
+                start_pool_sha256=pool.manifest_sha256,
+                pool_split=args.pool_split,
+                pool_sequences=len(pool.sequences),
+                pool_states=pool.n_states,
+            )
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(
                 {

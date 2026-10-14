@@ -1321,7 +1321,7 @@ class StartGroup:
     up there at class creation, so the whole module failed to import.
     """
 
-    __slots__ = ("name", "manager", "start_bytes", "pool_file")
+    __slots__ = ("name", "manager", "start_bytes", "pool_file", "roots")
 
     def __init__(
         self,
@@ -1334,6 +1334,20 @@ class StartGroup:
         self.manager = manager
         self.start_bytes = start_bytes  # the level start; None = game reset
         self.pool_file = pool_file  # basename of this group's pool file
+        # LEVEL STARTS, grouped by snowball sequence: [[start_bytes]] unless a root pool
+        # adds respawn states (curriculum.root_pool), one inner list per sequence.
+        self.roots: List[List[Optional[bytes]]] = [[start_bytes]]
+
+    def pick_root(self) -> Optional[bytes]:
+        """The level start for an episode starting at rung 0.
+
+        Uniform over snowball sequences, then over that sequence's states. With no root
+        pool there is one start and NO random draw, so such a run's random stream is
+        unchanged.
+        """
+        if len(self.roots) == 1 and len(self.roots[0]) == 1:
+            return self.roots[0][0]
+        return random.choice(random.choice(self.roots))
 
 
 _groups: List[StartGroup] = []
@@ -1648,7 +1662,6 @@ class CheckpointCurriculumEnv(gym.Env):
         group = _groups[_pick_group()] if _groups else None
         self._mgr = group.manager if group is not None else _manager
         self._group_name = group.name if group is not None else ""
-        root_bytes = group.start_bytes if group is not None else self._start_state_bytes
         level, state_bytes, start_stack, inherited_wps = self._mgr.pick_start()
         # A waypoint start returns a str id; remember it so (a) episode-end
         # record_episode credits the WP pool, and (b) we don't re-capture the
@@ -1667,12 +1680,16 @@ class CheckpointCurriculumEnv(gym.Env):
         # excludes the seed WP + already-captured); here we want every reach.
         self._reached_wps_this_ep: set = set()
 
-        if state_bytes is None and root_bytes is not None:
-            # CP0 for a level that boots from a save-state rather than a
-            # fresh game reset (level 2 starts from level2_start.sav, and an L5
-            # group from level5_start.sav). The file-based start carries no frame
-            # stack -> reseed fallback.
-            state_bytes = root_bytes
+        if state_bytes is None:
+            # CP0: the level start. Either the game reset (None), a level's save
+            # (level 2 starts from level2_start.sav, an L5 group from
+            # level5_start.sav), or with a root pool one of its respawn states. A
+            # file-based start carries no frame stack -> reseed fallback.
+            root_bytes = (
+                group.pick_root() if group is not None else self._start_state_bytes
+            )
+            if root_bytes is not None:
+                state_bytes = root_bytes
 
         if state_bytes is not None:
             self.base._interface.load_state(state_bytes)
@@ -2310,6 +2327,48 @@ def _start_group_specs(cfg) -> List[Tuple[str, Optional[str]]]:
     return out
 
 
+def _attach_root_pool(cfg, groups, specs) -> str:
+    """Add ``curriculum.root_pool``'s TRAIN states to the level starts of the group
+    whose game level the manifest is for. Returns a log line ("" with no root pool).
+
+    The group is found by game level: a named group "L<n>", or for a run without start
+    groups its own level (resolved through the registry). A manifest for a level the run
+    does not train on is refused, as is one whose layout differs from the run's reward
+    layout: its states would be trained under another level's reward geometry.
+    """
+    path = getattr(cfg.curriculum, "root_pool", None)
+    if not path:
+        return ""
+    from retro_ai.training import root_pool
+    from retro_ai.training.yeti_registry import Registry
+
+    pool = root_pool.load(path, "train")
+    if pool.layout != _level_of(cfg):
+        raise SystemExit(
+            f"root pool {path} is for layout {pool.layout}; this run's reward uses "
+            f"layout {_level_of(cfg)}"
+        )
+    names = [n for n, _s in specs]
+    if names == [""]:
+        own = Registry.load().training_level_of(cfg)
+        target = groups[0] if pool.game_level == own else None
+    else:
+        target = next((g for g in groups if g.name == f"L{pool.game_level}"), None)
+    if target is None:
+        raise SystemExit(
+            f"root pool {path} is for game level {pool.game_level}, which this run "
+            f"does not train on (groups: {names})"
+        )
+    target.roots = [[target.start_bytes]] + [
+        [body for _p, body in pool.sequences[k]] for k in sorted(pool.sequences)
+    ]
+    gname = target.name or f"L{pool.game_level}"
+    return (
+        f"{root_pool.describe(pool)} -> group {gname}, {len(target.roots)} "
+        "level-start sequences (the plain start is one)"
+    )
+
+
 def _make_manager(cfg, ladder_groups, ladder_rungs) -> CheckpointManager:
     """A CheckpointManager for one start group, configured from the run config."""
     mgr = CheckpointManager(
@@ -2796,7 +2855,11 @@ def train(cfg: RunConfig, config_path: Optional[str] = None) -> None:
             )
         )
 
+    _root_pool_line = _attach_root_pool(cfg, _groups, _specs)
+
     print("Checkpoint Curriculum Training", flush=True)
+    if _root_pool_line:
+        print(f"  Root pool: {_root_pool_line}", flush=True)
     if len(_groups) > 1:
         print(
             "  Start groups: "

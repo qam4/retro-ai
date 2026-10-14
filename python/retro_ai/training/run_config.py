@@ -483,6 +483,21 @@ class CurriculumConfig:
     # count and stop rules, which the trainer checks against the registry: one
     # reward and one environment serve all groups. L1 and L5 qualify.
     start_groups: List[int] = field(default_factory=list)
+    # ROOT POOL: extra LEVEL STARTS for one game level, from a respawn-harvest manifest
+    # (scripts/mo5/yeti/harvest_respawns.py; see retro_ai.training.root_pool).
+    #
+    # A level start always plays the same snowball sequence, and a policy trained only
+    # there memorises it: l1_v17 scores 215/300 from L1's reset and 0/330 from respawns
+    # with other sequences. With a root pool, every episode that starts at the level
+    # start draws one: uniform over snowball SEQUENCES (the plain level start is one of
+    # them), then over that sequence's states. Episodes from a pool state count as
+    # level-start episodes everywhere -- reset reach, the rung-0 goal score, waypoint
+    # reach -- since a respawn is the level from the top with nothing collected.
+    #
+    # Only the manifest's TRAIN split is used; the held-out sequences are for scoring
+    # (eval_from_reset.py --start-pool, and the referee). The manifest's game level must
+    # be one of the run's (its start groups, else its own level). None = off.
+    root_pool: Optional[str] = None
 
 
 @dataclass(frozen=True)

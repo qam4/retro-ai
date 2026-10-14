@@ -320,22 +320,38 @@ class Registry:
         return self._settings(cfg, game_level, str(reach))
 
     def default_result_path(
-        self, policy_id: str, game_level: int, episodes: int, seed: int
+        self,
+        policy_id: str,
+        game_level: int,
+        episodes: int,
+        seed: int,
+        pool_tag: Optional[str] = None,
     ) -> Path:
+        tag = f"_{pool_tag}" if pool_tag else ""
         return (
             self.results_dir
             / policy_id
-            / f"level{int(game_level)}_{int(episodes)}ep_seed{int(seed)}.json"
+            / f"level{int(game_level)}{tag}_{int(episodes)}ep_seed{int(seed)}.json"
         )
 
     # --- results -----------------------------------------------------------------
 
-    def results(self, policy_id: str, game_level: Optional[int] = None) -> List[Result]:
+    def results(
+        self,
+        policy_id: str,
+        game_level: Optional[int] = None,
+        start_pool: Optional[str] = None,
+        pool_split: Optional[str] = None,
+    ) -> List[Result]:
         """Stochastic results for ``policy_id`` read from its result files.
 
         Only files the registry-driven evaluator wrote are accepted: they name the
         policy and game level and carry the model hash, which must match the
         registry's (a result for a different model is not this policy's result).
+
+        Results from the level start and from a respawn pool (``--start-pool``) are
+        different measurements and are never mixed: by default only level-start results
+        are returned; pass ``start_pool`` and ``pool_split`` for a pool's.
         """
         pol = self.policy(policy_id)
         out: List[Result] = []
@@ -350,6 +366,8 @@ class Registry:
             if d.get("model_sha256") != pol.model_sha256 or d.get("deterministic"):
                 continue
             if game_level is not None and int(d["game_level"]) != int(game_level):
+                continue
+            if d.get("start_pool") != start_pool or d.get("pool_split") != pool_split:
                 continue
             try:
                 shown = str(path.relative_to(self.repo))
