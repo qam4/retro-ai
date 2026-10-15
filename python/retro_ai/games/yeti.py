@@ -3,10 +3,11 @@ sprite poses, per-level data, and death detection.
 
 Before this module these facts were re-declared in ~20 scripts, and some
 copies drifted into bugs — most importantly, lives-based death detection
-(``lives < prev_lives``) is copy-pasted across the eval/profile/render
-scripts but the lives byte is INERT on level 2, so those all silently miss
-L2 deaths. The authoritative death signal is the cause-agnostic 0x2AFC flag
-(validated on L1 ladder/jump/snowball + L2 falls); use :func:`is_dead`.
+(``lives < prev_lives``), copy-pasted across trainers and scripts, can never
+fire: the lives byte does not move at the death frame on any level. The death
+signal is the cause-agnostic 0x2AFC flag (validated on L1 ladder/jump/snowball +
+L2 falls); use :func:`is_dead`. Every trainer, script and game profile uses it,
+level 1 included (tests/python/test_yeti_profiles.py).
 
 Scope note: the navigation graph and pixel-y -> floor mapping still live in
 ``retro_ai.training.yeti_map`` (imported by the nav/reward code). They should

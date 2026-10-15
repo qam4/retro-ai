@@ -247,7 +247,6 @@ def _run_episode(
         return {k: iface.read_ram_byte(a) != 0 for k, a in L2_FRUIT_PRESENCE.items()}
 
     start_present = present()
-    prev_lives = iface.read_ram_byte(LIVES_ADDR)
     max_y = y()
     deepest_floor = agent_floor_from_pixel_y(max_y, level=2) or 1
 
@@ -307,10 +306,6 @@ def _run_episode(
         if iface.read_ram_byte(DEATH_FLAG_ADDR) == DEATH_FLAG_VALUE:
             end_reason = "death"
             break
-        if lives < prev_lives and prev_lives > 0:
-            end_reason = "death"
-            break
-        prev_lives = lives
         if done or trunc:
             end_reason = "done" if done else "trunc"
             break

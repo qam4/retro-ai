@@ -179,6 +179,7 @@ YETI_ADDRS = {
     "bonus_hi": 11010,
     "bonus_lo": 11011,
     "fruits_remaining": 11055,
+    "death_flag": 11004,  # 0x2AFC: 65 = dead (games/yeti.py, DEATH_FLAG_ADDR)
 }
 
 
@@ -214,9 +215,12 @@ def read_state(env):
     return state
 
 
-def is_dead(state, stall_count, prev_lives):
-    """Check if the player died (bonus stall or life loss)."""
-    if state["lives"] < prev_lives and prev_lives > 0:
+def is_dead(state, stall_count):
+    """Check if the player died: the 0x2AFC death flag, or a stalled bonus.
+
+    Not a lives decrease: the lives byte does not move at the death frame.
+    """
+    if state["death_flag"] == 65:
         return True
     if stall_count >= 10:
         return True
@@ -412,7 +416,6 @@ def explore(args):
         prev_action = None
         state = read_state(env)
         prev_bonus = state["bonus"]
-        prev_lives = state["lives"]
         stall_count = 0
         # Full trajectory from game start = parent's trajectory + new actions
         base_trajectory = list(chosen_info["trajectory"])
@@ -450,9 +453,8 @@ def explore(args):
                 prev_bonus = state["bonus"]
 
             # Check death
-            if is_dead(state, stall_count, prev_lives):
+            if is_dead(state, stall_count):
                 break
-            prev_lives = state["lives"]
 
             # Record cell — only save state if it's a new or improved cell
             # Skip death animation states (Y < 30 is above the game area)

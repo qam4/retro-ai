@@ -25,6 +25,7 @@ import os
 
 import imageio.v2 as imageio
 import numpy as np
+from retro_ai.games import yeti
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.run_config import EnvConfig
 from stable_baselines3 import PPO
@@ -128,7 +129,6 @@ def main() -> None:
     for ep in range(args.episodes):
         obs, _ = gym_env.reset()
         prev_pr = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-        prev_lives = iface.read_ram_byte(LIVES_ADDR)
         frames = []
         touched = False
 
@@ -139,15 +139,13 @@ def main() -> None:
             if raw is not None:
                 frames.append(np.asarray(raw, dtype=np.uint8))
             pr = iface.read_ram_byte(PRINCESS_FLAG_ADDR)
-            lives = iface.read_ram_byte(LIVES_ADDR)
             if pr == 1 and prev_pr == 0:
                 touched = True
                 print(f"ep{ep}: princess touched (bonus={bonus()})", flush=True)
                 break
             prev_pr = pr
-            if lives < prev_lives and prev_lives > 0:
+            if yeti.is_dead(iface):
                 break
-            prev_lives = lives
             if done or trunc:
                 break
         if not touched:

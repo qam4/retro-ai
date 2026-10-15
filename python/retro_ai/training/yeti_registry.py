@@ -28,7 +28,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 import yaml
 
@@ -369,6 +369,8 @@ class Registry:
                 continue
             if d.get("start_pool") != start_pool or d.get("pool_split") != pool_split:
                 continue
+            if not self._measured_under_current_rules(d):
+                continue
             try:
                 shown = str(path.relative_to(self.repo))
             except ValueError:
@@ -386,6 +388,26 @@ class Registry:
                 )
             )
         return out
+
+    def _measured_under_current_rules(self, d: Mapping) -> bool:
+        """Was result ``d`` measured with its level's CURRENT profile and stop rules?
+
+        A level's stop rules are part of the measurement: L1 moved from 1000 steps /
+        stall 15 to L4's 1500 / 40, and a princess rate measured under the old rules
+        is a different number from one measured under the new, even where the two
+        happen to agree. So results are pooled only within one set of rules, the way
+        they are only pooled within one emulator build (``rate``). A file that does
+        not record its rules cannot be checked and is not used.
+        """
+        try:
+            lvl = self.level(int(d["game_level"]))
+        except (KeyError, ValueError, TypeError):
+            return False
+        return (
+            d.get("profile") == lvl.profile
+            and d.get("max_steps") == lvl.max_steps
+            and d.get("stall_threshold") == lvl.stall_threshold
+        )
 
     def rate(
         self, policy_id: str, game_level: int, native_sha256: Optional[str]

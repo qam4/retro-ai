@@ -21,8 +21,12 @@ levels:
     start_state: null   # game reset
     profile: yeti_fruit
     fruits_total: 4
-    max_steps: 1000
-    stall_threshold: 15
+    # L4's stop rules (were 1000 / 15), so L1 trains and is scored as every later
+    # level is. l1_v17's 300 episodes ended by step 667 and none on a stall, so
+    # neither number moved them; a result measured under the old rules is still a
+    # different measurement and is not pooled with these (Registry.results).
+    max_steps: 1500
+    stall_threshold: 40
   2:
     layout: 2
     start_state: output/mo5/yeti/level2/level2_start.sav
@@ -49,13 +53,13 @@ levels:
     # playing L4 through its princess, so it carries a real playthrough's score, bonus
     # and lives. L1's profile and stop rules: same layout, and its bonus clock runs from
     # the first step like L1's (995 -> 958 on L1 vs 999 -> 962 on L5 over 40 no-op
-    # steps, measured 2026-10-12).
+    # steps, measured 2026-10-12). They moved with L1's to L4's.
     layout: 1
     start_state: output/mo5/yeti/level5/level5_start.sav
     profile: yeti_fruit
     fruits_total: 4
-    max_steps: 1000
-    stall_threshold: 15
+    max_steps: 1500
+    stall_threshold: 40
 
 policies:
   l1_v17:

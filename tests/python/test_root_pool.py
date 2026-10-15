@@ -21,7 +21,8 @@ from retro_ai.training.yeti_registry import Registry
 
 REPO = Path(__file__).resolve().parents[2]
 _CFG = (
-    REPO / "experiments/003-yeti/configs/yeti_curriculum_l1_v17_v30recipe_cold_10m.yaml"
+    REPO
+    / "experiments/003-yeti/configs/yeti_curriculum_l1_v20_l4settings_warm_v17_6m.yaml"
 )
 
 
@@ -141,6 +142,9 @@ def test_pool_results_do_not_mix_with_level_start_results(tmp_path):
         native_sha256="N",
         deterministic=False,
         episodes=100,
+        profile="yeti_fruit",
+        max_steps=1500,
+        stall_threshold=40,
     )
     (folder / "a.json").write_text(json.dumps(dict(base, seed=1, princess_touches=70)))
     (folder / "b.json").write_text(

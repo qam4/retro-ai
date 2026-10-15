@@ -60,7 +60,9 @@ def test_a_plain_run_is_scored_on_its_own_level(ref):
 
 def test_a_grouped_run_is_scored_on_every_group(ref, tmp_path):
     cfg = _write_cfg(
-        tmp_path, "yeti_curriculum_l1_v17_v30recipe_cold_10m.yaml", start_groups=[1, 5]
+        tmp_path,
+        "yeti_curriculum_l1_v20_l4settings_warm_v17_6m.yaml",
+        start_groups=[1, 5],
     )
     registry, _cfg, plan = ref._registry_plan(cfg)
     assert [n for n, _s, _r, _pool in plan] == [1, 5]
@@ -70,12 +72,12 @@ def test_a_grouped_run_is_scored_on_every_group(ref, tmp_path):
 
 def test_a_run_trained_off_its_levels_settings_is_refused(ref, tmp_path):
     cfg = RunConfig.from_yaml(
-        str(_CFG / "yeti_curriculum_l1_v17_v30recipe_cold_10m.yaml")
+        str(_CFG / "yeti_curriculum_l1_v20_l4settings_warm_v17_6m.yaml")
     )
     d = dataclasses.replace(cfg, env=dataclasses.replace(cfg.env, stall_threshold=99))
     p = tmp_path / "off.yaml"
     p.write_text(yaml.safe_dump(d.to_dict()), encoding="utf-8")
-    with pytest.raises(SystemExit, match="stall_threshold 15"):
+    with pytest.raises(SystemExit, match="stall_threshold 40"):
         ref._registry_plan(str(p))
 
 
@@ -84,7 +86,7 @@ def test_hand_typed_level_flags_are_refused_with_config(ref, monkeypatch):
         "--snapshots-dir",
         "/nonexistent",
         "--config",
-        str(_CFG / "yeti_curriculum_l1_v17_v30recipe_cold_10m.yaml"),
+        str(_CFG / "yeti_curriculum_l1_v20_l4settings_warm_v17_6m.yaml"),
         "--level",
         "1",
         "--check",

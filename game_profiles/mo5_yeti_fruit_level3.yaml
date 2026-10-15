@@ -2,7 +2,8 @@
 #
 # Same game-global reward params + relaxed bonus-stall as level 2 (L3 also has
 # an input-frozen intro where the bonus is frozen at 1000 for ~15-20 frames,
-# so the level-1 bonus_stall_frames=10 would false-terminate). The L3 start
+# so the old level-1 bonus_stall_frames=10 would false-terminate; L1 now uses
+# 120 too). The L3 start
 # save-state (level3_start.sav) is loaded by the training env
 # (curriculum.start_state), not here. Death via the cause-agnostic 0x2AFC flag.
 
@@ -15,7 +16,6 @@ reward_mode: memory
 
 reward_params:
   score_address_count: "0"
-  lives_addr: "11095"
   bonus_addr_hi: "11010"
   bonus_addr_lo: "11011"
   bonus_stall_frames: "120"

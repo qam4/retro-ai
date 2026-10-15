@@ -62,8 +62,10 @@ reward_params:
   score_address_0_bcd: "0"
   score_address_0_le: "0"
   score_address_0_multiplier: "1"
-  # Episode termination: life loss or bonus stall (death detection)
-  lives_addr: "11095"
+  # Episode termination: the 0x2AFC death flag, or a frozen bonus clock. Not the
+  # lives byte: it does not move at the death frame (games/yeti.py, LIVES_ADDR).
+  death_flag_addr: "11004"
+  death_flag_value: "65"
   bonus_addr_hi: "11010"
   bonus_addr_lo: "11011"
   bonus_stall_frames: "10"

@@ -1,6 +1,8 @@
 # Yeti — fruit-reward profile for LEVEL 2.
 #
-# Identical to mo5_yeti_fruit.yaml EXCEPT bonus_stall_frames is relaxed.
+# Identical to mo5_yeti_fruit.yaml apart from the name (since L1 moved onto these
+# settings; tests/python/test_yeti_profiles.py). bonus_stall_frames 120 was first
+# needed HERE, and the reason is kept below.
 # Why: level 2 freezes the bonus at 1000 for ~24-30 frames at level start,
 # then ticks it down slowly (~0.13/frame ≈ one decrement per ~8 frames).
 # The level-1 value (bonus_stall_frames: 10) treats that as a "stuck agent"
@@ -22,7 +24,6 @@ reward_mode: memory
 
 reward_params:
   score_address_count: "0"
-  lives_addr: "11095"
   bonus_addr_hi: "11010"
   bonus_addr_lo: "11011"
   # Relaxed for level 2's frozen-then-slow bonus (was 10 on level 1).

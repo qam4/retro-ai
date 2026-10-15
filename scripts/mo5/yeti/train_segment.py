@@ -25,6 +25,7 @@ from collections import deque
 from typing import Optional
 
 import gymnasium as gym
+from retro_ai.games import yeti
 from retro_ai.training.callbacks import EpisodeMetricsCallback
 from retro_ai.training.env_builder import build_training_env
 from retro_ai.training.rewards import RewardContext, RewardFn, reset_reward
@@ -321,7 +322,8 @@ class SegmentEnv(gym.Env):
 
         # Episode termination
         end_reason = None
-        if lives < self._prev_lives and self._prev_lives > 0:
+        # Death: the 0x2AFC flag. The lives byte does not move at the death frame.
+        if yeti.is_dead(self.iface):
             done = True
             end_reason = "death"
         self._prev_lives = lives

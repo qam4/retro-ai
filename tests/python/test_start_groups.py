@@ -20,7 +20,8 @@ from retro_ai.training.run_config import RunConfig
 REPO = Path(__file__).resolve().parents[2]
 _SRC = REPO / "scripts/mo5/yeti/train_checkpoint_curriculum.py"
 _L1_CFG = (
-    REPO / "experiments/003-yeti/configs/yeti_curriculum_l1_v17_v30recipe_cold_10m.yaml"
+    REPO
+    / "experiments/003-yeti/configs/yeti_curriculum_l1_v20_l4settings_warm_v17_6m.yaml"
 )
 
 

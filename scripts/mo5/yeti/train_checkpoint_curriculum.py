@@ -1525,20 +1525,22 @@ class CheckpointCurriculumEnv(gym.Env):
         self.stall_threshold = cfg.env.stall_threshold
         self._reward_fn = reward_fn
 
-        # Death detection via the fast 0x2AFC flag, gated to level >= 2 where
-        # the lives byte is inert (so the lives-based branch below is dead
-        # code there). Left OFF for level 1 so its termination timing is
-        # byte-for-byte unchanged (no L1 regression). When on, it provides
-        # ctx.died to the reward (the grounded reward suppresses shaping on a
-        # fatal step) AND labels end_reason="death" (which the lives branch
-        # cannot do on L2). The flag itself is validated cause-agnostic on
-        # both levels; we simply don't re-wire L1's working path.
+        # Death is the 0x2AFC flag (yeti.is_dead) on EVERY level. It gives ctx.died to
+        # the reward (the grounded reward suppresses shaping on the fatal step) and
+        # labels end_reason="death".
+        #
+        # L1 used to be left out "so its termination timing is byte-for-byte
+        # unchanged", and fell back to a lives-decrease test. That test cannot fire:
+        # the lives byte does not move at the death frame on any level (yeti.LIVES_ADDR;
+        # it drops at the respawn, ~380 steps later). So on L1 the reward never saw a
+        # death, and every death was logged as "env_done" -- 14970 of v19's first 15326
+        # episodes, with 0 "death" -- ended ~1 step late by the native 10-frame bonus
+        # stall. L1 now runs exactly as L2-L4 do.
         _level = 1
         try:
             _level = int(cfg.reward.params.get("level", 1))
         except (AttributeError, TypeError, ValueError):
             _level = 1
-        self._use_death_flag = _level >= 2
 
         # --- Waypoint curriculum (H-AI; off unless curriculum.waypoints) ---
         # Optional, non-gating start-seeds at computed ladder top/bottom
@@ -1904,11 +1906,10 @@ class CheckpointCurriculumEnv(gym.Env):
         princess_flag = self.iface.read_ram_byte(PRINCESS_FLAG_ADDR)
         princess_touched = princess_flag == 1 and self._prev_princess_flag == 0
 
-        # Fast, cause-agnostic death (0x2AFC). On L2 this is the ONLY reliable
-        # death signal (lives byte inert). Read once; used both for the reward
-        # (ctx.died -> grounded reward suppresses shaping on the fatal step)
-        # and for termination/labeling below.
-        died = self._use_death_flag and yeti.is_dead(self.iface)
+        # Fast, cause-agnostic death (0x2AFC), the only death signal on every level.
+        # Read once; used both for the reward (ctx.died -> grounded reward suppresses
+        # shaping on the fatal step) and for termination/labeling below.
+        died = yeti.is_dead(self.iface)
 
         ctx = RewardContext(
             prev_fruits=self._prev_fruits,
@@ -2104,13 +2105,8 @@ class CheckpointCurriculumEnv(gym.Env):
 
         # Termination
         end_reason = None
-        # Death: on L2 via the fast 0x2AFC flag (lives byte is inert there, so
-        # the lives check below can never fire — it stays for L1, where 0x2AFC
-        # detection is intentionally off to preserve L1's termination timing).
+        # Death: the 0x2AFC flag. Not the lives byte, which does not move at death.
         if died:
-            done = True
-            end_reason = "death"
-        elif lives < self._prev_lives and self._prev_lives > 0:
             done = True
             end_reason = "death"
         self._prev_lives = lives

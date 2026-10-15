@@ -42,18 +42,23 @@ def test_every_entry_points_at_something_real(registry):
 
 @pytest.mark.parametrize("pid", sorted(reg.Registry.load().policies))
 def test_each_policy_trained_on_a_level_whose_settings_match(registry, pid):
-    """The registry's level settings are what the policy's config trained with.
+    """The registry's level is the one the policy's config trained on.
 
-    If a config and the registry disagree on profile, start, fruit count or stop rules,
-    every evaluation through the registry would score the policy under conditions it
-    never trained in, without an error.
+    If a config and the registry disagree on profile, start, fruit count or layout,
+    every evaluation through the registry would score the policy on a level it never
+    trained on, without an error.
+
+    STOP RULES ARE NOT CHECKED HERE, deliberately. They belong to the level, not to the
+    policy: L1 moved from 1000 / 15 to L4's 1500 / 40, and l1_v17 -- trained under the
+    old ones -- is scored under the new ones like any later L1 policy. A result
+    measured under other rules is a different measurement and is not pooled
+    (test_results_under_other_stop_rules_are_not_pooled). A NEW run has to train under
+    the current rules: the referee's --check refuses it otherwise (Registry.mismatches).
     """
     n = registry.training_level(pid)
     lvl = registry.level(n)
     cfg = registry.config(pid)
     assert cfg.env.profile == lvl.profile
-    assert cfg.env.max_steps == lvl.max_steps
-    assert cfg.env.stall_threshold == lvl.stall_threshold
     assert cfg.curriculum.fruits_total == lvl.fruits_total
     assert cfg.curriculum.start_state == lvl.start_state
     assert int(cfg.reward.params.get("level", 1)) == lvl.layout
@@ -78,7 +83,7 @@ def test_l1_policy_on_l5_takes_l5s_start_and_its_own_view(registry):
     assert s.start_state == "output/mo5/yeti/level5/level5_start.sav"
     assert s.layout == 1 and s.fruits_total == 4
     assert s.env.profile == "yeti_fruit"
-    assert (s.env.max_steps, s.env.stall_threshold) == (1000, 15)
+    assert (s.env.max_steps, s.env.stall_threshold) == (1500, 40)
     # the policy's view, from its config
     assert s.env.resize_mode == "max" and s.env.resize == (84, 84)
     assert s.reach_mode == "sprite"
@@ -153,6 +158,10 @@ def _write(folder: Path, name: str, **d):
         "seed": 1,
         "episodes": 100,
         "princess_touches": 70,
+        # The rules it was measured under, as eval_from_reset records them.
+        "profile": "yeti_fruit",
+        "max_steps": 1500,
+        "stall_threshold": 40,
     }
     base.update(d)
     (folder / name).write_text(json.dumps(base), encoding="utf-8")
@@ -180,6 +189,29 @@ def test_results_come_from_files_and_are_checked(tmp_path):
     assert r.rate("l1_v17", 1, "N2") == (70, 100)
     assert r.rate("l1_v17", 5, "N1") == (0, 100)
     assert r.rate("l2_v10", 2, "N1") == (0, 0)
+
+
+def test_results_under_other_stop_rules_are_not_pooled(tmp_path):
+    """L1 moved to 1500 / 40. A result measured under 1000 / 15 -- every L1 result
+    before the move -- is a different measurement, and so is one that does not record
+    its rules at all."""
+    folder = tmp_path / "l1_v17"
+    _write(folder, "now.json")
+    _write(folder, "old_rules.json", seed=2, max_steps=1000, stall_threshold=15)
+    _write(folder, "old_profile.json", seed=3, profile="yeti_fruit_level2")
+    _write(folder, "unrecorded.json", seed=4)
+    data = json.loads((folder / "unrecorded.json").read_text())
+    for k in ("profile", "max_steps", "stall_threshold"):
+        del data[k]
+    (folder / "unrecorded.json").write_text(json.dumps(data))
+    loaded = reg.Registry.load()
+    r = reg.Registry(
+        loaded.levels, loaded.policies, loaded.champions, tmp_path, results_dir=tmp_path
+    )
+    assert [Path(x.file).name for x in r.results("l1_v17", 1)] == ["now.json"]
+    # L5 shares L1's rules, so an L5 result is filtered by the same three fields.
+    _write(folder, "l5_old.json", seed=5, game_level=5, max_steps=1000)
+    assert r.rate("l1_v17", 5, "N1") == (0, 0)
 
 
 def test_registered_models_have_the_registered_hash(registry):

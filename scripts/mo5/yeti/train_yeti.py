@@ -27,7 +27,9 @@ REWARD_PARAMS = {
     "basic_rom_path": f"{ROM_DIR}/mo5/roms/basic5.rom",
     "monitor_rom_path": f"{ROM_DIR}/mo5/roms/mo5.rom",
     "startup_sequence": 'wait:100|type:LOAD""\\n|wait:200|type:RUN\\n|wait:800|type:1|wait:300',
-    "lives_addr": "11095",
+    # Death: the 0x2AFC flag, not the lives byte (which does not move at death).
+    "death_flag_addr": "11004",
+    "death_flag_value": "65",
     "score_address_count": "1",
     "score_address_0_addr": "11093",
     "score_address_0_bytes": "2",

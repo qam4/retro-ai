@@ -1,7 +1,19 @@
-# Yeti — fruit-only reward profile
+# Yeti — fruit-only reward profile, LEVEL 1 (and level 5, which plays L1's layout).
 # Uses memory reward mode with no score addresses (0 base reward).
 # Fruit collection reward (+10 per fruit) comes from fruits_remaining_addr in C++.
 # Survival bonus (0.01/step) added by the training pipeline wrapper.
+#
+# Same termination as levels 2-4 (mo5_yeti_fruit_level4.yaml), and kept identical to it
+# apart from the name (tests/python/test_yeti_profiles.py):
+#
+#   death   the cause-agnostic 0x2AFC flag. This profile used to stop on a lives
+#           decrease, which never fires -- the lives byte does not move at the death
+#           frame on any level, only at the respawn ~380 steps later -- so L1 deaths
+#           were caught by the bonus stall instead, ~1 step late.
+#   stall   bonus_stall_frames 120 (was 10). With the death flag doing the death
+#           detection, the stall only catches a frozen bonus clock; 120 is the value
+#           every other level uses. All 299 l1_r1 respawn states and every level start
+#           read 32 (alive) at 0x2AFC, so none ends on its first step.
 
 name: yeti_fruit
 display_name: "Yeti (fruit reward)"
@@ -13,11 +25,12 @@ reward_mode: memory
 reward_params:
   # No score addresses — fruit reward comes from C++ fruit tracking
   score_address_count: "0"
-  # Episode termination
-  lives_addr: "11095"
+  # Episode termination: the death flag, and a frozen bonus clock
   bonus_addr_hi: "11010"
   bonus_addr_lo: "11011"
-  bonus_stall_frames: "10"
+  bonus_stall_frames: "120"
+  death_flag_addr: "11004"
+  death_flag_value: "65"
   # Fruit collection tracking
   fruits_remaining_addr: "11055"
   # BIOS ROM paths

@@ -5,7 +5,8 @@
 # (curriculum.start_state), not here. Death via the cause-agnostic 0x2AFC flag.
 #
 # bonus_stall_frames stays at 120 for the same reason as L3: the level-load tail
-# freezes the bonus clock, and the level-1 value of 10 would false-terminate.
+# freezes the bonus clock, and the old level-1 value of 10 would false-terminate
+# (L1 now uses 120 too).
 # Note the L4 entry state is now captured AFTER the clock starts (the previous
 # level's cleared flag must read 0 — see capture_level3_start._pick_controllable),
 # so the frozen window is no longer in the episode at all. 120 is kept as
@@ -24,7 +25,6 @@ reward_mode: memory
 
 reward_params:
   score_address_count: "0"
-  lives_addr: "11095"
   bonus_addr_hi: "11010"
   bonus_addr_lo: "11011"
   bonus_stall_frames: "120"

@@ -1,0 +1,84 @@
+# ============================================================================
+# L1 v20 -- L1 ON L4's SETTINGS. WARM from l1_v17, 6M, seed 42, L1 only.
+# ONE lever vs the control yeti_curriculum_l1_v18_ctrl_warm_v17_6m (already run): the
+# settings every other level trains with, which L1 never had:
+#
+#   death        the 0x2AFC flag, in the trainer AND the profile. L1 used a lives
+#                decrease, which never fires (the byte moves at the respawn, ~380 steps
+#                after the death), so its reward never saw a death and every death was
+#                logged "env_done" (v19: 33999 of 34564 episodes, 0 "death").
+#   native stall bonus_stall_frames 120 (was 10), as on L2-L4.
+#   stop rules   max_steps 1500 / stall_threshold 40 (was 1000 / 15), as on L4.
+#
+# The three move together because together they are "L4's settings"; the run does not
+# separate them. Everything else -- reward, PPO, curriculum, warm start, pools, seed --
+# is v18's, byte for byte.
+#
+# READ IT ON, best snapshot(s), 300 episodes each from the game reset: against v18's
+# 208/300 (best, 2.75M) and l1_v17 RE-MEASURED UNDER THESE RULES (the old 215/300 was
+# measured under 1000 / 15 and the registry does not pool across rules). Compare on
+# 300-episode re-measures, not referee lines: v18's snapshots read 0.00-0.83 at 30
+# episodes.
+# ============================================================================
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l1_v20_l4settings_warm_v17_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/best/best_model.zip
+  warmstart_weights_only: true
+  resume_pools: output/mo5/yeti/training/yeti_curriculum_l1_v17_v30recipe_cold_10m/checkpoints.pkl
+env:
+  profile: yeti_fruit
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+  resize_mode: max
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 1
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 4
+  fruit_presence_addrs:
+    1: 12205
+    2: 12032
+    3: 11880
+    4: 11736
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
