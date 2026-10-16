@@ -401,6 +401,7 @@ def main() -> None:
                 "final_x": result.final_x,
                 "final_y": result.final_y,
                 "reached_points": sorted(result.reached_points),
+                "fruit_order": result.fruit_order,
                 **({"start": ep_start_path} if pool is not None else {}),
             }
         )
@@ -431,6 +432,13 @@ def main() -> None:
             )
         )
     print(f"\nprincess touches: {princess_touches}/{n} ({100*princess_touches/n:.1f}%)")
+    # Which route: fruit pickup order, for the episodes that took every fruit.
+    full = [r for r in rows if len(r["fruit_order"]) == fruits_total]
+    route_counts = Counter("-".join(r["fruit_order"]) for r in full)
+    if fruits_total > 1 and full:
+        print(f"\nFruit order, episodes with all {fruits_total} fruits ({len(full)}):")
+        for order, k in route_counts.most_common(6):
+            print(f"  {order}: {k}")
 
     mean_rung = (
         sum(k * v for k, v in rung_counts.items()) / n if track and rung_counts else 0.0
@@ -491,6 +499,9 @@ def main() -> None:
                     "rung_counts": dict(rung_counts),
                     "n_rungs": n_rungs,
                     "mean_rung": mean_rung,
+                    # Pickup order of the episodes that took every fruit (rows hold
+                    # each episode's order, partial ones included).
+                    "fruit_order_counts": dict(route_counts),
                     # How these numbers were measured. Both silently change every
                     # route figure, and neither was recorded before 2026-10-07.
                     "reach_mode": args.reach_mode,

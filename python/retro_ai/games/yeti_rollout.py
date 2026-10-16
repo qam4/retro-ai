@@ -14,7 +14,7 @@ heatmap logic and read what they need off :class:`EpisodeResult`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -62,6 +62,21 @@ class EpisodeResult:
     # First time each checkpoint was reached this episode: cp -> (step, bonus).
     # cp = fruits collected; princess = fruits_total + 1. Used by profiling.
     cp_arrival: Dict[int, Tuple[int, int]] = field(default_factory=dict)
+    # The fruits collected this episode, IN THE ORDER TAKEN ("F1", "F3", ...), from the
+    # per-fruit presence bytes. ``reached_points`` is a set and ``max_cp`` a count, so
+    # neither says which route the agent took -- and on L1 the route is the question:
+    # F1 -> F2 -> F3 -> F4 is the shortest (960 px), the agent was believed to take
+    # F1 -> F3 -> F4 -> F2 (1472 px). Fruits already gone at the start are not listed.
+    fruit_order: List[str] = field(default_factory=list)
+
+
+def newly_collected(before: Mapping[int, bool], after: Mapping[int, bool]) -> List[int]:
+    """Fruit ids present in ``before`` and gone in ``after``, in id order.
+
+    ``before``/``after`` map fruit id -> "still on the map" (presence byte != 0). Two
+    fruits cannot be taken in one step in practice; if they were, id order is used.
+    """
+    return sorted(f for f, here in before.items() if here and not after.get(f, True))
 
 
 def waypoint_frame_reaches(
@@ -218,6 +233,15 @@ def rollout_episode(
             obs, _, _, _, _ = gym_env.step([0, 0, 0])
 
     start_fruits = yeti.read_fruits_remaining(iface)
+    # Pickup ORDER, from the per-fruit presence bytes (see EpisodeResult.fruit_order).
+    # Read on every level, independent of track_waypoints.
+    presence = dict(yeti.FRUIT_PRESENCE_BY_LEVEL.get(level, {}))
+
+    def _present() -> Dict[int, bool]:
+        return {f: iface.read_ram_byte(a) != 0 for f, a in presence.items()}
+
+    fruits_here = _present()
+    fruit_order: List[str] = []
     prev_bonus = yeti.read_bonus(iface)
     prev_princess = iface.read_ram_byte(yeti.PRINCESS_FLAG_ADDR)
 
@@ -273,6 +297,11 @@ def rollout_episode(
 
         if keep_frames and base._last_raw_obs is not None:
             frames.append(np.asarray(base._last_raw_obs, dtype=np.uint8).copy())
+
+        if presence:
+            now_here = _present()
+            fruit_order += [f"F{f}" for f in newly_collected(fruits_here, now_here)]
+            fruits_here = now_here
 
         cp_now = fruits_total - fruits
         if cp_now > max_cp:
@@ -333,6 +362,7 @@ def rollout_episode(
         actions=actions,
         frames=frames,
         cp_arrival=cp_arrival,
+        fruit_order=fruit_order,
         reached_points=reached_points,
         max_rung=max_rung,
         n_rungs=n_rungs,
