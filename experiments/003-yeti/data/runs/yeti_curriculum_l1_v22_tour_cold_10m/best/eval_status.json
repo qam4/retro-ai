@@ -1,0 +1,17 @@
+{
+ "step": 10000000,
+ "frontier": "rung4",
+ "frontier_rate": 0.9666666666666667,
+ "frontier_rate_ci95": 0.08039953798736565,
+ "princess": 0.8333333333333334,
+ "princess_ci95": 0.13114135472664246,
+ "mean_rung": 3.9,
+ "n_eval": 30,
+ "regressed": false,
+ "regress_margin": 0.0983192080250175,
+ "consecutive_regressions": 0,
+ "best_step": 4250000,
+ "best_frontier": "rung4",
+ "best_frontier_rate": 0.8666666666666667,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l1_v22_tour_cold_10m/best/best_model.zip"
+}

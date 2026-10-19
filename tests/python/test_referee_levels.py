@@ -67,7 +67,7 @@ def test_a_grouped_run_is_scored_on_every_group(ref, tmp_path):
     registry, _cfg, plan = ref._registry_plan(cfg)
     assert [n for n, _s, _r, _pool in plan] == [1, 5]
     assert plan[1][1].start_state == "output/mo5/yeti/level5/level5_start.sav"
-    assert registry.champions.get(1) == "l1_v17" and registry.champions.get(5) is None
+    assert registry.champions.get(1) == "l1_v22" and registry.champions.get(5) is None
 
 
 def test_a_run_trained_off_its_levels_settings_is_refused(ref, tmp_path):

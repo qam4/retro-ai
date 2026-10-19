@@ -86,10 +86,21 @@ policies:
     model_sha256: d62f6d8683685328f38f8485cdf8a67aabfe9c8867ee9ec0ca05c400b8627a27
     config: experiments/003-yeti/configs/yeti_curriculum_l4_v30_blockmax_cold_15m.yaml
     run_record: experiments/003-yeti/data/runs/yeti_curriculum_l4_v30_blockmax_cold_15m/run.yaml
+  l1_v22:
+    # The 10M SNAPSHOT, not the referee's saved best (4.25M). Of the three snapshots
+    # re-measured at 300 episodes from reset (stop 1500 / 40) it scored highest: 245
+    # against 243 (4.25M) and 235 (7.5M). Taking the top of three is a mild selection,
+    # and the three are within noise of each other. Its control, l1_v21 (the same
+    # config without route_potential), scored 148-162 on its own three.
+    model: output/mo5/yeti/training/yeti_curriculum_l1_v22_tour_cold_10m/snapshots/model_10000000_steps.zip
+    model_sha256: 2cf3e9bb7d3b99fb36437c6399636c3b0ad0a3c08602eca316a87efe682e423f
+    config: experiments/003-yeti/configs/yeti_curriculum_l1_v22_tour_cold_10m.yaml
+    run_record: experiments/003-yeti/data/runs/yeti_curriculum_l1_v22_tour_cold_10m/run.yaml
 
 # The policy that plays each game level. L5 has none: l1_v17 scores 0/300 there.
+# L1 moved from l1_v17 (219/300 under the current rules) to l1_v22 (245/300).
 champions:
-  1: l1_v17
+  1: l1_v22
   2: l2_v10
   3: l3_v15
   4: l4_v30
