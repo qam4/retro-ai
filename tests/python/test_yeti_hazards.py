@@ -60,3 +60,27 @@ def test_grouping_needs_a_disagreement_to_split():
     assert hz.compare(a, b) == (1, 0)
     assert hz.compare(a, c) == (0, 2)
     assert hz.group_sequences([a, b, c, a]) == [0, 0, 1, 0]
+
+
+def test_route_choices_needs_no_floor_model():
+    """Same track as above, on a layout `choices` cannot read: where it left each
+    surface, in y and 8-px columns, and nothing about which ladder that was."""
+    track = (
+        _roll(32, 272, 264)
+        + _roll(64, 264, 152)
+        + [(80, 152)]
+        + _roll(96, 152, 176)
+        + [(112, 176)]
+        + _roll(128, 176, 164)
+    )
+    assert hz.route_choices(_rows(track)) == [["32:33", "64:19", "96:22"]]
+
+
+def test_route_choices_groups_by_route_not_by_timing():
+    """Two starts whose snowball takes the same route a few steps apart are one group;
+    a different route is another. That is the limit noted in route_choices."""
+    route = _roll(64, 264, 152) + [(80, 152)] + _roll(96, 152, 160)
+    late = [None] * 5 + route
+    other = _roll(64, 264, 208) + [(80, 208)] + _roll(96, 208, 216)
+    seqs = [hz.route_choices(_rows(t)) for t in (route, late, other)]
+    assert hz.group_sequences(seqs) == [0, 0, 1]

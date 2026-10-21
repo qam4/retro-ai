@@ -171,6 +171,24 @@ def group_sequences(seqs: Sequence[Sequence[Sequence[str]]]) -> List[int]:
     return [int(g) for g in gid]
 
 
+def route_choices(rows: np.ndarray, x_step: int = 8) -> List[List[str]]:
+    """:func:`choices` without a floor model, for any layout: per hazard, where it left
+    each surface it rolled or walked on, ``"<y>:<x // x_step>"``.
+
+    It needs no ladder or platform list, so it works on L2-L4, whose layouts
+    :func:`choices` does not model. Checked against :func:`choices` on L1's 299 l1_r1
+    respawn recordings: with ``x_step`` 8 (or 16, or 32) :func:`group_sequences` gives
+    the same 31 groups, and no pair of recordings is grouped differently. At 4 it
+    splits recordings :func:`choices` joins, because where a snowball leaves a floor
+    wobbles by a few pixels.
+
+    What it does not see is TIMING: two starts whose hazards take the same routes at
+    different moments are one group. On L2, whose goats walk rather than choose, that is
+    most of what varies between starts (``tests/python/test_yeti_hazards.py``).
+    """
+    return [[f"{y}:{x // x_step}" for y, x in sb["route"]] for sb in snowballs(rows)]
+
+
 __all__ = [
     "WINDOW_LO",
     "SLOT_BASE",
@@ -183,4 +201,5 @@ __all__ = [
     "choices",
     "compare",
     "group_sequences",
+    "route_choices",
 ]

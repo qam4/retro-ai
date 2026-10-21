@@ -8,6 +8,12 @@ sequences). The game makes new sequences itself: every death leads to a respawn 
 snowballs depend on how the previous life ended. A root pool is a set of such respawn
 states, harvested by scripts/mo5/yeti/harvest_respawns.py.
 
+From L2 on there is no single level start either: the hazards a level opens with depend
+on when the previous level was finished. Those levels' pools also hold ENTRIES (the
+level as it opens after the previous one, finished at different moments), harvested by
+the same script. A level's pool is named in experiments/003-yeti/registry.yaml
+(``start_pool``) and the referee scores the level on its held-out sequences.
+
 A MANIFEST (tracked JSON) lists each state with its sha256, its sequence id and whether
 that sequence is HELD OUT (never trained on, used to score whether a policy reacts).
 The states are local files: a save holds the game program, so it is never committed.
@@ -84,6 +90,19 @@ def load(manifest: str, split: str = "train", check: bool = True) -> RootPool:
     )
 
 
+def read_manifest(manifest: str) -> dict:
+    """The manifest's JSON alone, without reading or checking any state file.
+
+    For callers that only need what a pool IS (its game level, layout, sequences) --
+    the referee's plan and --check, which run where the local state files may be absent
+    (CI). Anything that plays from the states goes through :func:`load`.
+    """
+    mpath = Path(manifest)
+    if not mpath.is_absolute():
+        mpath = REPO / mpath
+    return json.loads(mpath.read_text(encoding="utf-8"))
+
+
 def describe(pool: Optional[RootPool]) -> str:
     if pool is None:
         return "none"
@@ -93,4 +112,4 @@ def describe(pool: Optional[RootPool]) -> str:
     )
 
 
-__all__ = ["RootPool", "load", "describe", "SPLITS"]
+__all__ = ["RootPool", "load", "read_manifest", "describe", "SPLITS"]

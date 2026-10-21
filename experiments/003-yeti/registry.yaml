@@ -19,6 +19,9 @@ levels:
   1:
     layout: 1           # yeti_map.LEVELS key
     start_state: null   # game reset
+    # Respawns (31 snowball sequences, 10 held out). The referee scores L1 on the
+    # held-out ones; the game reset is reported beside them, for information only.
+    start_pool: experiments/003-yeti/data/respawns/l1_r1.json
     profile: yeti_fruit
     fruits_total: 4
     # L4's stop rules (were 1000 / 15), so L1 trains and is scored as every later
@@ -30,6 +33,8 @@ levels:
   2:
     layout: 2
     start_state: output/mo5/yeti/level2/level2_start.sav
+    # Entries (l1_v22 finishing L1 at spread moments) and respawns (l2_v10).
+    start_pool: experiments/003-yeti/data/start_pools/l2_p1.json
     profile: yeti_fruit_level2
     fruits_total: 2
     max_steps: 1000
@@ -37,6 +42,8 @@ levels:
   3:
     layout: 3
     start_state: output/mo5/yeti/level3/level3_start.sav
+    # Entries (l2_v10 finishing L2 at spread moments) and respawns (l3_v15).
+    start_pool: experiments/003-yeti/data/start_pools/l3_p1.json
     profile: yeti_fruit_level3
     fruits_total: 1
     max_steps: 1500
@@ -44,6 +51,9 @@ levels:
   4:
     layout: 4
     start_state: output/mo5/yeti/level4/level4_start.sav
+    # Entries (l3_v15 finishing L3) and respawns (l4_v30). Only 5 route patterns:
+    # L4's starts differ mostly in timing, which the grouping does not split on.
+    start_pool: experiments/003-yeti/data/start_pools/l4_p1.json
     profile: yeti_fruit_level4
     fruits_total: 1
     max_steps: 1500
@@ -56,6 +66,8 @@ levels:
     # steps, measured 2026-10-12). They moved with L1's to L4's.
     layout: 1
     start_state: output/mo5/yeti/level5/level5_start.sav
+    # Entries (l4_v30 finishing L4) and respawns (l1_v22 playing L5).
+    start_pool: experiments/003-yeti/data/start_pools/l5_p1.json
     profile: yeti_fruit
     fruits_total: 4
     max_steps: 1500

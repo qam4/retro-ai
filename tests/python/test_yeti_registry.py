@@ -40,6 +40,20 @@ def test_every_entry_points_at_something_real(registry):
         assert n in registry.levels and pid in registry.policies
 
 
+def test_every_start_pool_is_a_tracked_manifest_for_its_level(registry):
+    """Read from the manifest alone: the states are local files, absent in CI."""
+    from retro_ai.training.root_pool import read_manifest
+
+    pooled = {n: lvl.start_pool for n, lvl in registry.levels.items() if lvl.start_pool}
+    assert 1 in pooled, "L1's respawn pool is registered"
+    for n, path in pooled.items():
+        m = read_manifest(path)
+        assert int(m["game_level"]) == n, path
+        assert int(m["layout"]) == registry.level(n).layout, path
+        assert any(st["heldout"] for st in m["states"]), f"{path}: nothing held out"
+        assert not all(st["heldout"] for st in m["states"]), f"{path}: nothing to train"
+
+
 @pytest.mark.parametrize("pid", sorted(reg.Registry.load().policies))
 def test_each_policy_trained_on_a_level_whose_settings_match(registry, pid):
     """The registry's level is the one the policy's config trained on.

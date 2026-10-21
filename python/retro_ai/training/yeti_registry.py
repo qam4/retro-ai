@@ -68,6 +68,11 @@ class LevelSpec:
     fruits_total: int
     max_steps: int
     stall_threshold: int
+    # The level's START POOL: a manifest of real level starts (respawns, and on L2+
+    # entries from the previous level finished at different moments), split into train
+    # and held-out hazard sequences (retro_ai.training.root_pool). A level is scored on
+    # its held-out starts when it has one. None: scored on ``start_state`` only.
+    start_pool: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -148,6 +153,7 @@ class Registry:
                 fruits_total=int(v["fruits_total"]),
                 max_steps=int(v["max_steps"]),
                 stall_threshold=int(v["stall_threshold"]),
+                start_pool=v.get("start_pool"),
             )
             for n, v in (raw.get("levels") or {}).items()
         }
@@ -410,9 +416,17 @@ class Registry:
         )
 
     def rate(
-        self, policy_id: str, game_level: int, native_sha256: Optional[str]
+        self,
+        policy_id: str,
+        game_level: int,
+        native_sha256: Optional[str],
+        start_pool: Optional[str] = None,
+        pool_split: Optional[str] = None,
     ) -> Tuple[int, int]:
         """Pooled (princess, episodes) on ``game_level``, on one emulator build.
+
+        From the level start by default; pass ``start_pool`` / ``pool_split`` for the
+        rate on that pool's states (Registry.results keeps the two apart).
 
         Results from another emulator build are excluded: the L1 champion that read
         99.7% on the pre-``2b0a45d`` core reads 0/40 on the fixed one. Two files with
@@ -420,7 +434,7 @@ class Registry:
         """
         seen: Set[int] = set()
         k = n = 0
-        for r in self.results(policy_id, game_level):
+        for r in self.results(policy_id, game_level, start_pool, pool_split):
             if r.native_sha256 != native_sha256 or r.seed in seen:
                 continue
             seen.add(r.seed)

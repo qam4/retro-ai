@@ -351,9 +351,10 @@ def _registry_plan(config_path):
     taken under conditions it never trained in, after the hours of training, so it is
     checked before -- run_train_and_score.sh calls --check first.
     """
+    from retro_ai.training.root_pool import read_manifest
     from retro_ai.training.run_config import RunConfig
     from retro_ai.training.yeti_map import get_level_map
-    from retro_ai.training.yeti_registry import Registry
+    from retro_ai.training.yeti_registry import REPO, Registry
 
     registry = Registry.load()
     cfg = RunConfig.from_yaml(config_path)
@@ -361,6 +362,18 @@ def _registry_plan(config_path):
         levels = registry.levels_of(cfg)
     except ValueError as exc:
         raise SystemExit(f"{config_path}: {exc}") from None
+
+    def _same(a, b):
+        return (REPO / a).resolve() == (REPO / b).resolve()
+
+    # The pool the run TRAINS on (curriculum.root_pool), and its level.
+    train_pool = getattr(cfg.curriculum, "root_pool", None)
+    train_level = int(read_manifest(train_pool)["game_level"]) if train_pool else None
+    if train_pool and train_level not in levels:
+        raise SystemExit(
+            f"root pool {train_pool} is for game level {train_level}, not one of the "
+            f"run's levels {levels}"
+        )
     plan = []
     for n in levels:
         clash = registry.mismatches(cfg, n)
@@ -371,22 +384,80 @@ def _registry_plan(config_path):
             )
         s = registry.config_eval_settings(cfg, n)
         route = list(getattr(get_level_map(s.layout), "route_order", None) or [])
-        plan.append((n, s, route, None))
-    # A run with a root pool is also scored on the pool's HELD-OUT snowball sequences,
-    # which it never trains on: the "does it react?" number beside the level start's.
-    pool_path = getattr(cfg.curriculum, "root_pool", None)
-    if pool_path:
-        from retro_ai.training import root_pool
-
-        pool = root_pool.load(pool_path, "heldout")
-        base = next((e for e in plan if e[0] == pool.game_level), None)
-        if base is None:
-            raise SystemExit(
-                f"root pool {pool_path} is for game level {pool.game_level}, not "
-                f"one of the run's levels {levels}"
-            )
-        plan.append((pool.game_level, base[1], base[2], pool_path))
+        # WHERE A LEVEL IS SCORED. A level with a start pool (registry.yaml) is scored
+        # on that pool's HELD-OUT hazard sequences, whether or not the run trains on
+        # the pool: a level start other than a game reset is one draw among many (the
+        # hazards a level opens with depend on when the previous level was finished),
+        # so scoring on it would reward memorising one pattern. The level's own start
+        # is kept beside it only when it is the GAME RESET (L1), which every real game
+        # does play first, and then for information only (_informational).
+        pool = registry.level(n).start_pool
+        if train_pool and train_level == n:
+            if pool and not _same(pool, train_pool):
+                raise SystemExit(
+                    f"{config_path} trains on root pool {train_pool}, but game level "
+                    f"{n} is scored on its start pool {pool} (registry.yaml). Their "
+                    "held-out sequences are not each other's, so training on one can "
+                    "train on the other's held-out starts. Train on the level's pool, "
+                    "or register the new one."
+                )
+            pool = pool or train_pool
+        if pool is None:
+            plan.append((n, s, route, None))
+            continue
+        if int(read_manifest(pool)["game_level"]) != n:
+            raise SystemExit(f"start pool {pool} is not for game level {n}")
+        if s.start_state is None:
+            plan.append((n, s, route, None))
+        plan.append((n, s, route, pool))
     return registry, cfg, plan
+
+
+def _informational(plan) -> set:
+    """Entry keys reported for information only: a level's own start when the level
+    is also scored on a start pool. They count toward no score and no champion rule."""
+    pooled = {n for n, _s, _r, p in plan if p is not None}
+    return {_entry_key(n, p) for n, _s, _r, p in plan if p is None and n in pooled}
+
+
+def _score_levels(level_results, plan, registry, champion_ref):
+    """Per-entry records, the levels a snapshot fell below a champion on, and the
+    snapshot's score: the MEAN over the entries that decide (not _informational).
+
+    ``level_results`` are ``(game_level, route, pool, eval_result)`` in plan order.
+    A deciding entry with a registered champion is compared with that champion's rate
+    MEASURED THE SAME WAY -- from the level start, or on the same pool's held-out
+    sequences -- on the same emulator build (regressed_against, 3 sigma). A champion
+    with no such result has nothing to fall below.
+    """
+    from retro_ai.training.yeti_registry import regressed_against
+
+    info = _informational(plan)
+    levels_out, regressed = {}, []
+    for n, lroute, lpool, res in level_results:
+        lp, lr, lm, ln, lrates, lk, leps, lnative = res
+        rec = _score_level(lp, lr, lm, ln, lrates, _frontier_route(lroute, ln))
+        rec.update(princess_touches=lk, episodes=leps, native_sha256=lnative)
+        key = _entry_key(n, lpool)
+        if key in info:
+            rec["informational"] = True
+        champ = None if key in info else registry.champions.get(n)
+        if champ:
+            ref = (n, lpool, lnative)
+            if ref not in champion_ref:
+                champion_ref[ref] = registry.rate(
+                    champ, n, lnative, lpool, "heldout" if lpool else None
+                )
+            ck, cn = champion_ref[ref]
+            bad, z = regressed_against(lk, leps, ck, cn)
+            rec.update(champion=champ, champion_k=ck, champion_n=cn, z=z)
+            rec["champion_regressed"] = bad
+            if bad:
+                regressed.append(n)
+        levels_out[key] = rec
+    deciding = [r for k, r in levels_out.items() if k not in info]
+    score = sum(r["score"] for r in deciding) / len(deciding)
+    return levels_out, regressed, score
 
 
 def _entry_key(n, pool) -> str:
@@ -504,27 +575,35 @@ def main() -> None:
                 f"registry; do not pass {'it' if len(clash) == 1 else 'them'} as well"
             )
         registry, _cfg, plan = _registry_plan(args.config)
+        info = _informational(plan)
         for n, s, route, pool in plan:
-            champ = registry.champions.get(n) if pool is None else None
+            key = _entry_key(n, pool)
+            champ = None if key in info else registry.champions.get(n)
             start = s.start_state or "reset"
             if pool is not None:
-                start = f"held-out respawns of {pool}"
+                start = f"held-out starts of {pool}"
             print(
-                f"[keep-best] level {_entry_key(n, pool)}: layout {s.layout}, start "
+                f"[keep-best] level {key}: layout {s.layout}, start "
                 f"{start}, profile {s.env.profile}, stop "
                 f"{s.env.max_steps}/{s.env.stall_threshold}, resize "
                 f"{s.env.resize_mode}, reach {s.reach_mode}, route "
-                f"{len(route) or 'ladder'}, champion "
-                f"{champ or '-'}",
+                f"{len(route) or 'ladder'}, "
+                + (
+                    "for information only"
+                    if key in info
+                    else f"champion {champ or '-'}"
+                ),
                 flush=True,
             )
         if args.check:
             return
     elif args.check:
         raise SystemExit("--check needs --config")
-    multi = bool(plan) and len(plan) > 1
-    # (level, emulator sha) -> (k, n) of the level's champion; filled on first use,
-    # because the emulator sha comes from the eval output.
+    # Per-level scoring (_score_levels) whenever there is more than one entry, or the
+    # one entry is a start pool's held-out starts (its champion bar is measured there).
+    multi = bool(plan) and (len(plan) > 1 or plan[0][3] is not None)
+    # (level, pool, emulator sha) -> (k, n) of the level's champion, measured the same
+    # way; filled on first use, because the emulator sha comes from the eval output.
     champion_ref: dict = {}
 
     # Travel order for the frontier. From the level map, so no waypoint is named here.
@@ -589,9 +668,13 @@ def main() -> None:
                         )
                         for n, _s, route, pool in plan
                     ]
-                    princess, reach_top, mean_rung, n_rungs, rates = level_results[0][
-                        3
-                    ][:5]
+                    # The top-level numbers are the first DECIDING entry's (an
+                    # informational one, L1's game reset beside its pool, never is).
+                    info = _informational(plan)
+                    primary = next(
+                        r for r in level_results if _entry_key(r[0], r[2]) not in info
+                    )
+                    princess, reach_top, mean_rung, n_rungs, rates = primary[3][:5]
                 else:
                     princess, reach_top, mean_rung, n_rungs, rates = _eval_snapshot(
                         path,
@@ -633,7 +716,7 @@ def main() -> None:
             # The level's route order, or -- on a level without one (L1, L2) -- its
             # progress ladder. Identical to before wherever a route order exists, so
             # L3/L4 scores stay comparable.
-            route = _frontier_route(plan[0][2] if plan else route_order, n_rungs)
+            route = _frontier_route(primary[1] if plan else route_order, n_rungs)
             # (plan entries are (game level, settings, route, root pool or None))
             fwid, frate = _frontier(rates, route)
             fdepth = (route.index(fwid) + 1) / len(route) if (fwid and route) else 0.0
@@ -643,9 +726,11 @@ def main() -> None:
                 + 1e-4 * frate  # how reliably it gets there
                 + 1e-6 * depth
             )
-            # SEVERAL LEVELS (--config with start groups). Every level is scored the
-            # same way and the snapshot's score is their MEAN, so no level is weighted
-            # by a chosen number. A level with a registered champion is also compared
+            # SEVERAL LEVELS (--config with start groups), or a level scored on its
+            # start pool. Every deciding entry is scored the same way and the
+            # snapshot's score is their MEAN, so no level is weighted by a chosen
+            # number; an informational entry (L1's game reset beside its pool) counts
+            # toward nothing. A level with a registered champion is also compared
             # with that champion's measured rate on the same emulator build
             # (Registry.rate, pooled over its result files): a snapshot below it by more
             # than the two sample sizes explain (regressed_against, 3 sigma, the same
@@ -655,35 +740,10 @@ def main() -> None:
             # has nothing to fall below.
             levels_out = {}
             champion_regressed = []
-            if plan:
-                from retro_ai.training.yeti_registry import regressed_against
-
-                for n, lroute, lpool, res in level_results:
-                    lp, lr, lm, ln, lrates, lk, leps, lnative = res
-                    rec = _score_level(
-                        lp, lr, lm, ln, lrates, _frontier_route(lroute, ln)
-                    )
-                    rec.update(
-                        princess_touches=lk, episodes=leps, native_sha256=lnative
-                    )
-                    # A champion's rate was measured at the level start; a held-out
-                    # pool entry is another measurement and has none to fall below.
-                    champ = registry.champions.get(n) if lpool is None else None
-                    if multi and champ:
-                        key = (n, lnative)
-                        if key not in champion_ref:
-                            champion_ref[key] = registry.rate(champ, n, lnative)
-                        ck, cn = champion_ref[key]
-                        bad, z = regressed_against(lk, leps, ck, cn)
-                        rec.update(champion=champ, champion_k=ck, champion_n=cn, z=z)
-                        rec["champion_regressed"] = bad
-                        if bad:
-                            champion_regressed.append(n)
-                    levels_out[_entry_key(n, lpool)] = rec
-                if multi:
-                    score = sum(r["score"] for r in levels_out.values()) / len(
-                        levels_out
-                    )
+            if multi:
+                levels_out, champion_regressed, score = _score_levels(
+                    level_results, plan, registry, champion_ref
+                )
             eligible = not champion_regressed
             state["evaluated"][name] = {
                 "step": step,
@@ -743,7 +803,8 @@ def main() -> None:
             )
             if multi:
                 msg += " | " + "  ".join(
-                    f"L{n}: princess={r['princess']:.3f} "
+                    f"L{n}{' (info)' if r.get('informational') else ''}: "
+                    f"princess={r['princess']:.3f} "
                     f"frontier={r['frontier'] or '-'}@{r['frontier_rate']:.2f}"
                     + (
                         f" vs {r['champion']} {r['champion_k']}/{r['champion_n']} "
@@ -811,8 +872,8 @@ def main() -> None:
                             "frontier_rate"
                         ),
                         "best_model": os.path.join(best_dir, "best_model.zip"),
-                        # Per level, with --config and start groups. The top-level
-                        # fields above are the FIRST level's.
+                        # Per entry, with --config (start groups, start pools). The
+                        # top-level fields above are the first DECIDING entry's.
                         **(
                             {
                                 "levels": {

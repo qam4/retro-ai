@@ -382,9 +382,29 @@ WORK, in order:
       starts, uniform over snowball sequences), `eval_from_reset.py --start-pool`,
       referee scores the held-out split as "1-heldout". Pool `l1_r1`: 31 sequences, 10
       held out.
-- [ ] Run v19 (root pool, warm from l1_v17, 6M) against l1_v18. Read: held-out respawns
+- [x] Start pools for every level, and every level scored on held-out starts
+      (2026-10-20). A level after L1 has no single start: which hazards it opens with
+      depends on when the previous level was finished (twelve L1 finishes 373-440
+      steps -> 11 different L2 goat patterns; L2 -> L3 11 of 12; L3 -> L4 and L4 -> L5
+      3 of 11). `harvest_respawns.py entries` saves real entries (the previous level's
+      champion waits 0-60 steps just before the princess, then finishes), `play` saves
+      respawns, `merge` groups both by hazard sequence (`route_choices` off L1's
+      layout; it reproduces `choices`' 31 groups on l1_r1 exactly). registry.yaml
+      `levels.N.start_pool` names each level's pool; the referee scores a pooled level
+      on its held-out starts and holds it to the champion's rate measured there. L1's
+      game reset stays beside it, for information only; a saved L2-L5 start is not
+      scored at all. A run training on a different pool than its level's is refused.
+- [ ] Re-measure the champions on their level's held-out starts (300 episodes) -- the
+      bar the referee now holds new runs to. Expected near 0 (memorised patterns).
+- [ ] Train each level with `curriculum.root_pool` = its start pool.
+- [ ] L2's goats walk rather than choose, so `route_choices` sees few differences
+      between L2 starts that differ in goat timing; L2's held-out split is coarse.
+- [x] Run v19 (root pool, warm from l1_v17, 6M) against l1_v18. Read: held-out respawns
       and reset, 300 episodes each. The referee's champion check compares the reset
       with l1_v17's memorised 0.72 and may refuse every snapshot; results are kept.
+      Done: 0/30 everywhere (the sum route never came back to the last ladder). On the
+      tour recipe the same lever (v24, warm from l1_v22) reached 16/300 on held-out
+      respawns, the first non-zero, and lost the reset sequence (1/22 of level starts).
 - [ ] Full-game runner. The death behaviour is now known (notes above); a run past a
       death needs the respawn handling, and L5's sequence may depend on L4's play.
 - [ ] Later: best time (leftover bonus), starting on L2.

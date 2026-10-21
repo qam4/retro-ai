@@ -163,17 +163,39 @@ def test_pool_results_do_not_mix_with_level_start_results(tmp_path):
     assert [x.princess for x in r.results("l1_v17", 1, "p.json", "heldout")] == [0]
 
 
-def test_the_referee_also_scores_the_heldout_sequences(tmp_path):
+L1_POOL = "experiments/003-yeti/data/respawns/l1_r1.json"
+
+
+def _referee():
     spec = importlib.util.spec_from_file_location(
         "kbs_pool", REPO / "scripts/mo5/yeti/keep_best_sweep.py"
     )
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
-    m = _manifest(tmp_path, {0: 1, 1: 1}, heldout={1})
+    return ref
+
+
+def _run_cfg(tmp_path, root_pool_path):
     d = RunConfig.from_yaml(str(_CFG)).to_dict()
-    d["curriculum"]["root_pool"] = m
+    d["curriculum"]["root_pool"] = root_pool_path
     p = tmp_path / "run.yaml"
     p.write_text(yaml.safe_dump(d))
-    _reg, _cfg2, plan = ref._registry_plan(str(p))
-    assert [(n, pool) for n, _s, _r, pool in plan] == [(1, None), (1, m)]
-    assert ref._entry_key(1, m) == "1-heldout"
+    return str(p)
+
+
+def test_the_referee_scores_the_levels_registered_pool(tmp_path):
+    """A run training on L1's registered pool is scored on its held-out sequences; the
+    game reset is kept beside them."""
+    ref = _referee()
+    _reg, _cfg2, plan = ref._registry_plan(_run_cfg(tmp_path, L1_POOL))
+    assert [(n, pool) for n, _s, _r, pool in plan] == [(1, None), (1, L1_POOL)]
+    assert ref._entry_key(1, L1_POOL) == "1-heldout"
+
+
+def test_training_on_another_pool_than_the_levels_is_refused(tmp_path):
+    """Two pools harvested apart do not share a held-out split: training on one can
+    train on the other's held-out starts."""
+    ref = _referee()
+    m = _manifest(tmp_path, {0: 1, 1: 1}, heldout={1})
+    with pytest.raises(SystemExit, match="start pool"):
+        ref._registry_plan(_run_cfg(tmp_path, m))
