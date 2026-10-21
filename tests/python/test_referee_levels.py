@@ -83,6 +83,9 @@ def test_a_grouped_run_is_scored_on_every_group(ref, tmp_path):
 L1_POOL = "experiments/003-yeti/data/respawns/l1_r1.json"
 L4_POOL = "experiments/003-yeti/data/start_pools/l4_p1.json"
 L5_POOL = "experiments/003-yeti/data/start_pools/l5_p1.json"
+# An L2 run under L2's current stop rules (l2_v10's own config trained under 1000 / 40,
+# which the referee now refuses).
+L2_CFG = "yeti_curriculum_l2_v11_l4rules_warm_v10_6m.yaml"
 
 
 def test_a_level_without_a_pool_is_scored_on_its_own_start(ref, monkeypatch):
@@ -122,9 +125,7 @@ def test_a_saved_level_start_is_not_scored_beside_its_pool(ref, monkeypatch, tmp
     so with a start pool only the held-out starts are scored. Only a GAME RESET, which
     every real game plays first, is kept beside them."""
     m = _pooled_registry(monkeypatch, tmp_path, 2)
-    _reg, _cfg, plan = ref._registry_plan(
-        str(_CFG / "yeti_curriculum_l2_v10_deferfruit_10m.yaml")
-    )
+    _reg, _cfg, plan = ref._registry_plan(str(_CFG / L2_CFG))
     assert [(n, pool) for n, _s, _r, pool in plan] == [(2, m)]
     assert ref._informational(plan) == set()
 
@@ -132,7 +133,7 @@ def test_a_saved_level_start_is_not_scored_beside_its_pool(ref, monkeypatch, tmp
 def test_a_pool_for_another_level_is_refused(ref, monkeypatch, tmp_path):
     _pooled_registry(monkeypatch, tmp_path, 2, game_level_in_manifest=3)
     with pytest.raises(SystemExit, match="not for game level 2"):
-        ref._registry_plan(str(_CFG / "yeti_curriculum_l2_v10_deferfruit_10m.yaml"))
+        ref._registry_plan(str(_CFG / L2_CFG))
 
 
 class _FakeRegistry:

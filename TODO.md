@@ -394,9 +394,19 @@ WORK, in order:
       on its held-out starts and holds it to the champion's rate measured there. L1's
       game reset stays beside it, for information only; a saved L2-L5 start is not
       scored at all. A run training on a different pool than its level's is refused.
-- [ ] Re-measure the champions on their level's held-out starts (300 episodes) -- the
-      bar the referee now holds new runs to. Expected near 0 (memorised patterns).
-- [ ] Train each level with `curriculum.root_pool` = its start pool.
+- [x] Re-measure the champions on their level's held-out starts (300 episodes) -- the
+      bar the referee now holds new runs to. L1 l1_v22 0/300, L2 l2_v10 0/300 (no
+      fruit), L3 l3_v15 0/300 (no fruit), L4 l4_v30 58/300 (all from entries; one
+      held-out group), L5 l1_v22 0/300. Not the control hand-over: pool states give
+      control at step 1-2, the saved L2 / L3 starts at 4 / 11, and with those steps
+      skipped l2_v10 / l3_v15 still score 19/20 / 18/20 from their own start.
+- [ ] Train each level with `curriculum.root_pool` = its start pool. L2 and L3 first,
+      warm from their champions, each against a control without the pool: l2_v11 /
+      l2_v12, l3_v16 / l3_v17. On L4's settings except the resize mode (shown "max",
+      l2_v10 and l3_v15 die 20/20 from their own start, so a warm start keeps
+      "nearest"); L2's stop rules moved to 1500 / 40 with them (l2_v10 under them:
+      294/300 from its start, 0/300 held out). A cold L2 / L3 on
+      L4's full settings is still owed, for one view across levels.
 - [ ] L2's goats walk rather than choose, so `route_choices` sees few differences
       between L2 starts that differ in goat timing; L2's held-out split is coarse.
 - [x] Run v19 (root pool, warm from l1_v17, 6M) against l1_v18. Read: held-out respawns

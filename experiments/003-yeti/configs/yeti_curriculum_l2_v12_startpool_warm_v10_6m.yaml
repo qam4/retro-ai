@@ -1,0 +1,77 @@
+# ============================================================================
+# L2 v12 -- START POOL. WARM from l2_v10, 6M, seed 42.
+# ONE lever vs l2_v11: curriculum.root_pool, L2's registered start pool (l2_p1, TRAIN
+# split: 26 hazard sequences, 56 states -- entries of L2 after l1_v22 finished L1 at
+# different moments, and respawns -- plus the level start as one more sequence; 12
+# sequences held out for scoring).
+#
+# WHY. l2_v10 reaches the princess 298/300 from its level start and 0/300 on the
+# held-out starts, with no fruit in any episode: it plays the one start it trained on.
+# Not the moment control is handed over (the pool states give control at the first or
+# second step, the level start at the fourth; with those steps skipped l2_v10 still
+# scored 19/20). On L1 the same lever (l1_v24, from l1_v22) gave the first non-zero
+# held-out result, 16/300, and lost the plain reset.
+#
+# Settings as l2_v11 (L4's reach test and stop rules, l2_v10's resize mode).
+#
+# READ IT ON: as l2_v11. The referee scores L2 on its held-out starts only, against
+# l2_v10's held-out rate.
+# ============================================================================
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l2_v12_startpool_warm_v10_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l2_v10_deferfruit_10m/best/best_model.zip
+  warmstart_weights_only: true
+  resume_pools: output/mo5/yeti/training/yeti_curriculum_l2_v10_deferfruit_10m/checkpoints.pkl
+
+env:
+  profile: yeti_fruit_level2
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+  resize_mode: nearest
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 2
+    gamma: 1.0
+    defer_fruit_credit: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.05
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 2
+  fruit_presence_addrs:
+    1: 11950
+    2: 11975
+  start_state: output/mo5/yeti/level2/level2_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  waypoint_reach_mode: sprite
+  root_pool: experiments/003-yeti/data/start_pools/l2_p1.json

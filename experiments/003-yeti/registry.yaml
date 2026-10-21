@@ -37,7 +37,10 @@ levels:
     start_pool: experiments/003-yeti/data/start_pools/l2_p1.json
     profile: yeti_fruit_level2
     fruits_total: 2
-    max_steps: 1000
+    # L4's stop rules (max_steps was 1000), as on every other level. One of l2_v10's
+    # 300 episodes from the level start hit the 1000 cap, so little should change; a
+    # result measured under 1000 is still a different measurement and is not pooled.
+    max_steps: 1500
     stall_threshold: 40
   3:
     layout: 3
