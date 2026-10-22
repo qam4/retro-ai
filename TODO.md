@@ -407,6 +407,24 @@ WORK, in order:
       "nearest"); L2's stop rules moved to 1500 / 40 with them (l2_v10 under them:
       294/300 from its start, 0/300 held out). A cold L2 / L3 on
       L4's full settings is still owed, for one view across levels.
+      Results (300-episode re-measures): l2_v12 held-out 1 / 7 / 2 / 13 of 300 at 2M /
+      4M / 4.75M / 5M, all from respawns (entries 0/208), 12 of the 13 from one group;
+      l2_v11 0/300. l2_v12 lost its saved start (0/300; l2_v11 239/300). In training it
+      solved 3 of its 56 starts (single-state respawns, 61-79%), so it memorised; ~450
+      episodes per start in 6M. L3: no princess on held-out starts either arm; l3_v17
+      mean rung 1.5-1.7 / 12 against 0.05. l3_v16 lost its own start (below).
+- [ ] L2 start pool: more training (l2_v12 got ~450 episodes per start).
+- [x] Start-pool credit bug (2026-10-22). An episode was credited to the rung slot
+      re-derived from its state at episode end, not to the slot it was drawn from. A
+      pool file files states by recorded route points (never fruits) while the start
+      rung also counts missing fruits, so l3_v15's 100 fruit-platform states sat in
+      slot 8 and started on rung 9: slot 8's score never moved from 0.00, and in l3_v16
+      it took 73-78% of starts for 1.2M steps before the chain collapsed at the SN3 ->
+      A1 jump (l3_v15 makes it 260/274; l3_v16 at 4.75M 44/232). Fixed: credit and
+      episodes.csv `start_key` use the drawn slot (test_start_credit.py). Still true:
+      such states are FILED one slot low, so their start gate reads rung 8's reach.
+      l3_v16 / l3_v17 are not a one-lever pair (l3_v17's gate kept slot 8 shut), and
+      l3_v15's weights predate the reward changes 69fdac0 and 850f7ae.
 - [ ] L2's goats walk rather than choose, so `route_choices` sees few differences
       between L2 starts that differ in goat timing; L2's held-out split is coarse.
 - [x] Run v19 (root pool, warm from l1_v17, 6M) against l1_v18. Read: held-out respawns

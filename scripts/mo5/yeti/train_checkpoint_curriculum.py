@@ -583,9 +583,14 @@ class CheckpointManager:
             return
         if not (0 <= start_level <= self.N_RUNGS):
             return
+        # `start_level` is the POOL the episode was drawn from; `start_rung` the rung it
+        # actually began on. They differ when a pool file filed a state lower than it
+        # starts (see the env's `_start_source`), and progress is measured from where
+        # the episode began. Without a start rung they are the same thing.
+        began = start_level if start_rung is None else start_rung
         # Cumulative counters (display only).
         self.segment_attempts[start_level] += 1
-        advanced = reached_level > start_level
+        advanced = reached_level > began
         if advanced:
             self.segment_successes[start_level] += 1
         # Responsive per-segment success EMA (drives frontier weight).
@@ -599,7 +604,7 @@ class CheckpointManager:
         # weights by (1 - score).
         total_goals = self.N_RUNGS + 1
         self.checkpoints[start_level].update_goal_score(
-            self._episode_score(reached_level, start_level, total_goals)
+            self._episode_score(reached_level, began, total_goals)
         )
         # Reach-from-reset EMA: only reset (CP0) episodes are evidence
         # for "can the agent get to CP_n unaided". For each n in 1..4
@@ -1655,6 +1660,7 @@ class CheckpointCurriculumEnv(gym.Env):
         self._mgr: Optional[CheckpointManager] = None
         self._group_name = ""
         self._start_wp = None  # the WP this episode was seeded from (skip re-save)
+        self._start_source = 0  # the pool pick_start drew this episode from
         self._captured_wps: set = set()  # WPs already captured this episode
         # WPs detected but still awaiting a grounded frame to save from. Mirrors
         # `_grounded_snap_due` on the fruit path; see the capture site.
@@ -1748,6 +1754,17 @@ class CheckpointCurriculumEnv(gym.Env):
         # record_episode credits the WP pool, and (b) we don't re-capture the
         # waypoint we were seeded at.
         self._start_wp = level if isinstance(level, str) else None
+        # THE POOL THIS EPISODE WAS DRAWN FROM, kept so the episode is credited to it.
+        # pick_start weights a pool by 1 - its goal score, so the score must move with
+        # the episodes drawn from that pool. It used to be re-derived at episode end
+        # from the state's progress rung, which is not always the pool's key: a pool
+        # file is filed by each state's recorded route points, and those never include
+        # fruits, while the rung at episode start also counts the fruits missing in the
+        # game. l3_v15's file holds 100 states on L3's fruit platform with the fruit
+        # taken, filed under rung 8 and started at rung 9. Every episode drawn from rung
+        # 8 was credited to rung 9, rung 8's score stayed 0.00, and in l3_v16 it took
+        # 73-78% of all starts for the first 1.2M steps (test_start_credit.py).
+        self._start_source = level
         self._captured_wps = set()
         self._wp_snap_due = set()
         # Milestones this seed had ALREADY banked when captured. Restored into
@@ -2147,9 +2164,10 @@ class CheckpointCurriculumEnv(gym.Env):
                 if self._princess_touched_this_ep
                 else max(self._current_rung(), self._start_rung)
             )
-            # Credit the goal-score to the actual start: a WP id (str) for
-            # a waypoint-seeded episode, else the CP start level (int).
-            start_key = self._start_wp if self._start_wp is not None else start_level
+            # Credit the goal-score to the pool the episode was DRAWN from: a WP id
+            # (str), a rung slot, or 0 for the level start. Not `start_level`, which can
+            # differ from the slot's key (see `_start_source` in reset).
+            start_key = self._start_source
             # Pass the reached-WP set + the full WP universe so the manager can
             # update the reset-origin wp_reach_ema (only used when start_key==0).
             # Order-free segment health: did this episode reach any route point
@@ -2337,9 +2355,10 @@ class CheckpointCurriculumEnv(gym.Env):
             final_bonus=bonus,
             start_state_hash=self._start_state_hash,
             # TRUE start source, so from-reset analysis of episodes.csv is
-            # possible: a WP id for waypoint-seeded episodes, else the CP level
-            # ("0" = real game reset). start_level cannot distinguish them.
-            start_key=(self._start_wp if self._start_wp is not None else start_level),
+            # possible: the pool the episode was drawn from -- a WP id, a rung slot, or
+            # "0" for the level start. start_level is the rung it began on, which a
+            # rung-slot state can exceed (see `_start_source` in reset).
+            start_key=self._start_source,
             # Column index of the start x reached matrix (see EPISODE_COLUMNS):
             # every route point this episode reached.
             reached_points=";".join(sorted(self._reached_wps_this_ep)),
