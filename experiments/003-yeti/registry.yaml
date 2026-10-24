@@ -111,11 +111,24 @@ policies:
     model_sha256: 2cf3e9bb7d3b99fb36437c6399636c3b0ad0a3c08602eca316a87efe682e423f
     config: experiments/003-yeti/configs/yeti_curriculum_l1_v22_tour_cold_10m.yaml
     run_record: experiments/003-yeti/data/runs/yeti_curriculum_l1_v22_tour_cold_10m/run.yaml
+  l4_v32:
+    # The 2.25M snapshot, which is also the referee's saved best (same sha256). Trained
+    # on L4's start pool, warm from l4_v30's final weights. Registry evals, 300 episodes
+    # each: L4 held-out starts 124/300, all from entries (124/279; l4_v30 58/272), own
+    # saved start 141/300 (l4_v30 220/300). A --config re-measure before registering
+    # read 138 and 132. Its 2.75M and 3M snapshots read 111 and 42 held out, so the
+    # run swings and this is the top of three.
+    model: output/mo5/yeti/training/yeti_curriculum_l4_v32_startpool_warm_v30_6m/snapshots/model_2250000_steps.zip
+    model_sha256: 6868ec527b424472b72e78b924d16ec097919cff85a07cd7c5586ec5d9395d13
+    config: experiments/003-yeti/configs/yeti_curriculum_l4_v32_startpool_warm_v30_6m.yaml
+    run_record: experiments/003-yeti/data/runs/yeti_curriculum_l4_v32_startpool_warm_v30_6m/run.yaml
 
 # The policy that plays each game level. L5 has none: l1_v17 scores 0/300 there.
 # L1 moved from l1_v17 (219/300 under the current rules) to l1_v22 (245/300).
+# L4 moved from l4_v30 to l4_v32 for the held-out starts (124/300 against 58/300),
+# which a real game enters L4 through; it plays the one saved start worse (141 / 220).
 champions:
   1: l1_v22
   2: l2_v10
   3: l3_v15
-  4: l4_v30
+  4: l4_v32

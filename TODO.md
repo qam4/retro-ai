@@ -413,7 +413,18 @@ WORK, in order:
       solved 3 of its 56 starts (single-state respawns, 61-79%), so it memorised; ~450
       episodes per start in 6M. L3: no princess on held-out starts either arm; l3_v17
       mean rung 1.5-1.7 / 12 against 0.05. l3_v16 lost its own start (below).
-- [ ] L2 start pool: more training (l2_v12 got ~450 episodes per start).
+- [ ] L2 start pool: more training (l2_v12 got ~450 episodes per start). l2_v13 (l2_v12
+      continued to 20M): held-out 42 / 18 / 51 of 300 at 10M / 12M / 13M, wins in up to
+      5 of 12 groups, own start 191/300 at 13M -- but entries 0 in every snapshot (0/53
+      at 13M). Entries were 14% of level-start episodes (23 entries filed as one
+      group). Next: split entries into their own groups (goat timing), see below.
+- [x] L4 start pool (2026-10-23): l4_v32 (warm from l4_v30's final, + l4_p1) is the L4
+      champion at 2.25M: registry evals held-out 124/300, all from entries (124/279;
+      l4_v30 58/272), own start 141/300 (l4_v30 220/300). Control l4_v31: 67/300.
+- [ ] L3: l3_v19 (l3_v15's reach test, milestone marking and reward grounded poses on
+      current code) held its own start, 191/300 at 6M; l3_v16 / l3_v18 lost it. One
+      setting at a time: l3_v21 (box reach), l3_v22 (ground marking), l3_v23 (old
+      poses); start pool on l3_v19's settings: l3_v20.
 - [x] Start-pool credit bug (2026-10-22). An episode was credited to the rung slot
       re-derived from its state at episode end, not to the slot it was drawn from. A
       pool file files states by recorded route points (never fruits) while the start

@@ -1,0 +1,81 @@
+# ============================================================================
+# L3 v20 -- START POOL on l3_v15's reward and reach semantics. WARM from l3_v15, 6M,
+# seed 42.
+# ONE lever vs l3_v19: curriculum.root_pool, L3's registered start pool (l3_p1, TRAIN
+# split: 36 hazard groups, 91 states -- entries after l2_v10 finished L2 at different
+# moments, and respawns -- plus the level start as one more group; 18 groups held out).
+#
+# WHY. l3_v17 put this pool on the settings that collapse (sprite reach, mid-air
+# milestone marking, poses 6 / 7 in the reward's grounded set): held-out L3 rose from
+# mean rung 0.05 to 1.5-1.7 of 12, princess 0, and its own start went to 0/300. l3_v19
+# put those three back to l3_v15's and held its own start (191/300 at 6M; l3_v15
+# 246/300), so this is the pool on a base that does not collapse. On L4 the same lever
+# (l4_v32, warm from a champion trained on its own settings) doubled the held-out rate,
+# 58 -> 138 of 300, all from entries.
+#
+# READ IT ON, best snapshots re-measured at 300 episodes: L3 held-out starts split
+# entries / respawns (l3_v15 0/300, l3_v19 0/720 in the referee), and the saved start
+# (l3_v19 191/300). The referee scores L3 on held-out starts against l3_v15's 0/300.
+# ============================================================================
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v20_startpool_v15semantics_warm_v15_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m/final_model.zip
+  warmstart_weights_only: true
+  resume_pools: output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m/checkpoints.pkl
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+  resize_mode: nearest
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+    mark_airborne: false
+    surface_pose_ids: [0, 1, 2, 3, 4, 5, 8]
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  waypoint_reach_mode: box
+  root_pool: experiments/003-yeti/data/start_pools/l3_p1.json

@@ -1,0 +1,32 @@
+{
+ "step": 6000000,
+ "frontier": "Lprincess_top",
+ "frontier_rate": 0.13333333333333333,
+ "frontier_rate_ci95": 0.12186057260099421,
+ "princess": 0.03333333333333333,
+ "princess_ci95": 0.08039953798736568,
+ "mean_rung": 6.533333333333333,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.18618986725025255,
+ "consecutive_regressions": 11,
+ "best_step": 2250000,
+ "best_frontier": "Lprincess_top",
+ "best_frontier_rate": 0.5666666666666667,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v32_startpool_warm_v30_6m/best/best_model.zip",
+ "levels": {
+  "4-heldout": {
+   "princess": 0.03333333333333333,
+   "princess_touches": 1,
+   "episodes": 30,
+   "frontier": "Lprincess_top",
+   "frontier_rate": 0.13333333333333333,
+   "champion": "l4_v30",
+   "champion_k": 58,
+   "champion_n": 300,
+   "z": -2.180657985014553,
+   "champion_regressed": false
+  }
+ },
+ "champion_regressed": []
+}
