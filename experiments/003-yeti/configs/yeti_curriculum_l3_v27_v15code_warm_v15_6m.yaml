@@ -1,0 +1,87 @@
+# ============================================================================
+# L3 v27 -- l3_v15's CONFIG ON l3_v15's CODE. WARM from l3_v15's final weights and
+# final pools, 6M, seed 42. MUST RUN AT COMMIT 10e9bb4 (git worktree
+# out/l3v15code-10e9bb4), not on current code.
+#
+# l3_v15's yaml as it stood at 10e9bb4, except `resume` (l3_v15's own final_model.zip;
+# pools then load from its checkpoints.pkl beside it), `timesteps` 15M -> 6M,
+# `snapshot_freq_steps` 100k -> 250k and `output`.
+#
+# WHY. l3_v15's own 15M run dipped to no princess from the level start 17 times and
+# every dip recovered within 0.76M. Nine warm continuations from its final weights on
+# current code, box and sprite alike, had longer dips: 7 of 9 longer than any of
+# l3_v15's, 6 of 9 ending in a dip of 1.8-5.3M. Two candidates: the code since
+# 10e9bb4 (27 trainer commits, 2 reward changes), or the warm start itself (weights
+# copied, PPO's optimizer fresh).
+#
+# READ IT ON: dips of the princess EMA from the level start (reset_reach's last
+# entry). Long dips here too -> the warm start; short dips -> the code since 10e9bb4.
+#
+# KNOWN GAP: l3_v15 launched from a tree that was dirty at its end (env.json written
+# at finish, commit 10e9bb4); that trainer saved no diff. 10e9bb4 itself and the next
+# commit (1d83b62) only touch level3_notes.md, so the dirty part was most likely notes.
+# ============================================================================
+training:
+  timesteps: 6_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l3_v27_v15code_warm_v15_6m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  # Continues ctrl-C. Pools are read from the resume directory's
+  # checkpoints.pkl, so this inherits ctrl-C's reset-earned deep captures too.
+  resume: output/mo5/yeti/training/yeti_curriculum_l3_v15_gatewp_15m/final_model.zip
+  warmstart_weights_only: true
+
+env:
+  profile: yeti_fruit_level3
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 3
+    gamma: 1.0
+    # v13 semantics. credit_requires_survival stays OFF: with gamma=1 the
+    # episode's shaping telescopes to Phi(end)-Phi(start), so refunding it on
+    # death zeroes the whole shaping term for every episode that dies -- 17,024
+    # of 17,033 on L3. That is what killed v14.
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    ladder_segment_shaping: true
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.02
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  target_kl: 0.07
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level3/level3_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  # THE LEVER. Waypoint pools honour the same 0.15 from-reset reach gate the
+  # progress rungs do, so the budget goes to the reachable frontier instead of
+  # to states the agent cannot get to on its own.
+  gate_waypoints: true
