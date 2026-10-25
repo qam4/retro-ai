@@ -100,7 +100,8 @@ snowballs) on top of goats.
 
 ## Layout facts
 - **1 fruit** (`fruits_total=1`), `fruits_remaining` at 0x2B2F goes 1->0 on
-  pickup. Fruit sprite = "box 3" in `level3_annotated.png`: agent (x=14,y=64),
+  pickup. Fruit sprite = `F1` in `data/level_maps/level3_authored_map.png` (was "box 3" in the
+  hazard annotation `level3_annotated.png`, removed 2026-10-24): agent (x=14,y=64),
   pixel (56,64) (tilemap ids 18-21 @ ~0x2D6E — RENDER tile, not confirmed as
   the logic presence byte; for 1 fruit we can derive presence from
   fruits_remaining).

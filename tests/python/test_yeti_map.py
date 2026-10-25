@@ -222,9 +222,14 @@ def test_l3_jump_waypoints_on_ascent():
     # RAM units — so the seeder and the shaping agree on the jump-off geometry.
     from retro_ai.training.yeti_map import build_fixed_nodes
 
+    # A measured override (A3, see test_l3_a3_anchor_is_where_the_crossing_lands) is
+    # deliberately off the node: the node stays on the edge, the anchor moves.
     by_ident = {nd.ident: nd for nd in build_fixed_nodes(get_level_map(3))}
+    overridden = set(get_level_map(3).jump_waypoint_pos or {})
     for fa, fb in [(10, 11), (11, 12), (12, 13), (13, 14), (14, 15)]:
         name = {11: "A1", 12: "A2", 13: "A3", 14: "A4", 15: "A5"}[fb]
+        if name in overridden:
+            continue
         assert w3[name][0] == (by_ident[f"J{fa}_{fb}_b"].x - 8) // 4
 
     # LAUNCH pads: one per named edge, on the DEPARTURE (lower) platform. The
@@ -256,6 +261,34 @@ def test_l3_jump_waypoints_on_ascent():
     assert jump_waypoints(get_level_map(2)) == {}
     assert not any(k.startswith("A") for k in yeti.waypoints(1))
     assert not any(k.startswith("A") for k in yeti.waypoints(2))
+
+
+def test_l3_a3_anchor_is_where_the_crossing_lands():
+    """A3's measured anchor (LEVEL3.jump_waypoint_pos). The A2 -> A3 crossing of
+    l3_v15, identical in 40/40 princess episodes: floor 12's edge (x 33, y 70), one
+    airborne frame (x 32, y 66), landing (x 30, y 62), gone two frames later. The
+    derived anchor, x 32, is covered by none of those frames under sprite reach; x 31 is
+    covered by the landing and by standing on the one safe spot, x 32."""
+    from retro_ai.games import yeti
+    from retro_ai.training.targets import (
+        build_targets,
+        progress_ladder,
+        sprite_overlaps,
+    )
+
+    crossing = [(33, 70), (32, 66), (30, 62)]
+    assert not any(sprite_overlaps((32, 62), x, y) for x, y in crossing)
+    assert yeti.waypoints(3)["A3"] == (31, 62, 13)
+    a3 = (31, 62)
+    assert sprite_overlaps(a3, 30, 62), "the landing the policy makes"
+    assert sprite_overlaps(a3, 32, 62), "the safe spot (x 30 / 31 die in place)"
+    # Standing on floor 12's edge, before the jump, must not read as arriving.
+    assert not sprite_overlaps(a3, 33, 70) and not sprite_overlaps(a3, 34, 70)
+    # The reward marks the A3 milestone at the moved anchor, still as the mandatory
+    # J12_13_b step, and the progress ladder is unchanged.
+    t = {x.id: x for x in build_targets(3)}["A3"]
+    assert (t.pos, t.node_ident, t.mandatory) == ((31, 62), "J12_13_b", True)
+    assert progress_ladder(3)[1] == 12
 
 
 def test_l3_goat_climb_reward_not_penalised():

@@ -213,5 +213,8 @@ def test_standable_span_still_available_as_a_measurement_tool():
 
 
 def test_l3_untouched():
-    """L3 is out of scope and must not have moved."""
-    assert get_level_map(3).jump_waypoint_pos in (None, {})
+    """L3 keeps its derived anchors, except A3, whose override is MEASURED (2026-10-24:
+    sprite reach never covered the derived edge anchor; see LEVEL3 and
+    test_yeti_map.test_l3_a3_anchor_is_where_the_crossing_lands). Any other L3
+    override needs the same kind of evidence."""
+    assert get_level_map(3).jump_waypoint_pos == {"A3": (31, 62)}

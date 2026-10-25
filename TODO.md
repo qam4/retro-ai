@@ -425,6 +425,18 @@ WORK, in order:
       current code) held its own start, 191/300 at 6M; l3_v16 / l3_v18 lost it. One
       setting at a time: l3_v21 (box reach), l3_v22 (ground marking), l3_v23 (old
       poses); start pool on l3_v19's settings: l3_v20.
+      Results (300-episode re-measures from the level start at 6M): l3_v21 211/300
+      (box reach alone holds), l3_v22 0/300, l3_v23 0/300; l3_v20 0/300 own start and
+      0/300 held out (the pool fails on L3 on both settings).
+- [ ] L3 under sprite: A3's anchor (2026-10-24). Sprite read A3 at 0.07-0.12 from
+      reset while A4 read 0.70-0.72: the A2 -> A3 crossing never covers the derived
+      edge anchor x 32 (lands at x 30, where the compressor kills in place; x 32 is the
+      only safe spot). Moved to x 31 (LEVEL3.jump_waypoint_pos): sprite now catches
+      it 40/40. Every other visited jump anchor on L3 and L4 reads 40/40 under sprite;
+      L4's Hi route was never visited, so its anchors are unchecked. Running l3_v24
+      (l3_v18 + this anchor) to see whether it was the collapse.
+- [x] L2 map: the princess stands on the implicit ground (y 182), reached by two
+      ladders at px 56 / 232; the map had her on floor 6 with no way down (2026-10-24).
 - [x] Start-pool credit bug (2026-10-22). An episode was credited to the rung slot
       re-derived from its state at episode end, not to the slot it was drawn from. A
       pool file files states by recorded route points (never fruits) while the start

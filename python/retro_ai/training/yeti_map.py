@@ -263,7 +263,7 @@ LEVEL1 = LevelMap(
 # tile_y - 18 = {48,72,96,120,144,168} - 18. Both fruits on floor 5; ladder
 # centre_x = extracted UL x_px + 8. Princess on floor 6 at her RAM x (288).
 LEVEL2 = LevelMap(
-    floor_top_y={1: 30, 2: 54, 3: 78, 4: 102, 5: 126, 6: 150},
+    floor_top_y={1: 30, 2: 54, 3: 78, 4: 102, 5: 126, 6: 150, 7: 182},
     floor_height=24,
     # Fruit and princess y = standing Y of their floor (were 136 and 168 until
     # 2026-10-09; only the map drawing reads them, see LEVEL1).
@@ -278,9 +278,21 @@ LEVEL2 = LevelMap(
         ("L45a", 4, 5, 40),
         ("L45b", 4, 5, 296),
         ("L56", 5, 6, 120),
+        # Down to the GROUND (floor 7), where the princess is. In the extracted
+        # tilemap all along (level2_map.json: ladders at tile columns 6-7 and 28-29,
+        # rows 21-24) and missing here until 2026-10-24. l2_v10 descends L67b at
+        # x_ram 56 (px 232).
+        ("L67a", 6, 7, 56),
+        ("L67b", 6, 7, 232),
     ],
-    princess_centre_px=(288, 150),
-    princess_floor=6,
+    # The princess stands on the GROUND (level2_map.json: agent_x 72, agent_y 182),
+    # not on floor 6. Floor 7 is an implicit row-25 ground like L4's: no tiles, but
+    # walkable (standing y = 25*8 - 18 = 182). Until 2026-10-24 this said (288, 150)
+    # on floor 6, and y 182 resolved to no floor, so the reward fell back to floor 6
+    # for the whole last stretch. x = 72*4 + 8, the agent's centre where it touches
+    # her -- the same convention as fruit_centre_px (fruit 1: agent_x 14 -> px 64).
+    princess_centre_px=(296, 182),
+    princess_floor=7,
 )
 
 # Level 3 — fragmented multi-platform layout, REBUILT from the raw tilemap
@@ -382,6 +394,24 @@ LEVEL3 = LevelMap(
     # hops (landing floors 2/3) are intentionally omitted (reliably reached
     # from reset already).
     jump_waypoint_names={11: "A1", 12: "A2", 13: "A3", 14: "A4", 15: "A5"},
+    # MEASURED anchor (2026-10-24). A3 derives to x_ram 32, floor 13's right edge, and
+    # under sprite reach it was never reached: sprite covers anchor 32 only from x_ram
+    # 31..33 with the sprite up at floor 13's line, and the A2 -> A3 crossing never is.
+    # In 40/40 princess episodes of l3_v15 it steps to floor 12's edge (x 33, y 70),
+    # hops once (x 32, y 66 -- still below the line) and lands at x 30, then jumps on
+    # left under the compressor two frames later. Box (+-2) counted that landing; sprite
+    # read A3 at 0.07-0.12 from reset in three runs while A4, after it, read 0.70-0.72.
+    #
+    # 31, not 30. Held still for 60 frames on floor 13, x 30 and x 31 die in place (the
+    # compressor; inferred, nothing else is on that platform), x 32 stands, x 33 falls
+    # off. Anchor 31 is covered by the sprite from x 30..32, so the landing the policy
+    # makes counts and so does the safe spot -- without placing the arrival point any
+    # further into the crush zone than the landing already is.
+    #
+    # Moves DETECTION, CAPTURE and the reward's MARKING position only: the reward's
+    # distance target is the graph node J12_13_b, which stays on the edge (see
+    # `_jump_graph`). test_l3_a3_anchor_is_where_the_crossing_lands pins it.
+    jump_waypoint_pos={"A3": (31, 62)},
     # DISPLAY-ONLY travel order (see LevelMap.route_order): start -> princess.
     route_order=[
         "Lgoat_a_top",
