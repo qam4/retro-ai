@@ -1,0 +1,87 @@
+# ============================================================================
+# L4 v33 -- START POOL, COLD, 15M, seed 42. The unmasked arm of a pair with l4_v34.
+#
+# What it is: l4_v32's yaml (root_pool l4_p1) with the warm start REMOVED (`resume`,
+# `resume_pools`, `warmstart_weights_only` deleted), `timesteps` 6M -> 15M and `output`
+# changed. Equivalently l4_v30's yaml plus `curriculum.root_pool`. Reward, PPO, env and
+# every other curriculum field are l4_v30's.
+#
+# WHY. The policies read the HUD. Input-only paste test, 20 episodes per arm from the
+# policy's own saved start: l4_v32 (warm from l4_v30, trained on the start pool) goes to
+# 0/20 when a respawn's lives stars are pasted into its observation; l4_v30 (cold, one
+# start) is unaffected. So training on the pool, warm, taught l4_v32 to read the stars.
+# Two readings: the pool's starts differ in their HUD and a warm policy latches onto
+# it, or any pool training does. A cold pool run tells them apart.
+#
+# READ IT ON, in order:
+#   1. held-out starts (the referee's bar), against l4_v32's 124/300.
+#   2. HUD dependence of its best snapshot: .kiro/tmp/hud_probe.py arms (own start, a
+#      pool entry's and a respawn's score / stars pasted in). Unaffected = cold pool
+#      training does not create the dependence.
+#   3. against l4_v34 (same + HUD mask): one run per arm, so only a large difference
+#      in (1) counts.
+# ============================================================================
+training:
+  timesteps: 15_000_000
+  output: output/mo5/yeti/training/yeti_curriculum_l4_v33_startpool_cold_15m
+  num_envs: 8
+  seed: 42
+  snapshot_freq_steps: 250_000
+  route_table_freq_steps: 50_000
+
+env:
+  profile: yeti_fruit_level4
+  action_mode: joystick
+  max_steps: 1500
+  stall_threshold: 40
+  resize: [84, 84]
+  resize_mode: max
+
+reward:
+  name: fruit_bonus_path_progress_pbrs_grounded
+  params:
+    scale: 0.01
+    fruit_scale: 0.01
+    princess_scale: 0.05
+    level: 4
+    gamma: 1.0
+    defer_fruit_credit: true
+    waypoint_reward_tol: 2
+    mark_airborne: true
+    pay_on_target_change: true
+    ladder_segment_shaping: true
+    carry_pose_bonus: 1.0
+    carry_pose_ids: [15]
+
+ppo:
+  learning_rate: 3.0e-4
+  batch_size: 64
+  n_steps: 512
+  n_epochs: 4
+  ent_coef: 0.01
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+
+curriculum:
+  reset_fraction: 0.0
+  frontier_fraction: 0.0
+  earlier_fraction: 0.0
+  max_states_per_checkpoint: 100
+  min_states_to_advance: 20
+  min_survival_steps: 30
+  reach_threshold: 0.15
+  segment_floor: 0.0
+  fruits_total: 1
+  fruit_presence_addrs:
+    1: 11055
+  start_state: output/mo5/yeti/level4/level4_start.sav
+  waypoints: true
+  waypoint_tolerance: 2
+  gate_waypoints: true
+  gate_waypoints_by_predecessor: true
+  split_mandatory_starts: true
+  earned_progress_score: true
+  admit_requires_survival: true
+  waypoint_reach_mode: sprite
+  root_pool: experiments/003-yeti/data/start_pools/l4_p1.json

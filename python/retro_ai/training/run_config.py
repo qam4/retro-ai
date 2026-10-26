@@ -132,6 +132,19 @@ class EnvConfig:
     # a policy must be trained AND evaluated under the same mode. The referee
     # (keep_best_sweep -> eval_from_reset) takes it as `--resize-mode`.
     resize_mode: str = "nearest"
+    # Zero the top N rows of the RAW frame before crop/grayscale/resize. 0 = off. Unlike
+    # ``crop`` it keeps the observation's geometry, so a masked policy has the same
+    # input shape as an unmasked one. It exists because policies read the HUD: pasting
+    # another start's score digits or lives stars into the observation took l2_v10,
+    # l3_v15 and l4_v32 from their own start's success rate to 0/20. Yeti's first HUD
+    # line ("Joueur 1" with a blinking 1, score, lives stars) is raw rows 0-6 and row 7
+    # is always black, so 7 masks exactly that line. The agent's sprite top cannot go
+    # above row 12 (highest standing y 22, a jump rises 10 px; see
+    # test_mask_top_rows.py). The second HUD line (stage, bonus countdown) stays
+    # visible. Like ``resize_mode`` it changes the picture, so a policy must be trained
+    # AND evaluated with the same value; registry and --config evaluations take it from
+    # the run config, hand-typed eval_from_reset runs do not have it.
+    mask_top_rows: int = 0
 
 
 @dataclass(frozen=True)

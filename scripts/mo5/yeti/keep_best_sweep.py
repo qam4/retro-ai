@@ -586,7 +586,9 @@ def main() -> None:
                 f"[keep-best] level {key}: layout {s.layout}, start "
                 f"{start}, profile {s.env.profile}, stop "
                 f"{s.env.max_steps}/{s.env.stall_threshold}, resize "
-                f"{s.env.resize_mode}, reach {s.reach_mode}, route "
+                f"{s.env.resize_mode}, "
+                + (f"mask {s.env.mask_top_rows} rows, " if s.env.mask_top_rows else "")
+                + f"reach {s.reach_mode}, route "
                 f"{len(route) or 'ladder'}, "
                 + (
                     "for information only"

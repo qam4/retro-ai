@@ -39,6 +39,11 @@ class PreprocessingPipeline:
         a pixel), and a policy trained under one mode does not survive the other:
         the L4 v29 champion goes from mean rung 8.17 to 0.02. Train and evaluate
         with the SAME mode.
+    mask_top_rows : int
+        Set the top N rows of the RAW frame to 0 before crop, grayscale and
+        resize. 0 (default) leaves the frame untouched. Used to hide a HUD
+        without changing the observation's shape. The caller's frame is not
+        modified. Train and evaluate with the SAME value.
     frame_stack : int
         Number of consecutive frames to stack along the channel axis.
         A value of 1 disables stacking.
@@ -58,6 +63,7 @@ class PreprocessingPipeline:
         aug_pad: int = 4,
         aug_jitter: int = 10,
         resize_mode: str = "nearest",
+        mask_top_rows: int = 0,
     ) -> None:
         if not (1 <= frame_skip <= 16):
             raise ValueError(
@@ -68,10 +74,15 @@ class PreprocessingPipeline:
                 f"resize_mode must be one of {sorted(RESIZE_MODES)}, "
                 f"got {resize_mode!r}"
             )
+        if isinstance(mask_top_rows, bool) or int(mask_top_rows) != mask_top_rows:
+            raise ValueError(f"mask_top_rows must be an integer, got {mask_top_rows!r}")
+        if mask_top_rows < 0:
+            raise ValueError(f"mask_top_rows must be >= 0, got {mask_top_rows}")
 
         self.grayscale = grayscale
         self.resize = resize  # (target_height, target_width)
         self.resize_mode = resize_mode
+        self.mask_top_rows = int(mask_top_rows)
         self.frame_stack = frame_stack
         self.frame_skip = frame_skip
         self.crop = crop  # (y, x, height, width) — applied before grayscale/resize
@@ -144,8 +155,15 @@ class PreprocessingPipeline:
     # ------------------------------------------------------------------
 
     def _process_single_frame(self, frame: np.ndarray) -> np.ndarray:
-        """Apply crop, grayscale, resize, and optional augmentation to one frame."""
-        # Crop to region of interest (applied first)
+        """Apply mask, crop, grayscale, resize and optional augmentation to a frame."""
+        # Mask the top rows of the raw frame (applied first, in raw coordinates). On a
+        # copy: the caller's array can be the emulator's last raw frame, which other
+        # code reads.
+        if self.mask_top_rows:
+            frame = frame.copy()
+            frame[: self.mask_top_rows] = 0
+
+        # Crop to region of interest
         if self.crop is not None:
             y, x, h, w = self.crop
             frame = frame[y : y + h, x : x + w]
@@ -300,6 +318,10 @@ class PreprocessedEnv:
         mode = getattr(p, "resize_mode", "nearest")
         if mode != "nearest":
             sig = sig + (("resize_mode", mode),)
+        # Same rule for the mask: a stack captured unmasked shows the HUD.
+        mask = getattr(p, "mask_top_rows", 0)
+        if mask:
+            sig = sig + (("mask_top_rows", int(mask)),)
         return sig
 
     def export_frame_stack(self) -> Optional[Dict[str, Any]]:

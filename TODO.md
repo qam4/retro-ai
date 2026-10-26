@@ -417,7 +417,19 @@ WORK, in order:
       continued to 20M): held-out 42 / 18 / 51 of 300 at 10M / 12M / 13M, wins in up to
       5 of 12 groups, own start 191/300 at 13M -- but entries 0 in every snapshot (0/53
       at 13M). Entries were 14% of level-start episodes (23 entries filed as one
-      group). Next: split entries into their own groups (goat timing), see below.
+      group). Splitting entries by goat timing would not help: entries within a group
+      are ~1 px apart and each group already gets ~3.5% of starts. l2_v13's entries
+      die at the floor-5 gap after the pear with no goat near; and see the HUD below.
+- [ ] Policies read the HUD (2026-10-26). Input-only paste test, 20 episodes per arm
+      from the policy's own start: another start's score digits take l2_v10 and
+      l3_v15 to 0/20, a respawn's lives stars take l4_v32 to 0/20; l4_v30 and l1_v22
+      (cold) are unaffected, so warm pool training created l4_v32's dependence.
+      `env.mask_top_rows: 7` zeroes the first HUD line (raw rows 0-6: "Joueur 1",
+      score, stars; row 7 always black; the sprite top cannot go above row 12, so the
+      16-row crop above would cut the agent on L4's y-22 platforms). Running l4_v33
+      (cold, l4_p1, 15M) against l4_v34 (same + mask): read on held-out starts vs
+      l4_v32's 124/300, and probe l4_v33's best snapshot for HUD dependence. The bonus
+      countdown (rows 8-15) stays visible: a possible clock cue, untested.
 - [x] L4 start pool (2026-10-23): l4_v32 (warm from l4_v30's final, + l4_p1) is the L4
       champion at 2.25M: registry evals held-out 124/300, all from entries (124/279;
       l4_v30 58/272), own start 141/300 (l4_v30 220/300). Control l4_v31: 67/300.

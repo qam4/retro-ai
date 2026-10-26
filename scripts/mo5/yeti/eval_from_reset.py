@@ -319,7 +319,8 @@ def main() -> None:
             f"{args.model}, layout {args.level}, start {args.start_state or 'reset'}, "
             f"profile "
             f"{args.profile}, stop {args.max_steps}/{args.stall_threshold}, resize "
-            f"{settings.env.resize_mode}, reach {args.reach_mode}, seed {seed}",
+            f"{settings.env.resize_mode}, mask {settings.env.mask_top_rows} rows, "
+            f"reach {args.reach_mode}, seed {seed}",
             flush=True,
         )
 
@@ -506,6 +507,7 @@ def main() -> None:
                     # route figure, and neither was recorded before 2026-10-07.
                     "reach_mode": args.reach_mode,
                     "resize_mode": args.resize_mode,
+                    "mask_top_rows": env_cfg.mask_top_rows,
                     "rows": rows,
                 },
                 f,
