@@ -426,10 +426,25 @@ WORK, in order:
       (cold) are unaffected, so warm pool training created l4_v32's dependence.
       `env.mask_top_rows: 7` zeroes the first HUD line (raw rows 0-6: "Joueur 1",
       score, stars; row 7 always black; the sprite top cannot go above row 12, so the
-      16-row crop above would cut the agent on L4's y-22 platforms). Running l4_v33
-      (cold, l4_p1, 15M) against l4_v34 (same + mask): read on held-out starts vs
-      l4_v32's 124/300, and probe l4_v33's best snapshot for HUD dependence. The bonus
+      16-row crop above would cut the agent on L4's y-22 platforms). The bonus
       countdown (rows 8-15) stays visible: a possible clock cue, untested.
+      Results (cold, l4_p1, 15M, seed 42): l4_v34 (mask) learned the rope-2 crossing,
+      training princess 16-23% of episodes at 10-14M; l4_v33 (no mask) reached it in 5
+      of ~65k episodes and in no referee eval, so it cannot be HUD-probed. l4_v34's
+      13.5M snapshot is the L4 champion: registry evals held-out 141/300 (entries
+      141/280, respawns 0/20), own start 150/300 (l4_v32 124 / 141). One seed per arm
+      cannot separate the mask from luck: replicates l4_v35 / l4_v37 (no mask, seeds
+      43 / 44) and l4_v36 / l4_v38 (mask) running.
+- [ ] L4 respawn starts: 0 for every policy (l4_v34 0/20 and 0/22 held out, 0/1044 in
+      training at 10-15M against 10.4% from entries). Not the HUD: l4_v34 is masked,
+      and no pixel of its first observation marks all 15 respawns apart from all 70
+      entries (the only raw ones are the missing 6th lives star, under the mask). Not
+      control: the same 40 inputs move the agent identically from the level start, two
+      entries and three respawns. The policy goes another way: from entries it climbs
+      at x 50 within ~15 steps, from respawns it stays on the ground and dies at x
+      55-62 within 44-220 steps. On screen the starts differ mostly in the upper left
+      (y 40-119, x 40-159; what is there, not identified). Next: paste an entry's
+      upper playfield into a respawn's observation and see whether it climbs.
 - [x] L4 start pool (2026-10-23): l4_v32 (warm from l4_v30's final, + l4_p1) is the L4
       champion at 2.25M: registry evals held-out 124/300, all from entries (124/279;
       l4_v30 58/272), own start 141/300 (l4_v30 220/300). Control l4_v31: 67/300.

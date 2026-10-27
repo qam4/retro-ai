@@ -1,0 +1,34 @@
+{
+ "step": 15000000,
+ "frontier": "Lprincess_top",
+ "frontier_rate": 0.1,
+ "frontier_rate_ci95": 0.11080757659647504,
+ "princess": 0.0,
+ "princess_ci95": 0.056758545695239,
+ "mean_rung": 8.433333333333334,
+ "n_eval": 30,
+ "regressed": true,
+ "regress_margin": 0.16431676725154984,
+ "consecutive_regressions": 6,
+ "best_step": 13500000,
+ "best_frontier": "Lprincess_top",
+ "best_frontier_rate": 0.6,
+ "best_model": "output/mo5/yeti/training/yeti_curriculum_l4_v34_startpool_hudmask_cold_15m/best/best_model.zip",
+ "levels": {
+  "4-heldout": {
+   "princess": 0.0,
+   "princess_touches": 0,
+   "episodes": 30,
+   "frontier": "Lprincess_top",
+   "frontier_rate": 0.1,
+   "champion": "l4_v32",
+   "champion_k": 124,
+   "champion_n": 300,
+   "z": -4.456913468971875,
+   "champion_regressed": true
+  }
+ },
+ "champion_regressed": [
+  4
+ ]
+}

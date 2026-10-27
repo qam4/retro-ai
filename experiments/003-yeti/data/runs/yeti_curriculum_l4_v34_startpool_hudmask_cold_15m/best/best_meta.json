@@ -1,0 +1,20 @@
+{
+  "model": "model_13500000_steps.zip",
+  "step": 13500000,
+  "score": 0.6100607333333332,
+  "princess": 0.6,
+  "reach_top": 0.9666666666666667,
+  "mean_rung": 8.8,
+  "n_rungs": 12,
+  "frontier": "Lprincess_top",
+  "frontier_rate": 0.6,
+  "n_eval": 30,
+  "levels": {
+    "4-heldout": {
+      "princess": 0.6,
+      "frontier": "Lprincess_top",
+      "frontier_rate": 0.6,
+      "score": 0.6100607333333332
+    }
+  }
+}

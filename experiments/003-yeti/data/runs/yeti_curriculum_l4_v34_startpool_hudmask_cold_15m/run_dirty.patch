@@ -1,0 +1,167 @@
+diff --git a/TODO.md b/TODO.md
+index a2efc84..14f537f 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -417,7 +417,19 @@ WORK, in order:
+       continued to 20M): held-out 42 / 18 / 51 of 300 at 10M / 12M / 13M, wins in up to
+       5 of 12 groups, own start 191/300 at 13M -- but entries 0 in every snapshot (0/53
+       at 13M). Entries were 14% of level-start episodes (23 entries filed as one
+-      group). Next: split entries into their own groups (goat timing), see below.
++      group). Splitting entries by goat timing would not help: entries within a group
++      are ~1 px apart and each group already gets ~3.5% of starts. l2_v13's entries
++      die at the floor-5 gap after the pear with no goat near; and see the HUD below.
++- [ ] Policies read the HUD (2026-10-26). Input-only paste test, 20 episodes per arm
++      from the policy's own start: another start's score digits take l2_v10 and
++      l3_v15 to 0/20, a respawn's lives stars take l4_v32 to 0/20; l4_v30 and l1_v22
++      (cold) are unaffected, so warm pool training created l4_v32's dependence.
++      `env.mask_top_rows: 7` zeroes the first HUD line (raw rows 0-6: "Joueur 1",
++      score, stars; row 7 always black; the sprite top cannot go above row 12, so the
++      16-row crop above would cut the agent on L4's y-22 platforms). Running l4_v33
++      (cold, l4_p1, 15M) against l4_v34 (same + mask): read on held-out starts vs
++      l4_v32's 124/300, and probe l4_v33's best snapshot for HUD dependence. The bonus
++      countdown (rows 8-15) stays visible: a possible clock cue, untested.
+ - [x] L4 start pool (2026-10-23): l4_v32 (warm from l4_v30's final, + l4_p1) is the L4
+       champion at 2.25M: registry evals held-out 124/300, all from entries (124/279;
+       l4_v30 58/272), own start 141/300 (l4_v30 220/300). Control l4_v31: 67/300.
+diff --git a/python/retro_ai/core/preprocessing.py b/python/retro_ai/core/preprocessing.py
+index 471a0d8..d6bb7b2 100644
+--- a/python/retro_ai/core/preprocessing.py
++++ b/python/retro_ai/core/preprocessing.py
+@@ -39,6 +39,11 @@ class PreprocessingPipeline:
+         a pixel), and a policy trained under one mode does not survive the other:
+         the L4 v29 champion goes from mean rung 8.17 to 0.02. Train and evaluate
+         with the SAME mode.
++    mask_top_rows : int
++        Set the top N rows of the RAW frame to 0 before crop, grayscale and
++        resize. 0 (default) leaves the frame untouched. Used to hide a HUD
++        without changing the observation's shape. The caller's frame is not
++        modified. Train and evaluate with the SAME value.
+     frame_stack : int
+         Number of consecutive frames to stack along the channel axis.
+         A value of 1 disables stacking.
+@@ -58,6 +63,7 @@ class PreprocessingPipeline:
+         aug_pad: int = 4,
+         aug_jitter: int = 10,
+         resize_mode: str = "nearest",
++        mask_top_rows: int = 0,
+     ) -> None:
+         if not (1 <= frame_skip <= 16):
+             raise ValueError(
+@@ -68,10 +74,15 @@ class PreprocessingPipeline:
+                 f"resize_mode must be one of {sorted(RESIZE_MODES)}, "
+                 f"got {resize_mode!r}"
+             )
++        if isinstance(mask_top_rows, bool) or int(mask_top_rows) != mask_top_rows:
++            raise ValueError(f"mask_top_rows must be an integer, got {mask_top_rows!r}")
++        if mask_top_rows < 0:
++            raise ValueError(f"mask_top_rows must be >= 0, got {mask_top_rows}")
+ 
+         self.grayscale = grayscale
+         self.resize = resize  # (target_height, target_width)
+         self.resize_mode = resize_mode
++        self.mask_top_rows = int(mask_top_rows)
+         self.frame_stack = frame_stack
+         self.frame_skip = frame_skip
+         self.crop = crop  # (y, x, height, width) — applied before grayscale/resize
+@@ -144,8 +155,15 @@ class PreprocessingPipeline:
+     # ------------------------------------------------------------------
+ 
+     def _process_single_frame(self, frame: np.ndarray) -> np.ndarray:
+-        """Apply crop, grayscale, resize, and optional augmentation to one frame."""
+-        # Crop to region of interest (applied first)
++        """Apply mask, crop, grayscale, resize and optional augmentation to a frame."""
++        # Mask the top rows of the raw frame (applied first, in raw coordinates). On a
++        # copy: the caller's array can be the emulator's last raw frame, which other
++        # code reads.
++        if self.mask_top_rows:
++            frame = frame.copy()
++            frame[: self.mask_top_rows] = 0
++
++        # Crop to region of interest
+         if self.crop is not None:
+             y, x, h, w = self.crop
+             frame = frame[y : y + h, x : x + w]
+@@ -300,6 +318,10 @@ class PreprocessedEnv:
+         mode = getattr(p, "resize_mode", "nearest")
+         if mode != "nearest":
+             sig = sig + (("resize_mode", mode),)
++        # Same rule for the mask: a stack captured unmasked shows the HUD.
++        mask = getattr(p, "mask_top_rows", 0)
++        if mask:
++            sig = sig + (("mask_top_rows", int(mask)),)
+         return sig
+ 
+     def export_frame_stack(self) -> Optional[Dict[str, Any]]:
+diff --git a/python/retro_ai/training/env_builder.py b/python/retro_ai/training/env_builder.py
+index dc9601f..62696f3 100644
+--- a/python/retro_ai/training/env_builder.py
++++ b/python/retro_ai/training/env_builder.py
+@@ -93,6 +93,7 @@ def build_training_env(profile_name: str, env_cfg: EnvConfig) -> TrainingEnvStac
+             env_cfg.frame_skip if env_cfg.frame_skip is not None else profile.frame_skip
+         ),
+         resize_mode=getattr(env_cfg, "resize_mode", "nearest"),
++        mask_top_rows=getattr(env_cfg, "mask_top_rows", 0),
+     )
+     preprocessed = PreprocessedEnv(
+         base,
+diff --git a/python/retro_ai/training/run_config.py b/python/retro_ai/training/run_config.py
+index f025a9f..f555736 100644
+--- a/python/retro_ai/training/run_config.py
++++ b/python/retro_ai/training/run_config.py
+@@ -132,6 +132,19 @@ class EnvConfig:
+     # a policy must be trained AND evaluated under the same mode. The referee
+     # (keep_best_sweep -> eval_from_reset) takes it as `--resize-mode`.
+     resize_mode: str = "nearest"
++    # Zero the top N rows of the RAW frame before crop/grayscale/resize. 0 = off. Unlike
++    # ``crop`` it keeps the observation's geometry, so a masked policy has the same
++    # input shape as an unmasked one. It exists because policies read the HUD: pasting
++    # another start's score digits or lives stars into the observation took l2_v10,
++    # l3_v15 and l4_v32 from their own start's success rate to 0/20. Yeti's first HUD
++    # line ("Joueur 1" with a blinking 1, score, lives stars) is raw rows 0-6 and row 7
++    # is always black, so 7 masks exactly that line. The agent's sprite top cannot go
++    # above row 12 (highest standing y 22, a jump rises 10 px; see
++    # test_mask_top_rows.py). The second HUD line (stage, bonus countdown) stays
++    # visible. Like ``resize_mode`` it changes the picture, so a policy must be trained
++    # AND evaluated with the same value; registry and --config evaluations take it from
++    # the run config, hand-typed eval_from_reset runs do not have it.
++    mask_top_rows: int = 0
+ 
+ 
+ @dataclass(frozen=True)
+diff --git a/scripts/mo5/yeti/eval_from_reset.py b/scripts/mo5/yeti/eval_from_reset.py
+index 1f14759..78e6f9d 100644
+--- a/scripts/mo5/yeti/eval_from_reset.py
++++ b/scripts/mo5/yeti/eval_from_reset.py
+@@ -319,7 +319,8 @@ def main() -> None:
+             f"{args.model}, layout {args.level}, start {args.start_state or 'reset'}, "
+             f"profile "
+             f"{args.profile}, stop {args.max_steps}/{args.stall_threshold}, resize "
+-            f"{settings.env.resize_mode}, reach {args.reach_mode}, seed {seed}",
++            f"{settings.env.resize_mode}, mask {settings.env.mask_top_rows} rows, "
++            f"reach {args.reach_mode}, seed {seed}",
+             flush=True,
+         )
+ 
+@@ -506,6 +507,7 @@ def main() -> None:
+                     # route figure, and neither was recorded before 2026-10-07.
+                     "reach_mode": args.reach_mode,
+                     "resize_mode": args.resize_mode,
++                    "mask_top_rows": env_cfg.mask_top_rows,
+                     "rows": rows,
+                 },
+                 f,
+diff --git a/scripts/mo5/yeti/keep_best_sweep.py b/scripts/mo5/yeti/keep_best_sweep.py
+index 9d3a93d..1d0e836 100644
+--- a/scripts/mo5/yeti/keep_best_sweep.py
++++ b/scripts/mo5/yeti/keep_best_sweep.py
+@@ -586,7 +586,9 @@ def main() -> None:
+                 f"[keep-best] level {key}: layout {s.layout}, start "
+                 f"{start}, profile {s.env.profile}, stop "
+                 f"{s.env.max_steps}/{s.env.stall_threshold}, resize "
+-                f"{s.env.resize_mode}, reach {s.reach_mode}, route "
++                f"{s.env.resize_mode}, "
++                + (f"mask {s.env.mask_top_rows} rows, " if s.env.mask_top_rows else "")
++                + f"reach {s.reach_mode}, route "
+                 f"{len(route) or 'ladder'}, "
+                 + (
+                     "for information only"

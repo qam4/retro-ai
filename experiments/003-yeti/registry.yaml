@@ -122,13 +122,29 @@ policies:
     model_sha256: 6868ec527b424472b72e78b924d16ec097919cff85a07cd7c5586ec5d9395d13
     config: experiments/003-yeti/configs/yeti_curriculum_l4_v32_startpool_warm_v30_6m.yaml
     run_record: experiments/003-yeti/data/runs/yeti_curriculum_l4_v32_startpool_warm_v30_6m/run.yaml
+  l4_v34:
+    # The 13.5M snapshot, which is also the referee's saved best (same sha256). Cold, on
+    # L4's start pool, with the first HUD line masked (env.mask_top_rows 7, taken from
+    # the config by every registry eval). Registry evals, 300 episodes each: L4 held-out
+    # starts 141/300, all from entries (141/280; respawns 0/20), own saved start
+    # 150/300. A --config re-measure before registering read 144 and 164. The referee
+    # read 18/30 held out, the best of 60 snapshots. Its unmasked twin l4_v33 never
+    # reached the princess in a referee eval.
+    model: output/mo5/yeti/training/yeti_curriculum_l4_v34_startpool_hudmask_cold_15m/snapshots/model_13500000_steps.zip
+    model_sha256: 4a46f31d42c12685040f6e7e20084cd06ae816b17eb389e43c80016d40833e43
+    config: experiments/003-yeti/configs/yeti_curriculum_l4_v34_startpool_hudmask_cold_15m.yaml
+    run_record: experiments/003-yeti/data/runs/yeti_curriculum_l4_v34_startpool_hudmask_cold_15m/run.yaml
 
 # The policy that plays each game level. L5 has none: l1_v17 scores 0/300 there.
 # L1 moved from l1_v17 (219/300 under the current rules) to l1_v22 (245/300).
 # L4 moved from l4_v30 to l4_v32 for the held-out starts (124/300 against 58/300),
 # which a real game enters L4 through; it plays the one saved start worse (141 / 220).
+# Then from l4_v32 to l4_v34: held-out 141/300 against 124/300, own start 150 against
+# 141 (z +1.4 and +0.7, two-proportion; ahead on both, significant on neither), and it
+# cannot read the score or the lives stars, which l4_v32 does (a respawn's stars pasted
+# into its own start: 0/20).
 champions:
   1: l1_v22
   2: l2_v10
   3: l3_v15
-  4: l4_v32
+  4: l4_v34
