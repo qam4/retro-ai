@@ -432,9 +432,15 @@ WORK, in order:
       training princess 16-23% of episodes at 10-14M; l4_v33 (no mask) reached it in 5
       of ~65k episodes and in no referee eval, so it cannot be HUD-probed. l4_v34's
       13.5M snapshot is the L4 champion: registry evals held-out 141/300 (entries
-      141/280, respawns 0/20), own start 150/300 (l4_v32 124 / 141). One seed per arm
-      cannot separate the mask from luck: replicates l4_v35 / l4_v37 (no mask, seeds
-      43 / 44) and l4_v36 / l4_v38 (mask) running.
+      141/280, respawns 0/20), own start 150/300 (l4_v32 124 / 141).
+      Replicates (seeds 43, 44): masked l4_v38 (seed 44) learned it too, training
+      princess up to 44% of episodes; masked l4_v36 (seed 43) never reached the
+      princess (stuck at Lclimb3_top, before the rope-2 pad). Unmasked l4_v35 (seed 43)
+      learned a little (966 training princess episodes, 9/300 held out at 11.25M, 71/300
+      own start); l4_v37 (seed 44) did not. So masked 2 of 3 learned well, unmasked 0 of
+      3: p ~0.2, suggestive, not shown. The mask stays on (one config for every level).
+      l4_v38's 9M snapshot is the L4 champion: registry evals held-out 164/300 (entries
+      164/276, respawns 0/24), own start 187/300.
 - [ ] L4 respawn starts: 0 for every policy (l4_v34 0/20 and 0/22 held out, 0/1044 in
       training at 10-15M against 10.4% from entries). Not the HUD: l4_v34 is masked,
       and no pixel of its first observation marks all 15 respawns apart from all 70
