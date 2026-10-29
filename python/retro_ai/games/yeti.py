@@ -237,6 +237,12 @@ def waypoints(level: int) -> Mapping[str, Tuple[int, int, int]]:
             wps[f"{name}_top"] = (x_ram, m.floor_top_y[top_floor], top_floor)
         if which in ("bot", "both"):
             wps[f"{name}_bot"] = (x_ram, m.floor_top_y[bot_floor], bot_floor)
+    # Measured anchor overrides (LevelMap.ladder_waypoint_pos): position only, the
+    # floor stays the ladder end's. An unknown name is an error, not a silent no-op.
+    for nm, (ox, oy) in (getattr(m, "ladder_waypoint_pos", None) or {}).items():
+        if nm not in wps:
+            raise KeyError(f"ladder_waypoint_pos names {nm!r}, not a ladder waypoint")
+        wps[nm] = (int(ox), int(oy), wps[nm][2])
     # Jump-edge landing waypoints (L3 A1..A5 ascent): seed/reach targets on the
     # otherwise-unseedable jump platforms. NOT reward targets (reward
     # unchanged). Empty on L1/L2 (no jump_waypoint_names). Ladder/jump names are

@@ -153,6 +153,12 @@ class LevelMap:
     # navigation-graph node, so path-distance shaping geometry is untouched.
     # None (L1/L2/L3) => derived anchors, unchanged.
     jump_waypoint_pos: Optional[Dict[str, Tuple[int, int]]] = None
+    # The same for LADDER waypoints (``"<ladder>_top"`` / ``"_bot"``), ``name ->
+    # (x_ram, y_px)``, applied in ``yeti.waypoints``. A ladder waypoint is derived at
+    # the ladder's centre x and its floor's standing y, which is right for a ladder
+    # and wrong for anything the map models AS a ladder (L3's escalator). Detection
+    # and capture only; the graph node stays where the ladder is. None => derived.
+    ladder_waypoint_pos: Optional[Dict[str, Tuple[int, int]]] = None
     # Optional list of jump-waypoint names NOT to emit. Use for launch pads that are
     # redundant because the same platform already carries a waypoint that marks
     # correctly -- e.g. on L4 floor 11, `Low1_launch` and `Lclimb3_top` are the same
@@ -289,9 +295,14 @@ LEVEL2 = LevelMap(
     # not on floor 6. Floor 7 is an implicit row-25 ground like L4's: no tiles, but
     # walkable (standing y = 25*8 - 18 = 182). Until 2026-10-24 this said (288, 150)
     # on floor 6, and y 182 resolved to no floor, so the reward fell back to floor 6
-    # for the whole last stretch. x = 72*4 + 8, the agent's centre where it touches
-    # her -- the same convention as fruit_centre_px (fruit 1: agent_x 14 -> px 64).
-    princess_centre_px=(296, 182),
+    # for the whole last stretch.
+    # x = her SPRITE centre, as on L1 and L4: in the level-start frame her pixels span
+    # px 306-317 (the same as L1's princess), centre 312. Until 2026-10-29 this was 296
+    # (72*4+8), the agent's centre at the touch: all 592 of l2_v10's princess episodes
+    # end at x_ram 72, because the game fires the touch 16 px before the sprites
+    # centre up, on every level (L1 296 vs 312, L3 / L4 24 vs 8). Approach-neutral and
+    # what the map shows; the reward's last stretch still pulls the same way.
+    princess_centre_px=(312, 182),
     princess_floor=7,
 )
 
@@ -379,7 +390,10 @@ LEVEL3 = LevelMap(
         ("Lsc4", 10, 9, 288),  # SN2 <-> SN3 (4)
         ("Lprincess", 16, 15, 32),  # A5 <-> PRIN
     ],
-    princess_centre_px=(16, 30),
+    # Her SPRITE centre, as on L1 and L4: in the level-start frame her pixels span px
+    # 2-13 (the same as L4's princess), centre 8. Was 16 until 2026-10-29, neither her
+    # centre nor the touch point (l3_v15 touches her at x_ram 4, px 24, in 228 of 246).
+    princess_centre_px=(8, 30),
     princess_floor=16,
     # Jump-traversed platform links (mirrors annotate_level3_map.JUMPS): the
     # bottom START->STEP->2LAD hops and the SN3->A1->A2->A3->A4->A5 ascent.
@@ -412,6 +426,15 @@ LEVEL3 = LevelMap(
     # distance target is the graph node J12_13_b, which stays on the edge (see
     # `_jump_graph`). test_l3_a3_anchor_is_where_the_crossing_lands pins it.
     jump_waypoint_pos={"A3": (31, 62)},
+    # Lesc_top where the escalator ride STARTS (2026-10-29). Derived, it sat at the
+    # ladder centre (x_ram 33) and the goat platform's standing y (94), where the agent
+    # never is: l3_v15 jumps off the goat platform at y 84-86, lands on a step at x_ram
+    # 32, y 98 and rides down from there (pose 13). Under sprite reach the old anchor
+    # was covered on 2 frames only, at the end of the jump, 2 px inside the sprite's
+    # right edge; never while riding. (32, 98) is covered on the jump's last 3 frames
+    # and the first 2 ride frames, centred in x. The graph node and the ladder edge stay
+    # at px 140. test_l3_lesc_top_is_where_the_ride_starts pins it.
+    ladder_waypoint_pos={"Lesc_top": (32, 98)},
     # DISPLAY-ONLY travel order (see LevelMap.route_order): start -> princess.
     route_order=[
         "Lgoat_a_top",
@@ -437,7 +460,7 @@ LEVEL3 = LevelMap(
     waypoint_ends={
         "Lgoat_a": "top",
         "Lgoat_b": "top",
-        # Escalator: capture only the BOARD point (Lesc_top, ram33/y94). With
+        # Escalator: capture only the BOARD point (Lesc_top, ram32/y98). With
         # pose 13 (the ride) now in the seeding allow-list, this captures the
         # on-escalator "just boarded" state as a reverse-curriculum seed. The
         # bottom (Lesc_bot) is NOT captured: it can only be reached by already

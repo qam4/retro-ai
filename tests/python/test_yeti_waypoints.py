@@ -30,12 +30,13 @@ def test_waypoints_level2_has_top_and_bottom_per_ladder():
 def test_level2_princess_is_on_the_ground_where_l2_v10_touches_her():
     """level2_map.json (RAM) puts her at agent_x 72, agent_y 182 -- the implicit
     ground below floor 6 -- and l2_v10 descends L67b at x_ram 56 and touches her at
-    x_ram 72. The map had her on floor 6 at y 150 with no way down."""
+    x_ram 72. The map had her on floor 6 at y 150 with no way down. Her x is her sprite
+    centre (test_princess_is_her_sprite_centre), not the touch point."""
     from retro_ai.training.yeti_map import agent_floor_from_pixel_y, get_level_map
 
     m = get_level_map(2)
     assert m.princess_floor == 7 and m.floor_top_y[7] == 182
-    assert m.princess_centre_px == (72 * 4 + 8, 182)
+    assert m.princess_centre_px == (312, 182)
     assert agent_floor_from_pixel_y(182, level=2) == 7
     assert yeti.waypoints(2)["L67b_top"] == (56, 150, 6)
     assert yeti.waypoints(2)["L67b_bot"] == (56, 182, 7)

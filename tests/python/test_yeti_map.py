@@ -29,6 +29,17 @@ def test_fruit_and_princess_stand_on_their_floor(level):
     assert lvl.princess_centre_px[1] == lvl.floor_top_y[lvl.princess_floor]
 
 
+# The princess's sprite in each level-start frame (pink and cyan pixels, measured
+# 2026-10-29): px 306-317 on L1/L5 and L2, px 2-13 on L3 and L4. The agent touches her
+# 16 px before the centres meet (champions' 300-episode results: L1 296, L2 296, L3 24,
+# L4 24), so the touch point depends on the side the agent comes from.
+@pytest.mark.parametrize("level,centre", [(1, 312), (2, 312), (3, 8), (4, 8)])
+def test_princess_is_her_sprite_centre(level, centre):
+    """One convention on every level: her sprite centre. L2 used the touch point (296)
+    and L3 neither (16), which drew their princess boxes beside her on the maps."""
+    assert get_level_map(level).princess_centre_px[0] == centre
+
+
 def test_fixed_nodes_present(nav):
     """All expected nodes are in the graph."""
     for fid in (1, 2, 3, 4):
@@ -289,6 +300,58 @@ def test_l3_a3_anchor_is_where_the_crossing_lands():
     t = {x.id: x for x in build_targets(3)}["A3"]
     assert (t.pos, t.node_ident, t.mandatory) == ((31, 62), "J12_13_b", True)
     assert progress_ladder(3)[1] == 12
+
+
+def test_l3_lesc_top_is_where_the_ride_starts():
+    """Lesc_top's measured anchor (LEVEL3.ladder_waypoint_pos). l3_v15 boarding the
+    escalator, seed 0 (all 20 measured episodes board the same way): steps 83-90 the
+    jump off the goat platform, 91 on the ride (pose 13) at x_ram 32. The derived
+    anchor (33, 94) is covered on 2 frames, the jump's last, and never while riding;
+    (32, 98) on the jump's last 3 and the first 2 ride frames."""
+    from retro_ai.games import yeti
+    from retro_ai.training.targets import build_targets, sprite_overlaps
+
+    boarding = {
+        83: (27, 90),
+        84: (28, 86),
+        85: (29, 84),
+        86: (30, 84),
+        87: (30, 84),
+        88: (31, 84),
+        89: (32, 86),
+        90: (32, 86),
+        91: (32, 98),
+        92: (32, 98),
+        93: (32, 102),
+        94: (32, 102),
+        95: (32, 102),
+        96: (32, 106),
+    }
+
+    def hits(anchor):
+        return [t for t, (x, y) in boarding.items() if sprite_overlaps(anchor, x, y)]
+
+    assert hits((33, 94)) == [89, 90]
+    assert yeti.waypoints(3)["Lesc_top"] == (32, 98, 4)
+    assert hits((32, 98)) == [88, 89, 90, 91, 92]
+    new = (32, 98)
+    # Not while still walking on the goat platform (floor 4, x_ram 18-27, y 94).
+    assert not any(sprite_overlaps(new, x, 94) for x in range(18, 28))
+    # Still the same target; only its position moved. The graph keeps the ladder.
+    t = {x.id: x for x in build_targets(3)}["Lesc_top"]
+    assert (t.pos, t.node_ident) == ((32, 98), "Lesc_top")
+
+
+def test_ladder_waypoint_override_rejects_unknown_names(monkeypatch):
+    import dataclasses
+
+    from retro_ai.games import yeti
+    from retro_ai.training import yeti_map
+
+    bad = dataclasses.replace(yeti_map.LEVEL3, ladder_waypoint_pos={"Nope_top": (1, 2)})
+    monkeypatch.setitem(yeti_map.LEVELS, 3, bad)
+    with pytest.raises(KeyError, match="Nope_top"):
+        yeti.waypoints(3)
 
 
 def test_l3_goat_climb_reward_not_penalised():

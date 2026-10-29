@@ -439,6 +439,11 @@ WORK, in order:
       learned a little (966 training princess episodes, 9/300 held out at 11.25M, 71/300
       own start); l4_v37 (seed 44) did not. So masked 2 of 3 learned well, unmasked 0 of
       3: p ~0.2, suggestive, not shown. The mask stays on (one config for every level).
+      Cold training does not protect an unmasked policy: l4_v35 at 11.25M (cold, pool,
+      no mask), 40 episodes per arm from its own start, as is 14/40; an entry's score
+      pasted in 1/40; a respawn's stars 0/40 (fruits 0.03). l4_v30 (cold, ONE start)
+      was unaffected, so it is training on many starts, whose HUDs differ, that teaches
+      a policy to read the HUD.
       l4_v38's 9M snapshot is the L4 champion: registry evals held-out 164/300 (entries
       164/276, respawns 0/24), own start 187/300.
 - [ ] L4 respawn starts: 0 for every policy (l4_v34 0/20 and 0/22 held out, 0/1044 in
@@ -470,6 +475,10 @@ WORK, in order:
       (l3_v18 + this anchor) to see whether it was the collapse.
 - [x] L2 map: the princess stands on the implicit ground (y 182), reached by two
       ladders at px 56 / 232; the map had her on floor 6 with no way down (2026-10-24).
+- [x] Princess x is her sprite centre on every level (2026-10-29): L2 296 -> 312 (was
+      the touch point), L3 16 -> 8 (was neither). L3's Lesc_top moved to where the
+      escalator ride starts, (32, 98) from (33, 94), which the agent only covered on 2
+      jump frames (`LevelMap.ladder_waypoint_pos`).
 - [x] Start-pool credit bug (2026-10-22). An episode was credited to the rung slot
       re-derived from its state at episode end, not to the slot it was drawn from. A
       pool file files states by recorded route points (never fruits) while the start

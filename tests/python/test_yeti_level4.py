@@ -180,6 +180,6 @@ def test_lower_levels_are_untouched():
     """L4 must not perturb the levels we already have champions for."""
     assert len(get_level_map(1).floor_top_y) == 5
     assert len(get_level_map(3).floor_top_y) == 16
-    assert get_level_map(3).princess_centre_px == (16, 30)
+    assert get_level_map(3).princess_centre_px == (8, 30)
     assert yeti.fruit_presence_addrs(3) == {1: yeti.FRUITS_ADDR}
     assert yeti.fruit_presence_addrs(2) == {1: 11950, 2: 11975}
